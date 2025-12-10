@@ -1,0 +1,89 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+2:16:01 AM [express] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 12 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+2:16:07 AM [express] GET /api/user 401 in 13ms
+2:16:17 AM [express] GET /api/farms 401 in 2ms :: {"error":"Authentication required"}
+2:16:17 AM [express] GET /api/clients 401 in 1ms :: {"error":"Authentication required"}
+2:16:17 AM [express] GET /api/user 401 in 2ms
+2:16:24 AM [express] GET /api/farms 200 in 231ms :: []
+2:16:24 AM [express] GET /api/clients 200 in 234ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297",…
+2:16:24 AM [express] GET /api/user 304 in 173ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+2:17:22 AM [express] GET /api/user 200 in 181ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+2:17:22 AM [express] GET /api/visits 200 in 237ms :: []
+2:17:39 AM [express] GET /api/user 200 in 207ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+2:17:39 AM [express] GET /api/visits 200 in 231ms :: []
+2:19:29 AM [express] GET /api/clients 200 in 2900ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297"…
+2:19:31 AM [express] GET /api/farms 200 in 247ms :: []
+2:19:46 AM [express] GET /api/user 304 in 173ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+2:19:46 AM [express] GET /api/clients 200 in 238ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297",…
+2:19:48 AM [express] GET /api/farms 200 in 238ms :: []
+file:///home/runner/workspace/node_modules/zod/lib/index.mjs:587
+                const error = new ZodError(ctx.common.issues);
+                              ^
+
+ZodError: [
+  {
+    "code": "invalid_type",
+    "expected": "string",
+    "received": "undefined",
+    "path": [
+      "clientId"
+    ],
+    "message": "Required"
+  }
+]
+    at get error [as error] (file:///home/runner/workspace/node_modules/zod/lib/index.mjs:587:31)
+    at ZodObject.parse (file:///home/runner/workspace/node_modules/zod/lib/index.mjs:663:22)
+    at <anonymous> (/home/runner/workspace/server/routes.ts:4698:35)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+    at requireAuth (/home/runner/workspace/server/auth.ts:125:3)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/home/runner/workspace/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at <anonymous> (/home/runner/workspace/server/routes.ts:25:5)
+    at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+    at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+    at param (/home/runner/workspace/node_modules/express/lib/router/index.js:365:14)
+    at param (/home/runner/workspace/node_modules/express/lib/router/index.js:376:14)
+    at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:421:3)
+    at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+    at strategy.pass (/home/runner/workspace/node_modules/passport/lib/middleware/authenticate.js:355:9)
+    at /home/runner/workspace/node_modules/passport/lib/strategies/session.js:120:12
+    at pass (/home/runner/workspace/node_modules/passport/lib/authenticator.js:352:31)
+    at deserialized (/home/runner/workspace/node_modules/passport/lib/authenticator.js:364:7)
+    at <anonymous> (/home/runner/workspace/server/auth.ts:65:5)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  issues: [
+    {
+      code: 'invalid_type',
+      expected: 'string',
+      received: 'undefined',
+      path: [ 'clientId' ],
+      message: 'Required'
+    }
+  ],
+  addIssue: [Function (anonymous)],
+  addIssues: [Function (anonymous)],
+  errors: [
+    {
+      code: 'invalid_type',
+      expected: 'string',
+      received: 'undefined',
+      path: [ 'clientId' ],
+      message: 'Required'
+    }
+  ]
+}
+
+Node.js v20.19.3

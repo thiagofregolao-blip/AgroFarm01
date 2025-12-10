@@ -1,0 +1,53 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+10:58:12 PM [express] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 12 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+10:58:21 PM [express] GET /api/user 401 in 11ms
+10:58:21 PM [express] GET /api/visits 401 in 3ms :: {"error":"Authentication required"}
+10:58:27 PM [express] GET /api/user 304 in 179ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+10:58:27 PM [express] GET /api/visits 200 in 239ms :: []
+10:58:33 PM [express] GET /api/user 304 in 174ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+10:58:41 PM [express] GET /api/user 401 in 1ms
+10:58:54 PM [express] GET /api/user 304 in 173ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+10:59:19 PM [express] GET /api/user 200 in 176ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+10:59:19 PM [express] GET /api/visits 200 in 232ms :: []
+10:59:26 PM [express] GET /api/user 200 in 177ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+10:59:26 PM [express] POST /api/trips/start 400 in 179ms :: {"error":"visit_id é obrigatório"}
+10:59:26 PM [express] GET /api/visits 200 in 238ms :: []
+10:59:29 PM [express] GET /api/clients 200 in 235ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297",…
+10:59:49 PM [express] POST /api/trips/start 400 in 351ms :: {"error":"visit_id é obrigatório"}
+10:59:49 PM [express] GET /api/visits 200 in 236ms :: []
+11:02:32 PM [express] GET /api/clients 200 in 3054ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297"…
+file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345
+o?t(o):n(u)},"cb"),s=new r(function(o,u){n=o,t=u}).catch(o=>{throw Error.captureStackTrace(
+                                                                         ^
+
+error: column "address" does not exist
+    at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async NeonPreparedQuery.execute (/home/runner/workspace/node_modules/src/neon-serverless/session.ts:102:18)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:4640:23) {
+  length: 107,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+  position: '49',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3722',
+  routine: 'errorMissingColumn'
+}
+
+Node.js v20.19.3

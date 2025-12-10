@@ -1,0 +1,105 @@
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+chunk-XQLYTHWV.js?v=f6b0456d:521 Warning: validateDOMNesting(...): <a> cannot appear as a descendant of <a>.
+    at a
+    at a
+    at https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6b0456d:337:18
+    at div
+    at div
+    at form
+    at div
+    at _c9 (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/src/components/ui/card.tsx:114:12)
+    at div
+    at _c (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/src/components/ui/card.tsx:20:11)
+    at div
+    at div
+    at AuthPage (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/src/pages/auth-page.tsx:29:33)
+    at Route (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6b0456d:323:16)
+    at Switch (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=f6b0456d:379:17)
+    at Router
+    at Provider (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-2M7HY3UG.js?v=f6b0456d:38:15)
+    at TooltipProvider (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=f6b0456d:61:5)
+    at AuthProvider (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/src/hooks/use-auth.tsx:26:32)
+    at QueryClientProvider (https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=f6b0456d:2805:3)
+    at App
+printWarning @ chunk-XQLYTHWV.js?v=f6b0456d:521
+error @ chunk-XQLYTHWV.js?v=f6b0456d:505
+validateDOMNesting @ chunk-XQLYTHWV.js?v=f6b0456d:8256
+createInstance @ chunk-XQLYTHWV.js?v=f6b0456d:8328
+completeWork @ chunk-XQLYTHWV.js?v=f6b0456d:16290
+completeUnitOfWork @ chunk-XQLYTHWV.js?v=f6b0456d:19224
+performUnitOfWork @ chunk-XQLYTHWV.js?v=f6b0456d:19206
+workLoopSync @ chunk-XQLYTHWV.js?v=f6b0456d:19137
+renderRootSync @ chunk-XQLYTHWV.js?v=f6b0456d:19116
+performConcurrentWorkOnRoot @ chunk-XQLYTHWV.js?v=f6b0456d:18678
+workLoop @ chunk-XQLYTHWV.js?v=f6b0456d:197
+flushWork @ chunk-XQLYTHWV.js?v=f6b0456d:176
+performWorkUntilDeadline @ chunk-XQLYTHWV.js?v=f6b0456d:384Understand this error
+queryClient.ts:32  GET https://17ee9d41-8e31-40d1-881b-109572f48345-00-14sns2gutezyn.spock.replit.dev/api/user 401 (Unauthorized)
+(anonymous) @ queryClient.ts:32
+fetchFn @ @tanstack_react-query.js?v=f6b0456d:840
+run @ @tanstack_react-query.js?v=f6b0456d:494
+start @ @tanstack_react-query.js?v=f6b0456d:536
+fetch @ @tanstack_react-query.js?v=f6b0456d:926
+executeFetch_fn @ @tanstack_react-query.js?v=f6b0456d:2211
+onSubscribe @ @tanstack_react-query.js?v=f6b0456d:1898
+subscribe @ @tanstack_react-query.js?v=f6b0456d:24
+(anonymous) @ @tanstack_react-query.js?v=f6b0456d:3022
+subscribeToStore @ chunk-XQLYTHWV.js?v=f6b0456d:11984
+commitHookEffectListMount @ chunk-XQLYTHWV.js?v=f6b0456d:16915
+commitPassiveMountOnFiber @ chunk-XQLYTHWV.js?v=f6b0456d:18156
+commitPassiveMountEffects_complete @ chunk-XQLYTHWV.js?v=f6b0456d:18129
+commitPassiveMountEffects_begin @ chunk-XQLYTHWV.js?v=f6b0456d:18119
+commitPassiveMountEffects @ chunk-XQLYTHWV.js?v=f6b0456d:18109
+flushPassiveEffectsImpl @ chunk-XQLYTHWV.js?v=f6b0456d:19490
+flushPassiveEffects @ chunk-XQLYTHWV.js?v=f6b0456d:19447
+performSyncWorkOnRoot @ chunk-XQLYTHWV.js?v=f6b0456d:18868
+flushSyncCallbacks @ chunk-XQLYTHWV.js?v=f6b0456d:9119
+commitRootImpl @ chunk-XQLYTHWV.js?v=f6b0456d:19432
+commitRoot @ chunk-XQLYTHWV.js?v=f6b0456d:19277
+finishConcurrentRender @ chunk-XQLYTHWV.js?v=f6b0456d:18805
+performConcurrentWorkOnRoot @ chunk-XQLYTHWV.js?v=f6b0456d:18718
+workLoop @ chunk-XQLYTHWV.js?v=f6b0456d:197
+flushWork @ chunk-XQLYTHWV.js?v=f6b0456d:176
+performWorkUntilDeadline @ chunk-XQLYTHWV.js?v=f6b0456d:384Understand this error
+kanban-metas.tsx:218 === DEBUG: Recalculando subcategorias ===
+kanban-metas.tsx:219 Client area: 217.5
+kanban-metas.tsx:220 Application tracking state: {}
+kanban-metas.tsx:244 Fungicidas total: 0
+kanban-metas.tsx:245 Inseticidas total: 0
+kanban-metas.tsx:264 New subcategories values: {}
+kanban-metas.tsx:218 === DEBUG: Recalculando subcategorias ===
+kanban-metas.tsx:219 Client area: 217.5
+kanban-metas.tsx:220 Application tracking state: {}
+kanban-metas.tsx:244 Fungicidas total: 0
+kanban-metas.tsx:245 Inseticidas total: 0
+kanban-metas.tsx:264 New subcategories values: {}
+kanban-metas.tsx:218 === DEBUG: Recalculando subcategorias ===
+kanban-metas.tsx:219 Client area: 217.5
+kanban-metas.tsx:220 Application tracking state: {FUNGICIDAS-1: {…}}
+kanban-metas.tsx:244 Fungicidas total: 0
+kanban-metas.tsx:245 Inseticidas total: 0
+kanban-metas.tsx:264 New subcategories values: {}
+kanban-metas.tsx:218 === DEBUG: Recalculando subcategorias ===
+kanban-metas.tsx:219 Client area: 217.5
+kanban-metas.tsx:220 Application tracking state: {FUNGICIDAS-1: {…}, FUNGICIDAS-2: {…}}
+kanban-metas.tsx:226 Processing FUNGICIDAS-2: {status: 'ABERTO', products: Array(2)}
+kanban-metas.tsx:229   Product pricePerHa: 6.50, clientArea: 217.5, total: 1413.75
+kanban-metas.tsx:229   Product pricePerHa: 31.25, clientArea: 217.5, total: 6796.875
+kanban-metas.tsx:232   Group total: 8210.625
+kanban-metas.tsx:244 Fungicidas total: 8210.625
+kanban-metas.tsx:245 Inseticidas total: 0
+kanban-metas.tsx:264 New subcategories values: {fungicidas: '8210.63'}
+kanban-metas.tsx:218 === DEBUG: Recalculando subcategorias ===
+kanban-metas.tsx:219 Client area: 217.5
+kanban-metas.tsx:220 Application tracking state: {FUNGICIDAS-1: {…}, FUNGICIDAS-2: {…}, FUNGICIDAS-3: {…}}
+kanban-metas.tsx:226 Processing FUNGICIDAS-2: {status: 'ABERTO', products: Array(2)}
+kanban-metas.tsx:229   Product pricePerHa: 6.50, clientArea: 217.5, total: 1413.75
+kanban-metas.tsx:229   Product pricePerHa: 31.25, clientArea: 217.5, total: 6796.875
+kanban-metas.tsx:232   Group total: 8210.625
+kanban-metas.tsx:226 Processing FUNGICIDAS-3: {status: 'ABERTO', products: Array(2)}
+kanban-metas.tsx:229   Product pricePerHa: 8.18, clientArea: 217.5, total: 1779.1499999999999
+kanban-metas.tsx:229   Product pricePerHa: 25.20, clientArea: 217.5, total: 5481
+kanban-metas.tsx:232   Group total: 7260.15
+kanban-metas.tsx:244 Fungicidas total: 15470.775
+kanban-metas.tsx:245 Inseticidas total: 0
+kanban-metas.tsx:264 New subcategories values: {fungicidas: '15470.77'}

@@ -1,0 +1,92 @@
+🎯 Objetivo
+
+Calcular comissões de vendas (USD), acompanhar metas por safra, classificar vendas por vencimento (regra de safra), importar PDFs para identificar cliente/produtos, gerar histórico, comparar com a safra anterior e exibir dashboard com gráficos e relatórios exportáveis (Excel/PDF).
+
+⚙️ Funcionalidades
+1) Comissões
+
+Tabela de comissão por produto/categoria com faixas verde / amarela / vermelha.
+
+Cálculo automático por item, considerando IVA do Paraguai (alíquota configurável por produto/categoria; default do sistema configurável).
+
+Totais de comissão:
+
+Por produto, por categoria (fertilizantes, sementes, especialidades, agroquímicos) e total geral.
+
+Campo para lançamento manual (venda casual) com os mesmos critérios (categoria, faixa, IVA, safra).
+
+2) Importação de PDFs
+
+Extração de: cliente, produtos, datas, valor (USD), condições/vencimento.
+
+Associação automática ao cliente e à safra (pelas regras de vencimento abaixo).
+
+Criação/atualização do histórico de vendas (época, volume, valor, comissão aplicada).
+
+3) Regras de Safra (classificação por vencimento)
+
+Safra Verão (Soja): rotulada como “Soja AA/BB” (ex.: Soja 25/26).
+
+Entram todos os pedidos cujo vencimento seja 30/03 ou 30/04 (do ciclo correspondente).
+
+Safrinha (3 vencimentos, por cultura):
+
+Soja (safrinha): vencimento 30/06 (ano vigente).
+
+Milho: rótulo “Milho AA/AA” (ex.: Milho 25/25), vencimento 30/08.
+
+Trigo: (ano vigente), vencimento 30/10.
+
+O sistema deve atribuir a safra com base no vencimento do pedido + cultura detectada.
+
+Obs.: manter essas datas em uma tabela de parâmetros para você poder ajustar no futuro sem mexer em código.
+
+4) Metas por Safra
+
+Campo para inserir a meta (USD) por safra.
+
+Cálculo automático do atingimento (%) = vendas (USD) da safra / meta (USD).
+
+Curva de evolução do atingimento ao longo do tempo.
+
+5) Clientes 80/20
+
+Cadastro com área de plantio, região e culturas.
+
+Atualização do % de plantio por cliente.
+
+Média ponderada do avanço por região (peso = área).
+
+6) Comparação com Safra Anterior
+
+Para cada cliente, listar:
+
+Produtos vendidos na safra anterior que ainda não foram vendidos na safra atual.
+
+“Alertas de oportunidade” por lacunas de portfólio.
+
+Tabelas/relatórios por categoria e por região.
+
+7) Dashboard e Relatórios
+
+Dashboard:
+
+Vendas totais (USD) e comissões totais (USD).
+
+Atingimento de meta por safra (%).
+
+Gráficos:
+
+Comissões por categoria (4 barras) e evolução temporal.
+
+Vendas por categoria e total aproximado.
+
+Avanço de plantio (média ponderada) por região.
+
+Cards de lacunas vs. safra anterior (por cliente).
+
+Relatórios personalizados:
+
+Filtros: período, safra, cliente, região, categoria, produto.
+
+Exportação Excel (.xlsx) e PDF.

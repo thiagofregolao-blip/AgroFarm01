@@ -1,0 +1,55 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+11:29:13 PM [express] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 12 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+11:29:24 PM [express] GET /api/user 401 in 5ms
+11:29:25 PM [express] GET /api/user 401 in 2ms
+11:29:32 PM [express] GET /api/user 304 in 180ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+11:29:38 PM [express] GET /api/user 200 in 182ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+11:30:32 PM [express] GET /api/user 200 in 175ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+11:30:32 PM [express] GET /api/visits 200 in 234ms :: []
+11:30:49 PM [express] GET /api/user 200 in 177ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+11:30:49 PM [express] POST /api/trips/start 400 in 172ms :: {"error":"visit_id é obrigatório"}
+11:30:49 PM [express] GET /api/visits 200 in 237ms :: []
+11:31:01 PM [express] GET /api/user 200 in 172ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+11:31:01 PM [express] POST /api/trips/start 400 in 173ms :: {"error":"visit_id é obrigatório"}
+11:31:01 PM [express] GET /api/visits 200 in 230ms :: []
+11:31:08 PM [express] GET /api/user 200 in 176ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+11:31:08 PM [express] POST /api/trips/start 400 in 174ms :: {"error":"visit_id é obrigatório"}
+11:31:08 PM [express] GET /api/visits 200 in 233ms :: []
+11:31:12 PM [express] GET /api/clients 200 in 250ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297",…
+11:31:15 PM [express] GET /api/farms 200 in 233ms :: []
+file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345
+o?t(o):n(u)},"cb"),s=new r(function(o,u){n=o,t=u}).catch(o=>{throw Error.captureStackTrace(
+                                                                         ^
+
+error: null value in column "client_id" of relation "visits" violates not-null constraint
+    at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async NeonPreparedQuery.execute (/home/runner/workspace/node_modules/src/neon-serverless/session.ts:102:18)
+    at async Object.createVisitsBulk (/home/runner/workspace/server/storage-crm.ts:46:22)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:4590:21) {
+  length: 368,
+  severity: 'ERROR',
+  code: '23502',
+  detail: 'Failing row contains (visit-1760398306682, null, null, null, null, null, null, PLANEJADA, null, Visita Comercial - teste de visita, 2025-10-13 23:31:47.152401+00, 2025-10-13 23:31:47.152401+00).',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'visits',
+  column: 'client_id',
+  dataType: undefined,
+  constraint: undefined,
+  file: 'execMain.c',
+  line: '2021',
+  routine: 'ExecConstraints'
+}
+
+Node.js v20.19.3

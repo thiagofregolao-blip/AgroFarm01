@@ -1,0 +1,637 @@
+perfeito — segue o pacote mobile (Expo + TypeScript) pronto para rodar, com:
+
+sessão por cookie (mesmo modelo do web, sem JWT),
+
+axios com withCredentials: true,
+
+apontando para https://seu-repl.replit.app,
+
+telas: Login → Rota do Dia → Visita Ativa → Agenda por Texto,
+
+offline-first (SQLite + outbox),
+
+tracking e geofence base para Android.
+
+📦 Estrutura
+crm-agro-mobile/
+├─ app.json
+├─ package.json
+├─ tsconfig.json
+├─ babel.config.js
+└─ src/
+   ├─ api/
+   │  └─ client.ts
+   ├─ auth/
+   │  ├─ AuthContext.tsx
+   │  └─ LoginScreen.tsx
+   ├─ db/
+   │  ├─ schema.ts
+   │  └─ state.ts
+   ├─ geo/
+   │  └─ tripDetector.ts
+   ├─ sync/
+   │  └─ sync.ts
+   ├─ features/
+   │  ├─ visits/
+   │  │  ├─ ActiveVisit.tsx
+   │  │  └─ RouteMap.tsx
+   │  └─ agenda/
+   │     └─ AgendaFromText.tsx
+   └─ App.tsx
+
+app.json
+{
+  "expo": {
+    "name": "CRM Agro",
+    "slug": "crm-agro",
+    "scheme": "crmagro",
+    "platforms": ["android"],
+    "android": {
+      "package": "com.suaempresa.crmagro",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
+    }
+  }
+}
+
+package.json
+{
+  "name": "crm-agro-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^1.21.0",
+    "@tanstack/react-query": "^5.51.0",
+    "axios": "^1.7.2",
+    "expo": "~51.0.0",
+    "expo-location": "~16.5.0",
+    "expo-sqlite": "~13.5.0",
+    "expo-task-manager": "~11.8.0",
+    "react": "18.2.0",
+    "react-native": "0.74.0",
+    "react-native-maps": "^1.15.0"
+  },
+  "devDependencies": {
+    "@types/react": "~18.2.79",
+    "@types/react-native": "^0.73.0",
+    "typescript": "^5.3.3"
+  }
+}
+
+tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM"],
+    "jsx": "react",
+    "moduleResolution": "node",
+    "strict": true,
+    "allowJs": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@api/*": ["src/api/*"],
+      "@auth/*": ["src/auth/*"],
+      "@db/*": ["src/db/*"],
+      "@geo/*": ["src/geo/*"],
+      "@sync/*": ["src/sync/*"],
+      "@features/*": ["src/features/*"]
+    }
+  },
+  "include": ["src"]
+}
+
+babel.config.js
+module.exports = function(api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+  };
+};
+
+src/api/client.ts
+import axios from "axios";
+
+// MESMO DOMÍNIO DO BACKEND:
+// troque para sua URL real do Replit (https)
+export const API_BASE = "https://seu-repl.replit.app";
+
+export const api = axios.create({
+  baseURL: `${API_BASE}`,
+  withCredentials: true, // ENVIA/RECEBE COOKIES
+});
+
+// opcional: intercepta para tratar 401 e redirecionar pro login
+export function attachAuthInterceptors(onUnauthorized: () => void) {
+  api.interceptors.response.use(
+    (res) => res,
+    (err) => {
+      if (err?.response?.status === 401) onUnauthorized();
+      return Promise.reject(err);
+    }
+  );
+}
+
+src/auth/AuthContext.tsx
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { api, attachAuthInterceptors } from "@api/client";
+import { Alert } from "react-native";
+
+type User = { id: string; username: string; role: string } | null;
+
+type AuthCtx = {
+  user: User;
+  loading: boolean;
+  login: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  ensure: () => Promise<void>;
+};
+
+const Ctx = createContext<AuthCtx>(null as any);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    attachAuthInterceptors(() => setUser(null));
+    ensure(); // checa sessão ao abrir app
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function ensure() {
+    try {
+      setLoading(true);
+      // endpoint que você já tem no web: retorna usuário logado
+      const { data } = await api.get("/api/me"); // ajuste se for outro path
+      setUser(data || null);
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function login(username: string, password: string) {
+    // mesmo endpoint do web que seta cookie de sessão
+    await api.post("/api/login", { username, password });
+    await ensure();
+  }
+
+  async function logout() {
+    try {
+      await api.post("/api/logout");
+    } catch {}
+    setUser(null);
+  }
+
+  const value = useMemo(() => ({ user, loading, login, logout, ensure }), [user, loading]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useAuth() {
+  return useContext(Ctx);
+}
+
+src/auth/LoginScreen.tsx
+import React, { useState } from "react";
+import { View, Text, TextInput, Button, ActivityIndicator } from "react-native";
+import { useAuth } from "./AuthContext";
+
+export default function LoginScreen() {
+  const { login, loading } = useAuth();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onSubmit() {
+    setBusy(true); setErr(null);
+    try {
+      await login(username.trim(), password);
+    } catch (e: any) {
+      setErr(e?.response?.data?.error || "Falha no login");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 12 }}>
+      <Text style={{ fontSize: 20, fontWeight: "bold" }}>Entrar</Text>
+      <TextInput placeholder="Usuário" value={username} onChangeText={setUsername}
+        autoCapitalize="none" style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10 }} />
+      <TextInput placeholder="Senha" value={password} onChangeText={setPassword} secureTextEntry
+        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10 }} />
+      {err ? <Text style={{ color: "red" }}>{err}</Text> : null}
+      <Button title={busy ? "Entrando..." : "Entrar"} onPress={onSubmit} disabled={busy || loading} />
+      {(busy || loading) && <ActivityIndicator style={{ marginTop: 12 }} />}
+    </View>
+  );
+}
+
+src/db/schema.ts
+import * as SQLite from "expo-sqlite";
+
+export const db = SQLite.openDatabaseSync("crm_agro.db");
+
+export function initDb() {
+  db.execSync(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS visits (
+      id TEXT PRIMARY KEY,
+      client_id TEXT,
+      farm_id TEXT,
+      field_id TEXT,
+      window_start TEXT,
+      window_end TEXT,
+      status TEXT,
+      assignee TEXT,
+      notes TEXT,
+      updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS trips (
+      id TEXT PRIMARY KEY,
+      visit_id TEXT,
+      started_at TEXT,
+      ended_at TEXT,
+      start_odometer INTEGER,
+      end_odometer INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS telemetry_buffer (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trip_id TEXT,
+      ts TEXT,
+      lat REAL,
+      lng REAL,
+      speed_kmh REAL,
+      accuracy_m REAL
+    );
+    CREATE TABLE IF NOT EXISTS outbox (
+      op_id TEXT PRIMARY KEY,
+      type TEXT,
+      payload TEXT,
+      attempts INTEGER DEFAULT 0,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+  `);
+}
+
+src/db/state.ts
+import { db } from "./schema";
+
+export function setState(key: string, value: string) {
+  db.runSync("INSERT OR REPLACE INTO app_state(key,value) VALUES (?,?)", [key, value]);
+}
+export function getState(key: string): string | null {
+  const row = db.getFirstSync("SELECT value FROM app_state WHERE key=?", [key]) as any;
+  return row?.value ?? null;
+}
+
+src/sync/sync.ts
+import { db } from "@db/schema";
+import { api } from "@api/client";
+
+export async function syncNow() {
+  // PULL delta simples (você pode guardar um carimbo real em app_state)
+  const last = "2024-01-01T00:00:00Z";
+  const { data: serverVisits } = await api.get("/api/visits", { params: { updated_since: last } });
+  db.withTransactionSync(() => {
+    for (const v of serverVisits) {
+      db.execSync(
+        `INSERT OR REPLACE INTO visits(id,client_id,farm_id,field_id,window_start,window_end,status,assignee,notes,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))`,
+        [v.id, v.clientId, v.farmId, v.fieldId, v.windowStart, v.windowEnd, v.status, v.assignee, v.notes]
+      );
+    }
+  });
+
+  // PUSH Outbox (ex.: TRIP_START)
+  const pending = db.getAllSync("SELECT op_id, type, payload, attempts FROM outbox ORDER BY created_at ASC");
+  for (const op of (pending as any[]) || []) {
+    try {
+      const payload = JSON.parse(op.payload);
+      if (op.type === "TRIP_START") {
+        await api.post("/api/trips/start", payload, { headers: { "X-Op-Id": op.op_id } });
+      }
+      db.runSync("DELETE FROM outbox WHERE op_id=?", [op.op_id]);
+    } catch {
+      db.runSync("UPDATE outbox SET attempts = attempts + 1 WHERE op_id=?", [op.op_id]);
+      break; // aplica backoff natural
+    }
+  }
+}
+
+export function enqueue(op_type: string, payload: any) {
+  const op_id = Math.random().toString(36).slice(2);
+  db.runSync(
+    "INSERT OR REPLACE INTO outbox(op_id,type,payload,created_at) VALUES (?,?,?,datetime('now'))",
+    [op_id, op_type, JSON.stringify(payload)]
+  );
+}
+
+src/geo/tripDetector.ts
+import * as Location from "expo-location";
+import * as TaskManager from "expo-task-manager";
+import { enqueue } from "@sync/sync";
+
+const GEOFENCE_TASK = "GEOFENCE_BASE";
+const TRACK_TASK = "TRACK_TRIP";
+let lastExitAt: number | null = null;
+
+export async function registerBaseGeofence(lat: number, lng: number, radius = 200) {
+  await Location.startGeofencingAsync(GEOFENCE_TASK, [{ latitude: lat, longitude: lng, radius, identifier: "base" }]);
+}
+
+TaskManager.defineTask(GEOFENCE_TASK, ({ data, error }) => {
+  if (error || !data) return;
+  const { eventType } = (data as any).region || {};
+  if (eventType === Location.GeofencingEventType.Exit) lastExitAt = Date.now();
+});
+
+export async function maybeStartTrip(visit_id: string, loc: Location.LocationObject) {
+  const speedKmh = ((loc.coords.speed ?? 0) * 3.6);
+  const recentlyExited = lastExitAt && (Date.now() - lastExitAt) < 10 * 60 * 1000;
+  if (recentlyExited && speedKmh > 15) {
+    enqueue("TRIP_START", {
+      visit_id,
+      gps: { lat: loc.coords.latitude, lng: loc.coords.longitude, speed_kmh: speedKmh, accuracy_m: loc.coords.accuracy },
+      odometer: null,
+      op_id: `${visit_id}-${lastExitAt}`
+    });
+    await startTracking();
+  }
+}
+
+export async function startTracking() {
+  await Location.startLocationUpdatesAsync(TRACK_TASK, {
+    accuracy: Location.Accuracy.High,
+    timeInterval: 7000,
+    distanceInterval: 10,
+    showsBackgroundLocationIndicator: true,
+    pausesUpdatesAutomatically: true
+  });
+}
+
+TaskManager.defineTask(TRACK_TASK, ({ data, error }) => {
+  if (error || !data) return;
+  // você pode armazenar pontos em telemetry_buffer aqui e enviar em lote via sync
+});
+
+src/features/visits/ActiveVisit.tsx
+import React, { useEffect, useState } from "react";
+import { View, Text, FlatList, TouchableOpacity } from "react-native";
+import { db } from "@db/schema";
+import { setState, getState } from "@db/state";
+
+export default function ActiveVisit() {
+  const [visits, setVisits] = useState<any[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(getState("active_visit_id"));
+
+  useEffect(() => {
+    const v = db.getAllSync("SELECT id, client_id, window_start, status FROM visits ORDER BY window_start");
+    setVisits((v as any[]) || []);
+  }, []);
+
+  function choose(id: string) {
+    setActiveId(id);
+    setState("active_visit_id", id);
+  }
+
+  return (
+    <View style={{ padding: 16 }}>
+      <Text style={{ fontWeight: "bold", marginBottom: 8 }}>Rota do dia — selecione a visita ativa</Text>
+      <FlatList
+        data={visits}
+        keyExtractor={(i: any) => i.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            onPress={() => choose(item.id)}
+            style={{ padding: 12, borderWidth: 1, borderColor: activeId === item.id ? "green" : "#ddd", marginBottom: 8, borderRadius: 8 }}
+          >
+            <Text>{item.client_id} • {item.status}</Text>
+            <Text>{item.window_start || "sem janela"}</Text>
+            {activeId === item.id && <Text style={{ color: "green" }}>VISITA ATIVA</Text>}
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+}
+
+src/features/visits/RouteMap.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, FlatList } from "react-native";
+import MapView, { Marker, Polyline } from "react-native-maps";
+import { api } from "@api/client";
+
+const BASE = { lat: -25.3, lng: -57.6 };
+
+function haversine(a: {lat:number,lng:number}, b: {lat:number,lng:number}) {
+  const R = 6371; const dLat = (b.lat-a.lat)*Math.PI/180; const dLng = (b.lng-a.lng)*Math.PI/180;
+  const s1 = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s1));
+}
+function pinColor(status?: string) {
+  switch(status){
+    case "PLANEJADA": return "#9aa0a6";
+    case "PRONTA": return "#1e90ff";
+    case "EM_DESLOCAMENTO": return "#ff8c00";
+    case "NO_LOCAL": return "#34a853";
+    case "CONCLUIDA": return "#6f42c1";
+    default: return "#9aa0a6";
+  }
+}
+
+export default function RouteMap() {
+  const [visits, setVisits] = useState<any[]>([]);
+  const mapRef = useRef<MapView>(null);
+
+  useEffect(() => {
+    (async () => {
+      const today = new Date().toISOString().slice(0,10);
+      const { data } = await api.get("/api/visits/route", { params: { date: today } });
+      const filtered = (data || []).filter((v: any) => v.lat && v.lng);
+      setVisits(filtered);
+      setTimeout(() => {
+        try {
+          const coords = [{latitude: BASE.lat, longitude: BASE.lng}, ...filtered.map((v: any) => ({ latitude: v.lat, longitude: v.lng }))];
+          if (coords.length>1) mapRef.current?.fitToCoordinates(coords, { edgePadding: { top: 60, bottom: 60, left: 40, right: 40 }, animated: false });
+        } catch {}
+      }, 300);
+    })();
+  }, []);
+
+  const ordered = useMemo(() => {
+    const withScore = visits.map((v: any) => {
+      const timeScore = v.window_start ? new Date(v.window_start).getTime() : Number.MAX_SAFE_INTEGER;
+      const dist = haversine(BASE, { lat: v.lat, lng: v.lng });
+      return { ...v, _time: timeScore, _dist: dist };
+    });
+    withScore.sort((a: any, b: any) => (a._time - b._time) || (a._dist - b._dist));
+    return withScore;
+  }, [visits]);
+
+  const polylineCoords = [{ latitude: BASE.lat, longitude: BASE.lng }, ...ordered.map((v: any) => ({ latitude: v.lat, longitude: v.lng }))];
+
+  return (
+    <View style={{ flex: 1 }}>
+      <MapView ref={mapRef} style={{ flex: 1 }} initialRegion={{ latitude: BASE.lat, longitude: BASE.lng, latitudeDelta: 0.2, longitudeDelta: 0.2 }}>
+        <Marker coordinate={{ latitude: BASE.lat, longitude: BASE.lng }} title="Base" pinColor="#000" />
+        {ordered.map((v: any, i: number) => (
+          <Marker key={v.id} coordinate={{ latitude: v.lat, longitude: v.lng }} title={`${i+1}. ${v.client_id}`} description={v.window_start || ""} pinColor={pinColor(v.status)} />
+        ))}
+        {polylineCoords.length>1 && (<Polyline coordinates={polylineCoords} strokeColor="#1e90ff" strokeWidth={3} />)}
+      </MapView>
+      <FlatList
+        data={ordered}
+        keyExtractor={(i: any) => i.id}
+        renderItem={({ item, index }) => (
+          <View style={{ padding: 12, borderBottomWidth: 1, borderColor: "#eee" }}>
+            <Text>{index+1}. {item.client_id} • {item.status}</Text>
+            <Text>{item.window_start ? new Date(item.window_start).toLocaleTimeString() : "sem horário"}</Text>
+            <Text style={{ color: "#666" }}>~{item._dist.toFixed(1)} km da base</Text>
+          </View>
+        )}
+      />
+    </View>
+  );
+}
+
+src/features/agenda/AgendaFromText.tsx
+import React, { useState } from "react";
+import { View, Text, TextInput, Button, FlatList } from "react-native";
+import { api } from "@api/client";
+
+export default function AgendaFromText() {
+  const [text, setText] = useState("amanhã: João Pereira inspeção 08:00; Maria Lopes amostra 10:30 (obs: prioridade)");
+  const [items, setItems] = useState<any[]>([]);
+
+  async function parse() {
+    const { data } = await api.post("/api/agenda/parse", { text });
+    setItems(data.items || []);
+  }
+  async function confirm() {
+    const payload = items.filter(i => i.client_id).map(i => ({
+      client_id: i.client_id, intent: i.intent, date: i.date, time: i.time, notes: i.notes, priority: i.priority
+    }));
+    if (!payload.length) return;
+    await api.post("/api/agenda/confirm", { items: payload });
+    setItems([]); setText("");
+  }
+
+  return (
+    <View style={{ padding: 16, gap: 12 }}>
+      <Text style={{ fontWeight: "bold" }}>Gerar agenda por texto</Text>
+      <TextInput value={text} onChangeText={setText} placeholder="Digite aqui..." multiline
+        style={{ minHeight: 100, borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 8 }} />
+      <Button title="Analisar" onPress={parse} />
+      <FlatList
+        data={items}
+        keyExtractor={(_, i) => String(i)}
+        renderItem={({ item }) => (
+          <View style={{ padding: 8, borderBottomWidth: 1, borderColor: "#eee" }}>
+            <Text>Cliente: {item.client_name} {item.client_id ? "✅" : "❓"}</Text>
+            <Text>Intent: {item.intent || "-"}</Text>
+            <Text>Dia/Hora: {item.date} {item.time || ""}</Text>
+            {item.notes ? <Text>Obs: {item.notes}</Text> : null}
+            <Text>Prioridade: {item.priority || "-"}</Text>
+          </View>
+        )}
+      />
+      <Button title="Confirmar e criar visitas" onPress={confirm} />
+    </View>
+  );
+}
+
+src/App.tsx
+import React, { useEffect } from "react";
+import { View, Text, Button, ScrollView, ActivityIndicator } from "react-native";
+import { initDb } from "@db/schema";
+import { syncNow } from "@sync/sync";
+import { registerBaseGeofence } from "@geo/tripDetector";
+import { AuthProvider, useAuth } from "@auth/AuthContext";
+import LoginScreen from "@auth/LoginScreen";
+import ActiveVisit from "@features/visits/ActiveVisit";
+import RouteMap from "@features/visits/RouteMap";
+import AgendaFromText from "@features/agenda/AgendaFromText";
+
+function Main() {
+  const { user, loading, logout } = useAuth();
+
+  useEffect(() => {
+    initDb();
+    registerBaseGeofence(-25.3000, -57.6000, 200);
+  }, []);
+
+  if (loading) {
+    return <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator /></View>;
+  }
+
+  if (!user) return <LoginScreen />;
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={{ fontSize: 18, fontWeight: "bold" }}>CRM Agro — Android</Text>
+        <Button title="Sair" onPress={logout} />
+      </View>
+
+      <Button title="Sincronizar agora" onPress={() => syncNow()} />
+
+      <ActiveVisit />
+
+      <View style={{ height: 400 }}>
+        <RouteMap />
+      </View>
+
+      <AgendaFromText />
+    </ScrollView>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Main />
+    </AuthProvider>
+  );
+}
+
+▶️ Como rodar
+
+Crie a pasta crm-agro-mobile/ e adicione os arquivos acima.
+
+No terminal:
+
+cd crm-agro-mobile
+npm i
+npx expo start
+
+
+Abra no Android (Expo Go).
+
+Garanta que seu backend (Replit) está servindo:
+
+https://seu-repl.replit.app/api/login (POST) → retorna Set-Cookie de sessão,
+
+https://seu-repl.replit.app/api/me (GET) → retorna o usuário logado,
+
+todas as rotas /api/... do CRM.
+
+Dica: para cookies funcionarem em mobile, o servidor deve setar SameSite=None; Secure no cookie (se estiver em https), e o domínio deve permitir o envio do cookie no app. Como estamos no mesmo domínio (sem subdomínios diferentes), normalmente basta withCredentials: true.

@@ -1,0 +1,900 @@
+perfeito — vou te entregar um gerador de projeto em um único arquivo.
+Você cola isso num Replit “Node.js”, executa node create-crm-agro.js, e ele cria todo o monorepo (server + mobile) já com o código que desenhamos (Android-only prioritário). Depois é só instalar e rodar.
+
+Como usar (no Replit)
+
+Crie um Repl de Node.js vazio.
+
+Crie um arquivo chamado create-crm-agro.js e cole o código abaixo.
+
+No shell do Replit, rode:
+
+node create-crm-agro.js
+
+
+Ele vai gerar as pastas server/ e mobile/ com todos os arquivos.
+
+Edite server/.env (copie de .env.example) e aponte DATABASE_URL para o seu Postgres (pode ser Neon/Supabase).
+
+Instale e rode o server:
+
+cd server
+npm i
+npm run migrate   # cria extensões/tabelas
+npm run dev       # sobe API em :8080 (ou variável PORT)
+
+
+Para o mobile (Android-only):
+
+Baixe a pasta mobile/ e rode localmente:
+
+cd mobile
+npm i
+npx expo start
+
+
+Ajuste mobile/src/api/client.ts com a URL do teu servidor (o da Replit/NGROK/VPN etc.).
+
+Arquivo único: create-crm-agro.js
+
+Gera monorepo com server (Node/Express + Postgres) e mobile (Expo/React Native), incluindo endpoints, migrations, sync offline/outbox, geofence heurística, rota do dia, agenda por texto (parser simples).
+
+// create-crm-agro.js
+// Gerador de monorepo CRM Agro (Android-first) — Server + Mobile
+// Uso: node create-crm-agro.js
+
+const fs = require('fs');
+const path = require('path');
+
+const files = {
+  '.gitignore': `
+node_modules
+.expo
+dist
+.env
+  `.trim(),
+
+  'README.md': `
+# CRM Agro — Monorepo (Expo + Node + Postgres)
+
+Android-first (sem iOS por enquanto). Offline-first + agenda por texto + tracking/rota.
+
+## Pastas
+- server/ — API Express + Postgres
+- mobile/ — App Expo (Android)
+
+## Rodar server
+cd server
+npm i
+npm run migrate
+npm run dev
+
+## Rodar mobile
+cd mobile
+npm i
+npx expo start
+  `.trim(),
+
+  // ---------------- SERVER ----------------
+  'server/package.json': JSON.stringify({
+    name: "crm-agro-server",
+    version: "0.1.0",
+    type: "module",
+    scripts: {
+      dev: "node --watch src/index.js",
+      migrate: "node scripts/migrate.js"
+    },
+    dependencies: {
+      express: "^4.19.2",
+      cors: "^2.8.5",
+      morgan: "^1.10.0",
+      pg: "^8.12.0",
+      "fuse.js": "^7.0.0"
+    }
+  }, null, 2),
+
+  'server/.env.example': `
+PORT=8080
+DATABASE_URL=postgres://user:pass@host:5432/crm_agro
+TZ=America/Asuncion
+NODE_ENV=development
+  `.trim(),
+
+  'server/src/index.js': `
+import express from 'express';
+import cors from 'cors';
+import morgan from 'morgan';
+import visitsRouter from './routes/visits.js';
+import tripsRouter from './routes/trips.js';
+import checklistsRouter from './routes/checklists.js';
+import automationsRouter from './routes/automations.js';
+import healthRouter from './routes/health.js';
+import geoRouter from './routes/geo.js';
+import agendaRouter from './routes/agenda.js';
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(morgan('dev'));
+
+app.use('/api/visits', visitsRouter);
+app.use('/api/trips', tripsRouter);
+app.use('/api/checklists', checklistsRouter);
+app.use('/api/automations', automationsRouter);
+app.use('/api/geo', geoRouter);
+app.use('/api/agenda', agendaRouter);
+app.use('/healthz', healthRouter);
+
+const port = process.env.PORT || 8080;
+app.listen(port, () => console.log('[server] listening on :' + port));
+  `.trim(),
+
+  'server/src/db.js': `
+import pkg from 'pg';
+const { Pool } = pkg;
+
+export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const q = (text, params) => pool.query(text, params);
+  `.trim(),
+
+  'server/src/routes/health.js': `
+import { Router } from 'express';
+const r = Router();
+r.get('/', (_, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+export default r;
+  `.trim(),
+
+  'server/src/services/stateMachine.js': `
+export const transitions = {
+  PLANEJADA: ['PRONTA','EM_DESLOCAMENTO'],
+  PRONTA: ['EM_DESLOCAMENTO','PLANEJADA'],
+  EM_DESLOCAMENTO: ['NO_LOCAL','PLANEJADA'],
+  NO_LOCAL: ['CONCLUIDA','EM_DESLOCAMENTO'],
+  CONCLUIDA: []
+};
+export function canTransition(from, to){ return (transitions[from]||[]).includes(to); }
+  `.trim(),
+
+  'server/src/routes/visits.js': `
+import { Router } from 'express';
+import { q } from '../db.js';
+import { canTransition } from '../services/stateMachine.js';
+import crypto from 'crypto';
+const r = Router();
+
+// GET /api/visits?assignee=...&updated_since=ISO
+r.get('/', async (req, res) => {
+  const { assignee, updated_since } = req.query;
+  const rows = (await q(
+    \`SELECT v.* FROM visits v
+     WHERE ($1::uuid IS NULL OR v.assignee = $1::uuid)
+       AND ($2::timestamptz IS NULL OR v.window_start >= $2::timestamptz)
+     ORDER BY v.window_start NULLS LAST\`,
+    [assignee || null, updated_since || null]
+  )).rows;
+  res.json(rows);
+});
+
+// GET /api/visits/route?assignee=...&date=YYYY-MM-DD
+r.get('/route', async (req, res) => {
+  const { assignee, date } = req.query;
+  const rows = (await q(
+    \`SELECT v.id, v.client_id, v.status, v.window_start, v.window_end,
+            COALESCE(ST_Y(ST_Centroid(f.geom)), ST_Y(fa.centroid)) AS lat,
+            COALESCE(ST_X(ST_Centroid(f.geom)), ST_X(fa.centroid)) AS lng
+       FROM visits v
+  LEFT JOIN fields f ON f.id = v.field_id
+  LEFT JOIN farms  fa ON fa.id = v.farm_id
+      WHERE ($1::uuid IS NULL OR v.assignee = $1::uuid)
+        AND ($2::date IS NULL OR v.window_start::date = $2::date)
+   ORDER BY v.window_start NULLS LAST\`,
+    [assignee || null, date || null]
+  )).rows;
+  res.json(rows);
+});
+
+// POST /api/visits (bulk permitido)
+r.post('/', async (req, res) => {
+  const payload = Array.isArray(req.body) ? req.body : [req.body];
+  const values = [];
+  const inserts = payload.map((v, i) => {
+    const id = v.id || crypto.randomUUID();
+    const off = i * 10;
+    values.push(
+      id, v.client_id, v.farm_id || null, v.field_id || null,
+      v.scheduled_at || null, v.window_start || null, v.window_end || null,
+      v.status || 'PLANEJADA', v.assignee || null, v.notes || null
+    );
+    return \`($\${off+1},$\${off+2},$\${off+3},$\${off+4},$\${off+5},$\${off+6},$\${off+7},$\${off+8},$\${off+9},$\${off+10})\`;
+  }).join(',');
+
+  const sql = \`INSERT INTO visits (id,client_id,farm_id,field_id,scheduled_at,window_start,window_end,status,assignee,notes)
+               VALUES \${inserts} RETURNING *\`;
+  const rows = (await q(sql, values)).rows;
+  res.status(201).json(rows);
+});
+
+// PATCH /api/visits/:id/status { status }
+r.patch('/:id/status', async (req, res) => {
+  const { id } = req.params; const { status } = req.body;
+  const cur = (await q('SELECT status FROM visits WHERE id=$1', [id])).rows[0];
+  if (!cur) return res.status(404).json({ error: 'visita não encontrada' });
+  if (!canTransition(cur.status, status)) return res.status(409).json({ error: \`transição inválida \${cur.status} -> \${status}\` });
+  const row = (await q('UPDATE visits SET status=$1 WHERE id=$2 RETURNING *', [status, id])).rows[0];
+  res.json(row);
+});
+
+export default r;
+  `.trim(),
+
+  'server/src/routes/trips.js': `
+import { Router } from 'express';
+import { q } from '../db.js';
+import crypto from 'crypto';
+const r = Router();
+
+// POST /api/trips/start { visit_id, gps:{lat,lng}, odometer, op_id }
+r.post('/start', async (req, res) => {
+  const { visit_id, gps, odometer, op_id } = req.body || {};
+  if (!visit_id) return res.status(400).json({ error: 'visit_id é obrigatório' });
+  const dup = (await q("SELECT 1 FROM audit_logs WHERE action=$1 AND payload->>'op_id'=$2 LIMIT 1", ['TRIP_START', op_id || ''])).rows[0];
+  if (dup) return res.json({ ok: true, duplicate: true });
+
+  const id = crypto.randomUUID();
+  await q('INSERT INTO trips (id, visit_id, started_at, start_odometer) VALUES ($1,$2,now(),$3)', [id, visit_id, odometer || null]);
+  await q('UPDATE visits SET status=$1 WHERE id=$2', ['EM_DESLOCAMENTO', visit_id]);
+  await q('INSERT INTO audit_logs(action, entity, entity_id, payload) VALUES ($1,$2,$3,$4)', ['TRIP_START','trip', id, { op_id }]);
+  if (gps?.lat && gps?.lng) {
+    await q('INSERT INTO telemetry_gps(trip_id, ts, lat, lng, speed_kmh, accuracy_m) VALUES ($1, now(), $2, $3, $4, $5)', [id, gps.lat, gps.lng, gps.speed_kmh || null, gps.accuracy_m || null]);
+  }
+  res.status(201).json({ id, visit_id });
+});
+
+// POST /api/trips/gps  [{ trip_id, ts, lat, lng, speed_kmh, accuracy_m }]
+r.post('/gps', async (req, res) => {
+  const batch = Array.isArray(req.body) ? req.body : [];
+  if (!batch.length) return res.json({ inserted: 0 });
+  const values = [];
+  const rows = batch.map((p, i) => {
+    const off = i * 6;
+    values.push(p.trip_id, p.ts || new Date().toISOString(), p.lat, p.lng, p.speed_kmh || null, p.accuracy_m || null);
+    return \`($\${off+1},$\${off+2},$\${off+3},$\${off+4},$\${off+5},$\${off+6})\`;
+  }).join(',');
+  await q(\`INSERT INTO telemetry_gps(trip_id, ts, lat, lng, speed_kmh, accuracy_m) VALUES \${rows}\`, values);
+  res.json({ inserted: batch.length });
+});
+
+// POST /api/trips/:id/end { odometer }
+r.post('/:id/end', async (req, res) => {
+  const { id } = req.params; const { odometer } = req.body || {};
+  const trip = (await q('SELECT * FROM trips WHERE id=$1', [id])).rows[0];
+  if (!trip) return res.status(404).json({ error: 'trip não encontrada' });
+  await q('UPDATE trips SET ended_at=now(), end_odometer=$1 WHERE id=$2', [odometer || null, id]);
+  await q('UPDATE visits SET status=$1 WHERE id=(SELECT visit_id FROM trips WHERE id=$2)', ['NO_LOCAL', id]);
+  res.json({ ok: true });
+});
+
+export default r;
+  `.trim(),
+
+  'server/src/routes/checklists.js': `
+import { Router } from 'express';
+import { q } from '../db.js';
+import crypto from 'crypto';
+const r = Router();
+
+// POST /api/checklists/:visitId { template, answers, photos, signatures, finished }
+r.post('/:visitId', async (req, res) => {
+  const { visitId } = req.params;
+  const id = crypto.randomUUID();
+  const { template, answers, photos, signatures, finished } = req.body || {};
+  await q('INSERT INTO checklists(id, visit_id, template, answers, photos, signatures, finished, finished_at) VALUES ($1,$2,$3,$4,$5,$6,$7, CASE WHEN $7 THEN now() ELSE NULL END)',
+    [id, visitId, template || null, answers || {}, photos || {}, signatures || {}, !!finished]
+  );
+  if (finished) await q('UPDATE visits SET status=$1 WHERE id=$2', ['CONCLUIDA', visitId]);
+  res.status(201).json({ id, visit_id: visitId });
+});
+
+export default r;
+  `.trim(),
+
+  'server/src/routes/automations.js': `
+import { Router } from 'express';
+const r = Router();
+// placeholder p/ futuras automações (BullMQ/worker)
+r.get('/', (_, res)=> res.json({ ok: true, items: [] }));
+export default r;
+  `.trim(),
+
+  'server/src/services/geo.service.js': `
+import { q } from '../db.js';
+export async function pointInsideField(fieldId, lat, lng) {
+  const sql = "SELECT ST_Contains(geom, ST_SetSRID(ST_Point($1,$2),4326)) AS inside FROM fields WHERE id=$3";
+  const row = (await q(sql, [lng, lat, fieldId])).rows[0];
+  return !!row?.inside;
+}
+  `.trim(),
+
+  'server/src/routes/geo.js': `
+import { Router } from 'express';
+import { pointInsideField } from '../services/geo.service.js';
+const r = Router();
+
+// GET /api/geo/fields/:id/contains?lat=..&lng=..
+r.get('/fields/:id/contains', async (req, res) => {
+  const { id } = req.params; const { lat, lng } = req.query;
+  if (!lat || !lng) return res.status(400).json({ error: 'lat/lng obrigatórios' });
+  const inside = await pointInsideField(id, parseFloat(lat), parseFloat(lng));
+  res.json({ inside });
+});
+
+export default r;
+  `.trim(),
+
+  'server/src/services/nlp.service.js': `
+import Fuse from 'fuse.js';
+import { q } from '../db.js';
+
+function normalize(s){ return s.normalize('NFD').replace(/\\p{Diacritic}/gu,'').toLowerCase(); }
+
+const INTENT_MAP = {
+  'inspecao': 'INSPECAO_SOJA', 'inspeção': 'INSPECAO_SOJA',
+  'amostra': 'AMOSTRA_SOLO',
+  'pos-venda': 'POS_VENDA', 'pós-venda': 'POS_VENDA',
+  'colheita': 'INSPECAO_COLHEITA'
+};
+
+function parseLines(text){
+  const lines = text.split(/\\n|;|,/).map(l=>l.trim()).filter(Boolean);
+  const items = [];
+  for (const raw of lines) {
+    const s = normalize(raw);
+    const item = { client_name: raw };
+    if (/\\burgente\\b|\\bprioriza\\b/.test(s)) item.priority = 'A';
+    else if (/\\balta\\b/.test(s)) item.priority = 'A';
+    else if (/\\bmedia\\b|\\bmédia\\b/.test(s)) item.priority = 'B';
+    else if (/\\bbaixa\\b/.test(s)) item.priority = 'C';
+    for (const k of Object.keys(INTENT_MAP)) { if (s.includes(normalize(k))) { item.intent = INTENT_MAP[k]; break; } }
+    const hm = s.match(/\\b(\\d{1,2})(?:[:h](\\d{2}))?\\b/);
+    if (hm) { const hh = hm[1].padStart(2,'0'); const mm = (hm[2]||'00').padStart(2,'0'); item.time = \`\${hh}:\${mm}\`; }
+    const obs = s.match(/obs[:\\-\\s]+(.+)$/) || raw.match(/\\((.+)\\)/);
+    if (obs) item.notes = obs[1];
+    items.push(item);
+  }
+  return items;
+}
+
+export async function parseAgenda(text) {
+  const items = parseLines(text);
+  const rows = (await q('SELECT id, name FROM clients WHERE active = true')).rows;
+  const fuse = new Fuse(rows, { keys: ['name'], threshold: 0.3 });
+  const resolved = items.map(i => { const best = fuse.search(i.client_name)[0]; return { ...i, client_id: best?.item?.id }; });
+  const d = new Date().toISOString().slice(0,10);
+  return resolved.map(i=> ({ ...i, date: i.date || d }));
+}
+  `.trim(),
+
+  'server/src/routes/agenda.js': `
+import { Router } from 'express';
+import { q } from '../db.js';
+import { parseAgenda } from '../services/nlp.service.js';
+import crypto from 'crypto';
+const r = Router();
+
+// POST /api/agenda/parse { text }
+r.post('/parse', async (req, res) => {
+  const { text } = req.body || {};
+  if (!text) return res.status(400).json({ error: 'text é obrigatório' });
+  const parsed = await parseAgenda(text);
+  res.json({ items: parsed.map(p => ({ ...p, match_ok: !!p.client_id })) });
+});
+
+// POST /api/agenda/confirm { items: [...] }
+r.post('/confirm', async (req, res) => {
+  const { items } = req.body || {};
+  if (!Array.isArray(items) || items.length===0) return res.status(400).json({ error: 'items vazio' });
+  const values = [];
+  const rows = items.map((v, i) => {
+    const id = crypto.randomUUID(); const off = i*10;
+    const dt = v.date + (v.time? \`T\${v.time}:00-03:00\` : 'T09:00:00-03:00');
+    values.push(id, v.client_id, null, null, dt, dt, null, 'PLANEJADA', v.assignee || null, v.notes || null);
+    return \`($\${off+1},$\${off+2},$\${off+3},$\${off+4},$\${off+5},$\${off+6},$\${off+7},$\${off+8},$\${off+9},$\${off+10})\`;
+  }).join(',');
+  const sql = \`INSERT INTO visits (id,client_id,farm_id,field_id,scheduled_at,window_start,window_end,status,assignee,notes) VALUES \${rows} RETURNING *\`;
+  const inserted = (await q(sql, values)).rows;
+  res.status(201).json({ created: inserted.length, visits: inserted });
+});
+
+export default r;
+  `.trim(),
+
+  'server/migrations/000_init_postgis.sql': `
+CREATE EXTENSION IF NOT EXISTS postgis;
+  `.trim(),
+
+  'server/migrations/001_schema_core.sql': `
+CREATE TABLE IF NOT EXISTS clients (
+  id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  cluster TEXT,
+  priority CHAR(1),
+  active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS farms (
+  id UUID PRIMARY KEY,
+  client_id UUID REFERENCES clients(id),
+  name TEXT,
+  centroid GEOMETRY(Point, 4326)
+);
+
+CREATE TABLE IF NOT EXISTS fields (
+  id UUID PRIMARY KEY,
+  farm_id UUID REFERENCES farms(id),
+  name TEXT,
+  crop TEXT,
+  season TEXT,
+  geom GEOMETRY(Polygon, 4326) NOT NULL,
+  area_ha NUMERIC GENERATED ALWAYS AS (ST_Area(geom::geography)/10000.0) STORED,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  updated_by UUID
+);
+CREATE INDEX IF NOT EXISTS fields_gix ON fields USING GIST (geom);
+
+CREATE TABLE IF NOT EXISTS visits (
+  id UUID PRIMARY KEY,
+  client_id UUID REFERENCES clients(id),
+  farm_id UUID REFERENCES farms(id),
+  field_id UUID REFERENCES fields(id),
+  scheduled_at TIMESTAMPTZ,
+  window_start TIMESTAMPTZ,
+  window_end TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'PLANEJADA',
+  assignee UUID,
+  notes TEXT,
+  CONSTRAINT visits_status_chk CHECK (status IN ('PLANEJADA','PRONTA','EM_DESLOCAMENTO','NO_LOCAL','CONCLUIDA'))
+);
+
+CREATE TABLE IF NOT EXISTS trips (
+  id UUID PRIMARY KEY,
+  visit_id UUID REFERENCES visits(id),
+  started_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
+  start_odometer INT,
+  end_odometer INT,
+  distance_km NUMERIC
+);
+
+CREATE TABLE IF NOT EXISTS telemetry_gps (
+  id BIGSERIAL PRIMARY KEY,
+  trip_id UUID REFERENCES trips(id),
+  ts TIMESTAMPTZ,
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  speed_kmh NUMERIC,
+  accuracy_m NUMERIC
+);
+
+CREATE TABLE IF NOT EXISTS checklists (
+  id UUID PRIMARY KEY,
+  visit_id UUID REFERENCES visits(id),
+  template TEXT,
+  answers JSONB,
+  photos JSONB,
+  signatures JSONB,
+  finished BOOLEAN DEFAULT FALSE,
+  finished_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS automations (
+  id UUID PRIMARY KEY,
+  title TEXT,
+  active BOOLEAN DEFAULT TRUE,
+  schedule TEXT,
+  config JSONB
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  at TIMESTAMPTZ DEFAULT now(),
+  actor UUID,
+  action TEXT,
+  entity TEXT,
+  entity_id TEXT,
+  payload JSONB
+);
+  `.trim(),
+
+  'server/scripts/migrate.js': `
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { q } from '../src/db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function run() {
+  const dir = path.join(__dirname, '..', 'migrations');
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort();
+  for (const f of files) {
+    const sql = fs.readFileSync(path.join(dir, f), 'utf8');
+    console.log('[migrate]', f);
+    if (sql.trim()) await q(sql);
+  }
+  console.log('migrations done');
+  process.exit(0);
+}
+run().catch(e => { console.error(e); process.exit(1); });
+  `.trim(),
+
+  // ---------------- MOBILE ----------------
+  'mobile/package.json': JSON.stringify({
+    name: "crm-agro-mobile",
+    version: "0.1.0",
+    private: true,
+    main: "expo-router/entry",
+    scripts: {
+      start: "expo start",
+      android: "expo run:android"
+    },
+    dependencies: {
+      expo: "~51.0.0",
+      "expo-location": "~16.5.0",
+      "expo-task-manager": "~11.8.0",
+      "expo-sqlite": "~13.5.0",
+      "@react-native-async-storage/async-storage": "^1.21.0",
+      react: "18.2.0",
+      "react-native": "0.74.0",
+      "@tanstack/react-query": "^5.51.0",
+      axios: "^1.7.2",
+      "react-native-maps": "^1.15.0",
+      "expo-router": "^3.7.0"
+    }
+  }, null, 2),
+
+  'mobile/app.json': JSON.stringify({
+    expo: {
+      name: "CRM Agro",
+      slug: "crm-agro",
+      android: {
+        package: "com.suaempresa.crmagro",
+        permissions: ["ACCESS_FINE_LOCATION","ACCESS_BACKGROUND_LOCATION"]
+      }
+    }
+  }, null, 2),
+
+  'mobile/src/api/client.ts': `
+import axios from 'axios';
+// Altere para a URL pública do seu servidor (Replit/NGROK/VPN)
+export const api = axios.create({ baseURL: 'http://localhost:8080' });
+  `.trim(),
+
+  'mobile/src/db/schema.ts': `
+import * as SQLite from 'expo-sqlite';
+export const db = SQLite.openDatabaseSync('crm_agro.db');
+
+export function initDb() {
+  db.execSync(\`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS visits (
+      id TEXT PRIMARY KEY,
+      client_id TEXT,
+      farm_id TEXT,
+      field_id TEXT,
+      window_start TEXT,
+      window_end TEXT,
+      status TEXT,
+      assignee TEXT,
+      notes TEXT,
+      updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS trips (
+      id TEXT PRIMARY KEY,
+      visit_id TEXT,
+      started_at TEXT,
+      ended_at TEXT,
+      start_odometer INTEGER,
+      end_odometer INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS telemetry_buffer (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trip_id TEXT,
+      ts TEXT,
+      lat REAL,
+      lng REAL,
+      speed_kmh REAL,
+      accuracy_m REAL
+    );
+    CREATE TABLE IF NOT EXISTS outbox (
+      op_id TEXT PRIMARY KEY,
+      type TEXT,
+      payload TEXT,
+      attempts INTEGER DEFAULT 0,
+      created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+  \`);
+}
+  `.trim(),
+
+  'mobile/src/db/state.ts': `
+import { db } from './schema';
+export function setState(key, value){ db.runSync('INSERT OR REPLACE INTO app_state(key,value) VALUES (?,?)', [key, value]); }
+export function getState(key){ const row = db.getFirstSync('SELECT value FROM app_state WHERE key=?', [key]); return row?.value ?? null; }
+  `.trim(),
+
+  'mobile/src/sync/sync.ts': `
+import { db } from '../db/schema';
+import { api } from '../api/client';
+
+export async function syncNow() {
+  const last = '2024-01-01T00:00:00Z';
+  const { data: serverVisits } = await api.get('/api/visits', { params: { updated_since: last } });
+  db.withTransactionSync(() => {
+    for (const v of serverVisits) {
+      db.execSync(\`INSERT OR REPLACE INTO visits(id,client_id,farm_id,field_id,window_start,window_end,status,assignee,notes,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))\`,
+        [v.id, v.client_id, v.farm_id, v.field_id, v.window_start, v.window_end, v.status, v.assignee, v.notes]
+      );
+    }
+  });
+
+  const pending = db.getAllSync('SELECT op_id, type, payload, attempts FROM outbox ORDER BY created_at ASC');
+  for (const op of pending || []) {
+    try {
+      const payload = JSON.parse(op.payload);
+      if (op.type === 'TRIP_START') await api.post('/api/trips/start', payload, { headers: { 'X-Op-Id': op.op_id } });
+      db.runSync('DELETE FROM outbox WHERE op_id=?', [op.op_id]);
+    } catch(e){
+      db.runSync('UPDATE outbox SET attempts = attempts + 1 WHERE op_id=?', [op.op_id]);
+      break;
+    }
+  }
+}
+
+export function enqueue(op_type, payload){
+  const op_id = Math.random().toString(36).slice(2);
+  db.runSync("INSERT OR REPLACE INTO outbox(op_id,type,payload,created_at) VALUES (?,?,?,datetime('now'))", [op_id, op_type, JSON.stringify(payload)]);
+}
+  `.trim(),
+
+  'mobile/src/geo/tripDetector.ts': `
+import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
+import { enqueue } from '../sync/sync';
+
+const GEOFENCE_TASK = 'GEOFENCE_BASE';
+const TRACK_TASK = 'TRACK_TRIP';
+let lastExitAt = null;
+
+export async function registerBaseGeofence(lat, lng, radius = 200) {
+  await Location.startGeofencingAsync(GEOFENCE_TASK, [{ latitude: lat, longitude: lng, radius, identifier: 'base' }]);
+}
+
+TaskManager.defineTask(GEOFENCE_TASK, ({ data, error }) => {
+  if (error || !data) return;
+  const { eventType } = data.region || {};
+  if (eventType === Location.GeofencingEventType.Exit) lastExitAt = Date.now();
+});
+
+export async function maybeStartTrip(visit_id, loc) {
+  const speedKmh = ((loc.coords.speed ?? 0) * 3.6);
+  const recentlyExited = lastExitAt && (Date.now() - lastExitAt) < 10 * 60 * 1000;
+  if (recentlyExited && speedKmh > 15) {
+    enqueue('TRIP_START', {
+      visit_id,
+      gps: { lat: loc.coords.latitude, lng: loc.coords.longitude, speed_kmh: speedKmh, accuracy_m: loc.coords.accuracy },
+      odometer: null,
+      op_id: visit_id + '-' + lastExitAt
+    });
+    await startTracking();
+  }
+}
+
+export async function startTracking() {
+  await Location.startLocationUpdatesAsync(TRACK_TASK, {
+    accuracy: Location.Accuracy.High,
+    timeInterval: 7000,
+    distanceInterval: 10,
+    showsBackgroundLocationIndicator: true,
+    pausesUpdatesAutomatically: true
+  });
+}
+
+TaskManager.defineTask(TRACK_TASK, ({ data, error }) => {
+  if (error || !data) return;
+  const { locations } = data;
+  // gravações em telemetry_buffer podem ser adicionadas aqui se desejar
+});
+  `.trim(),
+
+  'mobile/src/features/visits/ActiveVisit.tsx': `
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { db } from '../../db/schema';
+import { setState, getState } from '../../db/state';
+
+export default function ActiveVisit(){
+  const [visits, setVisits] = useState([]);
+  const [activeId, setActiveId] = useState(getState('active_visit_id'));
+
+  useEffect(() => {
+    const v = db.getAllSync('SELECT id, client_id, window_start, status FROM visits ORDER BY window_start');
+    setVisits(v || []);
+  }, []);
+
+  function choose(id){
+    setActiveId(id); setState('active_visit_id', id);
+  }
+
+  return (
+    <View style={{ padding: 16 }}>
+      <Text style={{ fontWeight: 'bold' }}>Rota do dia — selecione a visita ativa</Text>
+      <FlatList data={visits} keyExtractor={(i)=>i.id} renderItem={({item})=>(
+        <TouchableOpacity onPress={()=>choose(item.id)} style={{ padding:12, borderWidth:1, borderColor: activeId===item.id?'green':'#ddd', marginVertical:6, borderRadius:8 }}>
+          <Text>{item.client_id} • {item.status}</Text>
+          <Text>{item.window_start || 'sem janela'}</Text>
+        </TouchableOpacity>
+      )}/>
+    </View>
+  );
+}
+  `.trim(),
+
+  'mobile/src/features/visits/RouteMap.tsx': `
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, FlatList } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import { api } from '../../api/client';
+
+const BASE = { lat: -25.3, lng: -57.6 };
+
+function haversine(a,b){
+  const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLng=(b.lng-a.lng)*Math.PI/180;
+  const s1=Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s1));
+}
+function pinColor(status){
+  switch(status){case 'PLANEJADA':return '#9aa0a6';case 'PRONTA':return '#1e90ff';case 'EM_DESLOCAMENTO':return '#ff8c00';case 'NO_LOCAL':return '#34a853';case 'CONCLUIDA':return '#6f42c1';default:return '#9aa0a6';}
+}
+
+export default function RouteMap(){
+  const [visits,setVisits]=useState([]);
+  const mapRef = useRef(null);
+
+  useEffect(()=>{ (async ()=>{
+    const today = new Date().toISOString().slice(0,10);
+    const { data } = await api.get('/api/visits/route', { params: { date: today } });
+    const filtered = (data||[]).filter(v=>v.lat && v.lng);
+    setVisits(filtered);
+    setTimeout(()=>{
+      const coords = [{latitude:BASE.lat, longitude:BASE.lng}, ...filtered.map(v=>({latitude:v.lat, longitude:v.lng}))];
+      if (coords.length>1) mapRef.current?.fitToCoordinates(coords, { edgePadding:{top:60,bottom:60,left:40,right:40}, animated:false });
+    }, 300);
+  })(); },[]);
+
+  const ordered = useMemo(()=>{
+    const withScore = visits.map(v=>{
+      const timeScore = v.window_start ? new Date(v.window_start).getTime() : Number.MAX_SAFE_INTEGER;
+      const dist = haversine(BASE,{lat:v.lat,lng:v.lng});
+      return {...v,_time:timeScore,_dist:dist};
+    });
+    withScore.sort((a,b)=> (a._time-b._time) || (a._dist-b._dist));
+    return withScore;
+  },[visits]);
+
+  const polyline = [{ latitude: BASE.lat, longitude: BASE.lng }, ...ordered.map(v=>({latitude:v.lat, longitude:v.lng}))];
+
+  return (
+    <View style={{ flex:1 }}>
+      <MapView ref={mapRef} style={{ flex:1 }} initialRegion={{ latitude: BASE.lat, longitude: BASE.lng, latitudeDelta: 0.2, longitudeDelta: 0.2 }}>
+        <Marker coordinate={{ latitude: BASE.lat, longitude: BASE.lng }} title="Base" pinColor="#000" />
+        {ordered.map((v,i)=> <Marker key={v.id} coordinate={{ latitude:v.lat, longitude:v.lng }} title={\`\${i+1}. \${v.client_id}\`} description={v.window_start||''} pinColor={pinColor(v.status)} />)}
+        {polyline.length>1 && <Polyline coordinates={polyline} strokeColor="#1e90ff" strokeWidth={3} />}
+      </MapView>
+      <FlatList data={ordered} keyExtractor={(i)=>i.id} renderItem={({item,index})=>(
+        <View style={{ padding:12, borderBottomWidth:1, borderColor:'#eee' }}>
+          <Text>{index+1}. {item.client_id} • {item.status}</Text>
+          <Text>{item.window_start ? new Date(item.window_start).toLocaleTimeString() : 'sem horário'}</Text>
+          <Text style={{ color:'#666' }}>~{item._dist.toFixed(1)} km da base</Text>
+        </View>
+      )}/>
+    </View>
+  );
+}
+  `.trim(),
+
+  'mobile/src/features/agenda/AgendaFromText.tsx': `
+import React, { useState } from 'react';
+import { View, Text, TextInput, Button, FlatList } from 'react-native';
+import { api } from '../../api/client';
+
+export default function AgendaFromText(){
+  const [text,setText]=useState('amanhã: João Pereira inspeção 08:00; Maria Lopes amostra 10:30 (obs: prioridade)');
+  const [items,setItems]=useState([]);
+
+  async function parse(){ const { data } = await api.post('/api/agenda/parse', { text }); setItems(data.items||[]); }
+  async function confirm(){
+    const payload = items.filter(i=>i.client_id).map(i=>({ client_id:i.client_id, intent:i.intent, date:i.date, time:i.time, notes:i.notes, priority:i.priority }));
+    if (!payload.length) return;
+    await api.post('/api/agenda/confirm', { items: payload });
+    setItems([]); setText('');
+  }
+
+  return (
+    <View style={{ padding:16, gap:12 }}>
+      <Text style={{ fontWeight:'bold' }}>Gerar agenda por texto</Text>
+      <TextInput value={text} onChangeText={setText} multiline placeholder="Digite ou cole aqui..." style={{ minHeight:100, borderWidth:1, borderColor:'#ddd', borderRadius:8, padding:8 }} />
+      <Button title="Analisar" onPress={parse} />
+      <FlatList data={items} keyExtractor={(_,i)=>String(i)} renderItem={({item})=>(
+        <View style={{ padding:8, borderBottomWidth:1, borderColor:'#eee' }}>
+          <Text>Cliente: {item.client_name} {item.client_id?'✅':'❓'}</Text>
+          <Text>Intent: {item.intent||'-'}</Text>
+          <Text>Dia/Hora: {item.date} {item.time||''}</Text>
+          {item.notes? <Text>Obs: {item.notes}</Text> : null}
+          <Text>Prioridade: {item.priority||'-'}</Text>
+        </View>
+      )}/>
+      <Button title="Confirmar e criar visitas" onPress={confirm} />
+    </View>
+  );
+}
+  `.trim(),
+
+  'mobile/src/app.tsx': `
+import React, { useEffect } from 'react';
+import { View, Text, Button, ScrollView } from 'react-native';
+import { initDb } from './db/schema';
+import { syncNow } from './sync/sync';
+import { registerBaseGeofence } from './geo/tripDetector';
+import ActiveVisit from './features/visits/ActiveVisit';
+import RouteMap from './features/visits/RouteMap';
+import AgendaFromText from './features/agenda/AgendaFromText';
+
+export default function App(){
+  useEffect(()=>{ initDb(); registerBaseGeofence(-25.3000, -57.6000, 200); },[]);
+  return (
+    <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16, gap:16 }}>
+      <Text style={{ fontSize:18, fontWeight:'bold' }}>CRM Agro — MVP Android</Text>
+      <Button title="Sincronizar agora" onPress={()=>syncNow()} />
+      <ActiveVisit />
+      <View style={{ height: 400 }}>
+        <RouteMap />
+      </View>
+      <AgendaFromText />
+    </ScrollView>
+  );
+}
+  `.trim(),
+};
+
+function writeFileSyncSafe(p, content) {
+  const dir = path.dirname(p);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(p, content);
+}
+
+for (const [rel, content] of Object.entries(files)) {
+  const out = path.join(process.cwd(), rel);
+  writeFileSyncSafe(out, content);
+  console.log('created:', rel);
+}
+
+console.log('\\n✅ Projeto CRM Agro gerado.');
+console.log('> Próximos passos:');
+console.log('1) cd server && npm i && npm run migrate && npm run dev');
+console.log('2) cd mobile && npm i && npx expo start (ajuste API baseURL)');
+
+Observações importantes
+
+Banco de dados: no Replit você vai querer apontar DATABASE_URL para um Postgres gerenciado (Neon, Supabase, RDS etc.).
+
+BaseURL do app: em mobile/src/api/client.ts troque http://localhost:8080 pela URL pública do teu server (Replit gera uma URL pública ao rodar o server).
+
+Android-only: Expo Managed já atende (não incluí configurações de iOS).
+
+VPN: quando for usar na rede da CVale, troque a baseURL por api.crm.intra (ou outro host interno) e siga com Per-App VPN.

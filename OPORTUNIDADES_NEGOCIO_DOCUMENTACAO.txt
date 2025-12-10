@@ -1,0 +1,772 @@
+================================================================================
+          DOCUMENTAÇÃO TÉCNICA COMPLETA - OPORTUNIDADES DE NEGÓCIOS
+================================================================================
+
+Data: 07/11/2025 | Versão Final
+
+RESUMO EXECUTIVO:
+- Menu exibe cards por categoria com progresso de vendas vs potencial
+- Badge AMARELO (includeInMarketArea) = cálculo de potencial  
+- Vendas C.Vale = TODAS as vendas (sem filtro de badge)
+- Penetração = (C.Vale + FECHADO) / Potencial × 100
+
+================================================================================
+1. FÓRMULAS
+================================================================================
+
+• Potencial USD = Σ(área × investimento/ha) [badge AMARELO]
+• C.Vale USD = Σ sales.totalAmount [TODAS vendas]
+• FECHADO USD = Σ totalValue [aplicações FECHADO]
+• Total Capturado = C.Vale + FECHADO
+• Penetração % = (Total Capturado ÷ Potencial) × 100
+
+BADGES:
+- AMARELO (includeInMarketArea=true): mercado potencial
+- VERDE (isTop80_20=true): clientes top 80/20
+
+================================================================================
+2. IMPORTS E CONTEXTO GLOBAL (server/routes.ts)
+================================================================================
+
+TODOS OS IMPORTS NECESSÁRIOS:
+
+```typescript
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { 
+  insertSaleSchema, insertClientSchema, insertCategorySchema, 
+  insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, 
+  insertExternalPurchaseSchema, insertClientFamilyRelationSchema, 
+  insertAlertSettingsSchema, insertAlertSchema, 
+  insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, 
+  insertFarmSchema, insertFieldSchema, subcategories, clients, 
+  sales, seasons, seasonGoals, categories, products, 
+  clientMarketRates, externalPurchases, purchaseHistory, 
+  marketBenchmarks, userClientLinks, masterClients, 
+  salesHistory, clientFamilyRelations, purchaseHistoryItems, 
+  barterSimulations, barterSimulationItems, farms, fields, 
+  passwordResetTokens, users, productsPriceTable, 
+  globalManagementApplications, clientApplicationTracking, 
+  insertClientApplicationTrackingSchema, systemSettings 
+} from "@shared/schema";
+import { visits } from "@shared/schema.crm";
+import { z } from "zod";
+import multer from "multer";
+import { importExcelFile, importClientsFromExcel } from "./import-excel";
+import { 
+  setupAuth, 
+  requireAuth, 
+  requireSuperAdmin, 
+  requireManager 
+} from "./auth";
+import { db } from "./db";
+import { eq, sql, and, gt, desc, inArray } from "drizzle-orm";
+import { parseCVALEPDF } from "./parse-cvale-pdf";
+import { emailService } from "./email";
+import { scrypt, randomBytes } from "crypto";
+import { promisify } from "util";
+```
+
+MIDDLEWARE:
+- requireAuth: valida login do usuário
+- requireManager: valida que usuário é gerente
+- db: instância do Drizzle ORM conectado ao PostgreSQL
+
+================================================================================
+3. ENDPOINT: /api/market-opportunity/category-cards/:seasonId
+================================================================================
+
+LOCALIZAÇÃO: server/routes.ts (linhas 3758-3923)
+MÉTODO: GET | AUTH: requireAuth | PARAM: seasonId (UUID)
+
+CÓDIGO COMPLETO:
+
+```typescript
+app.get("/api/market-opportunity/category-cards/:seasonId", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { seasonId } = req.params;
+    
+    const allCategories = await db.select().from(categories);
+    
+    // Clientes badge AMARELO (includeInMarketArea)
+    const clientsAmarelo = await db.select({
+      id: userClientLinks.id,
+      userArea: userClientLinks.plantingArea,
+      masterArea: masterClients.plantingArea
+    })
+      .from(userClientLinks)
+      .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
+      .where(and(
+        eq(userClientLinks.userId, userId),
+        eq(userClientLinks.includeInMarketArea, true)
+      ));
+    
+    const clientAmareloIds = clientsAmarelo.map(c => c.id);
+    
+    // Market rates (potencial)
+    const marketRates = clientAmareloIds.length > 0 
+      ? await db.select()
+          .from(clientMarketRates)
+          .where(and(
+            eq(clientMarketRates.userId, userId),
+            eq(clientMarketRates.seasonId, seasonId),
+            inArray(clientMarketRates.clientId, clientAmareloIds)
+          ))
+      : [];
+    
+    // TODAS as vendas (sem filtro badge)
+    const salesData = await db.select({
+        categoryId: sales.categoryId,
+        totalAmount: sales.totalAmount
+      })
+      .from(sales)
+      .where(and(
+        eq(sales.userId, userId),
+        eq(sales.seasonId, seasonId)
+      ));
+    
+    // TODAS aplicações FECHADO (sem filtro badge)
+    const fechadoApps = await db.select({
+        categoria: clientApplicationTracking.categoria,
+        totalValue: clientApplicationTracking.totalValue
+      })
+      .from(clientApplicationTracking)
+      .where(and(
+        eq(clientApplicationTracking.userId, userId),
+        eq(clientApplicationTracking.seasonId, seasonId),
+        eq(clientApplicationTracking.status, 'FECHADO')
+      ));
+    
+    const normalizeCategoryName = (name: string): string => {
+      const agroquimicoVariants = ['FUNGICIDAS', 'INSETICIDAS', 
+                                   'DESSECAÇÃO', 'TRATAMENTO DE SEMENTE', 'TS'];
+      if (agroquimicoVariants.includes(name.toUpperCase())) {
+        return 'Agroquímicos';
+      }
+      return name;
+    };
+    
+    const categoryData = new Map<string, {
+      categoryId: string;
+      categoryName: string;
+      categoryType: string;
+      potentialUsd: number;
+      potentialHa: number;
+      cvaleUsd: number;
+      fechadoUsd: number;
+    }>();
+    
+    allCategories.forEach(cat => {
+      categoryData.set(cat.id, {
+        categoryId: cat.id,
+        categoryName: cat.name,
+        categoryType: cat.type,
+        potentialUsd: 0,
+        potentialHa: 0,
+        cvaleUsd: 0,
+        fechadoUsd: 0
+      });
+    });
+    
+    // Potencial
+    marketRates.forEach(rate => {
+      const client = clientsAmarelo.find(c => c.id === rate.clientId);
+      if (!client) return;
+      
+      const area = parseFloat(client.userArea || client.masterArea || '0');
+      const investmentPerHa = parseFloat(rate.investmentPerHa || '0');
+      const potentialValue = area * investmentPerHa;
+      
+      const catData = categoryData.get(rate.categoryId);
+      if (catData) {
+        catData.potentialUsd += potentialValue;
+        catData.potentialHa += area;
+      }
+    });
+    
+    // C.Vale
+    salesData.forEach(sale => {
+      const catData = categoryData.get(sale.categoryId);
+      if (catData) {
+        catData.cvaleUsd += parseFloat(sale.totalAmount || '0');
+      }
+    });
+    
+    // FECHADO
+    fechadoApps.forEach(app => {
+      const normalizedName = normalizeCategoryName(app.categoria);
+      const category = allCategories.find(c => 
+        c.name === normalizedName || c.type === normalizedName.toLowerCase()
+      );
+      
+      if (category) {
+        const catData = categoryData.get(category.id);
+        if (catData) {
+          catData.fechadoUsd += parseFloat(app.totalValue || '0');
+        }
+      }
+    });
+    
+    const cards = Array.from(categoryData.values())
+      .filter(cat => cat.potentialUsd > 0 || cat.cvaleUsd > 0 || cat.fechadoUsd > 0)
+      .map(cat => {
+        const totalCapturedUsd = cat.cvaleUsd + cat.fechadoUsd;
+        const penetrationPercent = cat.potentialUsd > 0 
+          ? (totalCapturedUsd / cat.potentialUsd) * 100 
+          : 0;
+        
+        return {
+          categoryId: cat.categoryId,
+          categoryName: cat.categoryName,
+          categoryType: cat.categoryType,
+          potentialUsd: cat.potentialUsd,
+          potentialHa: cat.potentialHa,
+          cvaleUsd: cat.cvaleUsd,
+          fechadoUsd: cat.fechadoUsd,
+          totalCapturedUsd,
+          penetrationPercent: Math.min(penetrationPercent, 100)
+        };
+      });
+    
+    res.json({ cards });
+  } catch (error) {
+    console.error("Error fetching market opportunity category cards:", error);
+    res.status(500).json({ error: "Failed to fetch category cards" });
+  }
+});
+```
+
+RESPOSTA:
+```json
+{
+  "cards": [{
+    "categoryId": "uuid",
+    "categoryName": "Fertilizantes",
+    "categoryType": "fertilizantes",
+    "potentialUsd": 1834000.00,
+    "potentialHa": 9170.00,
+    "cvaleUsd": 379089.00,
+    "fechadoUsd": 0.00,
+    "totalCapturedUsd": 379089.00,
+    "penetrationPercent": 20.67
+  }]
+}
+```
+
+================================================================================
+4. ENDPOINT: /api/manager/team-market-percentages-multi
+================================================================================
+
+LOCALIZAÇÃO: server/routes.ts (linhas 5781-5992)
+MÉTODO: GET | AUTH: requireManager | QUERY: seasonIds (CSV)
+
+DIFERENÇA: Usa "Mercado" calculado em vez de "FECHADO"
+
+CÓDIGO COMPLETO:
+
+```typescript
+app.get("/api/manager/team-market-percentages-multi", requireManager, async (req, res) => {
+  try {
+    const { users, clientMarketRates, userClientLinks, masterClients, 
+            clientApplicationTracking, globalManagementApplications, 
+            productsPriceTable } = await import("@shared/schema");
+    const { inArray, and } = await import("drizzle-orm");
+    const managerId = req.user!.id;
+    const seasonIds = (req.query.seasonIds as string)?.split(',').filter(Boolean) || [];
+    
+    if (seasonIds.length === 0) {
+      return res.json({});
+    }
+    
+    const teamMembers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.managerId, managerId));
+    
+    const teamIds = teamMembers.map(m => m.id);
+    
+    if (teamIds.length === 0) {
+      return res.json({});
+    }
+    
+    const categories = await storage.getAllCategories();
+    const products = await storage.getAllProducts();
+    const allSales = await storage.getAllSales();
+    
+    const productCategoryMap = new Map<string, string>();
+    products.forEach(p => {
+      if (p.categoryId) {
+        productCategoryMap.set(p.id, p.categoryId);
+      }
+    });
+    
+    const categoryNameMap = new Map<string, string>();
+    categories.forEach(cat => {
+      categoryNameMap.set(cat.id, cat.name);
+    });
+    
+    const result: Record<string, Record<string, number>> = {};
+    
+    for (const seasonId of seasonIds) {
+      const teamMarketClients = await db.select({ id: userClientLinks.id })
+        .from(userClientLinks)
+        .where(and(
+          inArray(userClientLinks.userId, teamIds),
+          eq(userClientLinks.includeInMarketArea, true)
+        ));
+      
+      const teamMarketClientIds = teamMarketClients.map(c => c.id);
+      
+      // Vendas APENAS de clientes badge AMARELO
+      const teamSales = allSales.filter(s => 
+        teamIds.includes(s.userId) && 
+        s.seasonId === seasonId &&
+        teamMarketClientIds.includes(s.clientId)
+      );
+      
+      const salesByCategory: Record<string, number> = {};
+      categories.forEach(cat => {
+        salesByCategory[cat.id] = 0;
+      });
+      
+      teamSales.forEach(sale => {
+        const categoryId = productCategoryMap.get(sale.productId);
+        if (categoryId) {
+          salesByCategory[categoryId] += parseFloat(sale.totalAmount || '0');
+        }
+      });
+      
+      const teamMarketRates = await db.select()
+        .from(clientMarketRates)
+        .innerJoin(userClientLinks, eq(clientMarketRates.clientId, userClientLinks.id))
+        .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
+        .where(and(
+          inArray(userClientLinks.userId, teamIds),
+          eq(clientMarketRates.seasonId, seasonId),
+          eq(userClientLinks.includeInMarketArea, true)
+        ));
+      
+      const potentialByCategory: Record<string, number> = {};
+      categories.forEach(cat => {
+        potentialByCategory[cat.id] = 0;
+      });
+      
+      teamMarketRates.forEach(rate => {
+        const categoryId = rate.client_market_rates.categoryId;
+        const plantingArea = parseFloat(rate.master_clients.plantingArea || '0');
+        const investmentPerHa = parseFloat(rate.client_market_rates.investmentPerHa || '0');
+        const potential = plantingArea * investmentPerHa;
+        
+        if (potentialByCategory.hasOwnProperty(categoryId)) {
+          potentialByCategory[categoryId] += potential;
+        }
+      });
+      
+      const agroquimicosCategory = categories.find(c => c.type === 'agroquimicos');
+      const agroquimicosCategoryId = agroquimicosCategory?.id || '';
+      
+      const teamApplicationTrackingRaw = await db.select({
+        clientId: clientApplicationTracking.clientId,
+        productId: globalManagementApplications.productId,
+        plantingArea: masterClients.plantingArea
+      })
+        .from(clientApplicationTracking)
+        .innerJoin(globalManagementApplications, 
+                   eq(clientApplicationTracking.globalApplicationId, 
+                      globalManagementApplications.id))
+        .innerJoin(userClientLinks, 
+                   eq(clientApplicationTracking.clientId, userClientLinks.id))
+        .innerJoin(masterClients, 
+                   eq(userClientLinks.masterClientId, masterClients.id))
+        .where(and(
+          inArray(userClientLinks.userId, teamIds),
+          eq(globalManagementApplications.seasonId, seasonId),
+          eq(userClientLinks.includeInMarketArea, true),
+          eq(clientApplicationTracking.status, 'FECHADO')
+        ));
+      
+      const productIds = Array.from(new Set(
+        teamApplicationTrackingRaw.map(t => t.productId)
+      ));
+      const productPrices = productIds.length > 0 
+        ? await db.select({
+            id: productsPriceTable.id,
+            precoVerde: productsPriceTable.precoVerde
+          })
+          .from(productsPriceTable)
+          .where(inArray(productsPriceTable.id, productIds)) 
+        : [];
+      
+      const productPriceMap = new Map(
+        productPrices.map(p => [p.id, parseFloat(p.precoVerde || '0')])
+      );
+      
+      let totalFechadoAgroquimicos = 0;
+      teamApplicationTrackingRaw.forEach(tracking => {
+        const pricePerHa = productPriceMap.get(tracking.productId) || 0;
+        const area = parseFloat(tracking.plantingArea || '0');
+        totalFechadoAgroquimicos += pricePerHa * area;
+      });
+      
+      const fechadoByCategory: Record<string, number> = {};
+      categories.forEach(cat => {
+        fechadoByCategory[cat.id] = 0;
+      });
+      
+      if (agroquimicosCategoryId) {
+        fechadoByCategory[agroquimicosCategoryId] = totalFechadoAgroquimicos;
+      }
+      
+      // Mercado = Potencial - C.Vale - FECHADO
+      const marketValuesByCategory: Record<string, number> = {};
+      categories.forEach(cat => {
+        const potential = potentialByCategory[cat.id] || 0;
+        const sales = salesByCategory[cat.id] || 0;
+        const fechado = fechadoByCategory[cat.id] || 0;
+        
+        const mercado = Math.max(0, potential - sales - fechado);
+        marketValuesByCategory[cat.id] = mercado;
+      });
+      
+      const categoryPercentages: Record<string, number> = {};
+      
+      const standardCategories = [
+        'Agroquímicos', 'Especialidades', 'Fertilizantes', 'Corretivos',
+        'Sementes Soja', 'Sementes Milho', 'Sementes Trigo', 'Sementes Diversas'
+      ];
+      
+      standardCategories.forEach(catName => {
+        categoryPercentages[catName] = 0;
+      });
+      
+      categories.forEach(cat => {
+        const potential = potentialByCategory[cat.id] || 0;
+        const sales = salesByCategory[cat.id] || 0;
+        const mercado = marketValuesByCategory[cat.id] || 0;
+        const totalWorked = sales + mercado;
+        
+        const marketPercentage = potential > 0 
+          ? (totalWorked / potential) * 100 
+          : 0;
+        const categoryName = categoryNameMap.get(cat.id);
+        if (categoryName) {
+          categoryPercentages[categoryName] = marketPercentage;
+        }
+      });
+      
+      result[seasonId] = categoryPercentages;
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching team market percentages:", error);
+    res.status(500).json({ error: "Failed to fetch team market percentages" });
+  }
+});
+```
+
+DIFERENÇAS:
+- Vendas: APENAS badge AMARELO (não todas)
+- Usa "Mercado" = Potencial - C.Vale - FECHADO
+- Fórmula: (C.Vale + Mercado) / Potencial × 100
+
+================================================================================
+5. FRONTEND - client/src/pages/kanban-metas.tsx (ARQUIVO COMPLETO)
+================================================================================
+
+```typescript
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import MarketManagementPanel from "@/components/MarketManagementPanel";
+import Header from "@/components/layout/header";
+import Navbar from "@/components/layout/navbar";
+import { TrendingUp, DollarSign, Layers } from "lucide-react";
+
+interface Client { id: string; name: string; }
+interface Season { id: string; name: string; }
+interface CategoryCard {
+  categoryId: string;
+  categoryName: string;
+  categoryType: string;
+  potentialUsd: number;
+  potentialHa: number;
+  cvaleUsd: number;
+  fechadoUsd: number;
+  totalCapturedUsd: number;
+  penetrationPercent: number;
+}
+
+export default function KanbanMetasPage() {
+  const [viewSeasonId, setViewSeasonId] = useState<string>("");
+  const [showMarketPanel, setShowMarketPanel] = useState(false);
+  const [selectedMarketClient, setSelectedMarketClient] = useState<{
+    clientId: string; clientName: string;
+  } | null>(null);
+
+  const { data: seasons } = useQuery<Season[]>({
+    queryKey: ["/api/seasons"]
+  });
+
+  const { data: clients } = useQuery<Client[]>({
+    queryKey: ["/api/clients", { top8020: "true" }],
+    queryFn: async () => {
+      const res = await fetch("/api/clients?top8020=true", { 
+        credentials: "include" 
+      });
+      if (!res.ok) throw new Error("Failed to fetch clients");
+      return res.json();
+    }
+  });
+
+  const { data: categoryCardsData, isLoading: isLoadingCards } = 
+    useQuery<{ cards: CategoryCard[] }>({
+      queryKey: ["/api/market-opportunity/category-cards", viewSeasonId],
+      queryFn: async () => {
+        const res = await fetch(
+          `/api/market-opportunity/category-cards/${viewSeasonId}`, 
+          { credentials: "include" }
+        );
+        if (!res.ok) throw new Error("Failed to fetch category cards");
+        return res.json();
+      },
+      enabled: !!viewSeasonId
+    });
+
+  const handleNextClient = () => {
+    if (!clients || !selectedMarketClient) return;
+    const currentIndex = clients.findIndex(
+      c => c.id === selectedMarketClient.clientId
+    );
+    if (currentIndex === -1 || currentIndex === clients.length - 1) return;
+    const nextClient = clients[currentIndex + 1];
+    setSelectedMarketClient({
+      clientId: nextClient.id,
+      clientName: nextClient.name
+    });
+  };
+
+  const hasNextClient = () => {
+    if (!clients || !selectedMarketClient) return false;
+    const currentIndex = clients.findIndex(
+      c => c.id === selectedMarketClient.clientId
+    );
+    return currentIndex !== -1 && currentIndex < clients.length - 1;
+  };
+
+  return (
+    <div className="h-screen flex flex-col overflow-hidden">
+      <Header 
+        title="Oportunidades de Negócios"
+        subtitle="Gestão de oportunidades de mercado"
+        showNewSaleButton={false}
+      />
+      <Navbar />
+      
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <h1 className="text-2xl font-bold">Oportunidades de Negócios</h1>
+            
+            <div className="space-y-2 max-w-2xl">
+              <Label>Safra</Label>
+              <Select value={viewSeasonId} onValueChange={setViewSeasonId}>
+                <SelectTrigger data-testid="select-season">
+                  <SelectValue placeholder="Selecione uma safra" />
+                </SelectTrigger>
+                <SelectContent>
+                  {seasons?.map(season => (
+                    <SelectItem key={season.id} value={season.id}>
+                      {season.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {viewSeasonId && categoryCardsData && 
+             categoryCardsData.cards.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Progresso de Mercado por Categoria
+                </h2>
+                
+                {isLoadingCards ? (
+                  <div className="text-sm text-muted-foreground">Carregando...</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {categoryCardsData.cards.map((card) => (
+                      <Card key={card.categoryId} 
+                            data-testid={`category-card-${card.categoryType}`}>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg">
+                            {card.categoryName}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="flex items-start gap-2">
+                            <Layers className="h-4 w-4 text-muted-foreground mt-0.5" />
+                            <div className="flex-1">
+                              <div className="text-xs text-muted-foreground">
+                                Potencial de Mercado
+                              </div>
+                              <div className="font-semibold">
+                                ${card.potentialUsd.toLocaleString('pt-BR', { 
+                                  minimumFractionDigits: 2, 
+                                  maximumFractionDigits: 2 
+                                })}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {card.potentialHa.toLocaleString('pt-BR', { 
+                                  minimumFractionDigits: 2, 
+                                  maximumFractionDigits: 2 
+                                })} ha
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start gap-2">
+                            <DollarSign className="h-4 w-4 text-green-600 mt-0.5" />
+                            <div className="flex-1">
+                              <div className="text-xs text-muted-foreground">
+                                Vendas C.Vale
+                              </div>
+                              <div className="font-semibold text-green-600">
+                                ${card.cvaleUsd.toLocaleString('pt-BR', { 
+                                  minimumFractionDigits: 2, 
+                                  maximumFractionDigits: 2 
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start gap-2">
+                            <DollarSign className="h-4 w-4 text-blue-600 mt-0.5" />
+                            <div className="flex-1">
+                              <div className="text-xs text-muted-foreground">
+                                Aplicações Fechadas
+                              </div>
+                              <div className="font-semibold text-blue-600">
+                                ${card.fechadoUsd.toLocaleString('pt-BR', { 
+                                  minimumFractionDigits: 2, 
+                                  maximumFractionDigits: 2 
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="pt-2 border-t">
+                            <div className="text-xs text-muted-foreground mb-1">
+                              Total Capturado
+                            </div>
+                            <div className="font-bold text-primary">
+                              ${card.totalCapturedUsd.toLocaleString('pt-BR', { 
+                                minimumFractionDigits: 2, 
+                                maximumFractionDigits: 2 
+                              })}
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-muted-foreground">
+                                Penetração de Mercado
+                              </span>
+                              <span className="font-semibold">
+                                {card.penetrationPercent.toFixed(1)}%
+                              </span>
+                            </div>
+                            <Progress 
+                              value={card.penetrationPercent} 
+                              className="h-2"
+                              data-testid={`progress-${card.categoryType}`}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {viewSeasonId && clients && clients.length > 0 && (
+              <div className="space-y-2 max-w-2xl">
+                <Label>Cliente</Label>
+                <Select 
+                  value={selectedMarketClient?.clientId || ""} 
+                  onValueChange={(clientId) => {
+                    const client = clients.find(c => c.id === clientId);
+                    if (client) {
+                      setSelectedMarketClient({ 
+                        clientId: client.id, 
+                        clientName: client.name 
+                      });
+                      setShowMarketPanel(true);
+                    }
+                  }}
+                >
+                  <SelectTrigger data-testid="select-client">
+                    <SelectValue placeholder="Selecione um cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map(client => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+
+      {selectedMarketClient && (
+        <MarketManagementPanel
+          clientId={selectedMarketClient.clientId}
+          clientName={selectedMarketClient.clientName}
+          seasonId={viewSeasonId}
+          isOpen={showMarketPanel}
+          onClose={() => {
+            setShowMarketPanel(false);
+            setSelectedMarketClient(null);
+          }}
+          onNextClient={handleNextClient}
+          hasNextClient={hasNextClient()}
+        />
+      )}
+    </div>
+  );
+}
+```
+
+================================================================================
+6. COMPARAÇÃO CONSULTOR vs GERENTE
+================================================================================
+
+ASPECTO          | CONSULTOR              | GERENTE
+-----------------|------------------------|----------------------
+Badge Potencial  | AMARELO               | AMARELO
+Badge Vendas     | NENHUM (todas)        | AMARELO
+Métrica          | FECHADO (real)        | Mercado (calculado)
+Fórmula          | (C+F)/P × 100         | (C+M)/P × 100
+Agregação        | Individual            | Equipe
+Safras           | 1                     | Até 3
+
+POR QUE PENETRAÇÃO PODE ESTAR ZERO NO GERENTE:
+1. Nenhum cliente badge AMARELO na equipe
+2. Nenhum clientMarketRate cadastrado
+3. Vendas de clientes SEM badge amarelo
+4. Potencial zerado
+
+================================================================================
+FIM
+================================================================================

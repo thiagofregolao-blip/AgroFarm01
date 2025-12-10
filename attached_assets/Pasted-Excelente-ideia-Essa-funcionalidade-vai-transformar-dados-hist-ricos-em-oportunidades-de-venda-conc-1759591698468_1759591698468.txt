@@ -1,0 +1,57 @@
+Excelente ideia! Essa funcionalidade vai transformar dados históricos em oportunidades de venda concretas. Analisando o PDF que você enviou, vejo que contém informações valiosas do cliente SERGIO MIOTTO na safra 2024/2025.
+
+Minha Sugestão de Implementação
+1. Nova Página "Histórico de Compras" no menu lateral com:
+
+Importação de PDF:
+
+Upload do PDF de histórico do cliente
+Extração automática: cliente, produtos, quantidades, datas, valores
+Associação ao cliente existente no sistema
+Dashboard de Comparação por Cliente:
+
+Lado A: Produtos comprados na safra anterior (do PDF histórico)
+Lado B: Produtos já comprados na safra atual (do sistema)
+Gap Analysis: Produtos que o cliente costuma comprar mas ainda não comprou este ano
+Timeline Visual Mensal:
+
+Calendário de 12 meses mostrando:
+✅ Meses onde o cliente comprou (histórico)
+📍 Mês atual
+⚠️ Produtos que normalmente compra neste mês mas não comprou ainda
+💡 Alertas de oportunidade baseados no padrão histórico
+Cards de Oportunidades:
+
+Lista de produtos prioritários para contato
+Valor potencial estimado baseado no histórico
+Dias desde última compra vs padrão histórico
+2. Integração com Sistema Atual:
+
+Conectar com a tabela de clientes existente
+Usar os produtos já cadastrados
+Gerar insights na página de "Análise de Mercado"
+Isso vai permitir uma abordagem proativa: em vez de esperar o cliente ligar, você identifica quando ele está "atrasado" em relação ao padrão dele e pode fazer contato preventivo.
+O usuário quer criar um menu de histórico de vendas onde:
+
+Importar PDF com informações de compras do cliente na safra anterior
+Comparar o que já foi comprado pelo cliente vs o que ainda não foi comprado na safra atual
+Mostrar datas de compra
+Criar ferramenta que mostre os meses em que ele comprou
+Comparar com mês atual para ver se foi comprado ou não
+Objetivo: gerar novas oportunidades de venda
+O PDF mostra um relatório de pedidos da C.Vale com:
+
+Cliente (Entidad): SERGIO MIOTTO
+Várias datas de pedidos (Emisión): 25/09/23, 09/02/24, 09/03/24, 26/07/24, 22/08/24, 29/08/24, 18/09/24, 08/10/24, 17/10/24, 29/10/24
+Produtos (Mercaderia) com códigos
+Quantidade (Cant. Solic.)
+Valor unitário (Valor Unit.)
+Valor total (Valor Total)
+Vencimento: 30/04/25 (Fecha Pago)
+Safra: ZAFRA SOJA 30/04 - 2024/2025
+Preciso entender o que o usuário quer:
+
+Histórico de Compras: Armazenar compras históricas importadas do PDF
+Comparação: Comparar produtos comprados no histórico vs vendas atuais
+Timeline mensal: Mostrar em quais meses o cliente comprou e se já comprou no mês atual
+Oportunidades: Identificar produtos que cliente comprou antes mas ainda não comprou nesta safra

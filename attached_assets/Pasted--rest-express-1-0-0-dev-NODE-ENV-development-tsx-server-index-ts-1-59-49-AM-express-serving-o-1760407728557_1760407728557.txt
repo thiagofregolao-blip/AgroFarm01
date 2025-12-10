@@ -1,0 +1,45 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+1:59:49 AM [express] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 12 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+2:00:02 AM [express] GET /api/user 304 in 175ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+2:00:06 AM [express] GET /api/user 401 in 3ms
+2:00:09 AM [express] GET /api/user 200 in 182ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+2:00:09 AM [express] GET /api/visits 200 in 249ms :: []
+2:00:26 AM [express] GET /api/user 200 in 177ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+2:00:27 AM [express] GET /api/visits 200 in 234ms :: []
+2:07:54 AM [express] GET /api/clients 200 in 922ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297",…
+2:07:58 AM [express] GET /api/farms 200 in 285ms :: []
+file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345
+o?t(o):n(u)},"cb"),s=new r(function(o,u){n=o,t=u}).catch(o=>{throw Error.captureStackTrace(
+                                                                         ^
+
+error: null value in column "client_id" of relation "farms" violates not-null constraint
+    at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async NeonPreparedQuery.execute (/home/runner/workspace/node_modules/src/neon-serverless/session.ts:102:18)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:4699:23) {
+  length: 325,
+  severity: 'ERROR',
+  code: '23502',
+  detail: 'Failing row contains (ff6331ba-ac32-4b03-a11b-f67ed5dbc622, null, fazenda teste, null, -24.2544530, -54.7669050, null, null, 2025-10-14 02:08:32.170279).',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'farms',
+  column: 'client_id',
+  dataType: undefined,
+  constraint: undefined,
+  file: 'execMain.c',
+  line: '2021',
+  routine: 'ExecConstraints'
+}
+
+Node.js v20.19.3

@@ -1,0 +1,204 @@
+perfeito 👏 então vamos com tudo incluído desde o início — nada de deixar pra depois.
+isso significa que o CRM Agro PWA vai nascer 100% funcional, com todos os módulos ativos desde o MVP.
+
+deixa eu consolidar tudo pra garantir que o escopo está completo 👇
+
+🧱 CRM AGRO PWA — ESCOPO FINAL (versão completa)
+🔐 1️⃣ Autenticação e Perfis
+
+Login com usuário/senha (sessions, cookies)
+
+Perfis:
+
+Consultor
+
+Gerente
+
+Admin
+
+Sessão persistente (lembrar-me)
+
+Logout
+
+Tela de perfil (editar senha, ver dados)
+
+👥 2️⃣ Clientes, Fazendas e Talhões
+
+Lista completa de clientes com busca
+
+Cada cliente:
+
+múltiplas fazendas
+
+cada fazenda com talhões (polígonos e área calculada via PostGIS)
+
+centroide exibido no mapa
+
+Histórico de atendimentos por cliente
+
+Upload de fotos, relatórios e documentos (checklists e PDFs)
+
+Visualização no mapa com todos os campos do cliente
+
+Download/visualização de relatórios anexados
+
+📅 3️⃣ Agenda e Visitas
+
+Criação de visitas por texto (parser NLP)
+
+amanhã: João Pereira inspeção 08:00; Maria Lopes amostra 10:30
+
+
+Edição manual e reordenação
+
+Filtros por status (planejada / em curso / concluída)
+
+Sincronização completa com backend
+
+Alertas automáticos de horário
+
+🚗 4️⃣ Viagens e Tracking
+
+Botão “Iniciar viagem” manual ou automático via geofence
+
+Registra percurso completo com tempo, distância e pontos GPS
+
+Detecta chegada automática à fazenda:
+→ notifica e abre a visita correspondente
+
+Tracking mesmo offline (buffer local → sync depois)
+
+Exibe trilha da rota do dia no mapa
+
+🧾 5️⃣ Checklists de Campo
+
+Templates por tipo de visita (ex: inspeção, coleta, venda)
+
+Campos:
+
+textos
+
+múltipla escolha
+
+fotos
+
+assinatura digital
+
+Validação antes de enviar
+
+Salva offline e sincroniza quando voltar sinal
+
+🕓 6️⃣ Histórico e Relatórios
+
+Listagem de todas as visitas concluídas
+
+Filtros por período e cliente
+
+Exibe:
+
+duração média
+
+km percorridos
+
+tempo de deslocamento
+
+Exportação em PDF/Excel
+
+Histórico de atendimentos por cliente
+
+Visualização de fotos e relatórios anexados
+
+⚙️ 7️⃣ Automação
+
+Ao sair da base → inicia viagem
+
+Ao entrar em fazenda → muda status da visita pra “em andamento”
+
+Ao sair da área → encerra visita e finaliza viagem
+
+Ao concluir checklist → muda status pra “concluída”
+
+Notificações locais e push (Service Worker)
+
+📍 8️⃣ Mapa
+
+Mostra rota otimizada da agenda do dia
+
+Pinos dos clientes com status (cores)
+
+Mapa offline com cache de tiles
+
+Modo satélite e terreno
+
+Polígonos dos talhões
+
+⚡ 9️⃣ Offline e Sincronização
+
+IndexedDB local
+
+Outbox pattern (pendências)
+
+Sincronização automática ao reconectar
+
+Indicador visual de sync ativo/pendente
+
+🔔 10️⃣ Notificações
+
+Push via Service Worker
+
+Notificações locais:
+
+“Saída detectada — iniciar viagem?”
+
+“Chegou ao cliente João Pereira — iniciar visita?”
+
+“Checklist pendente”
+
+Vibrar + som
+
+🧰 11️⃣ Painel do Gerente (modo web)
+
+Visualiza em tempo real:
+
+posição atual dos consultores
+
+status das visitas
+
+progresso diário
+
+Relatórios de produtividade
+
+Filtros por equipe e data
+
+🧩 STACK TÉCNICA
+
+Frontend: React + TypeScript + Vite
+
+Offline: IndexedDB (Dexie.js)
+
+Mapa: Leaflet com cache local
+
+Backend: já existente (Express + Drizzle + PostGIS)
+
+Notificações: Service Worker + Web Push
+
+Empacotamento futuro: Capacitor (para Android APK)
+
+🚀 Proposta de Entrega
+
+1️⃣ Fase 1 — Estrutura e Login (1 dia)
+2️⃣ Fase 2 — Clientes/Fazendas/Mapa (2 dias)
+3️⃣ Fase 3 — Agenda + Visitas + Tracking (2 dias)
+4️⃣ Fase 4 — Checklists + Histórico + Relatórios (2 dias)
+5️⃣ Fase 5 — Automação + Notificações + Offline Sync (2 dias)
+
+Total estimado: ~9 dias de desenvolvimento
+(tudo no Replit, 100% testável, pronto pra empacotar em APK)
+
+⚙️ antes de eu gerar o código base, me confirma só:
+
+quer o projeto PWA em React com Vite + TypeScript (mais leve e rápido que Next)?
+
+quer que eu já inclua o Service Worker + cache offline + push notifications desde a base inicial?
+
+aí eu já gero o esqueleto completo do app pra rodar direto no Replit.

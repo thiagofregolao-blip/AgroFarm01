@@ -1,0 +1,58 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+1:21:29 AM [express] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 12 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+1:21:37 AM [express] GET /api/clients 401 in 4ms :: {"error":"Authentication required"}
+1:21:37 AM [express] GET /api/user 401 in 1ms
+1:21:42 AM [express] GET /api/user 304 in 185ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+1:21:42 AM [express] GET /api/clients 200 in 233ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297",…
+1:21:48 AM [express] GET /api/user 200 in 174ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+1:21:48 AM [express] GET /api/visits 200 in 233ms :: []
+1:22:05 AM [express] GET /api/user 200 in 201ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+1:22:05 AM [express] GET /api/visits 200 in 251ms :: []
+1:22:07 AM [express] GET /api/farms 200 in 240ms :: []
+📥 [DEBUG] POST /api/visits - Payload recebido: [
+  {
+    "id": "visit-1760404932051",
+    "client_id": "c85733d6-36e2-45bb-8656-0473842ac362",
+    "farm_id": null,
+    "window_start": "2025-10-16T08:00:00",
+    "window_end": "2025-10-16T08:00:00",
+    "status": "PLANEJADA",
+    "notes": "Amostra Folha"
+  }
+]
+/home/runner/workspace/node_modules/src/pg-core/columns/timestamp.ts:66
+                return value.toISOString();
+                             ^
+
+
+TypeError: value.toISOString is not a function
+    at PgTimestamp.mapToDriverValue (/home/runner/workspace/node_modules/src/pg-core/columns/timestamp.ts:66:16)
+    at <anonymous> (/home/runner/workspace/node_modules/src/sql/sql.ts:223:69)
+    at Array.map (<anonymous>)
+    at SQL.buildQueryFromSourceParams (/home/runner/workspace/node_modules/src/sql/sql.ts:148:30)
+    at <anonymous> (/home/runner/workspace/node_modules/src/sql/sql.ts:170:17)
+    at Array.map (<anonymous>)
+    at SQL.buildQueryFromSourceParams (/home/runner/workspace/node_modules/src/sql/sql.ts:148:30)
+    at <anonymous> (/home/runner/workspace/node_modules/src/sql/sql.ts:174:17)
+    at Array.map (<anonymous>)
+    at SQL.buildQueryFromSourceParams (/home/runner/workspace/node_modules/src/sql/sql.ts:148:30)
+    at <anonymous> (/home/runner/workspace/node_modules/src/sql/sql.ts:124:23)
+    at Object.startActiveSpan (/home/runner/workspace/node_modules/src/tracing.ts:27:11)
+    at SQL.toQuery (/home/runner/workspace/node_modules/src/sql/sql.ts:123:17)
+    at PgDialect.sqlToQuery (/home/runner/workspace/node_modules/src/pg-core/dialect.ts:591:14)
+    at <anonymous> (/home/runner/workspace/node_modules/src/pg-core/query-builders/insert.ts:405:19)
+    at Object.startActiveSpan (/home/runner/workspace/node_modules/src/tracing.ts:27:11)
+    at QueryPromise._prepare (/home/runner/workspace/node_modules/src/pg-core/query-builders/insert.ts:400:17)
+    at <anonymous> (/home/runner/workspace/node_modules/src/pg-core/query-builders/insert.ts:422:16)
+    at Object.startActiveSpan (/home/runner/workspace/node_modules/src/tracing.ts:27:11)
+    at QueryPromise.execute (/home/runner/workspace/node_modules/src/pg-core/query-builders/insert.ts:421:17)
+    at QueryPromise.then (/home/runner/workspace/node_modules/src/query-promise.ts:31:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+Node.js v20.19.3

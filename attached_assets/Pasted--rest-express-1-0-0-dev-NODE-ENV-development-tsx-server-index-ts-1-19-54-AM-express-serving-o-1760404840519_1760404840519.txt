@@ -1,0 +1,55 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+1:19:54 AM [express] serving on port 5000
+Browserslist: browsers data (caniuse-lite) is 12 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+1:20:07 AM [express] GET /api/user 304 in 173ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+1:20:07 AM [express] GET /api/clients 200 in 245ms :: [{"id":"7bbd3f8d-8d56-4c1f-b005-bbb095dc4297",…
+1:20:23 AM [express] GET /api/farms 200 in 237ms :: []
+1:20:26 AM [express] GET /api/user 200 in 181ms :: {"id":"4f752ce4-b8f4-42a5-98a9-17a335304d6f","use…
+1:20:26 AM [express] GET /api/visits 200 in 235ms :: []
+1:20:29 AM [express] POST /api/trips/start 400 in 180ms :: {"error":"visit_id é obrigatório"}
+📥 [DEBUG] POST /api/visits - Payload recebido: [
+  {
+    "id": "visit-1760404470233",
+    "client_id": "ebc049ff-990f-4cc7-b68e-4b725b871738",
+    "farm_id": null,
+    "window_start": "2025-10-14T09:14:00",
+    "window_end": "2025-10-14T09:14:00",
+    "status": "PLANEJADA",
+    "notes": "Amostra Solo"
+  }
+]
+file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345
+o?t(o):n(u)},"cb"),s=new r(function(o,u){n=o,t=u}).catch(o=>{throw Error.captureStackTrace(
+                                                                         ^
+
+error: null value in column "client_id" of relation "visits" violates not-null constraint
+    at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async NeonPreparedQuery.execute (/home/runner/workspace/node_modules/src/neon-serverless/session.ts:102:18)
+    at async Object.createVisitsBulk (/home/runner/workspace/server/storage-crm.ts:46:22)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:4620:21) {
+  length: 346,
+  severity: 'ERROR',
+  code: '23502',
+  detail: 'Failing row contains (visit-1760404470233, null, null, null, null, null, null, PLANEJADA, null, Amostra Solo, 2025-10-14 01:20:30.271167+00, 2025-10-14 01:20:30.271167+00).',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'visits',
+  column: 'client_id',
+  dataType: undefined,
+  constraint: undefined,
+  file: 'execMain.c',
+  line: '2021',
+  routine: 'ExecConstraints'
+}
+
+Node.js v20.19.3

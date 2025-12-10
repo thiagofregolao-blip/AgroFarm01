@@ -1,0 +1,361 @@
+bora! vou te entregar a navegação com abas + telas funcionais (Agenda com lista + criação por texto, Clientes, Histórico e Perfil), tudo em TypeScript e integrado ao seu backend via cookie de sessão (axios withCredentials: true já está no seu projeto).
+
+Abaixo estão arquivos prontos para você colar. No final deixo os comandos para instalar as libs do React Navigation.
+
+1) Dependências (uma vez)
+
+No terminal dentro do projeto mobile:
+
+npm i @react-navigation/native @react-navigation/bottom-tabs
+npm i react-native-screens react-native-safe-area-context
+# (expo já traz @expo/vector-icons)
+
+
+No iOS não vamos usar agora; no Android não precisa link manual.
+
+2) Atualize src/App.tsx
+
+Troca para usar o Navigator quando logado.
+
+// src/App.tsx
+import React, { useEffect } from "react";
+import { View, ActivityIndicator } from "react-native";
+import { initDb } from "@db/schema";
+import { registerBaseGeofence } from "@geo/tripDetector";
+import { AuthProvider, useAuth } from "@auth/AuthContext";
+import LoginScreen from "@auth/LoginScreen";
+import AppNavigator from "@features/navigation/AppNavigator";
+
+function Main() {
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    initDb();
+    registerBaseGeofence(-25.3000, -57.6000, 200);
+  }, []);
+
+  if (loading) {
+    return <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ActivityIndicator />
+    </View>;
+  }
+
+  if (!user) return <LoginScreen />;
+
+  return <AppNavigator />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Main />
+    </AuthProvider>
+  );
+}
+
+3) Novo: Navegação por abas
+
+Crie src/features/navigation/AppNavigator.tsx:
+
+// src/features/navigation/AppNavigator.tsx
+import React from "react";
+import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
+
+import HomeScreen from "../screens/HomeScreen";
+import AgendaScreen from "../screens/AgendaScreen";
+import ClientsScreen from "../screens/ClientsScreen";
+import HistoryScreen from "../screens/HistoryScreen";
+import ProfileScreen from "../screens/ProfileScreen";
+
+const Tab = createBottomTabNavigator();
+
+const theme = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: "#fff" }
+};
+
+export default function AppNavigator() {
+  return (
+    <NavigationContainer theme={theme}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerTitleAlign: "center",
+          tabBarActiveTintColor: "#1db954",
+          tabBarInactiveTintColor: "#888",
+          tabBarLabelStyle: { fontSize: 12 },
+          tabBarIcon: ({ color, size }) => {
+            const map: Record<string, keyof typeof Ionicons.glyphMap> = {
+              Home: "home",
+              Agenda: "calendar",
+              Clientes: "people",
+              Historico: "time",
+              Perfil: "person"
+            };
+            const name = map[route.name] || "ellipse";
+            return <Ionicons name={name} size={size} color={color} />;
+          }
+        })}
+      >
+        <Tab.Screen name="Home" component={HomeScreen} />
+        <Tab.Screen name="Agenda" component={AgendaScreen} />
+        <Tab.Screen name="Clientes" component={ClientsScreen} />
+        <Tab.Screen name="Historico" component={HistoryScreen} />
+        <Tab.Screen name="Perfil" component={ProfileScreen} />
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
+}
+
+4) Telas
+4.1 Home (mapa + visita ativa + sync)
+
+Crie src/features/screens/HomeScreen.tsx:
+
+import React from "react";
+import { View, Text, Button, ScrollView } from "react-native";
+import { syncNow } from "@sync/sync";
+import ActiveVisit from "../visits/ActiveVisit";
+import RouteMap from "../visits/RouteMap";
+
+export default function HomeScreen() {
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16 }}>
+      <Button title="SINCRONIZAR AGORA" color="#1db954" onPress={() => syncNow()} />
+
+      <Text style={{ fontWeight: "bold", marginTop: 8 }}>Rota do dia — selecione a visita ativa</Text>
+      <View style={{ height: 360 }}>
+        <Text style={{ fontWeight: "600", marginBottom: 6 }}>Mapa da Rota</Text>
+        <View style={{ height: 300, borderWidth: 1, borderColor: "#eee", borderRadius: 8, overflow: "hidden" }}>
+          <RouteMap />
+        </View>
+      </View>
+
+      <ActiveVisit />
+    </ScrollView>
+  );
+}
+
+4.2 Agenda (lista de visitas + criar por texto)
+
+Crie src/features/screens/AgendaScreen.tsx:
+
+import React, { useMemo, useState } from "react";
+import { View, Text, FlatList, TouchableOpacity, RefreshControl } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@api/client";
+import AgendaFromText from "../agenda/AgendaFromText";
+
+type Visit = {
+  id: string; client_id: string; status: string;
+  window_start?: string | null; notes?: string | null;
+};
+
+const STATUS = ["PLANEJADA","PRONTA","EM_DESLOCAMENTO","NO_LOCAL","CONCLUIDA"] as const;
+
+export default function AgendaScreen() {
+  const [filter, setFilter] = useState<typeof STATUS[number] | "TODAS">("TODAS");
+
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ["visits", "agenda"],
+    queryFn: async () => {
+      const { data } = await api.get<Visit[]>("/api/visits");
+      return data;
+    }
+  });
+
+  const visits = data || [];
+  const filtered = useMemo(
+    () => filter === "TODAS" ? visits : visits.filter(v => v.status === filter),
+    [visits, filter]
+  );
+
+  return (
+    <FlatList
+      ListHeaderComponent={
+        <View style={{ padding: 16, gap: 12 }}>
+          <Text style={{ fontWeight: "bold", fontSize: 16 }}>Agenda</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {(["TODAS", ...STATUS] as const).map(s => (
+              <TouchableOpacity key={s} onPress={() => setFilter(s)}
+                style={{ paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: filter===s?"#1db954":"#ddd", borderRadius: 999 }}>
+                <Text style={{ color: filter===s?"#1db954":"#444" }}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      }
+      data={filtered}
+      keyExtractor={(i) => i.id}
+      renderItem={({ item }) => (
+        <View style={{ padding: 12, borderBottomWidth: 1, borderColor: "#eee" }}>
+          <Text style={{ fontWeight: "600" }}>{item.client_id}</Text>
+          <Text style={{ color: "#666" }}>{item.window_start ? new Date(item.window_start).toLocaleString() : "sem horário"}</Text>
+          <Text style={{ color: "#1db954", fontWeight: "600" }}>{item.status}</Text>
+          {item.notes ? <Text style={{ color: "#555" }}>{item.notes}</Text> : null}
+        </View>
+      )}
+      refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} />}
+      ListFooterComponent={
+        <View style={{ padding: 16 }}>
+          <AgendaFromText />
+        </View>
+      }
+    />
+  );
+}
+
+
+Observação: usa /api/visits do seu backend; está alinhado com o módulo CRM.
+
+4.3 Clientes (lista + busca)
+
+Crie src/features/screens/ClientsScreen.tsx:
+
+import React, { useMemo, useState } from "react";
+import { View, Text, TextInput, FlatList, RefreshControl } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@api/client";
+
+type Client = { id: string; name: string; cluster?: string | null; priority?: string | null; active: boolean };
+
+export default function ClientsScreen() {
+  const [q, setQ] = useState("");
+
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ["clients", "list"],
+    queryFn: async () => {
+      // Ajuste se o seu endpoint tiver outro path/params
+      const { data } = await api.get<Client[]>("/api/clients", { params: { q } });
+      return data;
+    }
+  });
+
+  const list = useMemo(() => {
+    if (!data) return [];
+    const s = q.trim().toLowerCase();
+    if (!s) return data;
+    return data.filter(c => c.name.toLowerCase().includes(s));
+  }, [data, q]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={{ padding: 16 }}>
+        <Text style={{ fontWeight: "bold", fontSize: 16 }}>Clientes</Text>
+        <TextInput
+          value={q}
+          onChangeText={(t)=>{ setQ(t); }}
+          placeholder="Buscar cliente..."
+          style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, marginTop: 8 }}
+        />
+      </View>
+      <FlatList
+        data={list}
+        keyExtractor={(i) => i.id}
+        refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} />}
+        renderItem={({ item }) => (
+          <View style={{ padding: 12, borderBottomWidth: 1, borderColor: "#eee" }}>
+            <Text style={{ fontWeight: "600" }}>{item.name}</Text>
+            <Text style={{ color: "#666" }}>
+              {item.cluster ? `Cluster: ${item.cluster}  • ` : ""}{item.priority ? `Prioridade: ${item.priority}` : ""}
+            </Text>
+            <Text style={{ color: item.active ? "#1db954" : "#c00" }}>{item.active ? "Ativo" : "Inativo"}</Text>
+          </View>
+        )}
+      />
+    </View>
+  );
+}
+
+
+Se você ainda não tem /api/clients, pode expor rapidamente no backend (SELECT em clients com filtro q), mas a tela já fica pronta.
+
+4.4 Histórico (visitas concluídas)
+
+Crie src/features/screens/HistoryScreen.tsx:
+
+import React, { useMemo } from "react";
+import { View, Text, FlatList, RefreshControl } from "react-native";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@api/client";
+
+type Visit = { id: string; client_id: string; status: string; window_start?: string | null; notes?: string | null };
+
+export default function HistoryScreen() {
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ["visits", "history"],
+    queryFn: async () => {
+      const { data } = await api.get<Visit[]>("/api/visits"); // pega todas e filtra no app
+      return data;
+    }
+  });
+
+  const concluded = useMemo(
+    () => (data || []).filter(v => v.status === "CONCLUIDA").sort((a,b) =>
+      (new Date(b.window_start || 0).getTime() - new Date(a.window_start || 0).getTime())
+    ),
+    [data]
+  );
+
+  return (
+    <FlatList
+      data={concluded}
+      keyExtractor={(i) => i.id}
+      refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} />}
+      renderItem={({ item }) => (
+        <View style={{ padding: 12, borderBottomWidth: 1, borderColor: "#eee" }}>
+          <Text style={{ fontWeight: "600" }}>{item.client_id}</Text>
+          <Text style={{ color: "#666" }}>{item.window_start ? new Date(item.window_start).toLocaleString() : "—"}</Text>
+          {item.notes ? <Text style={{ color: "#555" }}>{item.notes}</Text> : null}
+        </View>
+      )}
+      ListEmptyComponent={<View style={{ padding: 16 }}><Text>Nenhuma visita concluída ainda.</Text></View>}
+    />
+  );
+}
+
+4.5 Perfil (usuário + logout + diagnósticos)
+
+Crie src/features/screens/ProfileScreen.tsx:
+
+import React from "react";
+import { View, Text, Button, Alert } from "react-native";
+import { useAuth } from "@auth/AuthContext";
+import * as Location from "expo-location";
+
+export default function ProfileScreen() {
+  const { user, logout } = useAuth();
+
+  async function checkPerms() {
+    const fg = await Location.getForegroundPermissionsAsync();
+    const bg = await Location.getBackgroundPermissionsAsync();
+    Alert.alert(
+      "Permissões",
+      `Foreground: ${fg.status}\nBackground: ${bg.status}`
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, padding: 16, gap: 16 }}>
+      <Text style={{ fontWeight: "bold", fontSize: 16 }}>Perfil</Text>
+      <Text>Usuário: {user?.username}</Text>
+      <Text>Papel: {user?.role}</Text>
+
+      <Button title="Ver permissões de GPS" onPress={checkPerms} />
+      <Button title="Sair" color="#c0392b" onPress={logout} />
+    </View>
+  );
+}
+
+5) Observações rápidas
+
+Cookies no mobile: Como você está no mesmo domínio (axios baseURL direto para o Replit), withCredentials: true já envia/recebe cookies. Garanta que o backend está setando Set-Cookie com SameSite=None; Secure quando for https.
+
+Endpoint de clientes: a tela de Clientes chama /api/clients?q=.... Se não existir ainda, basta expor no backend: SELECT id,name,cluster,priority,active FROM clients WHERE active AND (q IS NULL OR name ILIKE '%'||q||'%').
+
+React Query: já estamos usando para cache/refresh fácil.
+
+Style: deixei simples e clean; depois posso subir um tema mais “brand”.
+
+Se quiser, eu também te mando um endpoint /api/clients para o seu backend (Drizzle TS) pra isso ficar redondo. Quer que eu inclua esse handler agora?

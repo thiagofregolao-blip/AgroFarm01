@@ -1,0 +1,103 @@
+modules = ["nodejs-20", "postgresql-16", "python-3.11", "web"]
+run = "npm run dev"
+hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["zip"]
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "build"]
+run = ["npm", "run", "start"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 32993
+externalPort = 8080
+
+[[ports]]
+localPort = 33113
+externalPort = 8000
+
+[[ports]]
+localPort = 33381
+externalPort = 3002
+
+[[ports]]
+localPort = 34199
+externalPort = 3001
+
+[[ports]]
+localPort = 34473
+externalPort = 8008
+
+[[ports]]
+localPort = 34997
+externalPort = 4200
+
+[[ports]]
+localPort = 37857
+externalPort = 3003
+
+[[ports]]
+localPort = 38533
+externalPort = 8099
+
+[[ports]]
+localPort = 39549
+externalPort = 5000
+
+[[ports]]
+localPort = 40655
+externalPort = 3000
+
+[[ports]]
+localPort = 40723
+externalPort = 5173
+
+[[ports]]
+localPort = 41859
+externalPort = 8081
+
+[[ports]]
+localPort = 44013
+externalPort = 9000
+
+[[ports]]
+localPort = 45087
+externalPort = 6800
+
+[[ports]]
+localPort = 46123
+externalPort = 6000
+
+[env]
+PORT = "5000"
+
+[agent]
+integrations = ["javascript_mem_db:1.0.0", "javascript_auth_all_persistance:1.0.0"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000

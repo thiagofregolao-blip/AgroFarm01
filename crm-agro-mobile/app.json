@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "CRM Agro",
+    "slug": "crm-agro",
+    "version": "1.0.0",
+    "scheme": "crmagro",
+    "platforms": ["android"],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#22c55e"
+    },
+    "android": {
+      "package": "com.agrofarma.crmagro",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ],
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#22c55e"
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "Permitir localização mesmo em segundo plano para rastreamento de viagens"
+        }
+      ]
+    ],
+    "orientation": "portrait",
+    "userInterfaceStyle": "light"
+  }
+}

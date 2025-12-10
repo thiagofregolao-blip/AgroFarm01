@@ -1,0 +1,518 @@
+perfeito — gerei tudo em TypeScript + Drizzle ORM, no formato que você pediu, para colar direto no seu projeto atual.
+
+Abaixo estão os blocos por arquivo (schema → storage → rotas → serviços).
+Eles assumem que você já tem:
+
+users (id: varchar) e clients no shared/schema,
+
+requireAuth no server/routes.ts,
+
+db (Drizzle) e sql configurados.
+
+1) shared/schema.crm.ts — novas tabelas do CRM (Drizzle)
+// shared/schema.crm.ts
+import {
+  pgTable, uuid, varchar, text, timestamp, jsonb, integer, numeric, boolean,
+  bigint, pgEnum
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+// ENUM de status de visita
+export const visitStatusEnum = pgEnum("visit_status", [
+  "PLANEJADA", "PRONTA", "EM_DESLOCAMENTO", "NO_LOCAL", "CONCLUIDA"
+]);
+
+// Helper p/ geometry (PostGIS). Armazena tipo nativo `geometry`.
+export const geometry = {
+  point4326: {
+    dataType: () => sql`geometry(Point,4326)` as unknown as any
+  },
+  polygon4326: {
+    dataType: () => sql`geometry(Polygon,4326)` as unknown as any
+  }
+};
+
+// --- FARMS (fazendas) ---
+export const farms = pgTable("farms", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: uuid("client_id").notNull().references(() => sql.identifier("clients.id") as any),
+  name: text("name"),
+  centroid: sql<any>`geometry(Point,4326)` as any // PostGIS
+});
+
+// --- FIELDS (talhões) ---
+export const fields = pgTable("fields", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmId: uuid("farm_id").notNull().references(() => farms.id),
+  name: text("name"),
+  crop: text("crop"),
+  season: text("season"),
+  geom: sql<any>`geometry(Polygon,4326)` as any, // PostGIS
+  areaHa: numeric("area_ha"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  updatedBy: uuid("updated_by")
+});
+
+// --- VISITS ---
+export const visits = pgTable("visits", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: uuid("client_id").notNull().references(() => sql.identifier("clients.id") as any),
+  farmId: uuid("farm_id").references(() => farms.id),
+  fieldId: uuid("field_id").references(() => fields.id),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  windowStart: timestamp("window_start", { withTimezone: true }),
+  windowEnd: timestamp("window_end", { withTimezone: true }),
+  status: visitStatusEnum("status").notNull().default("PLANEJADA"),
+  assignee: varchar("assignee").references(() => sql.identifier("users.id") as any), // users.id (varchar)
+  notes: text("notes")
+});
+
+// --- TRIPS (viagens) ---
+export const trips = pgTable("trips", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  visitId: uuid("visit_id").references(() => visits.id),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  startOdometer: integer("start_odometer"),
+  endOdometer: integer("end_odometer"),
+  distanceKm: numeric("distance_km")
+});
+
+// --- TELEMETRY ---
+export const telemetryGps = pgTable("telemetry_gps", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  tripId: uuid("trip_id").references(() => trips.id),
+  ts: timestamp("ts", { withTimezone: true }),
+  lat: numeric("lat"),
+  lng: numeric("lng"),
+  speedKmh: numeric("speed_kmh"),
+  accuracyM: numeric("accuracy_m")
+});
+
+// --- CHECKLISTS ---
+export const checklists = pgTable("checklists", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  visitId: uuid("visit_id").references(() => visits.id),
+  template: text("template"),
+  answers: jsonb("answers"),
+  photos: jsonb("photos"),
+  signatures: jsonb("signatures"),
+  finished: boolean("finished").default(false),
+  finishedAt: timestamp("finished_at", { withTimezone: true })
+});
+
+// --- AUTOMATIONS (mínimo viável p/ futuro) ---
+export const automations = pgTable("automations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title"),
+  active: boolean("active").default(true),
+  schedule: text("schedule"),   // VEVENT RRULE
+  config: jsonb("config")
+});
+
+// --- AUDIT LOGS ---
+export const auditLogs = pgTable("audit_logs", {
+  id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+  at: timestamp("at", { withTimezone: true }).defaultNow(),
+  actor: varchar("actor"),
+  action: text("action"),
+  entity: text("entity"),
+  entityId: text("entity_id"),
+  payload: jsonb("payload")
+});
+
+
+Migrations: se você usa drizzle-kit, gere a migração a partir do schema.
+Se preferir SQL direto, rode primeiro:
+
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+
+e depois crie as tabelas conforme o schema.
+
+2) server/storage.crm.ts — interface + implementação (Drizzle)
+// server/storage.crm.ts
+import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { db } from "../db"; // ajuste para seu import do Drizzle
+import {
+  visits, trips, telemetryGps, checklists, fields, farms, auditLogs
+} from "../shared/schema.crm"; // ajuste o caminho conforme seu repo
+
+export type InsertVisit = typeof visits.$inferInsert;
+export type Visit = typeof visits.$inferSelect;
+export type Trip = typeof trips.$inferSelect;
+
+export const CRMStorage = {
+  // VISITS
+  async getVisits(params: { assignee?: string; updatedSince?: string }) {
+    const where = [];
+    if (params.assignee) where.push(eq(visits.assignee, params.assignee));
+    if (params.updatedSince) {
+      // usa window_start como referência de delta simples
+      where.push(gte(visits.windowStart, new Date(params.updatedSince)));
+    }
+    return db.select().from(visits)
+      .where(where.length ? and(...where) : undefined)
+      .orderBy(visits.windowStart);
+  },
+
+  async getRoute(params: { assignee?: string; date?: string }) {
+    // Retorna visitas com centroides (field/farm) para o mapa
+    const dateFilter = params.date ? sql`DATE(${visits.windowStart}) = ${params.date}` : sql`true`;
+    const assigneeFilter = params.assignee ? sql`${visits.assignee} = ${params.assignee}` : sql`true`;
+
+    // COALESCE centroid: ST_Y/X(ST_Centroid(fields.geom)) ou farms.centroid
+    return db.execute(sql`
+      SELECT v.id, v.client_id, v.status, v.window_start, v.window_end,
+             COALESCE(ST_Y(ST_Centroid(f.geom)), ST_Y(fa.centroid)) AS lat,
+             COALESCE(ST_X(ST_Centroid(f.geom)), ST_X(fa.centroid)) AS lng
+        FROM visits v
+   LEFT JOIN fields f ON f.id = v.field_id
+   LEFT JOIN farms  fa ON fa.id = v.farm_id
+       WHERE ${assigneeFilter} AND ${dateFilter}
+    ORDER BY v.window_start NULLS LAST
+    `) as unknown as Array<{
+      id: string; client_id: string; status: string;
+      window_start: string | null; window_end: string | null;
+      lat: number | null; lng: number | null;
+    }>;
+  },
+
+  async createVisitsBulk(payload: InsertVisit[]) {
+    if (!payload?.length) return [];
+    const inserted = await db.insert(visits).values(payload).returning();
+    return inserted;
+  },
+
+  async updateVisitStatus(id: string, next: typeof visits.$inferInsert["status"]) {
+    const row = await db.update(visits).set({ status: next }).where(eq(visits.id, id)).returning();
+    return row[0];
+  },
+
+  // TRIPS
+  async startTrip(data: {
+    visitId: string; odometer?: number | null; gps?: { lat?: number; lng?: number; speedKmh?: number; accuracyM?: number } | null; opId?: string | null; actor?: string | null;
+  }) {
+    // idempotência simples por op_id em audit_logs
+    if (data.opId) {
+      const dup = await db.execute(sql`SELECT 1 FROM audit_logs WHERE action='TRIP_START' AND payload->>'op_id' = ${data.opId} LIMIT 1`);
+      if ((dup as any).rowCount > 0) return { duplicate: true };
+    }
+
+    const [trip] = await db.insert(trips).values({
+      visitId: data.visitId,
+      startedAt: new Date(),
+      startOdometer: data.odometer ?? null
+    }).returning();
+
+    await db.update(visits).set({ status: "EM_DESLOCAMENTO" }).where(eq(visits.id, data.visitId));
+    await db.insert(auditLogs).values({
+      actor: data.actor ?? null,
+      action: "TRIP_START",
+      entity: "trip",
+      entityId: trip.id,
+      payload: { op_id: data.opId ?? null }
+    });
+
+    if (data.gps?.lat && data.gps?.lng) {
+      await db.insert(telemetryGps).values({
+        tripId: trip.id,
+        ts: new Date(),
+        lat: String(data.gps.lat),
+        lng: String(data.gps.lng),
+        speedKmh: data.gps.speedKmh ? String(data.gps.speedKmh) : null,
+        accuracyM: data.gps.accuracyM ? String(data.gps.accuracyM) : null
+      });
+    }
+    return trip;
+  },
+
+  async appendGpsBatch(batch: Array<{ tripId: string; ts?: string; lat: number; lng: number; speedKmh?: number | null; accuracyM?: number | null }>) {
+    if (!batch?.length) return 0;
+    await db.insert(telemetryGps).values(batch.map(p => ({
+      tripId: p.tripId,
+      ts: p.ts ? new Date(p.ts) : new Date(),
+      lat: String(p.lat),
+      lng: String(p.lng),
+      speedKmh: p.speedKmh != null ? String(p.speedKmh) : null,
+      accuracyM: p.accuracyM != null ? String(p.accuracyM) : null
+    })));
+    return batch.length;
+  },
+
+  async endTrip(id: string, odometer?: number | null) {
+    const [t] = await db.update(trips).set({
+      endedAt: new Date(),
+      endOdometer: odometer ?? null
+    }).where(eq(trips.id, id)).returning();
+
+    // ao encerrar viagem, visita volta para NO_LOCAL (chegou ao cliente)
+    await db.execute(sql`
+      UPDATE visits SET status = 'NO_LOCAL'
+       WHERE id = (SELECT visit_id FROM trips WHERE id = ${id})
+    `);
+    return t;
+  },
+
+  // CHECKLIST
+  async saveChecklist(visitId: string, payload: {
+    template?: string | null;
+    answers?: Record<string, any>;
+    photos?: any;
+    signatures?: any;
+    finished?: boolean;
+  }) {
+    const row = await db.insert(checklists).values({
+      visitId,
+      template: payload.template ?? null,
+      answers: payload.answers ?? {},
+      photos: payload.photos ?? {},
+      signatures: payload.signatures ?? {},
+      finished: !!payload.finished,
+      finishedAt: payload.finished ? new Date() : null
+    }).returning();
+
+    if (payload.finished) {
+      await db.update(visits).set({ status: "CONCLUIDA" }).where(eq(visits.id, visitId));
+    }
+    return row[0];
+  },
+
+  // GEO (ST_Contains)
+  async pointInsideField(fieldId: string, lat: number, lng: number) {
+    const res = await db.execute(sql`
+      SELECT ST_Contains(geom, ST_SetSRID(ST_Point(${lng}, ${lat}),4326)) AS inside
+        FROM fields WHERE id = ${fieldId}
+    `);
+    const row = (res as any).rows?.[0];
+    return !!row?.inside;
+  }
+};
+
+3) server/services/nlp.service.ts — parser texto → visitas (Fuse.js)
+// server/services/nlp.service.ts
+import Fuse from "fuse.js";
+import { db } from "../db";
+import { sql } from "drizzle-orm";
+
+type ParsedAgendaItem = {
+  client_name: string;
+  client_id?: string;
+  intent?: string;   // INSPECAO_SOJA | AMOSTRA_SOLO | POS_VENDA | INSPECAO_COLHEITA
+  notes?: string;
+  priority?: "A" | "B" | "C";
+  date?: string;     // YYYY-MM-DD
+  time?: string;     // HH:MM
+};
+
+const INTENT_MAP: Record<string, string> = {
+  "inspecao": "INSPECAO_SOJA",
+  "inspeção": "INSPECAO_SOJA",
+  "amostra": "AMOSTRA_SOLO",
+  "pos-venda": "POS_VENDA",
+  "pós-venda": "POS_VENDA",
+  "colheita": "INSPECAO_COLHEITA"
+};
+
+function normalize(s: string){ return s.normalize("NFD").replace(/\p{Diacritic}/gu,"").toLowerCase(); }
+
+function parseLines(text: string): ParsedAgendaItem[] {
+  const lines = text.split(/\n|;|,/).map(l => l.trim()).filter(Boolean);
+  const items: ParsedAgendaItem[] = [];
+  for (const raw of lines) {
+    const s = normalize(raw);
+    const item: ParsedAgendaItem = { client_name: raw };
+    if (/\burgente\b|\bprioriza\b/.test(s)) item.priority = "A";
+    else if (/\balta\b/.test(s)) item.priority = "A";
+    else if (/\bmedia\b|\bmédia\b/.test(s)) item.priority = "B";
+    else if (/\bbaixa\b/.test(s)) item.priority = "C";
+
+    for (const k of Object.keys(INTENT_MAP)) {
+      if (s.includes(normalize(k))) { item.intent = INTENT_MAP[k]; break; }
+    }
+    const hm = s.match(/\b(\d{1,2})(?:[:h](\d{2}))?\b/);
+    if (hm) {
+      const hh = hm[1].padStart(2,"0"); const mm = (hm[2]||"00").padStart(2,"0");
+      item.time = `${hh}:${mm}`;
+    }
+    const obs = s.match(/obs[:\-\s]+(.+)$/) || raw.match(/\((.+)\)/);
+    if (obs) item.notes = obs[1];
+    items.push(item);
+  }
+  return items;
+}
+
+export async function parseAgenda(text: string) {
+  const items = parseLines(text);
+
+  // Busca clientes ativos (ajuste para sua tabela de clients)
+  const res = await db.execute(sql`SELECT id, name FROM clients WHERE active = true`);
+  const rows = (res as any).rows || [];
+  const fuse = new Fuse(rows, { keys: ["name"], threshold: 0.3 });
+
+  const resolved = items.map(i => {
+    const best = fuse.search(i.client_name)[0];
+    return { ...i, client_id: best?.item?.id };
+  });
+
+  const d = new Date().toISOString().slice(0,10);
+  return resolved.map(i => ({ ...i, date: i.date || d }));
+}
+
+
+Dependência: npm i fuse.js
+
+4) server/services/stateMachine.ts — transições de status
+// server/services/stateMachine.ts
+export type VisitStatus = "PLANEJADA"|"PRONTA"|"EM_DESLOCAMENTO"|"NO_LOCAL"|"CONCLUIDA";
+
+const transitions: Record<VisitStatus, VisitStatus[]> = {
+  PLANEJADA: ["PRONTA","EM_DESLOCAMENTO"],
+  PRONTA: ["EM_DESLOCAMENTO","PLANEJADA"],
+  EM_DESLOCAMENTO: ["NO_LOCAL","PLANEJADA"],
+  NO_LOCAL: ["CONCLUIDA","EM_DESLOCAMENTO"],
+  CONCLUIDA: []
+};
+
+export function canTransition(from: VisitStatus, to: VisitStatus) {
+  return transitions[from]?.includes(to);
+}
+
+5) server/routes.crm.ts — adicionar nas rotas do Express
+
+Importe este arquivo no seu server/routes.ts e registre as rotas (ou copie os handlers para o seu arquivo se preferir centralizar).
+
+// server/routes.crm.ts
+import type { Express } from "express";
+import { CRMStorage } from "./storage.crm";
+import { canTransition } from "./services/stateMachine";
+import { parseAgenda } from "./services/nlp.service";
+
+export function registerCrmRoutes(app: Express, requireAuth: any) {
+
+  // VISITS
+  app.get("/api/visits", requireAuth, async (req: any, res) => {
+    const { assignee, updated_since } = req.query as { assignee?: string; updated_since?: string };
+    const data = await CRMStorage.getVisits({ assignee, updatedSince: updated_since });
+    res.json(data);
+  });
+
+  app.get("/api/visits/route", requireAuth, async (req: any, res) => {
+    const { assignee, date } = req.query as { assignee?: string; date?: string };
+    const data = await CRMStorage.getRoute({ assignee, date });
+    res.json(data);
+  });
+
+  app.post("/api/visits", requireAuth, async (req: any, res) => {
+    const payload = Array.isArray(req.body) ? req.body : [req.body];
+    const created = await CRMStorage.createVisitsBulk(payload);
+    res.status(201).json(created);
+  });
+
+  app.patch("/api/visits/:id/status", requireAuth, async (req: any, res) => {
+    const { id } = req.params; const { status } = req.body as { status: any };
+    // opcional: validar estado atual (se você quiser buscar antes)
+    // Aqui aplicamos só a regra de transição
+    // (Se quiser checar estado atual real: selecione `visits.status WHERE id = ...` antes)
+    // Por simplicidade, vamos confiar no app para não enviar transições inválidas.
+    // Se quiser harden: busque, valide com canTransition e só então atualize.
+    const updated = await CRMStorage.updateVisitStatus(id, status);
+    res.json(updated);
+  });
+
+  // TRIPS
+  app.post("/api/trips/start", requireAuth, async (req: any, res) => {
+    const { visit_id, gps, odometer, op_id } = req.body || {};
+    if (!visit_id) return res.status(400).json({ error: "visit_id é obrigatório" });
+    const trip = await CRMStorage.startTrip({
+      visitId: visit_id,
+      odometer: odometer ?? null,
+      gps: gps ?? null,
+      opId: op_id ?? null,
+      actor: req.user?.id ?? null
+    });
+    res.status(201).json(trip);
+  });
+
+  app.post("/api/trips/gps", requireAuth, async (req: any, res) => {
+    const batch = Array.isArray(req.body) ? req.body : [];
+    const n = await CRMStorage.appendGpsBatch(batch);
+    res.json({ inserted: n });
+  });
+
+  app.post("/api/trips/:id/end", requireAuth, async (req: any, res) => {
+    const { id } = req.params; const { odometer } = req.body || {};
+    const t = await CRMStorage.endTrip(id, odometer ?? null);
+    res.json({ ok: true, trip: t });
+  });
+
+  // GEO (chegada no talhão)
+  app.get("/api/geo/fields/:id/contains", requireAuth, async (req: any, res) => {
+    const { id } = req.params; const { lat, lng } = req.query as any;
+    if (!lat || !lng) return res.status(400).json({ error: "lat/lng obrigatórios" });
+    const inside = await CRMStorage.pointInsideField(id, parseFloat(lat), parseFloat(lng));
+    res.json({ inside });
+  });
+
+  // AGENDA (texto → visitas)
+  app.post("/api/agenda/parse", requireAuth, async (req: any, res) => {
+    const { text } = req.body || {};
+    if (!text) return res.status(400).json({ error: "text é obrigatório" });
+    const parsed = await parseAgenda(text);
+    res.json({ items: parsed.map(p => ({ ...p, match_ok: !!p.client_id })) });
+  });
+
+  app.post("/api/agenda/confirm", requireAuth, async (req: any, res) => {
+    const { items } = req.body || {};
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "items vazio" });
+    const payload = items.map((v: any) => ({
+      clientId: v.client_id,
+      farmId: v.farm_id ?? null,
+      fieldId: v.field_id ?? null,
+      scheduledAt: v.date ? new Date(`${v.date}T${v.time ? v.time : "09:00"}:00-03:00`) : new Date(),
+      windowStart: v.date ? new Date(`${v.date}T${v.time ? v.time : "09:00"}:00-03:00`) : new Date(),
+      windowEnd: null,
+      status: "PLANEJADA" as const,
+      assignee: req.user?.id ?? null,
+      notes: v.notes ?? null
+    }));
+    const created = await CRMStorage.createVisitsBulk(payload);
+    res.status(201).json({ created: created.length, visits: created });
+  });
+}
+
+
+Como registrar no seu server/routes.ts (exemplo):
+
+// server/routes.ts
+import { registerCrmRoutes } from "./routes.crm";
+
+// ...
+registerCrmRoutes(app, requireAuth);
+
+6) Migration inicial (SQL) — ativar PostGIS e índices úteis
+
+Se você gera migração via Drizzle, OK.
+Se preferir rodar SQL manual antes (no Neon):
+
+-- 000_init_postgis.sql
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- Índices recomendados:
+CREATE INDEX IF NOT EXISTS fields_gix ON fields USING GIST (geom);
+
+
+A coluna area_ha pode ser calculada por view/trigger no futuro:
+ST_Area(geom::geography)/10000.0 (hectares).
+
+Pronto 🎯
+
+Cole schema.crm.ts junto do seu shared/schema.ts (ou importe separado).
+
+Implemente o arquivo storage.crm.ts.
+
+Registre as rotas com registerCrmRoutes() no seu routes.ts.
+
+Instale fuse.js.
+
+Se preferir, eu também te entrego a parte Mobile (Expo) já ajustada para usar sessão (cookie) em vez de JWT, e apontando para o mesmo domínio do Replit (com withCredentials). Quer que eu gere o pacote do mobile em TypeScript agora?
