@@ -1,6 +1,6 @@
 import Navbar from "@/components/layout/navbar";
 import Header from "@/components/layout/header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -422,10 +422,13 @@ export default function Comissoes() {
             </Card>
           </div>
 
-          {/* Commission Configuration Table */}
+          {/* Tabela de Comissões (igual ao layout da imagem) */}
           <Card className="shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Configuração de Comissões</CardTitle>
+              <div>
+                <CardTitle>Tabela de Comissões</CardTitle>
+                <CardDescription>Gerencie as taxas de comissão por categoria</CardDescription>
+              </div>
               <div className="flex gap-2">
                 {isAdmin && editingCategory && (
                   <>
@@ -483,14 +486,12 @@ export default function Comissoes() {
                               className="w-16 px-2 py-1 text-center border rounded"
                             />
                           ) : (
-                            <Badge className="badge-verde font-mono">
-                              {parseFloat(category.greenCommission).toFixed(2)}%
-                            </Badge>
+                            <span className="font-mono text-sm">{parseFloat(category.greenCommission).toFixed(2)}%</span>
                           )}
                         </TableCell>
                         
                         {/* Verde Margin */}
-                        <TableCell className="text-center text-xs">
+                        <TableCell className="text-center text-xs text-muted-foreground">
                           {editingCategory === category.id ? (
                             <input
                               type="number"
@@ -515,14 +516,12 @@ export default function Comissoes() {
                               className="w-16 px-2 py-1 text-center border rounded"
                             />
                           ) : (
-                            <Badge className="badge-amarela font-mono">
-                              {parseFloat(category.yellowCommission).toFixed(2)}%
-                            </Badge>
+                            <span className="font-mono text-sm">{parseFloat(category.yellowCommission).toFixed(2)}%</span>
                           )}
                         </TableCell>
                         
                         {/* Amarela Margin */}
-                        <TableCell className="text-center text-xs">
+                        <TableCell className="text-center text-xs text-muted-foreground">
                           {editingCategory === category.id ? (
                             <div className="flex gap-1">
                               <input
@@ -557,14 +556,12 @@ export default function Comissoes() {
                               className="w-16 px-2 py-1 text-center border rounded"
                             />
                           ) : (
-                            <Badge className="badge-vermelha font-mono">
-                              {parseFloat(category.redCommission).toFixed(2)}%
-                            </Badge>
+                            <span className="font-mono text-sm">{parseFloat(category.redCommission).toFixed(2)}%</span>
                           )}
                         </TableCell>
                         
                         {/* Vermelha Margin */}
-                        <TableCell className="text-center text-xs">
+                        <TableCell className="text-center text-xs text-muted-foreground">
                           {editingCategory === category.id ? (
                             <div className="flex gap-1">
                               <input
@@ -599,7 +596,7 @@ export default function Comissoes() {
                               className="w-16 px-2 py-1 text-center border rounded"
                             />
                           ) : (
-                            <Badge variant="outline" className="font-mono">
+                            <Badge className="bg-verde/10 text-verde border-verde/20 font-mono" variant="outline">
                               {parseFloat(category.belowListCommission).toFixed(2)}%
                             </Badge>
                           )}
