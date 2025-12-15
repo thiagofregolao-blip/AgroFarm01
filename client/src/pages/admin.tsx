@@ -534,8 +534,47 @@ function UsersManagement() {
 }
 
 function CategoriesManagement() {
+  const { toast } = useToast();
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategory, setNewCategory] = useState({
+    name: "",
+    type: "fertilizantes",
+    greenCommission: "0.30",
+    greenMarginMin: "7.00",
+    yellowCommission: "0.20",
+    yellowMarginMin: "6.00",
+    yellowMarginMax: "6.99",
+    redCommission: "0.18",
+    redMarginMin: "4.00",
+    redMarginMax: "4.99",
+    belowListCommission: "0.15",
+    defaultIva: "10.00",
+  });
+
   const { data: categories, isLoading } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
+  });
+
+  const createCategoryMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      return apiRequest("POST", "/api/admin/categories", payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      toast({
+        title: "Categoria criada",
+        description: "A categoria foi criada com sucesso.",
+      });
+      setShowNewCategoryModal(false);
+      setNewCategory((prev) => ({ ...prev, name: "" }));
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Erro ao criar categoria. Verifique os campos e tente novamente.",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -549,10 +588,182 @@ function CategoriesManagement() {
           <CardTitle>Gestão de Categorias</CardTitle>
           <CardDescription>Gerencie as categorias de produtos</CardDescription>
         </div>
-        <Button size="sm" className="gap-2">
-          <Plus size={16} />
-          Nova Categoria
-        </Button>
+        <Dialog open={showNewCategoryModal} onOpenChange={setShowNewCategoryModal}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="gap-2" data-testid="button-new-category">
+              <Plus size={16} />
+              Nova Categoria
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl" data-testid="new-category-modal">
+            <DialogHeader>
+              <DialogTitle>Nova Categoria</DialogTitle>
+              <DialogDescription>
+                Cadastre uma nova categoria com as regras de comissão.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newCategory.name.trim() || !newCategory.type) {
+                  toast({
+                    title: "Campos obrigatórios",
+                    description: "Informe o nome e o tipo da categoria.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                createCategoryMutation.mutate({
+                  ...newCategory,
+                  name: newCategory.name.trim(),
+                });
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nome *</Label>
+                  <Input
+                    value={newCategory.name}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Ex: Biológicos, Adjuvantes..."
+                    data-testid="input-new-category-name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tipo *</Label>
+                  <Select
+                    value={newCategory.type}
+                    onValueChange={(value) => setNewCategory((p) => ({ ...p, type: value }))}
+                  >
+                    <SelectTrigger data-testid="select-new-category-type">
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fertilizantes">Fertilizantes</SelectItem>
+                      <SelectItem value="sementes">Sementes</SelectItem>
+                      <SelectItem value="especialidades">Especialidades</SelectItem>
+                      <SelectItem value="agroquimicos">Agroquímicos</SelectItem>
+                      <SelectItem value="corretivos">Corretivos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Comissão Verde (%)</Label>
+                  <Input
+                    value={newCategory.greenCommission}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, greenCommission: e.target.value }))}
+                    data-testid="input-green-commission"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Margem Verde mín (%)</Label>
+                  <Input
+                    value={newCategory.greenMarginMin}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, greenMarginMin: e.target.value }))}
+                    data-testid="input-green-margin-min"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>IVA padrão (%)</Label>
+                  <Input
+                    value={newCategory.defaultIva}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, defaultIva: e.target.value }))}
+                    data-testid="input-default-iva"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Comissão Amarela (%)</Label>
+                  <Input
+                    value={newCategory.yellowCommission}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, yellowCommission: e.target.value }))}
+                    data-testid="input-yellow-commission"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Margem Amarela mín (%)</Label>
+                  <Input
+                    value={newCategory.yellowMarginMin}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, yellowMarginMin: e.target.value }))}
+                    data-testid="input-yellow-margin-min"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Margem Amarela máx (%)</Label>
+                  <Input
+                    value={newCategory.yellowMarginMax}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, yellowMarginMax: e.target.value }))}
+                    data-testid="input-yellow-margin-max"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Comissão Vermelha (%)</Label>
+                  <Input
+                    value={newCategory.redCommission}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, redCommission: e.target.value }))}
+                    data-testid="input-red-commission"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Margem Vermelha mín (%)</Label>
+                  <Input
+                    value={newCategory.redMarginMin}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, redMarginMin: e.target.value }))}
+                    data-testid="input-red-margin-min"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Margem Vermelha máx (%)</Label>
+                  <Input
+                    value={newCategory.redMarginMax}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, redMarginMax: e.target.value }))}
+                    data-testid="input-red-margin-max"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Comissão Abaixo da Lista (%)</Label>
+                  <Input
+                    value={newCategory.belowListCommission}
+                    onChange={(e) => setNewCategory((p) => ({ ...p, belowListCommission: e.target.value }))}
+                    data-testid="input-below-list-commission"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowNewCategoryModal(false)}
+                  data-testid="button-cancel-new-category"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createCategoryMutation.isPending}
+                  data-testid="button-save-new-category"
+                >
+                  {createCategoryMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
