@@ -585,8 +585,42 @@ function CategoriesManagement() {
 }
 
 function SubcategoriesManagement() {
+  const { toast } = useToast();
+  const [showNewSubcategoryModal, setShowNewSubcategoryModal] = useState(false);
+  const [newSubcategoryName, setNewSubcategoryName] = useState("");
+  const [newSubcategoryCategoryId, setNewSubcategoryCategoryId] = useState<string>("");
+  const [newSubcategoryDisplayOrder, setNewSubcategoryDisplayOrder] = useState<string>("0");
+
   const { data: subcategories, isLoading } = useQuery<Subcategory[]>({
     queryKey: ['/api/subcategories'],
+  });
+
+  const { data: categories } = useQuery<Category[]>({
+    queryKey: ['/api/categories'],
+  });
+
+  const createSubcategoryMutation = useMutation({
+    mutationFn: async (payload: { name: string; categoryId: string; displayOrder: number }) => {
+      return apiRequest("POST", "/api/admin/subcategories", payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/subcategories'] });
+      toast({
+        title: "Subcategoria criada",
+        description: "A subcategoria foi criada com sucesso.",
+      });
+      setShowNewSubcategoryModal(false);
+      setNewSubcategoryName("");
+      setNewSubcategoryCategoryId("");
+      setNewSubcategoryDisplayOrder("0");
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Erro ao criar subcategoria. Verifique os campos e tente novamente.",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -600,10 +634,99 @@ function SubcategoriesManagement() {
           <CardTitle>Gestão de Subcategorias</CardTitle>
           <CardDescription>Gerencie as subcategorias de produtos</CardDescription>
         </div>
-        <Button size="sm" className="gap-2">
-          <Plus size={16} />
-          Nova Subcategoria
-        </Button>
+        <Dialog open={showNewSubcategoryModal} onOpenChange={setShowNewSubcategoryModal}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="gap-2" data-testid="button-new-subcategory">
+              <Plus size={16} />
+              Nova Subcategoria
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md" data-testid="new-subcategory-modal">
+            <DialogHeader>
+              <DialogTitle>Nova Subcategoria</DialogTitle>
+              <DialogDescription>
+                Crie uma subcategoria vinculada a uma categoria.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newSubcategoryName.trim() || !newSubcategoryCategoryId) {
+                  toast({
+                    title: "Campos obrigatórios",
+                    description: "Informe o nome e a categoria da subcategoria.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+
+                const displayOrderNum = Number(newSubcategoryDisplayOrder);
+                createSubcategoryMutation.mutate({
+                  name: newSubcategoryName.trim(),
+                  categoryId: newSubcategoryCategoryId,
+                  displayOrder: Number.isFinite(displayOrderNum) ? displayOrderNum : 0,
+                });
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label>Nome *</Label>
+                <Input
+                  value={newSubcategoryName}
+                  onChange={(e) => setNewSubcategoryName(e.target.value)}
+                  placeholder="Ex: Fungicidas, Inseticidas, TS..."
+                  data-testid="input-new-subcategory-name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Categoria *</Label>
+                <Select value={newSubcategoryCategoryId} onValueChange={setNewSubcategoryCategoryId}>
+                  <SelectTrigger data-testid="select-new-subcategory-category">
+                    <SelectValue placeholder="Selecione a categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories?.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Ordem de exibição</Label>
+                <Input
+                  type="number"
+                  value={newSubcategoryDisplayOrder}
+                  onChange={(e) => setNewSubcategoryDisplayOrder(e.target.value)}
+                  placeholder="0"
+                  data-testid="input-new-subcategory-display-order"
+                />
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowNewSubcategoryModal(false)}
+                  data-testid="button-cancel-new-subcategory"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createSubcategoryMutation.isPending}
+                  data-testid="button-save-new-subcategory"
+                >
+                  {createSubcategoryMutation.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
