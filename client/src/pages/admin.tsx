@@ -1556,13 +1556,11 @@ function CommissionsManagement() {
                         className="w-16 px-2 py-1 text-center border rounded"
                       />
                     ) : (
-                      <Badge className="badge-verde font-mono">
-                        {parseFloat(category.greenCommission).toFixed(2)}%
-                      </Badge>
+                      <span className="font-mono text-sm">{parseFloat(category.greenCommission).toFixed(2)}%</span>
                     )}
                   </TableCell>
                   
-                  <TableCell className="text-center text-xs">
+                  <TableCell className="text-center text-xs text-muted-foreground">
                     {editingCategory === category.id ? (
                       <input
                         type="number"
@@ -1586,13 +1584,11 @@ function CommissionsManagement() {
                         className="w-16 px-2 py-1 text-center border rounded"
                       />
                     ) : (
-                      <Badge className="badge-amarela font-mono">
-                        {parseFloat(category.yellowCommission).toFixed(2)}%
-                      </Badge>
+                      <span className="font-mono text-sm">{parseFloat(category.yellowCommission).toFixed(2)}%</span>
                     )}
                   </TableCell>
                   
-                  <TableCell className="text-center text-xs">
+                  <TableCell className="text-center text-xs text-muted-foreground">
                     {editingCategory === category.id ? (
                       <div className="flex gap-1 justify-center">
                         <input
@@ -1626,13 +1622,11 @@ function CommissionsManagement() {
                         className="w-16 px-2 py-1 text-center border rounded"
                       />
                     ) : (
-                      <Badge className="badge-vermelha font-mono">
-                        {parseFloat(category.redCommission).toFixed(2)}%
-                      </Badge>
+                      <span className="font-mono text-sm">{parseFloat(category.redCommission).toFixed(2)}%</span>
                     )}
                   </TableCell>
                   
-                  <TableCell className="text-center text-xs">
+                  <TableCell className="text-center text-xs text-muted-foreground">
                     {editingCategory === category.id ? (
                       <div className="flex gap-1 justify-center">
                         <input
@@ -1666,7 +1660,7 @@ function CommissionsManagement() {
                         className="w-16 px-2 py-1 text-center border rounded"
                       />
                     ) : (
-                      <Badge className="bg-muted text-muted-foreground font-mono">
+                      <Badge className="bg-verde/10 text-verde border-verde/20 font-mono" variant="outline">
                         {parseFloat(category.belowListCommission).toFixed(2)}%
                       </Badge>
                     )}
