@@ -17,6 +17,8 @@ async function main() {
   const DATABASE_URL = mustGetEnv("DATABASE_URL");
   const username = process.env.ADMIN_USERNAME || "admin";
   const plainPassword = process.env.ADMIN_PASSWORD || "admin123";
+  const createIfMissing = (process.env.ADMIN_CREATE_IF_MISSING || "").toLowerCase() === "true";
+  const updateProfile = (process.env.ADMIN_UPDATE_PROFILE || "").toLowerCase() === "true";
   const name = process.env.ADMIN_NAME || "Administrador";
   const role = process.env.ADMIN_ROLE || "administrador";
 
@@ -51,23 +53,36 @@ async function main() {
 
     if (existing.length > 0) {
       const userId = existing[0].id;
-      await sql`
-        UPDATE users
-        SET password = ${password}, name = ${name}, role = ${role}
-        WHERE id = ${userId}
-      `;
+      if (updateProfile) {
+        await sql`
+          UPDATE users
+          SET password = ${password}, name = ${name}, role = ${role}
+          WHERE id = ${userId}
+        `;
+      } else {
+        await sql`
+          UPDATE users
+          SET password = ${password}
+          WHERE id = ${userId}
+        `;
+      }
       console.log("✅ Usuário atualizado com sucesso:");
       console.log(`   Username: ${username}`);
-      console.log(`   Role: ${role}`);
       console.log("⚠️  Senha foi redefinida para o valor informado em ADMIN_PASSWORD.");
     } else {
+      if (!createIfMissing) {
+        throw new Error(
+          `Usuário '${username}' não existe neste banco. Verifique se o DATABASE_URL aponta para o Neon correto. ` +
+            `Se você realmente quiser criar, rode com ADMIN_CREATE_IF_MISSING=true.`
+        );
+      }
+
       await sql`
         INSERT INTO users (username, password, name, role)
         VALUES (${username}, ${password}, ${name}, ${role})
       `;
       console.log("✅ Usuário criado com sucesso:");
       console.log(`   Username: ${username}`);
-      console.log(`   Role: ${role}`);
       console.log("⚠️  Senha foi definida para o valor informado em ADMIN_PASSWORD.");
     }
   } finally {
