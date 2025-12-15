@@ -1,0 +1,6 @@
+id,type,due_date_month,due_date_day,label_pattern
+sp-soja-verao,soja_verao,3,30,Soja {year}/{next_year}
+sp-soja-verao-alt,soja_verao,4,30,Soja {year}/{next_year}
+sp-soja-safrinha,soja_safrinha,6,30,Soja Safrinha {year}
+sp-milho,milho,8,30,Milho {year}/{year}
+sp-trigo,trigo,10,30,Trigo {year}

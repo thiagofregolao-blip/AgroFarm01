@@ -1,8 +1,11 @@
-import { db } from './db';
+import { db, dbReady } from './db';
 import * as schema from '@shared/schema';
 
 async function seed() {
   console.log('🌱 Seeding database...');
+  
+  // Aguarda o banco estar pronto
+  await dbReady;
 
   const categoryData = [
     {

@@ -1,0 +1,263 @@
+id,name,category_id,description,is_active,subcategory_id,marca,package_size,segment,timac_points
+0c78c4e6-4190-4665-a5c4-6ed6777ad22a,FERT 12-15-15 - FERTIPAR - BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+b8dc677e-da87-4826-bbc9-20557f7d5b8a,RIZOLIQ TOP - BRADYRHIZOBIUM - 2LTS,cat-especialidades,RIZOBACTER,t,,RIZOBACTER,2.00,,0.00
+a7d5f4d7-9d90-4604-8b29-dc2cf804ca6f,FERT TOP PHOS BALANCE - BB - 13 09 09,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+97f95490-3d3f-4fb5-aa71-6df01f3f3527,CYANTRANE 80WG 1KG,cat-agroquimicos,TAMPA,t,,TAMPA,1.00,,0.00
+7f30b178-1b9b-4d0d-9b58-78ad6ee1543a,PORCELEN PLUS - BENZOATO 30 WG% - 1KG,cat-agroquimicos,RAINBOW,t,,RAINBOW,1.00,,0.00
+32fb72a7-fbc0-4fe4-bc15-3222d655e845,ACRESCENT SOLUS F - NEMATICIDA - 20LTS,cat-especialidades,CARBON,t,,CARBON,20.00,,0.00
+924b9063-a2dd-4bd7-9721-35a21597c54a,ACRESCENT RAIZ F - NEMATICIDA -  5LTS,cat-especialidades,CARBON,t,,CARBON,5.00,,0.00
+c95cdd39-84f3-4315-8f8e-96c880d48da9,FERT PHYSALG ACTIMAX 13-09-09 - BB,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+8552703f-6803-486a-88e3-52749ae90e71,STICKER OIL 20 LTS,cat-especialidades,TECNOMYL,t,,TECNOMYL,20.00,,0.00
+75b2fc62-f1d8-4df9-857a-b7b18cdf5f8d,RIZOSPRAY VALEMAX  - 1LTS,cat-especialidades,RIZOBACTER,t,,RIZOBACTER,1.00,,0.00
+ea4cf8f2-2916-45d3-830e-eb94c36d9002,FERT 02-20-18 - BRFERTIL - BB - KG,cat-fertilizantes,BR FERTIL,t,,BR FERTIL,,,0.00
+c580d67c-3b7c-47f7-b0e9-e02dbcb147c8,FERT 00-00-60 - FERTIPAR - BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+e4111c42-14ec-47e2-8890-5b9c3f3e8023,FERT 04-30-10 + MICRO MOSAIC-  BB - KG,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+440586d7-420d-4a11-9af4-21b78314eef8,FERT 00-00-60 - YARA - BB - KG,cat-fertilizantes,YARA FERTILIZANTES,t,,YARA FERTILIZANTES,,,0.00
+d71b7f9b-92e4-46b2-a1b0-0590b3c13660,FERT 02-20-18 MOSAIC - BB - KG,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+fefdcfa4-43f0-4cdf-8f55-c8744d7c1b57,FERT BASIDUO 135 TIMAC - BB,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+5a7c2266-28ce-41f6-be2f-95397d21d4f2,FERT SULFAMMO META 29 - TIMAC - BB - KG,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+0ec210da-3b4b-4346-a5d9-7cf28b90eb85,FERT 12-15-15 - BR FERTIL - BB - KG,cat-fertilizantes,BR FERTIL,t,,BR FERTIL,,,0.00
+56f268e6-db73-4c5e-9a30-e928198d71cb,METYL OIL - ACEITE METILADA - 10LTS,cat-especialidades,RIZOBACTER,t,,RIZOBACTER,10.00,,0.00
+26c7b142-88e6-4a76-bf32-c1e9ff889d3c,GESAPRIM 90 - ATRAZINA 90% WG - 10KG,cat-agroquimicos,SYNGENTA PARAGUAY S.A.,t,,SYNGENTA PARAGUAY S.A.,10.00,,0.00
+c7cf53a9-7f3a-4ffa-8ee0-21a0528717a0,RASS 32 - 1L,cat-especialidades,INQUIMA,t,,INQUIMA,1.00,,0.00
+0dd27eaf-2905-4593-b8b3-e3df3f46ad5a,TA35 + ZINC - ADJUVANTE - 5LTS,cat-especialidades,INQUIMA,t,,INQUIMA,5.00,,0.00
+37e6e467-d925-40b2-aee5-ba4515c9c38f,RIZOIL M - ACEITE METILADA - 10LTS,cat-especialidades,RIZOBACTER,t,,RIZOBACTER,10.00,,0.00
+135e89d3-a34c-479e-b759-e4a521d63fde,SEMILLA MAIZ DKB 360 VT3PRO - 60 MIL SEMILLAS,cat-sem-milho,DEKALPAR,t,,DEKALPAR,,,0.00
+f843cba9-605b-461f-9830-47a59a7c1bf9,FERT 09-22-20 MOSAIC - BB - KG,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+9f80b449-bbfa-41bd-92ab-e013577f5ba7,CLARTEX - METALDEIDO - 25KG,cat-agroquimicos,RIZOBACTER,t,,RIZOBACTER,25.00,,0.00
+59c6b948-ace4-4671-8fe6-935b10c0b185,FERT 45-00-00 UREA - FERTIPAR - BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+dfd25ecd-069d-4501-8a28-7dba3e36faa9,FERT FOST.MON.MAP GR 11-52 - MOSAIC - BB,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+47631d16-3b27-4880-af5a-7ac543919fe2,SEM. SORGO 1G100- BLS- CORTEVA,cat-sem-milho,CORTEVA,t,,CORTEVA,,,0.00
+30eed411-63ba-4276-97ef-c99c2317387c,FERTIACTYL GRAMINEAS - 2LTS,cat-especialidades,TIMAC,t,,TIMAC,2.00,,3.00
+a7dfd9fa-bb24-4ab3-bd44-5b6300d3dfff,FERTIACTYL LEGUMINOSAS - 2LTS,cat-especialidades,TIMAC,t,,TIMAC,2.00,,3.00
+366be9b7-51e7-41d2-98c3-02801fa01245,PROGEN DETOX - 10LTS,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+09e88507-4db3-4664-9e96-ffe81cb859b4,FERTILEADER 954 - VITAL - 10LTS,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+50e10459-8b27-4916-953f-b46636cada6a,FERTILEADER AXIS NG - 5L,cat-especialidades,TIMAC,t,,TIMAC,5.00,,1.00
+4859161e-5b69-42e7-86e3-f9b6779da644,FERTIACTYL GZ - 10LTS,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+81581447-8003-440d-99f6-462d727b1ba1,FERTIACTYL LEGUMINOSAS - 5LTS,cat-especialidades,TIMAC,t,,TIMAC,5.00,,3.00
+fe64d721-dff0-4e14-9dbe-f7b4e4c298d2,FERTILEADER GOLD BMO - 10LTS,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+39cef0a8-e6c9-480b-8056-932500a71f55,FULMINANTE 80 WG - FIPRONIL 80- 1 KG.,cat-agroquimicos,CHDS,t,sub-inseticidas,CHDS,1.00,inseticida,0.00
+343d96c4-8a5e-4347-9584-8dc64044d4ed,"BALUART - PROTHIOC. 17,5% + TRIFLOXIS. 15% - 5LTS",cat-agroquimicos,UPL,t,sub-tratamento-sementes,UPL,5.00,ts,0.00
+67be7dda-3644-483d-b1a3-b9dc1693dfd4,NATIVO - TEBUCO. 20% + TRIFLOXIS. 10% - 5LTS,cat-agroquimicos,BAYER,t,sub-tratamento-sementes,BAYER,5.00,ts,0.00
+6f736da4-9b64-461a-9224-4ad47209770d,CYPRESS - CYPROCONAZOLE 15% + DIFENOCONAZOLE 25% -,cat-agroquimicos,SYNGENTA PARAGUAY S.A.,t,sub-fungicidas,SYNGENTA PARAGUAY S.A.,,fungicida,0.00
+e692911d-4232-472a-99a5-b6cdb92cc6d8,EXALT - SPINETORAM 12% - 1L,cat-agroquimicos,CORTEVA,t,sub-inseticidas,CORTEVA,1.00,inseticida,0.00
+e23ecc35-32e3-4980-8fe1-b5dd9e035d08,WETTER- PICOX. + TEBU. + MACONZ. - 20LTS,cat-agroquimicos,ADAMA,t,sub-tratamento-sementes,ADAMA,20.00,ts,0.00
+be59ed75-9809-478c-84e8-4ff2280b8d5e,UTRISHA TM- 5KG.,cat-especialidades,CORTEVA,t,,CORTEVA,5.00,,0.00
+ddc798d0-98db-4c51-ad9f-268f21a03774,FERT 08-20-10 FERTIPAR 5% CA + 8% S- BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+f0e65f8e-878b-4412-9535-a4da27184252,FERT 20-00-00 - BR FERTIL - BB - KG,cat-fertilizantes,BR FERTIL,t,,BR FERTIL,,,0.00
+4f62beb4-dba2-4561-a38d-8f8ae7225fb6,INTREPID - METOXIFENOZIDA 24% - 5LTS,cat-agroquimicos,CORTEVA,t,sub-inseticidas,CORTEVA,5.00,inseticida,0.00
+9d408d5b-d9df-4c51-9738-efd88e1f398c,FERTIACTYL GZ - 5LTS,cat-especialidades,TIMAC,t,,TIMAC,5.00,,1.00
+89ae8ab9-5e2f-490d-8152-e5384bf295ae,FERTIACTYL SWEET- 10 LTS.,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+45e62da5-2272-41bf-802d-8f6d88b750ee,SEACTIV AXIS NG-10 LTS,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+392adaa8-3853-429a-a1f3-8ff1af265208,FERT 08-20-10 - MOSAIC - BB - KG,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+c9ff0590-018a-40a5-a7da-801b22b39235,EUROFIT MAX - 10LTS,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+68f79595-d9ba-4142-a36e-6a9d0582247c,SEACTIV VITAL 954 - 10LTS,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+68169cfb-4ad8-457c-8851-2ae04f2ad409,FERT SULFAMMO META S - TIMAC - BB - KG,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+5c499719-5efa-4656-a463-d9bda30082d3,FERT INRIZZA 490 03-26-00 TIMAC - BB,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+87d1684a-8569-48f3-a433-18ecc72b12f7,FERT 15-15-15 - BR FERTIL - BB - KG,cat-fertilizantes,BR FERTIL,t,,BR FERTIL,,,0.00
+1c4bcfa3-8896-4a7b-a73e-d40176022714,YARA VITA FOLICARE - BLS 25KG,cat-especialidades,YARA FERTILIZANTES,t,,YARA FERTILIZANTES,25.00,,0.00
+94fef025-4f91-4f40-b521-e8e44e5a0676,ACTIVMAN - FOSFITO MANGANES - 5LTS,cat-especialidades,AGRICHEM,t,,AGRICHEM,5.00,,0.00
+58762fe6-7b30-4e3d-9e70-6ae895944671,CRONNOS - PICOX. + TEBU. + MACONZ. - 20LTS,cat-fertilizantes,ADAMA,t,,ADAMA,20.00,,0.00
+8adb91b8-973e-424b-b79a-7b498af0a840,RIZOSPRAY EXTREMO - 5 LTS,cat-especialidades,RIZOBACTER,t,,RIZOBACTER,5.00,,0.00
+ff4564d0-df57-4bc3-9f61-6d691b3dd3bf,U10 - INQUIMA - 1 L,cat-especialidades,INQUIMA,t,,INQUIMA,1.00,,0.00
+14366256-3dfd-42fe-8806-0f08cfae9106,FERT 20-00-20 FERTIPAR - BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+1d83ca6a-a994-4bc9-81a7-fc121ba58394,FERT 00-00-60 - MOSAIC - BB,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+7a433be0-dbd4-4ce0-b4e8-cde2c4366793,FERT 02-20-20 - FERTIPAR - BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+66ff0250-b1ec-4d4b-a17d-59dbef0bb13d,CORAZA - LAMBDACIALOTRINA 25% - 5LTS,cat-agroquimicos,CHDS,t,sub-tratamento-sementes,CHDS,5.00,ts,0.00
+5006cb5a-6224-40d9-a35b-65639fad768a,YUNTA FS246 - 5 LTS,cat-agroquimicos,BAYER,t,sub-tratamento-sementes,BAYER,5.00,ts,0.00
+2b5f5c55-3fde-43e6-a439-d0a657b6b502,"DERMACOR - CLORANTRANILIPROLE 62,5% - 1L",cat-agroquimicos,CORTEVA,t,sub-tratamento-sementes,CORTEVA,1.00,ts,0.00
+54c822a8-6c6b-4835-8839-80551929e04c,HUSSAR EVOLUTION EC 96 - 5 LTS,cat-agroquimicos,BAYER,t,sub-tratamento-sementes,BAYER,5.00,ts,0.00
+6d866fda-0c07-429a-b9d5-56dac721cebe,EXPEDITION - SULFOXAFLOR 10% + LAMBDA. 15% - 5LTS,cat-agroquimicos,CORTEVA,t,sub-tratamento-sementes,CORTEVA,5.00,ts,0.00
+d28e4d02-2e8b-4044-8db0-cf0fcfac9758,"TECNUP PREMIUM 2 - GLIFOSATO 60,8% - 20LTS",cat-agroquimicos,TECNOMYL,t,sub-dessecacao,TECNOMYL,20.00,herbicida,0.00
+ced52ca2-cf12-43f5-9eb2-a08536989238,"2,4 D AMINA TM - 2,4D AMINA 72% - 20LTS",cat-agroquimicos,TECNOMYL,t,sub-dessecacao,TECNOMYL,20.00,herbicida,0.00
+0a1dd5c1-202f-481a-b591-0331a24e40a3,CLOMAGROP 48 - CLOMAZONE 48% - 20LTS,cat-agroquimicos,,t,sub-dessecacao,,,herbicida,0.00
+0f7b1dd5-b056-4636-a0a7-d3ceec41aa24,FLUMITOP 48 SC FLUMIOXAZIM 48% 5 LTS,cat-agroquimicos,,t,sub-dessecacao,,,herbicida,0.00
+3cca9087-dfff-4463-a9eb-68d574b46e5e,PARAGROP 24 - PARAQUAT 24% - 20LTS,cat-agroquimicos,CIAGROPA,t,sub-dessecacao,CIAGROPA,20.00,herbicida,0.00
+67a734ca-f12c-416c-a3f8-4f7434db90f3,FERT TOP PHOS BASE - TIMAC - BB,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+881fbd04-bea0-4542-86da-442e622acbf0,FERT 08-40-08 TME - YARA - BB - KG,cat-fertilizantes,YARA FERTILIZANTES,t,,YARA FERTILIZANTES,,,0.00
+b3e48baa-c384-4414-a421-8af3a430ea2d,FERT 20-00-00 - FERTIPAR - BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+4beaeebe-c6eb-4e5f-b6b3-72edea1d7f09,FASCINATE 40 SL- GLUFOSINATO - 20LTS,cat-agroquimicos,UPL,t,sub-dessecacao,UPL,20.00,herbicida,0.00
+1bf518c3-a343-4077-b2c3-975e3de58089,VERDICT ULTRA 1L,cat-agroquimicos,CORTEVA,t,sub-dessecacao,CORTEVA,1.00,herbicida,0.00
+87d3e1d2-afd2-4015-be36-a9d026e7db86,FERT TOP PHOS 280 HP - TIMAC -  BB,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+3d178945-52d5-4432-996c-c278b6ea65d8,CLOMAZERB 48- CLOMAZONE 48% EC-20LT,cat-agroquimicos,TAMPA,t,sub-dessecacao,TAMPA,20.00,herbicida,0.00
+ba8fca06-34cf-4522-aaa0-7db09b2c1d26,TEXARO - HALAUXIFEN 11.5% + DICLOS. 58% - 860GR,cat-agroquimicos,CORTEVA,t,sub-dessecacao,CORTEVA,860.00,herbicida,0.00
+a5559749-42ae-432c-b0ba-f00e8a2c778d,TRIBO 840 - DICLOSULAN 84% - 500G,cat-agroquimicos,IASA,t,sub-dessecacao,IASA,,herbicida,0.00
+fb02ef37-26e9-47eb-a93a-0889ae0d6f92,HEAT - SAFLUFENACIL - 350G,cat-agroquimicos,BASF - GPSA,t,sub-dessecacao,BASF - GPSA,,herbicida,0.00
+b50d90e9-2757-4b16-9b07-4a15b8cf7794,SEMILLA DE MAIZ AG 8701 PRO4- BLS.,cat-sem-milho,TECNOMYL,t,,TECNOMYL,,,0.00
+0361b77f-2672-46ab-8a99-8b73e35d3e79,TEBUDIFEN 40 - DIFENO 20%+ TEBUCONAZOLE 20%- 5L.,cat-agroquimicos,TAMPA,t,sub-fungicidas,TAMPA,5.00,fungicida,0.00
+f23baab8-1bf0-43da-a63d-7823a6db678c,VIOVAN - 5L,cat-agroquimicos,CORTEVA,t,sub-fungicidas,CORTEVA,5.00,fungicida,0.00
+67c87f17-a7a3-4096-9369-02798c7e0533,LASCAR - ACEFATO 97% DF - 5KG,cat-agroquimicos,UPL,t,sub-inseticidas,UPL,5.00,inseticida,0.00
+f5239860-3e6d-4d1b-ba94-b296991de308,CLORANTE 625 FS- 1LTS.,cat-agroquimicos,TAMPA,t,sub-tratamento-sementes,TAMPA,1.00,ts,0.00
+42cbc55a-b963-47ae-8666-fe631051994a,FERT 05-25-25 - FERTIPAR - BB- KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+ab387b26-c9e7-47da-9870-e869fe1d1581,FERT PFALM 05-25-25 - MOSAIC - BB - KG,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+f41d0117-fba6-4ed8-bc94-7d5a976ec4ba,CLORANTE 80 WG CLORANTRANILIPROL 80 % 1 KG,cat-agroquimicos,TAMPA,t,,TAMPA,1.00,ts,0.00
+cead7c82-bef6-4917-8e46-c42418f119f4,"RANCONA - IPCONAZOLE 2,5% + METALAXIL 2% - 1L",cat-agroquimicos,CORTEVA,t,sub-tratamento-sementes,CORTEVA,1.00,ts,0.00
+7c040919-8518-4be2-8a30-95088f9ff3f0,TOXATRIN - THIAMETOXAN 30 + BIFEN 20 - 5LTS,cat-agroquimicos,TAMPA,t,sub-tratamento-sementes,TAMPA,5.00,ts,0.00
+e0195b3f-ce67-4e2c-93dd-450db4cb864f,MERCOBLOC STANDARD -  25KG.,6704c025-303a-404a-b9a4-706c4a7358c8,TIMAC,t,,TIMAC,25.00,,0.00
+7ebf5308-b1aa-4bb3-b16e-65dd0dcf7aee,LOYER - DIFENOTEFURAN 20%  LAMBDACIA. 20% - 5LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,ts,0.00
+744fbf89-39e5-4628-99ca-a188bc3540b3,SEM. SORGO 1G100- BLS- CORTEVA,cat-sem-diversas,CORTEVA,t,,CORTEVA,,,0.00
+da64b040-ee6b-41e8-b0ae-0bbdfc3984ce,MERCOBLOC STANDARD -  25KG.,6704c025-303a-404a-b9a4-706c4a7358c8,TIMAC,t,,TIMAC,25.00,,0.00
+73bf35bb-f414-421a-a5d9-d5b0540b762e,VESSARYA - 10 LTS,cat-agroquimicos,CORTEVA,t,sub-tratamento-sementes,CORTEVA,10.00,ts,0.00
+b2b84ef0-b605-4115-a371-8541c0a8593d,MERCOBLOC STANDARD -  25KG.,6704c025-303a-404a-b9a4-706c4a7358c8,TIMAC,t,,TIMAC,25.00,,0.00
+b46b8044-9571-4484-9037-762799f02d5e,FERTIACTYL SWEET- 10 LTS.,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+254a6ba5-ecc6-437f-ba11-fa8fe822d7f9,APROACH POWER - PICOX. 9% + CIPRO 4% - 5LTS,cat-agroquimicos,CORTEVA,t,sub-tratamento-sementes,CORTEVA,5.00,ts,0.00
+3e620cb8-a8b0-461c-aef0-c802b3433720,"GRAN MURALLA - METSULFUROM 60% - 0,5KG",cat-agroquimicos,AGROPLUS,t,sub-tratamento-sementes,AGROPLUS,5.00,ts,0.00
+8c18045e-556a-49ec-aa41-94db282862a9,OPTIMIZER EC765 - 5L,cat-agroquimicos,BAYER,t,,BAYER,5.00,outros,0.00
+893e0dbb-0e64-4ebc-ba39-79d72ed6faf7,THIAMEX PLANT - THIAMETOXAM - 1KG,cat-agroquimicos,CHDS,t,,CHDS,1.00,inseticida,0.00
+e4b4c186-aa6f-432d-96fa-136e30d98997,ATRANEX - ATRAZINA 90% WG - 15KGS,cat-agroquimicos,ADAMA,t,,ADAMA,15.00,herbicida,0.00
+3b17fa90-f1a1-4c37-b811-1e75a808e175,"SPHERE MAX SC - TRIFLOXIS. 37,5% + CIPROCON. 16% -",cat-agroquimicos,BAYER,t,,BAYER,,fungicida,0.00
+e3698c0b-c1af-4701-a8f2-9ff8098f85a6,RITIRAM CARB PLUS- 5L,cat-agroquimicos,RIZOBACTER,t,,RIZOBACTER,5.00,outros,0.00
+08527738-99af-4f17-9908-18bfe3f78861,RITIRAM CARB PLUS- 1L,cat-agroquimicos,RIZOBACTER,t,,RIZOBACTER,1.00,outros,0.00
+23cfd085-6808-4957-804d-feeb6b2eacd2,BASAGRAN 600 - 5 L,cat-agroquimicos,MATRISOJA,t,,MATRISOJA,5.00,outros,0.00
+808a604e-4a41-40b6-898e-bdf2aee77747,GRASIDIM - CLETONDIM 24% - 5 LTS,cat-agroquimicos,RAINBOW,t,sub-tratamento-sementes,RAINBOW,5.00,ts,0.00
+1b0613b3-bae9-4ac3-9293-beca5be461a7,CENTURION- CLETODIM 24%- 5 LTS.,cat-agroquimicos,UPL,t,sub-tratamento-sementes,UPL,5.00,ts,0.00
+4f2a843b-90b2-4b1d-9b21-c2267ff76499,TECNUP SG- GLIFOSATO 75%- 15KG,cat-agroquimicos,TECNOMYL,t,sub-dessecacao,TECNOMYL,15.00,herbicida,0.00
+d91dd5d2-d996-4fe2-9d54-34f13e8c784f,RAZANTE - PARAQUAT 24% - 20LTS,cat-agroquimicos,CHDS,t,sub-dessecacao,CHDS,20.00,herbicida,0.00
+8113cd94-85ea-480a-a054-e734e13fbd7c,TECNOQUAT - PARAQUAT 24% - 20LTS,cat-agroquimicos,TECNOMYL,t,sub-dessecacao,TECNOMYL,20.00,herbicida,0.00
+f0b05236-d521-4094-977b-ad9ced50298f,PARAFUR- PARAQUAT 24%,cat-agroquimicos,AGROFUTURO,t,sub-dessecacao,AGROFUTURO,,herbicida,0.00
+c00c57ad-8d77-480a-aeaf-2b9813672231,CONFIRMM 84 WG - DICLOSULAN 84% - 500G,cat-agroquimicos,TECNOMYL,t,sub-dessecacao,TECNOMYL,,herbicida,0.00
+7129b5b9-f393-4d0b-bbc8-5c440a995a4e,EXTRAZONE- SULFENTRAZONE 50%- 5LT,cat-agroquimicos,TAMPA,t,sub-dessecacao,TAMPA,5.00,herbicida,0.00
+0a08b4cd-0607-4c49-8cd4-3df8334cd665,"PIXXARO - FLUROXYPYR 34,91% + HALAUXYFEN 1,64%-5L",cat-agroquimicos,CORTEVA,t,sub-dessecacao,CORTEVA,5.00,herbicida,0.00
+747bb1cc-c7b9-4839-b605-18277253e9a9,"CRIPTON XPRO - PROTHIO. 17,5% + TRIFLOX. 15% + BIX",cat-agroquimicos,BAYER,t,sub-fungicidas,BAYER,,fungicida,0.00
+3bb3c41f-a0e3-4d89-a990-300f1064b550,VESSARYA - 6L,cat-agroquimicos,CORTEVA,t,sub-fungicidas,CORTEVA,6.00,fungicida,0.00
+d67bfe4f-7c1f-48d6-bf68-ad28defa4000,BIFENTAM 40MAX_ (BIFENTRINA 40%)- 5 LT,cat-agroquimicos,TAMPA,t,sub-inseticidas,TAMPA,5.00,inseticida,0.00
+6b2001fe-680d-478f-81ad-79a733dce88b,ACETAMIPRID 70 WP- 1KG.,cat-agroquimicos,AGROPLUS,t,sub-inseticidas,AGROPLUS,1.00,inseticida,0.00
+d43d65ec-b5bc-4f10-91ca-5ff6c68ce856,MIND 900 - METOMIL 90% - 1KG,cat-agroquimicos,IASA,t,sub-inseticidas,IASA,1.00,inseticida,0.00
+434a722c-7c86-45a2-91ca-70d154414243,GALIL SC - 5 L,cat-agroquimicos,ADAMA,t,sub-inseticidas,ADAMA,5.00,inseticida,0.00
+e00523c4-0eae-411b-ac18-e60fb986dbf5,OBERON - 1L,cat-agroquimicos,BAYER,t,sub-inseticidas,BAYER,1.00,inseticida,0.00
+91c38b5e-7d1d-46c4-aafa-629ef73c7a4f,"ABAMEC - ABAMECTINA 8,4% - 1L",cat-agroquimicos,TECNOMYL,t,sub-inseticidas,TECNOMYL,1.00,inseticida,0.00
+508c8cd9-f850-4df4-aa80-944ed1292142,UNIRON 10 - NOVALURON 10% - 1L,cat-agroquimicos,UPL,t,,UPL,1.00,outros,0.00
+b95129bd-92dd-4580-80da-da1ce98fe4a0,TORBEN -TERBUTILAZINA 90% WG -10KG,cat-agroquimicos,TECNOMYL,t,,TECNOMYL,10.00,outros,0.00
+897b00fa-474e-4066-89c8-e9cd0aea2635,FERTILEADER AXIS NG - 5L,cat-fertilizantes,,t,,,,,0.00
+be6f0488-221f-4066-9609-9040322929c2,VESPER FIT WDG - 10% BENZOATO 40% LUFENURON - 1KG,6704c025-303a-404a-b9a4-706c4a7358c8,,t,,,,,0.00
+94c84304-51e8-46d1-8c77-270f56a73198,SOYGUARD 30 - TEFLUBEZUROM 30% - 1L,6704c025-303a-404a-b9a4-706c4a7358c8,,t,,,,,0.00
+94a9833c-7187-46a1-a9e8-0b1d78f35ad2,SNIPER - BIFENTRIN 40% - 5LTS,6704c025-303a-404a-b9a4-706c4a7358c8,,t,,,,,0.00
+99d4252c-d96d-453a-a711-5b217e20299a,"ONLY - THIAMETOXAN 75% WG - 0,5KG",6704c025-303a-404a-b9a4-706c4a7358c8,,t,,,,,0.00
+238b824b-8d61-4504-8103-d3246e94560c,DINOBIN - DINOTEFURAN 20% + BIFENTRIN 15% - 5LTS,6704c025-303a-404a-b9a4-706c4a7358c8,,t,,,,,0.00
+8ec566ba-7361-4440-80e0-f43485f795b5,FERTIACTYL SWEET- 10 LTS.,cat-especialidades,TIMAC,t,,TIMAC,10.00,,1.00
+8f54b10f-37fe-4b23-9193-2e0b9d841705,ACRESCENT RAIZ F - NEMATICIDA - 1L,cat-agroquimicos,,t,,,,outros,0.00
+32d32be3-2ad3-499b-abc1-e543542aaf17,APPORT DIFENOTEFURAN 20%  LAMBDACIA. 20% - 5LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,ts,0.00
+4458184d-120e-4d0c-bbbb-3ee5aa61af7a,ONLY 60 SC - THIAMETOXAN 60% - 5LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,ts,0.00
+0b2a9a61-b19e-48bc-a528-e327525c3e45,BESULAR - 5LTS,cat-agroquimicos,RAINBOW,t,sub-tratamento-sementes,RAINBOW,5.00,ts,0.00
+b6f1ebc5-d286-4923-81b0-0c223aff5084,KURIN 48 - FLUMIOXAZIM 48% - 5LTS,cat-agroquimicos,CIAGROPA,t,sub-tratamento-sementes,CIAGROPA,5.00,ts,0.00
+ef7dd50f-8517-49eb-b5a0-5a5b6c113474,HURACAN 25 FS - FIPRONIL 25% - 5LTS,cat-agroquimicos,,t,sub-tratamento-sementes,TECNOMYL,5.00,ts,0.00
+1ca2d63c-5a37-4b4f-9742-5d5390110f0d,ACRESCENT SOLUS F - NEMATICIDA - 20LTS,cat-agroquimicos,,t,sub-tratamento-sementes,,,ts,0.00
+e0aef75a-fd6c-46d2-a9c9-ca5422766ff4,ACRESCENT RAIZ F - NEMATICIDA - 5LTS,cat-agroquimicos,,t,sub-tratamento-sementes,,,ts,0.00
+f76061c1-0a87-4dfa-a8a2-ea61c1f28b03,CLOMA 48- CLOMAZONE 48%- 20L,cat-agroquimicos,,t,sub-dessecacao,,,herbicida,0.00
+97f0f8d9-0951-49c2-a383-6e44e16680ed,GLUFOSEC - GLUFOSINATO 40% TAMPA - 20LTS,cat-agroquimicos,,t,sub-dessecacao,TAMPA,20.00,herbicida,0.00
+d6c2f694-bbe0-4c71-9693-c101d29d71f1,"POLUX CLEAN - GLIFOSATO 60,8% - 20L",cat-agroquimicos,CHDS,t,sub-dessecacao,CHDS,20.00,herbicida,0.00
+f9097fd4-3ed0-4f10-9206-c70d731f7427,"SPIREEL MIX- PROTIO17,5%+TRYFLO15%+BIXAFEN12,5- 5L",cat-agroquimicos,RAINBOW,t,sub-fungicidas,RAINBOW,5.00,fungicida,0.00
+7c3aa2ce-c08c-43fd-9643-71a8d0d64484,MURALLA - MANCOZEB 75% WG - 25 KG,cat-agroquimicos,,t,sub-fungicidas,TECNOMYL,25.00,fungicida,0.00
+426391ca-67ee-4677-a99f-f29ac0e96195,UNIZEB - MANCOZEB 80% WP - 25KG,cat-agroquimicos,UPL,t,sub-fungicidas,UPL,25.00,fungicida,0.00
+942b7e11-c540-4baa-a084-1e797cc0c1c7,"CRIPTON SC - PROTHIO. 17,5% + TRIFLOXIS. 15% - 5LT",cat-agroquimicos,,t,sub-fungicidas,BAYER,,fungicida,0.00
+6bb907ec-2914-4e84-9988-7225f0b9fd93,SOYGUARD 30 - TEFLUBEZUROM 30% - 5LT.,cat-agroquimicos,TECNOMYL,t,sub-inseticidas,TECNOMYL,5.00,inseticida,0.00
+76d02c8a-56aa-45b0-9328-cc7953b2c81d,CAYENNE 60 SC - IMIDACLOPRID 60% - 5 L,cat-agroquimicos,CIAGROPA,t,sub-inseticidas,CIAGROPA,5.00,inseticida,0.00
+da6cb26b-a89a-45c8-bf5d-2b3a3c753111,BELT - FLUBENDIAMIDA 48% - 500ML,cat-agroquimicos,BAYER,t,sub-inseticidas,BAYER,,inseticida,0.00
+48030c95-7d98-4981-8489-49af286905db,AMPLIGO - CLORANTRA. 10% + LAMBDA. 5% - 1L,cat-agroquimicos,SYNGENTA PARAGUAY S.A.,t,sub-inseticidas,SYNGENTA PARAGUAY S.A.,1.00,inseticida,0.00
+4038edfb-882b-4a93-8722-2534271b7a3b,ZAFIRO SC - TEBUCONAZOLE 43% - 5L,cat-agroquimicos,,t,sub-fungicidas,CHDS,5.00,fungicida,0.00
+99d2d1cb-cc7e-4df7-a4be-737e55a22e98,MURALLA - MANCOZEB 75% WG - 15KG,cat-agroquimicos,,t,sub-fungicidas,TECNOMYL,15.00,fungicida,0.00
+2ad12389-0b31-4a76-b57d-aa974272fae1,FENTIPROL 60 SC- BIFENTRIN 25%+ ETIPROL 35%- 5LT,cat-agroquimicos,TAMPA,t,sub-inseticidas,TAMPA,5.00,inseticida,0.00
+c3575bc3-eb75-4f5e-9f65-0840da7c56a5,YARA VITA N-MOL - 20L,cat-especialidades,YARA FERTILIZANTES,t,,YARA FERTILIZANTES,20.00,,0.00
+2b03d0b6-5421-4631-8573-455361603838,TODYM 24 - 20 LTS,cat-agroquimicos,TECNOMYL,t,sub-dessecacao,TECNOMYL,20.00,herbicida,0.00
+2d60e0f3-7f0a-4afd-84e6-1c95c6508d5f,FERT 10-20-20 FERTIPAR - BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+f3c0f0cd-576c-4f18-8be3-f1e6c23ecbd9,ZETHAPYR- IMAZETAPIR 10% - 5 LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,ts,0.00
+343ed10c-659d-4fe8-a2f1-d4e8093e21dc,SOBERAN - TEMBOTRIONA 42% - 5LTS,cat-agroquimicos,BAYER,t,sub-tratamento-sementes,BAYER,5.00,ts,0.00
+dbf0a43f-b9f9-4264-bfdc-fbbda33e5190,APROACH PRIMA - 5LTS,cat-agroquimicos,CORTEVA,t,sub-tratamento-sementes,CORTEVA,5.00,ts,0.00
+e877c27a-c7e3-4c34-8c55-a12405481180,"ATIVUM - EPOX. 5% + FLUXAP. 5% + PIRA 8,1% - 5LTS",cat-agroquimicos,BASF - GPSA,t,sub-tratamento-sementes,BASF - GPSA,5.00,ts,0.00
+fe3f4818-6227-4110-a41b-3e22816eae13,TORAC SC - SULFENTRAZONE 50%  - 5 LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,ts,0.00
+96ed6d7c-b24c-4124-aad4-6f7852bea021,"GLIFOGROP FUL DMA  - GLIFOSATO 60,8% - 20LTS",cat-agroquimicos,CIAGROPA,t,sub-tratamento-sementes,CIAGROPA,20.00,ts,0.00
+62c3d76f-563b-43b5-a372-b9c3413da531,FLUMITOP 48 SC FLUMIOXAZIM 48%  5 LTS,cat-agroquimicos,TAMPA,t,sub-tratamento-sementes,TAMPA,5.00,ts,0.00
+36bcec82-c67a-469b-9d51-b3575f692cf2,GENESIS GRAM - 5LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,ts,0.00
+c92a035f-d1a4-45fa-9cb8-ad5141008ca3,DIFENAZOL - TEBU 20% + DIFENO 20% - 5LTS,cat-agroquimicos,AGROFUTURO,t,sub-tratamento-sementes,AGROFUTURO,5.00,,0.00
+80ea8298-bf1b-416e-a7a1-217c0775ec9f,TA35 + ZINC - ADJUVANTE - 1L,cat-especialidades,INQUIMA,t,,INQUIMA,1.00,,0.00
+3aec4026-0e65-47f7-8a6f-4a6ac87dd511,EUROFIT MAX - 5 LTS,cat-especialidades,TIMAC,t,,TIMAC,5.00,,0.00
+e67f118b-952c-419b-a81e-38c56c35ab2f,TAMPRONIL SC- CLOROTALONIL 72%- 20L.,cat-agroquimicos,TAMPA,t,sub-fungicidas,TAMPA,20.00,,0.00
+ed9bcc96-5f89-41d0-ac13-116066da8594,FERT 00-28-00 MACROFERTIL - BB,cat-fertilizantes,LDC,t,,LDC,,,0.00
+4033c16a-5462-40cd-a24b-0c5000e018b5,FERT 02-20-20  MOSAIC - BB - KG,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+36c1882e-8e33-4490-8848-5bb874190289,FERT 04-30-10 + MICRO - FERTIPAR -  BB - KG,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+0f4139a5-6d06-4580-bdb3-7549851e5d73,SUNZONE XTRA - SULFENTRAZONE 75% - 5KG,cat-agroquimicos,RAINBOW,t,sub-dessecacao,RAINBOW,5.00,,0.00
+624f3aad-efe1-4135-9a21-bdef0d713b85,"FERT 04-24-10+CA 9% - S 6% - B 0,2% BB - KG",cat-fertilizantes,COOPAVEL,t,,COOPAVEL,,,0.00
+8e816fc0-d514-4d95-917d-ab33fb4d099e,PERITO ULTRA WG- ACEFATO 85%+ BIFEN 3%- 10KG.,cat-agroquimicos,UPL,t,sub-inseticidas,UPL,10.00,,0.00
+ed38a870-4b60-407b-bc32-ff0711f67e68,CLETODIM NORTOX 24%- 5L,cat-agroquimicos,NORTOX,t,sub-dessecacao,NORTOX,5.00,,0.00
+d173a33b-f207-4e1d-823e-ba454f170e1f,DANKE- DIFENO 20%+ TEBUCO 20%- 5LTS.,cat-agroquimicos,,t,sub-inseticidas,TECNOMYL,5.00,inseticida,0.00
+dee6a4bc-059f-412f-8227-7dd18b28917e,TRICLON - TRICLOPYR 48% - 20LT,cat-agroquimicos,UPL,t,sub-dessecacao,UPL,20.00,,0.00
+2b48bdb9-57ab-463f-9cc6-c25ca826087e,CLEANNER - TEFLUBENZURON 30% - 1 L,cat-agroquimicos,CIAGROPA,t,sub-inseticidas,CIAGROPA,1.00,,0.00
+d50b3606-e635-4c66-b3d9-1cacfc1bac72,RIZOLIQ DAKAR - BRADYRHIZOBIUM - 2LTS,cat-especialidades,RIZOBACTER,t,,RIZOBACTER,2.00,,0.00
+55a98dc5-3d30-47f6-a664-de4a52263d09,SILWET - 1L,cat-especialidades,RIZOBACTER,t,,RIZOBACTER,1.00,,0.00
+c2835407-b6f8-4585-bf49-9cc7f864d90e,FERTIACTYL SWEET- 10 LTS.,cat-fertilizantes,TIMAC,t,,TIMAC,10.00,,0.00
+b1ce45e2-8fce-4124-bdda-94bf2ce2aa53,POLIPLUS XTRASHINE RED - 5LTS,cat-especialidades,FORQUIMICA,t,,FORQUIMICA,5.00,,0.00
+d3b89984-9d04-4b67-ac8a-1966db9bbcd6,SEM SOJA M5947 IPRO - 125MIL SEM. BLS,cat-sem-soja,CVALE,t,,CVALE,,,0.00
+22c8d8dd-add0-4510-bbc7-2486a5d4ca57,SEM SOJA M5947IPRO - 5MM SEM. - BB,cat-sem-soja,CVALE,t,,CVALE,,,0.00
+a1b69bc2-fc1e-4b83-b419-cd72ee8c616e,SEM SOJA 64IX66 RSF 12X (NEXUS)-125MILSEM-BLS,cat-sem-soja,CVALE,t,,CVALE,,,0.00
+c6a6965c-0ac6-442c-a973-98d35dd8c754,"DYNAMITE- DICAMBA 57,8%- 20 LT.",cat-agroquimicos,CHDS,t,,CHDS,20.00,,0.00
+f277da16-6662-44e1-8a63-483bbb8a036d,PODEROS 40 - GLUFOSINATO 40% - 20LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,20.00,,0.00
+356b7af7-0890-41fa-a4bd-15c8c52a5752,POLIPLUS XTRASHINE RED - 1LTS,cat-agroquimicos,FORQUIMICA,t,sub-tratamento-sementes,FORQUIMICA,1.00,,0.00
+87259134-4d8f-446a-bc76-a58b036f068d,"2,4 D TM ZERO - 2,4D AMINA 72% - 20LTS",cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,20.00,,0.00
+9dc09213-5dc7-48e4-82f7-6abc161bd789,FERT 04-30-10 - BRFERTIL - BB - KG,cat-fertilizantes,BR FERTIL,t,,BR FERTIL,,,0.00
+4877ba9e-5a8a-4f1d-9248-f946dc33019d,ACRESCENT RAIZ F - NEMATICIDA - 1L,cat-especialidades,CARBON,t,,CARBON,1.00,,0.00
+0ee460dd-24e9-4279-9966-12c2ede565d6,LÍNEA PULVERIZADOR ROSCAVEL SAFRAJET,cat-fertilizantes,,t,,,,,0.00
+cf44ae0a-af51-44b4-9152-9f695dc62de2,PULVERIZADOR SAFRAJET ELECTRICO 650L,cat-fertilizantes,,t,,,650.00,,0.00
+88a97e1c-9068-4155-bb5d-19be8338312f,PULVERIZADOR SAFRAJET ELECTRICO 300L,cat-fertilizantes,,t,,,300.00,,0.00
+3c0dca95-1a4e-4a2a-8ed5-6d4e8267e834,CALCAREO DOLOMÍTICO,cat-fertilizantes,,t,,,,,0.00
+a9e69fd5-cd26-40fa-949e-cf10f83e63e7,FERT 15-15-15 + 11% S - NPK - BB FERTIPAR,cat-fertilizantes,FERTIPAR FERTILIZANTES,t,,FERTIPAR FERTILIZANTES,,,0.00
+53cce7e1-a59a-45ff-b438-89634cff7d02,SEMILLA MAIZ DKB 260 PRO4+TSI - 60 MIL SEMILLAS,cat-sem-milho,DEKALPAR,t,,DEKALPAR,,,0.00
+5855b13b-ae18-4247-b9aa-f3f32a7e49c2,YARA VITA ZINTRAC - 10LTS,cat-especialidades,YARA FERTILIZANTES,t,,YARA FERTILIZANTES,10.00,,0.00
+512a7e54-0223-4529-bfd9-971508c9efc8,FERT PFALM 12-15-15 - MOSAIC - BB,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+6349054b-b8ba-4ec1-9140-9b54eb5d2945,RIDOWN WG - GLIFOSATO 75% - 10KG,cat-agroquimicos,RAINBOW,t,sub-dessecacao,RAINBOW,10.00,,0.00
+d115638d-0e3a-420f-8ab5-d18cba452e59,FERT SULFAMMO META 17 - TIMAC - BB - KG,cat-fertilizantes,TIMAC,t,,TIMAC,,,0.00
+8da5b76f-fff1-472e-b014-7fb2954914ba,KSC PHYTACTYL V - BLS 25KG.,cat-especialidades,TIMAC,t,,TIMAC,25.00,,0.00
+51105c77-fbb6-4443-9505-4093184ca723,SEMILLA MAIZ FS 533 VIP3 - BLS 60.000 SEMILLAS,cat-sem-milho,FORSEED,t,,FORSEED,,,0.00
+8cf0f02b-f215-4261-a3a5-438075cf9d00,FERTIACTYL LEGUMINOSAS - 10LTS,cat-especialidades,TIMAC,t,,TIMAC,10.00,,0.00
+8fe67e60-f497-4bf7-9574-293819b309f1,BELUGA- DIFLUBENZURON 48%- 1LT.,cat-agroquimicos,TAMPA,t,,TAMPA,1.00,,0.00
+8ca6bf7d-96a1-48d8-ac79-83133265573a,"FLOXY PROEXTRA-PROTIO17,5+TRIFLO15+BIXAFEN12,5- 5L",cat-agroquimicos,TAMPA,t,sub-fungicidas,TAMPA,5.00,,0.00
+9d9f972e-3795-440a-aaf8-90a3416d6371,"MAXIM RFC - METALAXIL 3,75 + FLUDIOXONIL 2,5% - 1L",cat-agroquimicos,SYNGENTA PARAGUAY S.A.,t,sub-tratamento-sementes,SYNGENTA PARAGUAY S.A.,1.00,,0.00
+d6b99ccb-e239-4388-8184-4ce6caaee0e1,FIPRONIL NORTOX MAX- FIPRONIL 50%- 5LTS.,cat-agroquimicos,NORTOX,t,sub-tratamento-sementes,NORTOX,5.00,,0.00
+b972bc89-0911-417e-842b-f0b4cb4e953c,BRACHIARIA RUZIZIENSIS NUA VC80- 20KG,cat-sem-diversas,AZURE,t,,AZURE,20.00,,0.00
+9ae4008f-a8f3-436c-94f7-024de95c6e17,BRACHIARIA RUZIZIENSIS ADVANCED VC80- 10KG,cat-sem-diversas,AZURE,t,,AZURE,10.00,,0.00
+db20cd6d-4b52-463b-b3b8-3c64cae61276,SEMILLA MAIZ FS 512 VIP3 - BLS 60.000 SEMILLAS,cat-sem-milho,FORSEED,t,,FORSEED,,,0.00
+546cf335-aa4a-4466-b56c-14538dd6e054,FERT-UREA-46 NUTREX-COFCO,cat-fertilizantes,COFCO,t,,COFCO,,,0.00
+fc117751-a0c7-4104-9666-9411c064d671,ACEGOAL XTRA - ACETAMIPRID 70% - 1KG,cat-agroquimicos,RAINBOW,t,sub-inseticidas,RAINBOW,1.00,,0.00
+df672d55-91b8-4a43-aa5e-2c7160a428ca,SNIPER - BIFENTRIN 40% - 5LTS,cat-agroquimicos,CHDS,t,sub-tratamento-sementes,CHDS,5.00,,0.00
+d342f85e-bd19-4760-ae5f-10fdbe03b178,ONLY 60 TS - THIAMETOXAN 60% - 1L,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,1.00,,0.00
+a09aa18f-e8b1-4b97-857f-a4e7bd63cefa,YARA VITA COMO - 1LT,cat-especialidades,YARA FERTILIZANTES,t,,YARA FERTILIZANTES,1.00,,0.00
+1306df4f-966a-4c16-95b0-4a8c7359d8e0,BINGO - CLOTHIANIDINA 60 % - 1L,cat-agroquimicos,CHDS,t,,CHDS,1.00,,0.00
+ca39eead-a23a-48b5-9f06-066a7805186e,FENTHRIN- BIFENTRIN 40- 5LTS.,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,,0.00
+8d1b2b50-e54b-487d-905f-809708cf04e0,IPPON 60 SC - IMIDACLOPRID 60%  - 5L,cat-agroquimicos,CHDS,t,sub-inseticidas,CHDS,5.00,,0.00
+80be705b-beea-4f97-90a9-c881c85ced4b,HOOLIGAN - CARFENTRAZONE 40% - 1LT,cat-agroquimicos,CHDS,t,,CHDS,1.00,,0.00
+a16429bf-3779-446b-a41c-cb2910696d88,VENOM- CHLORFFENAPYR 24% EC- 1LT.,cat-agroquimicos,CHDS,t,,CHDS,1.00,,0.00
+d855e7a3-d22c-46de-b106-e1491dd51fd8,AUSTRAL (PIROXALSUFONA) - 80% 500GR,cat-agroquimicos,TAMPA,t,,TAMPA,500.00,,0.00
+8a126df6-7458-42ad-9019-48227908d566,BATTUS GOLD - 1KG,cat-agroquimicos,,t,sub-inseticidas,,1.00,,0.00
+bb8ee84f-dfed-4277-8bba-1c262d0fd22c,CLORPIRIFOS - NORTOX - 5 L,cat-agroquimicos,NORTOX,t,sub-inseticidas,NORTOX,5.00,,0.00
+4ee63895-91ed-4683-96ee-271cdab2ed0f,PYRI PANDA - PIRIPROXYFEN 35% - 5 L,cat-agroquimicos,AGROPLUS,t,,AGROPLUS,5.00,,0.00
+108c00fe-844b-454b-9ced-8ef13ecfaf9b,SUNATO - IMIDACLOPRID 36% + FIPRONIL18 %-1L,cat-agroquimicos,BAYER,t,sub-inseticidas,BAYER,1.00,,0.00
+c63d1533-f020-4dab-916f-ce90870db47e,METHOMYL SP - 1KG,cat-agroquimicos,TECNOMYL,t,,TECNOMYL,1.00,,0.00
+d3967d6e-9d97-4c84-a3ad-1135ca487277,MERCOBLOC STANDARD -  25KG.,cat-especialidades,TIMAC,t,,TIMAC,25.00,,0.00
+baa12e01-69e0-4cdf-aa33-a92a0b8f3c4d,"2,4 D CIAGROPA - 2,4D AMINA 72% - 20LTS",cat-agroquimicos,CIAGROPA,t,sub-tratamento-sementes,CIAGROPA,20.00,,0.00
+0f107bfa-ff63-420a-bf14-da350cf219ed,FERT 03-32-08 ATHOS MOSAIC - BB,cat-fertilizantes,MOSAIC,t,,MOSAIC,,,0.00
+124f6ef2-001b-45a4-90c6-174c817dbc07,ATRAKING XTRA - ATRAZINA 90% - 10 KG,cat-agroquimicos,RAINBOW,t,,RAINBOW,10.00,,0.00
+1d637a15-e08b-4cec-b40d-307ee953f717,FIPRO 25 SC FIPRONIL 25% 1 LT.,cat-agroquimicos,TAMPA,t,sub-tratamento-sementes,TAMPA,1.00,,0.00
+62164834-0ffe-4cbc-a87a-ee5e76e635ce,YARA VITA THIOTRAC - 10L,cat-especialidades,YARA FERTILIZANTES,t,,YARA FERTILIZANTES,10.00,,0.00
+a5511a75-5a04-4698-80e9-c2f5a4aca27f,KSC PHYTACTYL II - BLS 25KG.,cat-especialidades,TIMAC,t,,TIMAC,25.00,,0.00
+03c9c087-ddb8-4ee6-ba2e-2610c064d4e9,AZIMUT- AZOXISTROBINA + TEBUCONAZOL- 5 LT.,cat-agroquimicos,ADAMA,t,sub-fungicidas,ADAMA,5.00,,0.00
+412c42bb-cf9f-4555-8341-1a53b7a53cbb,FERT 20-00-00 - BB - KG,cat-fertilizantes,AGRIDESA,t,,AGRIDESA,,,0.00
+6e2547b5-13e6-407d-b405-35e7a52b26b0,FUSIL - FOMESAFEN 25% - 5LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,,0.00
+27314b08-b8e9-442f-af78-e960fc83b1d8,"RIZOVERIA LIQ- 7,5 LT",cat-especialidades,RIZOBACTER,t,,RIZOBACTER,5.00,,0.00
+7b1f89c3-c64a-4cff-9373-b875cd38c359,ONLY - THIAMETOXAN 75% WG - 1KG,cat-agroquimicos,TECNOMYL,t,sub-inseticidas,TECNOMYL,1.00,,0.00
+70c31d0a-757d-44c1-ab89-44b2eda72757,BARET DUO - DIFENO 25% + CIPROCONAZOL 15% - 5LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,,0.00
+21b19ca0-d8a2-4cce-946b-6847102371fe,FOMEFLAG - FOMESAFEN 25% - 5LTS,cat-agroquimicos,RAINBOW,t,sub-tratamento-sementes,RAINBOW,5.00,,0.00
+3958e2b2-8869-4611-a865-1004ab1ebc71,"PROSOY T  TRIFLOXIS 17,5% + TRIFLOXIS 15% - 5LTS",cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,,0.00
+0069e25c-093f-4e0f-af53-748aaced3fd6,GENESIS GOLD - PICOXI. 20% + CIPRO 16% -  5LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,,0.00
+003f97cc-5ed9-4610-b93d-38ba044c172c,K-CIQUE FS - IMIDACLOPRID 60% - 5LTS,cat-agroquimicos,TECNOMYL,t,sub-tratamento-sementes,TECNOMYL,5.00,,0.00
+82796bfd-ff5f-4483-a19d-1723b248152a,RAVAGE- METOMIL 90% SP- 1KG.,cat-agroquimicos,AGROFUTURO,t,sub-inseticidas,AGROFUTURO,1.00,,0.00
+492c2185-278e-4db3-ad4b-cd1986912ccb,PROPICONAZOLE - PROPICONAZOLE 25% - 4 LTS,cat-agroquimicos,CORTEVA,t,sub-tratamento-sementes,CORTEVA,4.00,,0.00
+8932d9e4-2b64-44c9-babc-a818cadc4a07,RELEASE CLODINAFOP 24% - 1L,cat-agroquimicos,TECNOMYL,t,,TECNOMYL,1.00,,0.00
+318cea20-e0f7-4da3-9a0d-1ec34c9238dc,RIZOSPIRILLIUM - 2LTS,cat-especialidades,RIZOBACTER,t,,RIZOBACTER,2.00,,0.00
+03bc6a5e-b1fb-48f3-a837-684e116e2f38,CIPYR 253 SC_ (PIRACLOS.13.3%+ CIPROC.12%),cat-agroquimicos,TAMPA,t,,TAMPA,,,0.00
+23c061cf-511a-4190-9489-136cc578837a,SOYGUARD 30 - TEFLUBEZUROM 30% - 1L,cat-agroquimicos,TECNOMYL,t,sub-inseticidas,TECNOMYL,1.00,,0.00
+12a4f31d-f73d-40f7-a5cc-a6d0b8340f3a,SAFERON- TEFLUBENZURON 30%- 1L.,cat-agroquimicos,RAINBOW,t,sub-inseticidas,RAINBOW,1.00,,0.00
+f60b362a-82b0-4bd1-a0ef-52220dcaf1d6,GALIL SC- BIFENTRINA + IMIDA- 5 L,cat-agroquimicos,ADAMA,t,sub-inseticidas,ADAMA,5.00,,0.00
+99121d7e-2462-46d2-97ac-3603b01ea2db,DIGROP- DIQUAT 20% - 20LTS,cat-agroquimicos,CIAGROPA,t,sub-tratamento-sementes,CIAGROPA,20.00,,0.00
+291b2e87-56a3-478d-b4ba-8c5064c8e49b,SOLOMON - IMIDACLOPRID 21% + BETA CYFLUTRINA 9% -,cat-agroquimicos,BAYER,t,sub-inseticidas,BAYER,,,0.00
+f901040b-fe27-4e88-8e13-86f7b48e26be,STRIM - S-METOLACLORO 96% - 20LTS,cat-agroquimicos,UPL,t,sub-tratamento-sementes,UPL,20.00,,0.00
+d32d2b4f-3660-453c-9350-cb3216eee95f,CRIPTON SUPRA SC360 - 5LTS,cat-agroquimicos,BAYER,t,sub-tratamento-sementes,BAYER,5.00,,0.00
+304e6f24-2c61-4017-a458-26cc7fc171d2,VIOVAN- PICOXISTROBINA+ PROTIO- 10LT.,cat-agroquimicos,CORTEVA,t,sub-fungicidas,CORTEVA,10.00,,0.00

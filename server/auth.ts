@@ -10,7 +10,7 @@ import { User as SelectUser } from "@shared/schema";
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface User extends SelectUser { }
   }
 }
 
@@ -31,7 +31,7 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || 'super-secret-session-key',
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -88,30 +88,43 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) {
+        return next(err);
+      }
+      if (!user) {
+        return res.status(401).json({ error: "Usuário ou senha incorretos" });
+      }
+      req.logIn(user, (err) => {
+        if (err) {
+          return next(err);
+        }
+        return res.status(200).json(user);
+      });
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
     req.logout((err) => {
       if (err) return next(err);
-      
+
       // Destroy session completely
       req.session.destroy((destroyErr) => {
         if (destroyErr) {
           console.error("Error destroying session:", destroyErr);
         }
-        
+
         // Clear session cookie
         res.clearCookie('connect.sid');
-        
+
         // Add cache control headers to prevent caching
         res.set({
           'Cache-Control': 'no-store, no-cache, must-revalidate, private',
           'Pragma': 'no-cache',
           'Expires': '0'
         });
-        
+
         res.sendStatus(200);
       });
     });

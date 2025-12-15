@@ -1,13 +1,45 @@
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import ws from 'ws';
 import * as schema from '@shared/schema';
-
-neonConfig.webSocketConstructor = ws;
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool, { schema });
+const databaseUrl = process.env.DATABASE_URL;
+
+// Detecta se é uma URL Neon (usa WebSocket) ou PostgreSQL local
+const isNeonUrl = databaseUrl.includes('neon.tech') || 
+  (databaseUrl.startsWith('postgresql://') && databaseUrl.includes('@') && !databaseUrl.includes('localhost'));
+
+let db: any;
+let pool: any;
+let dbReady: Promise<void>;
+
+if (isNeonUrl) {
+  // Usa driver Neon para URLs Neon (requer inicialização assíncrona)
+  dbReady = (async () => {
+    const { drizzle } = await import('drizzle-orm/neon-serverless');
+    const { Pool, neonConfig } = await import('@neondatabase/serverless');
+    const ws = await import('ws');
+    
+    neonConfig.webSocketConstructor = ws.default;
+    pool = new Pool({ connectionString: databaseUrl });
+    db = drizzle(pool, { schema });
+  })();
+} else {
+  // Usa driver postgres-js para PostgreSQL local
+  dbReady = Promise.all([
+    import('drizzle-orm/postgres-js'),
+    import('postgres')
+  ]).then(([{ drizzle }, postgres]) => {
+    const sql = postgres.default(databaseUrl);
+    db = drizzle(sql, { schema });
+    pool = sql;
+  });
+}
+
+dbReady.catch((err) => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
+});
+
+export { pool, db, dbReady };
