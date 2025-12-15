@@ -638,6 +638,8 @@ function ProductsManagement() {
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
   const [brandFilter, setBrandFilter] = useState<string | undefined>(undefined);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [showImportProductsModal, setShowImportProductsModal] = useState(false);
+  const [importingProducts, setImportingProducts] = useState(false);
   
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ['/api/products'],
@@ -718,6 +720,58 @@ function ProductsManagement() {
     }
   };
 
+  const handleProductsImportUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportingProducts(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      // Por padrão atualiza produtos existentes pelo par (name + category)
+      formData.append("updateExisting", "true");
+
+      const res = await fetch("/api/admin/products/import", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok || !result?.success) {
+        throw new Error(result?.error || "Falha ao importar produtos");
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+
+      toast({
+        title: "Importação concluída",
+        description: `${result.created ?? 0} criado(s), ${result.updated ?? 0} atualizado(s)${result.errors?.length ? ` • ${result.errors.length} aviso(s)` : ""}`,
+      });
+
+      if (result.errors?.length) {
+        console.warn("Erros/avisos na importação de produtos:", result.errors);
+        toast({
+          title: "Importação com avisos",
+          description: "Algumas linhas foram ignoradas. Veja o console para detalhes.",
+          variant: "destructive",
+        });
+      }
+
+      setShowImportProductsModal(false);
+    } catch (err: any) {
+      toast({
+        title: "Erro na importação",
+        description: err?.message || "Erro ao importar arquivo",
+        variant: "destructive",
+      });
+    } finally {
+      setImportingProducts(false);
+      event.target.value = "";
+    }
+  };
+
   if (isLoading) {
     return <div className="text-center py-8">Carregando produtos...</div>;
   }
@@ -780,10 +834,60 @@ function ProductsManagement() {
             <RefreshCw size={16} />
             {syncCategoriesMutation.isPending ? "Sincronizando..." : "Sincronizar Categorias"}
           </Button>
-          <Button size="sm" variant="outline" className="gap-2">
-            <Upload size={16} />
-            Importar
-          </Button>
+          <Dialog open={showImportProductsModal} onOpenChange={setShowImportProductsModal}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-2" data-testid="button-import-products">
+                <Upload size={16} />
+                Importar
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md" data-testid="import-products-modal">
+              <DialogHeader>
+                <DialogTitle>Importar Produtos (Excel)</DialogTitle>
+                <DialogDescription>
+                  Envie uma planilha (.xlsx/.xls/.csv). Linhas serão criadas ou atualizadas por <strong>Nome + Categoria</strong>.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="bg-muted p-4 rounded-lg text-sm">
+                  <p className="font-medium mb-2">Colunas aceitas (flexível):</p>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li><strong>Nome</strong>: Nome / NOME / Produto</li>
+                    <li><strong>Categoria</strong>: categoryId / Categoria / type</li>
+                    <li><strong>Opcional</strong>: Marca, Descrição, Segmento, Subcategoria, isActive</li>
+                  </ul>
+                </div>
+
+                <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleProductsImportUpload}
+                    disabled={importingProducts}
+                    className="hidden"
+                    id="products-file-upload"
+                    data-testid="input-file-upload-products"
+                  />
+                  <label
+                    htmlFor="products-file-upload"
+                    className={`cursor-pointer flex flex-col items-center gap-3 ${importingProducts ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                      <Upload className="text-primary" size={24} />
+                    </div>
+                    <div>
+                      <p className="font-medium">
+                        {importingProducts ? "Importando..." : "Clique para selecionar arquivo"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Excel/CSV (.xlsx, .xls, .csv)
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Button size="sm" className="gap-2">
             <Plus size={16} />
             Novo Produto

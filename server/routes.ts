@@ -2503,6 +2503,186 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Import products from Excel/CSV (admin)
+  app.post("/api/admin/products/import", requireSuperAdmin, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+
+      const updateExisting = String(req.body?.updateExisting ?? "true").toLowerCase() !== "false";
+
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return res.status(400).json({ error: "Planilha vazia" });
+      }
+
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      // cache categories/subcategories to resolve by name/type
+      const allCategories = (await db.select().from(categories)) as any[];
+      const allSubcategories = (await db.select().from(subcategories)) as any[];
+
+      const categoryById = new Map(allCategories.map((c: any) => [c.id, c]));
+      const categoryByName = new Map(allCategories.map((c: any) => [String(c.name).trim().toLowerCase(), c]));
+      const categoryByType = new Map(allCategories.map((c: any) => [String(c.type).trim().toLowerCase(), c]));
+
+      const subcategoryById = new Map(allSubcategories.map((s: any) => [s.id, s]));
+      const subcategoryByName = new Map(
+        allSubcategories.map((s: any) => [`${s.categoryId}:${String(s.name).trim().toLowerCase()}`, s]),
+      );
+
+      let created = 0;
+      let updated = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i] as any;
+        try {
+          const rawName =
+            row["name"] ??
+            row["Name"] ??
+            row["NOME"] ??
+            row["Nome"] ??
+            row["PRODUTO"] ??
+            row["Produto"] ??
+            row["produto"] ??
+            "";
+          const name = String(rawName).trim();
+          if (!name) {
+            errors.push(`Linha ${i + 2}: nome do produto vazio`);
+            continue;
+          }
+
+          const rawCategory =
+            row["categoryId"] ??
+            row["CategoryId"] ??
+            row["CATEGORIA_ID"] ??
+            row["categoria_id"] ??
+            row["category"] ??
+            row["Category"] ??
+            row["CATEGORIA"] ??
+            row["Categoria"] ??
+            row["categoria"] ??
+            row["type"] ??
+            row["Tipo"] ??
+            row["TIPO"] ??
+            "";
+          const categoryToken = String(rawCategory).trim();
+
+          let resolvedCategoryId: string | null = null;
+          if (categoryToken) {
+            const byId = categoryById.get(categoryToken);
+            if (byId) resolvedCategoryId = byId.id;
+            if (!resolvedCategoryId) {
+              const byName = categoryByName.get(categoryToken.toLowerCase());
+              if (byName) resolvedCategoryId = byName.id;
+            }
+            if (!resolvedCategoryId) {
+              const byType = categoryByType.get(categoryToken.toLowerCase());
+              if (byType) resolvedCategoryId = byType.id;
+            }
+          }
+
+          if (!resolvedCategoryId) {
+            errors.push(`Linha ${i + 2} (${name}): categoria inválida ou não encontrada (${categoryToken || "vazia"})`);
+            continue;
+          }
+
+          const rawDescription = row["description"] ?? row["Descrição"] ?? row["Descricao"] ?? row["DESCRICAO"] ?? "";
+          const description = String(rawDescription).trim() || null;
+
+          const rawMarca = row["marca"] ?? row["Marca"] ?? row["MARCA"] ?? "";
+          const marca = String(rawMarca).trim() || null;
+
+          const rawPackageSize =
+            row["packageSize"] ?? row["package_size"] ?? row["PackageSize"] ?? row["Tamanho"] ?? row["TAMANHO"] ?? "";
+          const packageSizeStr = String(rawPackageSize).trim();
+          const packageSize = packageSizeStr === "" ? null : String(packageSizeStr);
+
+          const rawSegment = row["segment"] ?? row["Segmento"] ?? row["SEGMENTO"] ?? "";
+          const segment = String(rawSegment).trim() || null;
+
+          const rawSubcategory =
+            row["subcategoryId"] ??
+            row["SubcategoryId"] ??
+            row["SUBCATEGORY_ID"] ??
+            row["subcategoria_id"] ??
+            row["Subcategoria"] ??
+            row["SUBCATEGORIA"] ??
+            "";
+          const subcategoryToken = String(rawSubcategory).trim();
+          let subcategoryId: string | null = null;
+          if (subcategoryToken) {
+            const byId = subcategoryById.get(subcategoryToken);
+            if (byId) {
+              subcategoryId = byId.id;
+            } else {
+              const byName = subcategoryByName.get(`${resolvedCategoryId}:${subcategoryToken.toLowerCase()}`);
+              if (byName) subcategoryId = byName.id;
+            }
+          }
+
+          const rawActive = row["isActive"] ?? row["Ativo"] ?? row["ativo"] ?? "";
+          const isActive =
+            rawActive === "" ? true : String(rawActive).toLowerCase() === "true" || String(rawActive) === "1";
+
+          if (updateExisting) {
+            const existing = await db
+              .select({ id: products.id })
+              .from(products)
+              .where(and(eq(products.name, name), eq(products.categoryId, resolvedCategoryId)))
+              .limit(1);
+            if (existing.length > 0) {
+              await db
+                .update(products)
+                .set({
+                  description,
+                  marca,
+                  packageSize,
+                  segment,
+                  subcategoryId,
+                  isActive,
+                })
+                .where(eq(products.id, existing[0].id));
+              updated++;
+              continue;
+            }
+          }
+
+          await db.insert(products).values({
+            name,
+            categoryId: resolvedCategoryId,
+            description,
+            marca,
+            packageSize,
+            segment,
+            subcategoryId,
+            isActive,
+          });
+          created++;
+        } catch (err: any) {
+          console.error("Erro importando produto linha", i + 2, err);
+          errors.push(`Linha ${i + 2}: ${err?.message || "erro desconhecido"}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        totalRows: data.length,
+        created,
+        updated,
+        errors: errors.length ? errors.slice(0, 20) : undefined,
+      });
+    } catch (error) {
+      console.error("Import products error:", error);
+      res.status(500).json({ error: "Falha ao importar produtos" });
+    }
+  });
+
   app.patch("/api/admin/products/:id", requireSuperAdmin, async (req, res) => {
     try {
       const updated = await storage.updateProduct(req.params.id, req.body);
