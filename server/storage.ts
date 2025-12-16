@@ -127,6 +127,10 @@ export interface IStorage {
   upsertClientMarketValue(value: InsertClientMarketValue): Promise<ClientMarketValue>;
   deleteClientMarketValue(clientId: string, categoryId: string, userId: string, seasonId: string): Promise<boolean>;
 
+  // Client Category Pipeline (Status de negociação por categoria)
+  getClientCategoryPipeline(clientId: string, userId: string, seasonId: string): Promise<ClientCategoryPipeline[]>;
+  upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline>;
+
   // Market Benchmarks
   getMarketBenchmarks(userId: string, seasonId: string): Promise<MarketBenchmark[]>;
   upsertMarketBenchmark(benchmark: InsertMarketBenchmark): Promise<MarketBenchmark>;
@@ -1922,6 +1926,43 @@ export class DBStorage implements IStorage {
         eq(clientMarketValues.seasonId, seasonId)
       ));
     return true;
+  }
+
+  async getClientCategoryPipeline(clientId: string, userId: string, seasonId: string): Promise<ClientCategoryPipeline[]> {
+    return await db.select().from(clientCategoryPipeline)
+      .where(and(
+        eq(clientCategoryPipeline.clientId, clientId),
+        eq(clientCategoryPipeline.userId, userId),
+        eq(clientCategoryPipeline.seasonId, seasonId)
+      ));
+  }
+
+  async upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline> {
+    const existing = await db.select().from(clientCategoryPipeline)
+      .where(and(
+        eq(clientCategoryPipeline.clientId, pipeline.clientId),
+        eq(clientCategoryPipeline.categoryId, pipeline.categoryId),
+        eq(clientCategoryPipeline.userId, pipeline.userId),
+        eq(clientCategoryPipeline.seasonId, pipeline.seasonId)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const updated = await db.update(clientCategoryPipeline)
+        .set({
+          status: pipeline.status,
+          updatedAt: sql`now()`
+        })
+        .where(eq(clientCategoryPipeline.id, existing[0].id))
+        .returning();
+      return updated[0];
+    } else {
+      const id = randomUUID();
+      const inserted = await db.insert(clientCategoryPipeline)
+        .values({ id, ...pipeline })
+        .returning();
+      return inserted[0];
+    }
   }
 
   async getMarketBenchmarks(userId: string, seasonId: string): Promise<MarketBenchmark[]> {
