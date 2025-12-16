@@ -3962,6 +3962,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         marketRates = [];
       }
 
+      // Get Manager Team Rates (Potencial Geral) for Fallback
+      let managerRatesMap = new Map<string, any>();
+      try {
+        const currentUser = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        const managerId = currentUser[0]?.managerId || userId;
+        const managerRates = await storage.getManagerTeamRates(managerId, seasonId);
+        managerRates.forEach(r => managerRatesMap.set(r.categoryId, r));
+        console.log(`[MARKET-CARDS] Found ${managerRates.length} manager team rates for manager ${managerId}`);
+      } catch (mgrRateError) {
+        console.error('[MARKET-CARDS] Error fetching manager rates:', mgrRateError);
+      }
+
       // Get ALL sales (C.Vale) for this user, regardless of badge
       let salesData: any[] = [];
       try {
@@ -4186,21 +4198,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             const clientCatEntry = clientEntry.categories.get(category.id)!;
 
-            const rate = ratesMap.get(client.id)?.get(category.id);
+            const clientRate = ratesMap.get(client.id)?.get(category.id);
+            const managerRate = managerRatesMap.get(category.id);
 
-            // Calculate Potential
+            // Calculate Potential - Use Client Rate if exists, otherwise fallback to Manager Rate
             let potentialValue = 0;
             let area = parseFloat(client.userArea || client.masterArea || '0');
 
-            if (rate) {
-              const investmentPerHa = parseFloat(rate.investmentPerHa || '0') || 0;
-              if (!isNaN(investmentPerHa) && !isNaN(area) && area > 0) {
-                potentialValue = area * investmentPerHa;
-                if (!isNaN(potentialValue)) {
-                  catData.potentialUsd += potentialValue;
-                  catData.potentialHa += area;
-                  clientCatEntry.potentialUsd += potentialValue;
-                }
+            let investmentPerHa = 0;
+            if (clientRate) {
+              investmentPerHa = parseFloat(clientRate.investmentPerHa || '0') || 0;
+            } else if (managerRate) {
+              investmentPerHa = parseFloat(managerRate.investmentPerHa || '0') || 0;
+            }
+
+            if (!isNaN(investmentPerHa) && !isNaN(area) && area > 0) {
+              potentialValue = area * investmentPerHa;
+              if (!isNaN(potentialValue)) {
+                catData.potentialUsd += potentialValue;
+                catData.potentialHa += area;
+                clientCatEntry.potentialUsd += potentialValue;
               }
             }
 
