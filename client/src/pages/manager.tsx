@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, TrendingUp, Target, ListChecks, ArrowLeft, Download, Plus, Edit, Trash2, Trash, Calendar, CheckCircle, FileDown, Settings, Loader2 } from 'lucide-react';
+import { Users, TrendingUp, Target, ListChecks, ArrowLeft, Download, Plus, Edit, Trash2, Trash, Calendar, CheckCircle, FileDown, Settings, Loader2, Eye, EyeOff } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -40,6 +40,7 @@ interface TeamData {
 
 export default function ManagerDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
+
   const { toast } = useToast();
 
   // Read hash from URL to determine active tab
@@ -504,6 +505,7 @@ function MarketPenetrationTab({
   setSeason3: (value: string) => void;
 }) {
   const { toast } = useToast();
+  const [showValues, setShowValues] = useState(false);
 
   const { data: seasons } = useQuery<any[]>({
     queryKey: ['/api/seasons'],
@@ -775,10 +777,20 @@ function MarketPenetrationTab({
           <CardDescription>Comparativo C.Vale vs Mercado por Safra</CardDescription>
         </div>
         {season1 && (
-          <Button onClick={exportToPowerPoint} variant="outline" size="sm" data-testid="button-export-pptx">
-            <FileDown className="h-4 w-4 mr-2" />
-            Exportar PowerPoint
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant={showValues ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowValues(!showValues)}
+            >
+              {showValues ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+              {showValues ? "Ocultar Valores" : "Ver Valores"}
+            </Button>
+            <Button onClick={exportToPowerPoint} variant="outline" size="sm" data-testid="button-export-pptx">
+              <FileDown className="h-4 w-4 mr-2" />
+              Exportar PowerPoint
+            </Button>
+          </div>
         )}
       </CardHeader>
       <CardContent>
@@ -846,16 +858,29 @@ function MarketPenetrationTab({
                 </thead>
                 <tbody>
                   {allCategories.map((category) => {
-                    const cvale1 = season1 ? (salesVsGoals1?.[category] || 0) : null;
-                    const mercado1 = season1 ? (marketPercentage1?.[category] || 0) : null;
+                    // Update data access for new structure (object with properties)
+                    const cvaleData1 = season1 ? salesVsGoals1?.[category] : null;
+                    const cvale1 = cvaleData1?.percentage ?? null;
+
+                    const marketData1 = season1 ? marketPercentage1?.[category] : null;
+                    const mercado1 = marketData1?.percentage ?? null;
+
                     const desvio1 = (cvale1 !== null && mercado1 !== null) ? (cvale1 - mercado1) : null;
 
-                    const cvale2 = season2 ? (salesVsGoals2?.[category] || 0) : null;
-                    const mercado2 = season2 ? (marketPercentage2?.[category] || 0) : null;
+                    const cvaleData2 = season2 ? salesVsGoals2?.[category] : null;
+                    const cvale2 = cvaleData2?.percentage ?? null;
+
+                    const marketData2 = season2 ? marketPercentage2?.[category] : null;
+                    const mercado2 = marketData2?.percentage ?? null;
+
                     const desvio2 = (cvale2 !== null && mercado2 !== null) ? (cvale2 - mercado2) : null;
 
-                    const cvale3 = season3 ? (salesVsGoals3?.[category] || 0) : null;
-                    const mercado3 = season3 ? (marketPercentage3?.[category] || 0) : null;
+                    const cvaleData3 = season3 ? salesVsGoals3?.[category] : null;
+                    const cvale3 = cvaleData3?.percentage ?? null;
+
+                    const marketData3 = season3 ? marketPercentage3?.[category] : null;
+                    const mercado3 = marketData3?.percentage ?? null;
+
                     const desvio3 = (cvale3 !== null && mercado3 !== null) ? (cvale3 - mercado3) : null;
 
                     const desvio1Text = desvio1 !== null ? formatPercentage(desvio1) : '-';
@@ -869,21 +894,133 @@ function MarketPenetrationTab({
                       return '';
                     };
 
+                    const formatCurrency = (val: number) => {
+                      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
+                    };
+
                     return (
                       <tr key={category} className="border-b transition-colors hover:bg-muted/50" data-testid={`category-row-${category}`}>
                         <td className="p-4 align-middle font-medium">{category}</td>
-                        <td className="p-4 align-middle text-center">{cvale1 !== null ? formatPercentage(cvale1) : '-'}</td>
-                        <td className="p-4 align-middle text-center">{mercado1 !== null ? formatPercentage(mercado1) : '-'}</td>
+                        <td className="p-4 align-middle text-center">
+                          <div>{cvale1 !== null ? formatPercentage(cvale1) : '-'}</div>
+                          {showValues && cvaleData1 && (
+                            <div className="text-[10px] text-muted-foreground mt-1 flex flex-col gap-0.5">
+                              <span title="Vendas Realizadas">Venda: {formatCurrency(cvaleData1.sales)}</span>
+                              <span title="Meta Definida">Meta: {formatCurrency(cvaleData1.goal)}</span>
+                              {cvaleData1.breakdown && cvaleData1.breakdown.length > 0 && (
+                                <div className="mt-2 border-t pt-1 flex flex-col gap-0.5">
+                                  {cvaleData1.breakdown.map((b: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between gap-2 text-[9px]">
+                                      <span>{b.name}</span>
+                                      <span>{formatCurrency(b.sales)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4 align-middle text-center">
+                          <div>{mercado1 !== null ? formatPercentage(mercado1) : '-'}</div>
+                          {showValues && marketData1 && (
+                            <div className="text-[10px] text-muted-foreground mt-1 flex flex-col gap-0.5">
+                              <span title="Decidido (Vendas + Perdido)">Decidido: {formatCurrency(marketData1.decided)}</span>
+                              <span title="Potencial Total">Potencial: {formatCurrency(marketData1.potential)}</span>
+                              {marketData1.breakdown && marketData1.breakdown.length > 0 && (
+                                <div className="mt-2 border-t pt-1 flex flex-col gap-0.5">
+                                  {marketData1.breakdown.map((b: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between gap-2 text-[9px]">
+                                      <span>{b.name}</span>
+                                      <span title="Decidido / Potencial">{formatCurrency(b.decided)} / {formatCurrency(b.potential)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className={`p-4 align-middle text-center font-semibold border-r-2 border-gray-300 ${getDesvioColor(desvio1Text, desvio1)}`}>
                           {desvio1Text}
                         </td>
-                        <td className="p-4 align-middle text-center">{cvale2 !== null ? formatPercentage(cvale2) : '-'}</td>
-                        <td className="p-4 align-middle text-center">{mercado2 !== null ? formatPercentage(mercado2) : '-'}</td>
+                        <td className="p-4 align-middle text-center">
+                          <div>{cvale2 !== null ? formatPercentage(cvale2) : '-'}</div>
+                          {showValues && cvaleData2 && (
+                            <div className="text-[10px] text-muted-foreground mt-1 flex flex-col gap-0.5">
+                              <span title="Vendas Realizadas">Venda: {formatCurrency(cvaleData2.sales)}</span>
+                              <span title="Meta Definida">Meta: {formatCurrency(cvaleData2.goal)}</span>
+                              {cvaleData2.breakdown && cvaleData2.breakdown.length > 0 && (
+                                <div className="mt-2 border-t pt-1 flex flex-col gap-0.5">
+                                  {cvaleData2.breakdown.map((b: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between gap-2 text-[9px]">
+                                      <span>{b.name}</span>
+                                      <span>{formatCurrency(b.sales)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4 align-middle text-center">
+                          <div>{mercado2 !== null ? formatPercentage(mercado2) : '-'}</div>
+                          {showValues && marketData2 && (
+                            <div className="text-[10px] text-muted-foreground mt-1 flex flex-col gap-0.5">
+                              <span title="Decidido (Vendas + Perdido)">Decidido: {formatCurrency(marketData2.decided)}</span>
+                              <span title="Potencial Total">Potencial: {formatCurrency(marketData2.potential)}</span>
+                              {marketData2.breakdown && marketData2.breakdown.length > 0 && (
+                                <div className="mt-2 border-t pt-1 flex flex-col gap-0.5">
+                                  {marketData2.breakdown.map((b: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between gap-2 text-[9px]">
+                                      <span>{b.name}</span>
+                                      <span title="Decidido / Potencial">{formatCurrency(b.decided)} / {formatCurrency(b.potential)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className={`p-4 align-middle text-center font-semibold border-r-2 border-gray-300 ${getDesvioColor(desvio2Text, desvio2)}`}>
                           {desvio2Text}
                         </td>
-                        <td className="p-4 align-middle text-center">{cvale3 !== null ? formatPercentage(cvale3) : '-'}</td>
-                        <td className="p-4 align-middle text-center">{mercado3 !== null ? formatPercentage(mercado3) : '-'}</td>
+                        <td className="p-4 align-middle text-center">
+                          <div>{cvale3 !== null ? formatPercentage(cvale3) : '-'}</div>
+                          {showValues && cvaleData3 && (
+                            <div className="text-[10px] text-muted-foreground mt-1 flex flex-col gap-0.5">
+                              <span title="Vendas Realizadas">Venda: {formatCurrency(cvaleData3.sales)}</span>
+                              <span title="Meta Definida">Meta: {formatCurrency(cvaleData3.goal)}</span>
+                              {cvaleData3.breakdown && cvaleData3.breakdown.length > 0 && (
+                                <div className="mt-2 border-t pt-1 flex flex-col gap-0.5">
+                                  {cvaleData3.breakdown.map((b: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between gap-2 text-[9px]">
+                                      <span>{b.name}</span>
+                                      <span>{formatCurrency(b.sales)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4 align-middle text-center">
+                          <div>{mercado3 !== null ? formatPercentage(mercado3) : '-'}</div>
+                          {showValues && marketData3 && (
+                            <div className="text-[10px] text-muted-foreground mt-1 flex flex-col gap-0.5">
+                              <span title="Decidido (Vendas + Perdido)">Decidido: {formatCurrency(marketData3.decided)}</span>
+                              <span title="Potencial Total">Potencial: {formatCurrency(marketData3.potential)}</span>
+                              {marketData3.breakdown && marketData3.breakdown.length > 0 && (
+                                <div className="mt-2 border-t pt-1 flex flex-col gap-0.5">
+                                  {marketData3.breakdown.map((b: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between gap-2 text-[9px]">
+                                      <span>{b.name}</span>
+                                      <span title="Decidido / Potencial">{formatCurrency(b.decided)} / {formatCurrency(b.potential)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className={`p-4 align-middle text-center font-semibold ${getDesvioColor(desvio3Text, desvio3)}`}>
                           {desvio3Text}
                         </td>

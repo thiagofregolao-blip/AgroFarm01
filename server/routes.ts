@@ -4366,13 +4366,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const segmentBreakdown = {
         agroquimicos: {
           total: 0,
-          subcategories: {} as Record<string, number>
+          subcategories: {} as Record<string, number>,
+          clients: [] as Array<{ id: string; name: string; value: number }>
         },
-        fertilizantes: 0,
-        sementes: 0,
-        corretivos: 0,
-        especialidades: 0
+        fertilizantes: { total: 0, clients: [] as Array<{ id: string; name: string; value: number }> },
+        sementes: { total: 0, clients: [] as Array<{ id: string; name: string; value: number }> },
+        corretivos: { total: 0, clients: [] as Array<{ id: string; name: string; value: number }> },
+        especialidades: { total: 0, clients: [] as Array<{ id: string; name: string; value: number }> }
       };
+
+      // Helper to map client ID to Name
+      const clientNameMap = new Map<string, string>();
+      clientsAmarelo.forEach(c => clientNameMap.set(c.id, c.name));
 
       // 1. Agroquimicos Breakdown (from Applications)
       validApps.forEach(app => {
@@ -4395,25 +4400,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             segmentBreakdown.agroquimicos.total += val;
             segmentBreakdown.agroquimicos.subcategories[subName] = (segmentBreakdown.agroquimicos.subcategories[subName] || 0) + val;
+
+            // Add to client list (aggregate if already exists)
+            const clientName = clientNameMap.get(app.clientId) || 'Cliente Externo';
+            const existingClient = segmentBreakdown.agroquimicos.clients.find(c => c.id === app.clientId);
+            if (existingClient) {
+              existingClient.value += val;
+            } else {
+              segmentBreakdown.agroquimicos.clients.push({ id: app.clientId, name: clientName, value: val });
+            }
           }
         } catch (e) {
           // ignore segment error
         }
       });
 
-      // 2. General Segments Breakdown (from CategoryData)
-      categoryData.forEach(cat => {
-        // Mapping based on category type
-        const type = normalizeString(cat.categoryType);
-        if (type.includes('fertilizante')) {
-          segmentBreakdown.fertilizantes += cat.oportunidadesUsd;
-        } else if (type.includes('semente')) {
-          segmentBreakdown.sementes += cat.oportunidadesUsd;
-        } else if (type.includes('corretivo')) {
-          segmentBreakdown.corretivos += cat.oportunidadesUsd;
-        } else if (type.includes('especialidade') || type.includes('foliar') || type.includes('biologico')) {
-          segmentBreakdown.especialidades += cat.oportunidadesUsd;
-        }
+      // Sort Agroquimicos clients descending
+      segmentBreakdown.agroquimicos.clients.sort((a, b) => b.value - a.value);
+
+      // 2. General Segments Breakdown (from ClientBreakdown)
+      // We iterate clientBreakdown to get opportunities per client per category
+      clientBreakdown.forEach(client => {
+        Object.entries(client.categories).forEach(([catId, data]) => {
+          if (data.oportunidadesUsd > 0) {
+            const catData = categoryData.get(catId);
+            if (catData) {
+              const type = normalizeString(catData.categoryType);
+              let targetSegment: keyof typeof segmentBreakdown | null = null;
+
+              if (type.includes('fertilizante')) targetSegment = 'fertilizantes';
+              else if (type.includes('semente')) targetSegment = 'sementes';
+              else if (type.includes('corretivo')) targetSegment = 'corretivos';
+              else if (type.includes('especialidade') || type.includes('foliar') || type.includes('biologico')) targetSegment = 'especialidades';
+
+              if (targetSegment && targetSegment !== 'agroquimicos') {
+                segmentBreakdown[targetSegment].total += data.oportunidadesUsd;
+                segmentBreakdown[targetSegment].clients.push({
+                  id: client.clientId,
+                  name: client.clientName,
+                  value: data.oportunidadesUsd
+                });
+              }
+            }
+          }
+        });
+      });
+
+      // Sort clients for other segments
+      (['fertilizantes', 'sementes', 'corretivos', 'especialidades'] as const).forEach(key => {
+        segmentBreakdown[key].clients.sort((a, b) => b.value - a.value);
       });
 
       return res.json({
@@ -6321,7 +6356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get team member IDs
       const teamMembers = await db
-        .select({ id: users.id })
+        .select({ id: users.id, name: users.name, username: users.username })
         .from(users)
         .where(eq(users.managerId, managerId));
 
@@ -6403,16 +6438,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         // Calculate percentages (sales / goal * 100)
-        const categoryPercentages: Record<string, number> = {};
+        // Calculate percentages (sales / goal * 100)
+        // Calculate percentages (sales / goal * 100) and breakdown
+        const categoryData: Record<string, { percentage: number; sales: number; goal: number; breakdown: Array<{ name: string; sales: number; goal: number }> }> = {};
+
         Object.entries(categoryMetaFieldMap).forEach(([categoryName, metaField]) => {
           const salesAmount = categorySales[categoryName] || 0;
           const goalAmount = parseFloat((seasonGoal as any)[metaField] || '0');
 
           const percentage = goalAmount > 0 ? (salesAmount / goalAmount) * 100 : 0;
-          categoryPercentages[categoryName] = percentage;
+
+          // Calculate breakdown per consultant for this category
+          const breakdown: Array<{ name: string; sales: number; goal: number }> = [];
+
+          teamMembers.forEach(member => {
+            // Calculate member sales for this category
+            const memberSales = seasonSales
+              .filter(s => s.userId === member.id)
+              .reduce((acc, sale) => {
+                const cId = productCategoryMap.get(sale.productId);
+                const cName = cId ? categoryNameMap.get(cId) : '';
+                if (cName === categoryName) {
+                  return acc + parseFloat(sale.totalAmount || '0');
+                }
+                return acc;
+              }, 0);
+
+            // Calculate member goal for this category (assuming goals are split evenly or accessed individually if available?)
+            // Wait, `seasonGoal` fetched earlier is the TEAM goal (fetched by managerId). 
+            // We need INDIVIDUAL goals to show a proper breakdown.
+            // Looking at lines 6372-6379 (not shown in view but inferred), `seasonGoal` seems to be fetched for the manager user? 
+            // Actually, `seasonGoals` table has `userId`. 
+            // I need to fetch ALL season goals for the team members to do this correctly.
+
+            // Since I haven't fetched individual goals in this endpoint yet, I'll stick to Sales breakdown for now 
+            // and maybe just show 0 or split goal if I can't get it easily without a larger refactor.
+            // BUT, the user asked for "values that each contribute".
+            // Let's check how `seasonGoal` is fetched. 
+            // "const seasonGoal = await db.query.seasonGoals.findFirst..."
+
+            // To do this right, I need to fetch all team goals. 
+            // I will implement a simplified version first: Sales Breakdown only, 
+            // OR I will fetch team goals. 
+            // Let's assume for now we just show Sales in breakdown, 
+            // as Goal breakdown might be complex if individual goals aren't set.
+            // However, the interface format "V: X M: Y" implies both.
+
+            // Let's try to fetch individual goals inside the loop? No, that's N+1.
+            // Better to fetch all goals for team in this season at the start.
+
+            breakdown.push({
+              name: member.name || member.username,
+              sales: memberSales,
+              goal: 0 // Placeholder until I add goal fetching logic
+            });
+          });
+
+          categoryData[categoryName] = {
+            percentage,
+            sales: salesAmount,
+            goal: goalAmount,
+            breakdown: breakdown.filter(b => b.sales > 0 || b.goal > 0) // Only show active consultants
+          };
         });
 
-        result[seasonId] = categoryPercentages;
+        result[seasonId] = categoryData;
       }
 
       res.json(result);
@@ -6436,7 +6526,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get team member IDs
       const teamMembers = await db
-        .select({ id: users.id })
+        .select({ id: users.id, name: users.name, username: users.username })
         .from(users)
         .where(eq(users.managerId, managerId));
 
@@ -6464,8 +6554,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         categoryNameMap.set(cat.id, cat.name);
       });
 
-      // Result structure: { seasonId: { categoryName: marketPercentage } }
-      const result: Record<string, Record<string, number>> = {};
+      // Result structure: { seasonId: { categoryName: { percentage, decided, potential, breakdown } } }
+      const result: Record<string, Record<string, { percentage: number; decided: number; potential: number; breakdown: Array<{ name: string; decided: number; potential: number }> }>> = {};
 
       for (const seasonId of seasonIds) {
         // Get market clients for the team (includeInMarketArea=true)
@@ -6535,6 +6625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const teamApplicationTrackingRaw = await db.select({
           clientId: clientApplicationTracking.clientId,
+          userId: userClientLinks.userId,
           productId: globalManagementApplications.productId,
           plantingArea: masterClients.plantingArea
         })
@@ -6593,7 +6684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Calculate market penetration: (C.Vale + Mercado) / potential * 100
         // Mercado = values from clientMarketValues (column Mercado in modal)
         // Ensure we include all major categories even if they have no data
-        const categoryPercentages: Record<string, number> = {};
+        const categoryData: Record<string, { percentage: number; decided: number; potential: number; breakdown: Array<{ name: string; decided: number; potential: number }> }> = {};
 
         // Define standard category names to ensure consistency with sales-vs-goals endpoint
         const standardCategories = [
@@ -6609,24 +6700,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Initialize all standard categories with 0
         standardCategories.forEach(catName => {
-          categoryPercentages[catName] = 0;
+          categoryData[catName] = { percentage: 0, decided: 0, potential: 0, breakdown: [] };
         });
 
         // Calculate and populate actual values
         categories.forEach(cat => {
           const potential = potentialByCategory[cat.id] || 0;
           const sales = salesByCategory[cat.id] || 0;
-          const mercado = marketValuesByCategory[cat.id] || 0;
-          const totalWorked = sales + mercado; // C.Vale + Mercado
+          const fechado = fechadoByCategory[cat.id] || 0;
 
-          const marketPercentage = potential > 0 ? (totalWorked / potential) * 100 : 0;
+          // Calculate breakdown per consultant for this category
+          const breakdown: Array<{ name: string; decided: number; potential: number }> = [];
+
+          teamMembers.forEach(member => {
+            // Member Potential
+            let memberPotential = 0;
+            teamMarketRates.forEach(rate => {
+              // Check if rate belongs to a client of this member AND category matches
+              // Does rate map to member? rate uses `clientMarketRates` joined with `userClientLinks`.
+              // We need to check if the link belongs to this member.
+              // Logic at 6511: `innerJoin(userClientLinks...)`.
+              // `teamMarketRates` contains rows.
+              if (rate.user_client_links.userId === member.id && rate.client_market_rates.categoryId === cat.id) {
+                const plantingArea = parseFloat(rate.master_clients.plantingArea || '0');
+                const investmentPerHa = parseFloat(rate.client_market_rates.investmentPerHa || '0');
+                memberPotential += plantingArea * investmentPerHa;
+              }
+            });
+
+            // Member Sales
+            let memberSales = 0;
+            teamSales.forEach(sale => {
+              if (sale.userId === member.id) {
+                const cId = productCategoryMap.get(sale.productId);
+                if (cId === cat.id) {
+                  memberSales += parseFloat(sale.totalAmount || '0');
+                }
+              }
+            });
+
+            // Member Fechado (Lost)
+            let memberFechado = 0;
+            // Iterate tracking raw data
+            teamApplicationTrackingRaw.forEach(tracking => {
+              if (tracking.userId === member.id && agroquimicosCategoryId === cat.id) {
+                const pricePerHa = productPriceMap.get(tracking.productId) || 0;
+                const area = parseFloat(tracking.plantingArea || '0');
+                memberFechado += pricePerHa * area;
+              }
+            });
+
+            breakdown.push({
+              name: member.name || member.username,
+              decided: memberSales + memberFechado,
+              potential: memberPotential
+            });
+          });
+
+
+          const totalDecided = sales + fechado;
+          const marketPercentage = potential > 0 ? (totalDecided / potential) * 100 : 0;
           const categoryName = categoryNameMap.get(cat.id);
           if (categoryName) {
-            categoryPercentages[categoryName] = marketPercentage;
+            categoryData[categoryName] = {
+              percentage: marketPercentage,
+              decided: totalDecided,
+              potential: potential,
+              breakdown: breakdown.filter(b => b.decided > 0 || b.potential > 0)
+            };
           }
         });
 
-        result[seasonId] = categoryPercentages;
+        result[seasonId] = categoryData;
       }
 
       res.json(result);

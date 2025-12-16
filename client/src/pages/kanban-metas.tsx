@@ -69,15 +69,21 @@ interface MonthlySales {
   total: number;
 }
 
+interface SegmentData {
+  total: number;
+  clients: Array<{ id: string; name: string; value: number }>;
+}
+
 interface SegmentBreakdown {
   agroquimicos: {
     total: number;
     subcategories: Record<string, number>;
+    clients: Array<{ id: string; name: string; value: number }>;
   };
-  fertilizantes: number;
-  sementes: number;
-  corretivos: number;
-  especialidades: number;
+  fertilizantes: SegmentData;
+  sementes: SegmentData;
+  corretivos: SegmentData;
+  especialidades: SegmentData;
 }
 
 interface DashboardData {
@@ -451,7 +457,7 @@ export default function KanbanMetasPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       {/* Agroquímicos Group */}
                       <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
                         <div className="flex justify-between items-center mb-3">
@@ -465,7 +471,7 @@ export default function KanbanMetasPage() {
                         </div>
 
                         {/* Subcategories (Fungicides, etc.) */}
-                        <div className="space-y-2 pl-4 border-l-2 border-slate-200">
+                        <div className="space-y-2 pl-4 border-l-2 border-slate-200 mb-4">
                           {Object.entries(dashboardData.segmentBreakdown.agroquimicos.subcategories)
                             .sort(([, a], [, b]) => b - a)
                             .map(([name, value]) => (
@@ -476,27 +482,67 @@ export default function KanbanMetasPage() {
                                 </span>
                               </div>
                             ))}
-                          {Object.keys(dashboardData.segmentBreakdown.agroquimicos.subcategories).length === 0 && (
-                            <span className="text-xs text-slate-400 italic">Sem oportunidades abertas</span>
-                          )}
+                        </div>
+
+                        {/* Client Breakdown for Agroquímicos */}
+                        <div className="pl-4 pt-3 border-t border-slate-200">
+                          <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Por Cliente</p>
+                          <div className="space-y-1">
+                            {dashboardData.segmentBreakdown.agroquimicos.clients.length > 0 ? (
+                              dashboardData.segmentBreakdown.agroquimicos.clients.slice(0, 5).map((client) => (
+                                <div key={client.id} className="flex justify-between items-center text-xs">
+                                  <span className="text-slate-600 truncate max-w-[140px]" title={client.name}>{client.name}</span>
+                                  <span className="font-medium text-slate-900 border-b border-dashed border-slate-300">
+                                    ${client.value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                                  </span>
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-xs text-slate-400 italic">Sem oportunidades</span>
+                            )}
+                            {dashboardData.segmentBreakdown.agroquimicos.clients.length > 5 && (
+                              <p className="text-[10px] text-slate-400 text-right mt-1">+ {dashboardData.segmentBreakdown.agroquimicos.clients.length - 5} outros</p>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       {/* Other Segments */}
                       {[
-                        { label: 'Fertilizantes', value: dashboardData.segmentBreakdown.fertilizantes, color: 'bg-blue-500' },
-                        { label: 'Sementes', value: dashboardData.segmentBreakdown.sementes, color: 'bg-green-500' },
-                        { label: 'Especialidades', value: dashboardData.segmentBreakdown.especialidades, color: 'bg-purple-500' },
-                        { label: 'Corretivos', value: dashboardData.segmentBreakdown.corretivos, color: 'bg-yellow-500' }
+                        { key: 'fertilizantes', label: 'Fertilizantes', data: dashboardData.segmentBreakdown.fertilizantes, color: 'bg-blue-500' },
+                        { key: 'sementes', label: 'Sementes', data: dashboardData.segmentBreakdown.sementes, color: 'bg-green-500' },
+                        { key: 'especialidades', label: 'Especialidades', data: dashboardData.segmentBreakdown.especialidades, color: 'bg-purple-500' },
+                        { key: 'corretivos', label: 'Corretivos', data: dashboardData.segmentBreakdown.corretivos, color: 'bg-yellow-500' }
                       ].map((item) => (
-                        <div key={item.label} className="flex justify-between items-center p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${item.color}`} />
-                            <span className="font-medium text-slate-600">{item.label}</span>
+                        <div key={item.key} className="rounded-lg border border-slate-100 p-3 hover:bg-slate-50 transition-colors">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${item.color}`} />
+                              <span className="font-medium text-slate-600">{item.label}</span>
+                            </div>
+                            <span className="font-bold text-slate-800">
+                              ${item.data.total.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </span>
                           </div>
-                          <span className="font-bold text-slate-800">
-                            ${item.value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                          </span>
+
+                          {/* Client List */}
+                          <div className="pl-4 space-y-1">
+                            {item.data.clients.length > 0 ? (
+                              item.data.clients.slice(0, 5).map((client) => (
+                                <div key={client.id} className="flex justify-between items-center text-xs">
+                                  <span className="text-slate-500 truncate max-w-[140px]" title={client.name}>{client.name}</span>
+                                  <span className="text-slate-700">
+                                    ${client.value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                                  </span>
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-xs text-slate-400 italic pl-1">Sem oportunidades</span>
+                            )}
+                            {item.data.clients.length > 5 && (
+                              <p className="text-[10px] text-slate-400 text-right">+ {item.data.clients.length - 5} outros</p>
+                            )}
+                          </div>
                         </div>
                       ))}
 
