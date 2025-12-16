@@ -8,7 +8,7 @@ import multer from "multer";
 import { importExcelFile, importClientsFromExcel } from "./import-excel";
 import { setupAuth, requireAuth, requireSuperAdmin, requireManager } from "./auth";
 import { db } from "./db";
-import { eq, sql, and, gt, desc, inArray } from "drizzle-orm";
+import { eq, sql, and, gt, desc, inArray, or } from "drizzle-orm";
 import { parseCVALEPDF } from "./parse-cvale-pdf";
 import { emailService } from "./email";
 import { scrypt, randomBytes } from "crypto";
@@ -3928,7 +3928,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all categories
       const allCategories = await db.select().from(categories);
 
-      // Get user's clients with badge amarelo (includeInMarketArea) - for potential calculation
+      // Get user's clients with badge amarelo (includeInMarketArea) OR 80/20 badge - for potential calculation
       const clientsAmarelo = await db.select({
         id: userClientLinks.id,
         name: masterClients.name,
@@ -3939,7 +3939,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
         .where(and(
           eq(userClientLinks.userId, userId),
-          eq(userClientLinks.includeInMarketArea, true)
+          or(
+            eq(userClientLinks.includeInMarketArea, true),
+            eq(userClientLinks.isTop80_20, true)
+          )
         ));
 
       const clientAmareloIds = clientsAmarelo.map(c => c.id);
