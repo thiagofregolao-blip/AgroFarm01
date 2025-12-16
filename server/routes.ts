@@ -4343,10 +4343,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .filter(cat => {
           const hasData = (cat.potentialUsd > 0 || cat.cvaleUsd > 0 || cat.oportunidadesUsd > 0 || cat.jaNegociadoUsd > 0);
           // Safety: ensure all values are valid numbers
-          return hasData && 
-            !isNaN(cat.potentialUsd) && 
-            !isNaN(cat.cvaleUsd) && 
-            !isNaN(cat.oportunidadesUsd) && 
+          return hasData &&
+            !isNaN(cat.potentialUsd) &&
+            !isNaN(cat.cvaleUsd) &&
+            !isNaN(cat.oportunidadesUsd) &&
             !isNaN(cat.jaNegociadoUsd);
         })
         .map(cat => {
@@ -4742,7 +4742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const key = `${app.categoria}-${app.applicationNumber}`;
           const clientArea = parseFloat(client.userClientArea || client.masterClientArea || '0') || 0;
           const pricePerHa = parseFloat(app.pricePerHa || '0') || 0;
-          const totalValue = app.trackingTotalValue 
+          const totalValue = app.trackingTotalValue
             ? (parseFloat(app.trackingTotalValue) || 0)
             : (isNaN(pricePerHa) || isNaN(clientArea) ? 0 : pricePerHa * clientArea);
 
@@ -4820,7 +4820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[CLIENT-MARKET-PANEL] Critical Error:", error);
       console.error("[CLIENT-MARKET-PANEL] Error Stack:", error instanceof Error ? error.stack : 'No stack trace');
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to fetch client market panel data",
         details: error instanceof Error ? error.message : 'Unknown error',
         stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined
@@ -4885,7 +4885,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update pipeline statuses
       if (pipelineStatuses && Array.isArray(pipelineStatuses)) {
         try {
+          console.log(`[CLIENT-MARKET-PANEL] Updating pipeline for client ${clientId}, season ${seasonId}, items: ${pipelineStatuses.length}`);
           for (const ps of pipelineStatuses) {
+            console.log(`[CLIENT-MARKET-PANEL] Upserting pipeline: category=${ps.categoryId}, status=${ps.status}, season=${seasonId}`);
             await storage.upsertClientCategoryPipeline({
               clientId,
               categoryId: ps.categoryId,
@@ -4894,6 +4896,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               status: ps.status
             });
           }
+
         } catch (pipelineError: any) {
           const message = pipelineError?.message || String(pipelineError);
           if (message.includes('client_category_pipeline') || message.includes('relation \"client_category_pipeline\" does not exist')) {

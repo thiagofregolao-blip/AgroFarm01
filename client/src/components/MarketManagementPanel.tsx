@@ -74,7 +74,7 @@ export default function MarketManagementPanel({
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['client-market-panel', clientId, seasonId],
     queryFn: async () => {
-      const res = await fetch(`/api/client-market-panel/${clientId}/${seasonId}`);
+      const res = await fetch(`/api/client-market-panel/${clientId}?seasonId=${seasonId}`);
       if (!res.ok) throw new Error('Failed to fetch data');
       return res.json();
     },
