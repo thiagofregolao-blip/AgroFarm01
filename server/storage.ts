@@ -12,10 +12,11 @@ import type {
   BarterProduct, InsertBarterProduct, BarterSettings, InsertBarterSettings,
   BarterSimulation, InsertBarterSimulation, BarterSimulationItem, InsertBarterSimulationItem,
   SalesTarget, InsertSalesTarget,
-  ClientCategoryPipeline, InsertClientCategoryPipeline
+  ClientCategoryPipeline, InsertClientCategoryPipeline,
+  ManagerTeamRate, InsertManagerTeamRate
 } from "@shared/schema";
 import { db, pool } from './db';
-import { users, categories, products, regions, clients, seasons, seasonGoals, sales, seasonParameters, marketInvestmentRates, clientMarketRates, clientMarketValues, marketBenchmarks, externalPurchases, clientFamilyRelations, alertSettings, alerts, purchaseHistory, purchaseHistoryItems, masterClients, userClientLinks, barterProducts, barterSettings, barterSimulations, barterSimulationItems, salesTargets, systemSettings, clientCategoryPipeline } from '@shared/schema';
+import { users, categories, products, regions, clients, seasons, seasonGoals, sales, seasonParameters, marketInvestmentRates, clientMarketRates, clientMarketValues, marketBenchmarks, externalPurchases, clientFamilyRelations, alertSettings, alerts, purchaseHistory, purchaseHistoryItems, masterClients, userClientLinks, barterProducts, barterSettings, barterSimulations, barterSimulationItems, salesTargets, systemSettings, clientCategoryPipeline, managerTeamRates } from '@shared/schema';
 import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -116,6 +117,10 @@ export interface IStorage {
   getClientMarketRates(clientId: string, userId: string, seasonId: string): Promise<ClientMarketRate[]>;
   upsertClientMarketRate(rate: InsertClientMarketRate): Promise<ClientMarketRate>;
   deleteClientMarketRate(clientId: string, categoryId: string, userId: string, seasonId: string): Promise<boolean>;
+
+  // Manager Team Rates
+  getManagerTeamRates(managerId: string, seasonId: string): Promise<ManagerTeamRate[]>;
+  upsertManagerTeamRate(rate: InsertManagerTeamRate): Promise<ManagerTeamRate>;
 
   // Client Market Values (Mercado)
   getClientMarketValues(clientId: string, userId: string, seasonId: string): Promise<ClientMarketValue[]>;
@@ -1834,6 +1839,42 @@ export class DBStorage implements IStorage {
     return true;
   }
 
+  async getManagerTeamRates(managerId: string, seasonId: string): Promise<ManagerTeamRate[]> {
+    return await db.select().from(managerTeamRates)
+      .where(and(
+        eq(managerTeamRates.managerId, managerId),
+        eq(managerTeamRates.seasonId, seasonId)
+      ));
+  }
+
+  async upsertManagerTeamRate(rate: InsertManagerTeamRate): Promise<ManagerTeamRate> {
+    const existing = await db.select().from(managerTeamRates)
+      .where(and(
+        eq(managerTeamRates.managerId, rate.managerId),
+        eq(managerTeamRates.seasonId, rate.seasonId),
+        eq(managerTeamRates.categoryId, rate.categoryId)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const updated = await db.update(managerTeamRates)
+        .set({
+          investmentPerHa: rate.investmentPerHa,
+          subcategories: rate.subcategories,
+          updatedAt: sql`now()`
+        })
+        .where(eq(managerTeamRates.id, existing[0].id))
+        .returning();
+      return updated[0];
+    } else {
+      const id = randomUUID();
+      const inserted = await db.insert(managerTeamRates)
+        .values({ id, ...rate })
+        .returning();
+      return inserted[0];
+    }
+  }
+
   async getClientMarketValues(clientId: string, userId: string, seasonId: string): Promise<ClientMarketValue[]> {
     return await db.select().from(clientMarketValues)
       .where(and(
@@ -1935,56 +1976,54 @@ export class DBStorage implements IStorage {
     investmentPerHa: number;
     totalPotential: number;
   }>> {
-    // Get all clients with includeInMarketArea = true for this user
-    const marketClients = await db.select({
+    // 1. Determine Manager ID
+    const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user || user.length === 0) return [];
+
+    const managerId = user[0].managerId || userId; // If consultant, use managerId. If manager/admin, use self.
+
+    // 2. Get Manager Team Rates
+    const managerRates = await this.getManagerTeamRates(managerId, seasonId);
+
+    if (!managerRates || managerRates.length === 0) {
+      return [];
+    }
+
+    // 3. Get all eligible clients (80/20 OR Market Badge) for this user
+    const eligibleClients = await db.select({
       id: userClientLinks.id,
       plantingArea: userClientLinks.plantingArea,
-      includeInMarketArea: userClientLinks.includeInMarketArea,
     })
       .from(userClientLinks)
       .where(and(
         eq(userClientLinks.userId, userId),
-        eq(userClientLinks.includeInMarketArea, true)
+        or(
+          eq(userClientLinks.includeInMarketArea, true),
+          eq(userClientLinks.isTop80_20, true)
+        )
       ));
 
-    // Calculate total market area
-    const totalMarketArea = marketClients.reduce((sum, client) => {
-      return sum + parseFloat(client.plantingArea || '0');
+    // 4. Calculate total market area (sum of planting area of eligible clients)
+    const totalMarketArea = eligibleClients.reduce((sum, client) => {
+      const area = parseFloat(client.plantingArea || '0');
+      return sum + (isNaN(area) ? 0 : area);
     }, 0);
 
-    // Get all categories
+    // 5. Get all categories to map names
     const allCategories = await db.select().from(categories);
+    const categoryMap = new Map(allCategories.map(c => [c.id, c.name]));
 
-    // Get investment rates for this user and season - use DISTINCT ON to get one value per category
-    const rates = await db.select({
-      categoryId: clientMarketRates.categoryId,
-      investmentPerHa: clientMarketRates.investmentPerHa,
-    })
-      .from(clientMarketRates)
-      .where(and(
-        eq(clientMarketRates.userId, userId),
-        eq(clientMarketRates.seasonId, seasonId)
-      ))
-      .orderBy(clientMarketRates.categoryId, sql`${clientMarketRates.updatedAt} DESC`);
-
-    // Use Map to store only the first (most recent) value per category
-    const ratesByCategory = new Map<string, number>();
-    for (const rate of rates) {
-      if (!ratesByCategory.has(rate.categoryId)) {
-        ratesByCategory.set(rate.categoryId, parseFloat(rate.investmentPerHa));
-      }
-    }
-
-    // Build result array
-    const result = allCategories.map(category => {
-      const investmentPerHa = ratesByCategory.get(category.id) || 0;
+    // 6. Build Result
+    const result = managerRates.map(rate => {
+      const categoryName = categoryMap.get(rate.categoryId) || 'Desconhecida';
+      const investment = parseFloat(rate.investmentPerHa as string) || 0;
 
       return {
-        categoryId: category.id,
-        categoryName: category.name,
+        categoryId: rate.categoryId,
+        categoryName,
         marketArea: totalMarketArea,
-        investmentPerHa: investmentPerHa,
-        totalPotential: totalMarketArea * investmentPerHa,
+        investmentPerHa: investment,
+        totalPotential: totalMarketArea * investment
       };
     });
 

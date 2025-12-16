@@ -1044,38 +1044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/clients/manager-team/market-rates/:seasonId", requireManager, async (req, res) => {
     try {
       const { seasonId } = req.params;
-
-      // Get all consultants in this manager's team
-      const teamConsultants = await db.select()
-        .from(users)
-        .where(eq(users.managerId, req.user!.id));
-
-      const consultantIds = teamConsultants.map(c => c.id);
-
-      // Include manager themselves to find their own clients if they have no team or want to see their own config
-      consultantIds.push(req.user!.id);
-
-      // Get one client used as reference to fetch the rates (they should all have the same values)
-      const firstClient = await db.select()
-        .from(userClientLinks)
-        .where(and(
-          inArray(userClientLinks.userId, consultantIds),
-          eq(userClientLinks.includeInMarketArea, true)
-        ))
-        .limit(1);
-
-      if (firstClient.length === 0) {
-        return res.json([]);
-      }
-
-      // Query database directly for market rates for this client and season
-      const rates = await db.select()
-        .from(clientMarketRates)
-        .where(and(
-          eq(clientMarketRates.clientId, firstClient[0].id),
-          eq(clientMarketRates.seasonId, seasonId)
-        ));
-
+      const rates = await storage.getManagerTeamRates(req.user!.id, seasonId);
       res.json(rates);
     } catch (error) {
       console.error('Error fetching team market rates:', error);
@@ -1090,74 +1059,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('POST /api/clients/manager-team/market-rates');
       console.log('Manager ID:', req.user!.id);
-      console.log('Received allRates:', JSON.stringify(allRates, null, 2));
-
-      // Get all consultants in this manager's team
-      const teamConsultants = await db.select()
-        .from(users)
-        .where(eq(users.managerId, req.user!.id));
-
-      console.log('Team consultants found:', teamConsultants.length);
-
-      // Include team consultants + manager themselves
-      const consultantIds = teamConsultants.map(c => c.id);
-      consultantIds.push(req.user!.id); // Include manager's own clients
-
-      console.log('Total user IDs to process (team + manager):', consultantIds.length);
-
-      // Get all clients for these users (team + manager) - only those included in market area
-      const teamClients = await db.select()
-        .from(userClientLinks)
-        .where(and(
-          inArray(userClientLinks.userId, consultantIds),
-          eq(userClientLinks.includeInMarketArea, true)
-        ));
-
-      console.log('Team clients with badge amarelo found:', teamClients.length);
-
-      if (teamClients.length === 0) {
-        console.log('No clients with yellow badge, returning 0');
-        return res.json({ success: true, message: "Nenhum cliente com badge amarelo (Incluir na Área de Mercado). Configure pelo menos um cliente.", count: 0, categoryCount: 0 });
-      }
-
-      // Process all categories from allRates array
-      let totalRatesCreated = 0;
 
       if (allRates && Array.isArray(allRates) && allRates.length > 0) {
         // Process each category
         for (const rateConfig of allRates) {
           const { categoryId, seasonId, investmentPerHa, subcategories } = rateConfig;
 
-          // Apply this category's rate to all team clients
-          for (const client of teamClients) {
-            await storage.upsertClientMarketRate({
-              clientId: client.id,
-              categoryId,
-              userId: client.userId,
-              seasonId,
-              investmentPerHa,
-              subcategories: subcategories || null
-            });
-            totalRatesCreated++;
-          }
+          // Save to manager_team_rates
+          await storage.upsertManagerTeamRate({
+            managerId: req.user!.id,
+            seasonId,
+            categoryId,
+            investmentPerHa,
+            subcategories: subcategories || null
+          });
         }
       }
 
-      const clientCount = teamClients.length;
-      const categoryCount = allRates?.length || 0;
+      // Get count of clients that might be affected (just for info)
+      // Clients with badges (80/20 OR Market) belonging to this manager's team
+      const teamConsultants = await db.select().from(users).where(eq(users.managerId, req.user!.id));
+      const teamIds = teamConsultants.map(u => u.id);
+      teamIds.push(req.user!.id); // Include manager
+
+      const affectedClients = await db.select({ count: sql<number>`count(*)` })
+        .from(userClientLinks)
+        .where(and(
+          inArray(userClientLinks.userId, teamIds),
+          or(
+            eq(userClientLinks.isTop80_20, true),
+            eq(userClientLinks.includeInMarketArea, true)
+          )
+        ));
+
+      const clientCount = Number(affectedClients[0]?.count || 0);
 
       res.json({
         success: true,
-        count: clientCount,
-        categoryCount: categoryCount,
-        totalRates: totalRatesCreated,
-        message: `Potencial de ${categoryCount} categoria(s) aplicado a ${clientCount} cliente(s)`
+        message: `Configuração salva com sucesso! O potencial será calculado automaticamente para ${clientCount} clientes com badge (80/20 ou Mercado).`,
+        clientCount
       });
+
     } catch (error) {
-      console.error('Error upserting client market rate:', error);
-      res.status(500).json({ error: "Failed to save client market rate" });
+      console.error('Error saving team market rates:', error);
+      res.status(500).json({ error: "Failed to save team market rates" });
     }
   });
+
 
   app.post("/api/clients/:clientId/market-rates", requireAuth, async (req, res) => {
     try {

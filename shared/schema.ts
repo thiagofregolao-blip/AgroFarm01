@@ -913,9 +913,28 @@ export const clientCategoryPipeline = pgTable("client_category_pipeline", {
   uniquePipeline: unique().on(table.clientId, table.seasonId, table.categoryId),
 }));
 
+// Manager Team Rates - Configuração Global do Gerente
+export const managerTeamRates = pgTable("manager_team_rates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  managerId: varchar("manager_id").notNull().references(() => users.id), // ID do gerente que definiu a regra
+  seasonId: varchar("season_id").notNull().references(() => seasons.id),
+  categoryId: varchar("category_id").notNull().references(() => categories.id),
+  investmentPerHa: decimal("investment_per_ha", { precision: 10, scale: 2 }).notNull(), // $/ha
+  subcategories: jsonb("subcategories"), // breakdown opcional
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  // Garante uma única regra por gerente/safra/categoria
+  uniqueRate: unique().on(table.managerId, table.seasonId, table.categoryId),
+}));
+
 export const insertClientCategoryPipelineSchema = createInsertSchema(clientCategoryPipeline).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertClientCategoryPipeline = z.infer<typeof insertClientCategoryPipelineSchema>;
 export type ClientCategoryPipeline = typeof clientCategoryPipeline.$inferSelect;
+
+export const insertManagerTeamRateSchema = createInsertSchema(managerTeamRates).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertManagerTeamRate = z.infer<typeof insertManagerTeamRateSchema>;
+export type ManagerTeamRate = typeof managerTeamRates.$inferSelect;
 
 // System Settings schemas
 export const insertSystemSettingsSchema = createInsertSchema(systemSettings).omit({ id: true, updatedAt: true });
