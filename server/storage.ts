@@ -2711,23 +2711,30 @@ export class DBStorage implements IStorage {
   }
 
   async upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline> {
+    console.log('[PIPELINE-UPSERT] Input:', JSON.stringify(pipeline));
+
+    // Query by the unique constraint columns: clientId, seasonId, categoryId
+    // Note: userId is NOT part of the unique constraint, so we don't filter by it here
     const existing = await db.select().from(clientCategoryPipeline)
       .where(and(
         eq(clientCategoryPipeline.clientId, pipeline.clientId),
         eq(clientCategoryPipeline.categoryId, pipeline.categoryId),
-        eq(clientCategoryPipeline.seasonId, pipeline.seasonId),
-        eq(clientCategoryPipeline.userId, pipeline.userId)
+        eq(clientCategoryPipeline.seasonId, pipeline.seasonId)
       ))
       .limit(1);
+
+    console.log('[PIPELINE-UPSERT] Existing record:', existing.length > 0 ? JSON.stringify(existing[0]) : 'None');
 
     if (existing.length > 0) {
       const updated = await db.update(clientCategoryPipeline)
         .set({
           status: pipeline.status,
+          userId: pipeline.userId, // Update userId in case it changed
           updatedAt: new Date()
         })
         .where(eq(clientCategoryPipeline.id, existing[0].id))
         .returning();
+      console.log('[PIPELINE-UPSERT] Updated:', JSON.stringify(updated[0]));
       return updated[0];
     } else {
       const id = randomUUID();
@@ -2738,6 +2745,7 @@ export class DBStorage implements IStorage {
           status: pipeline.status ?? 'ABERTO'
         })
         .returning();
+      console.log('[PIPELINE-UPSERT] Inserted:', JSON.stringify(inserted[0]));
       return inserted[0];
     }
   }
