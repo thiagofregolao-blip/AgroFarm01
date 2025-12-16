@@ -3928,7 +3928,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all categories
       const allCategories = await db.select().from(categories);
 
-      // Get user's clients with badge amarelo (includeInMarketArea) OR 80/20 badge - for potential calculation
+      // Get user's clients with badge amarelo (includeInMarketArea) ONLY - for market potential calculation
+      // NOTE: 80/20 badge is for different purpose, not for market potential
       const clientsAmarelo = await db.select({
         id: userClientLinks.id,
         name: masterClients.name,
@@ -3939,10 +3940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
         .where(and(
           eq(userClientLinks.userId, userId),
-          or(
-            eq(userClientLinks.includeInMarketArea, true),
-            eq(userClientLinks.isTop80_20, true)
-          )
+          eq(userClientLinks.includeInMarketArea, true)
         ));
 
       const clientAmareloIds = clientsAmarelo.map(c => c.id);
