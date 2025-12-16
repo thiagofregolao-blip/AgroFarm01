@@ -19,7 +19,7 @@ const scryptAsync = promisify(scrypt);
 export async function registerRoutes(app: Express): Promise<Server> {
   // Blueprint: javascript_auth_all_persistance - Setup auth routes
   setupAuth(app);
-  
+
   // Add no-cache headers to all API routes to prevent cross-user data leakage
   app.use('/api/*', (req, res, next) => {
     res.set({
@@ -29,10 +29,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     next();
   });
-  
+
   // Configure multer for file uploads
   const upload = multer({ storage: multer.memoryStorage() });
-  
+
   // Categories
   app.get("/api/categories", requireAuth, async (req, res) => {
     try {
@@ -57,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/subcategories", requireAuth, async (req, res) => {
     try {
       const { categoryId } = req.query;
-      
+
       if (categoryId) {
         const subs = await db.select()
           .from(subcategories)
@@ -65,7 +65,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .orderBy(subcategories.displayOrder);
         return res.json(subs);
       }
-      
+
       const allSubs = await db.select()
         .from(subcategories)
         .orderBy(subcategories.categoryId, subcategories.displayOrder);
@@ -79,7 +79,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products", async (req, res) => {
     try {
       const { categoryId } = req.query;
-      const products = categoryId 
+      const products = categoryId
         ? await storage.getProductsByCategory(categoryId as string)
         : await storage.getAllProducts();
       res.json(products);
@@ -100,10 +100,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/products/:id", requireSuperAdmin, async (req, res) => {
     try {
-      const existingProduct = await storage.getAllProducts().then(products => 
+      const existingProduct = await storage.getAllProducts().then(products =>
         products.find(p => p.id === req.params.id)
       );
-      
+
       if (!existingProduct) {
         return res.status(404).json({ error: "Product not found" });
       }
@@ -112,12 +112,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentCategory = categories.find(c => c.id === existingProduct.categoryId);
       const targetCategoryId = req.body.categoryId || existingProduct.categoryId;
       const targetCategory = categories.find(c => c.id === targetCategoryId);
-      
+
       const updateData = { ...req.body };
-      
+
       const isCurrentlyAgro = currentCategory?.type === 'agroquimicos';
       const willBeAgro = targetCategory?.type === 'agroquimicos';
-      
+
       if (isCurrentlyAgro && existingProduct.segment) {
         if ('segment' in req.body && !req.body.segment) {
           return res.status(400).json({ error: "Cannot clear segment for existing agrochemical products" });
@@ -126,7 +126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updateData.segment = existingProduct.segment;
         }
       }
-      
+
       if (willBeAgro) {
         const finalSegment = 'segment' in updateData ? updateData.segment : existingProduct.segment;
         if (!finalSegment) {
@@ -148,32 +148,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const detectAgrochemicalSegment = (productName: string): string => {
         const name = productName.toLowerCase();
-        
+
         if (name.includes('tratamento') || name.includes('seed treatment') || name.startsWith('ts ') ||
-            name.includes(' ts ') || name.endsWith(' ts') || /\bts\b/.test(name) ||
-            name.includes('fipronil') || name.includes('tiabendazol')) {
+          name.includes(' ts ') || name.endsWith(' ts') || /\bts\b/.test(name) ||
+          name.includes('fipronil') || name.includes('tiabendazol')) {
           return 'ts';
         }
-        
-        if (name.includes('fungicida') || name.includes('azoxistrobina') || name.includes('tebuconazol') || 
-            name.includes('trifloxistrobina') || name.includes('piraclostrobina') || name.includes('protioconazol') ||
-            name.includes('mancozeb') || name.includes('fluxapiroxade') || name.includes('carbendazim')) {
+
+        if (name.includes('fungicida') || name.includes('azoxistrobina') || name.includes('tebuconazol') ||
+          name.includes('trifloxistrobina') || name.includes('piraclostrobina') || name.includes('protioconazol') ||
+          name.includes('mancozeb') || name.includes('fluxapiroxade') || name.includes('carbendazim')) {
           return 'fungicida';
         }
-        
-        if (name.includes('inseticida') || name.includes('imidacloprid') || name.includes('lambda') || 
-            name.includes('cipermetrina') || name.includes('clorantraniliprole') || name.includes('tiametoxam') ||
-            name.includes('metoxifenozida') || name.includes('ciantraniliprole')) {
+
+        if (name.includes('inseticida') || name.includes('imidacloprid') || name.includes('lambda') ||
+          name.includes('cipermetrina') || name.includes('clorantraniliprole') || name.includes('tiametoxam') ||
+          name.includes('metoxifenozida') || name.includes('ciantraniliprole')) {
           return 'inseticida';
         }
-        
-        if (name.includes('herbicida') || name.includes('glifosato') || name.includes('paraquat') || 
-            name.includes('atrazina') || name.includes('2,4-d') || name.includes('dicamba') ||
-            name.includes('imazetapir') || name.includes('haloxifop') || name.includes('glufosinato') ||
-            name.includes('fluroxipir') || name.includes('imazapir')) {
+
+        if (name.includes('herbicida') || name.includes('glifosato') || name.includes('paraquat') ||
+          name.includes('atrazina') || name.includes('2,4-d') || name.includes('dicamba') ||
+          name.includes('imazetapir') || name.includes('haloxifop') || name.includes('glufosinato') ||
+          name.includes('fluroxipir') || name.includes('imazapir')) {
           return 'herbicida';
         }
-        
+
         return 'outros';
       };
 
@@ -240,15 +240,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const [subcategoryId, productNames] of Object.entries(spreadsheetData)) {
         const segment = segmentMap[subcategoryId];
-        
+
         for (const spreadsheetName of productNames) {
           const normalizedSpreadsheetName = normalizeProductName(spreadsheetName);
-          
+
           const matchedProduct = allProducts.find(p => {
             if (p.categoryId !== agrochemicalCategory.id) return false;
             const normalizedDbName = normalizeProductName(p.name);
-            return normalizedDbName.includes(normalizedSpreadsheetName) || 
-                   normalizedSpreadsheetName.includes(normalizedDbName);
+            return normalizedDbName.includes(normalizedSpreadsheetName) ||
+              normalizedSpreadsheetName.includes(normalizedDbName);
           });
 
           if (matchedProduct) {
@@ -322,34 +322,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
-      
+
       // Verificar se o cliente pertence ao usuário
       const existingClient = await storage.getClient(id);
       if (!existingClient) {
         return res.status(404).json({ error: "Client not found" });
       }
-      
+
       if (existingClient.userId !== userId) {
         return res.status(403).json({ error: "Não autorizado a editar este cliente" });
       }
-      
+
       const updates = req.body;
       const updatedClient = await storage.updateClient(id, updates);
-      
+
       // Se acabou de marcar como 80/20, aplicar potenciais gerais automaticamente
       if (updates.isTop80_20 === true && !existingClient.isTop80_20) {
         const { seasons, userClientLinks, clientMarketRates } = await import("@shared/schema");
         const { inArray, ne } = await import("drizzle-orm");
-        
+
         // Buscar safra ativa
         const activeSeasons = await db.select()
           .from(seasons)
           .where(eq(seasons.isActive, true))
           .limit(1);
-        
+
         if (activeSeasons.length > 0) {
           const activeSeason = activeSeasons[0];
-          
+
           // Buscar outros clientes 80/20 do mesmo usuário (excluindo o cliente atual)
           const otherTop8020Clients = await db.select()
             .from(userClientLinks)
@@ -359,10 +359,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               eq(userClientLinks.isActive, true),
               ne(userClientLinks.id, id) // Excluir o cliente atual
             ));
-          
+
           if (otherTop8020Clients.length > 0) {
             const otherClientIds = otherTop8020Clients.map(c => c.id);
-            
+
             // Buscar potenciais gerais existentes de outros clientes 80/20 nesta safra
             const existingRates = await db.select()
               .from(clientMarketRates)
@@ -371,7 +371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 inArray(clientMarketRates.clientId, otherClientIds),
                 eq(clientMarketRates.seasonId, activeSeason.id)
               ));
-            
+
             if (existingRates.length > 0) {
               // Agrupar por categoryId e pegar o valor mais comum (moda)
               const ratesByCategory = new Map<string, string[]>();
@@ -381,12 +381,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
                 ratesByCategory.get(rate.categoryId)!.push(rate.investmentPerHa);
               });
-              
+
               // Para cada categoria, copiar o potencial geral para o novo cliente 80/20
               for (const [categoryId, investmentValues] of Array.from(ratesByCategory.entries())) {
                 // Usar o valor mais frequente (ou o primeiro se houver empate)
                 const investmentPerHa = investmentValues[0];
-                
+
                 // Verificar se já existe rate para este cliente/categoria/safra
                 const existing = await db.select()
                   .from(clientMarketRates)
@@ -397,7 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     eq(clientMarketRates.seasonId, activeSeason.id)
                   ))
                   .limit(1);
-                
+
                 if (existing.length === 0) {
                   // Criar novo potencial para este cliente
                   await db.insert(clientMarketRates).values({
@@ -413,7 +413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       res.json(updatedClient);
     } catch (error) {
       console.error("Error updating client:", error);
@@ -424,19 +424,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/clients/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Verificar se o cliente pertence ao usuário
       const existingClient = await storage.getClient(id);
       if (!existingClient) {
         return res.status(404).json({ error: "Client not found" });
       }
-      
+
       if (existingClient.userId !== req.user!.id) {
         return res.status(403).json({ error: "Não autorizado a deletar este cliente" });
       }
-      
+
       const deleted = await storage.deleteClient(id);
-      
+
       res.json({ success: true, message: "Client deleted successfully" });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete client" });
@@ -445,7 +445,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Import clients from Excel
   const clientUpload = multer({ storage: multer.memoryStorage() });
-  
+
   app.post("/api/clients/import", requireAuth, clientUpload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
@@ -454,13 +454,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const vendedorId = req.body.vendedorId || req.user!.id;
       const result = await importClientsFromExcel(req.file.buffer, vendedorId);
-      
+
       if (!result.success && result.errors.length > 0) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: result.errors[0],
           created: result.created,
           updated: result.updated,
-          errors: result.errors 
+          errors: result.errors
         });
       }
 
@@ -494,15 +494,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!Array.isArray(clientIds)) {
         return res.status(400).json({ error: "clientIds must be an array" });
       }
-      
+
       const relationsMap = await storage.getBatchClientFamilyRelations(clientIds, req.user!.id);
-      
+
       // Convert Map to object for JSON serialization
       const result: Record<string, string[]> = {};
       relationsMap.forEach((value, key) => {
         result[key] = value;
       });
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching batch family relations:", error);
@@ -514,13 +514,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { relatedClientId } = req.body;
-      
+
       const relation = insertClientFamilyRelationSchema.parse({
         clientId: id,
         relatedClientId,
         userId: req.user!.id
       });
-      
+
       const newRelation = await storage.addClientFamilyRelation(relation);
       res.status(201).json(newRelation);
     } catch (error) {
@@ -532,11 +532,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id, relatedId } = req.params;
       const deleted = await storage.removeClientFamilyRelation(id, relatedId, req.user!.id);
-      
+
       if (!deleted) {
         return res.status(404).json({ error: "Family relation not found" });
       }
-      
+
       res.json({ success: true, message: "Family relation removed successfully" });
     } catch (error) {
       res.status(500).json({ error: "Failed to remove family relation" });
@@ -565,14 +565,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/seasons", async (req, res) => {
     try {
       console.log("[DEBUG] POST /api/seasons - Request body:", JSON.stringify(req.body, null, 2));
-      
+
       // Coerce date strings to Date objects
       const bodyWithDates = {
         ...req.body,
         startDate: new Date(req.body.startDate),
         endDate: new Date(req.body.endDate),
       };
-      
+
       const season = insertSeasonSchema.parse(bodyWithDates);
       const newSeason = await storage.createSeason(season);
       res.status(201).json(newSeason);
@@ -621,19 +621,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { userId: _, ...updates } = req.body;
-      
+
       // Verify the goal belongs to the authenticated user
       const allGoals = await storage.getAllSeasonGoals();
       const existingGoal = allGoals.find(g => g.id === id);
-      
+
       if (!existingGoal) {
         return res.status(404).json({ error: "Season goal not found" });
       }
-      
+
       if (existingGoal.userId !== req.user!.id) {
         return res.status(403).json({ error: "Not authorized to update this goal" });
       }
-      
+
       const updatedGoal = await storage.updateSeasonGoal(id, updates);
       res.json(updatedGoal);
     } catch (error) {
@@ -644,19 +644,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/season-goals/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Verify the goal belongs to the authenticated user
       const allGoals = await storage.getAllSeasonGoals();
       const existingGoal = allGoals.find(g => g.id === id);
-      
+
       if (!existingGoal) {
         return res.status(404).json({ error: "Season goal not found" });
       }
-      
+
       if (existingGoal.userId !== req.user!.id) {
         return res.status(403).json({ error: "Not authorized to delete this goal" });
       }
-      
+
       const deleted = await storage.deleteSeasonGoal(id);
       if (deleted) {
         res.json({ success: true });
@@ -673,7 +673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { clientId, seasonId } = req.query;
       let sales;
-      
+
       if (clientId) {
         sales = await storage.getSalesByClient(clientId as string);
       } else if (seasonId) {
@@ -681,10 +681,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         sales = await storage.getAllSales();
       }
-      
+
       // Cada usuário vê apenas suas próprias vendas
       sales = sales.filter(sale => sale.userId === req.user!.id);
-      
+
       res.json(sales);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch sales" });
@@ -707,7 +707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { userId: _, ...updates } = req.body; // Remove userId from updates to prevent ownership change
-      
+
       // First verify the sale belongs to the authenticated user
       const existingSale = await storage.getSale(id);
       if (!existingSale) {
@@ -716,10 +716,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingSale.userId !== req.user!.id) {
         return res.status(403).json({ error: "Forbidden: Cannot edit another user's sale" });
       }
-      
+
       // Convert date strings to Date objects
       const processedUpdates: any = { ...updates };
-      
+
       // Convert all timestamp fields
       if (processedUpdates.dueDate) {
         processedUpdates.dueDate = new Date(processedUpdates.dueDate);
@@ -727,7 +727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (processedUpdates.saleDate) {
         processedUpdates.saleDate = new Date(processedUpdates.saleDate);
       }
-      
+
       const updatedSale = await storage.updateSale(id, processedUpdates);
       res.json(updatedSale);
     } catch (error) {
@@ -739,41 +739,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/sales/barter/:clientId/manual-commission", requireAuth, async (req, res) => {
     try {
       const { clientId } = req.params;
-      
+
       // Validate commission amount with Zod
       const commissionSchema = z.object({
         commissionAmount: z.number().min(0, "Commission amount must be >= 0")
       });
-      
+
       const validationResult = commissionSchema.safeParse(req.body);
       if (!validationResult.success) {
         return res.status(400).json({ error: "Invalid commission amount. Must be a number >= 0" });
       }
-      
+
       const { commissionAmount } = validationResult.data;
-      
+
       // Verify client belongs to user (unless admin)
       const client = await storage.getClient(clientId);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
-      
+
       if (client.userId !== req.user!.id) {
         return res.status(403).json({ error: "Forbidden: Cannot edit another user's client sales" });
       }
-      
+
       // Get barter sales for this client
       const allSales = await storage.getAllSales();
       const barterSales = allSales.filter(
-        sale => sale.clientId === clientId && 
-                sale.commissionTier === 'barter' && 
-                sale.userId === req.user!.id
+        sale => sale.clientId === clientId &&
+          sale.commissionTier === 'barter' &&
+          sale.userId === req.user!.id
       );
-      
+
       if (barterSales.length === 0) {
         return res.status(404).json({ error: "No barter sales found for this client" });
       }
-      
+
       // Apply total commission to first product, zero to others
       const updatedSales = [];
       for (let i = 0; i < barterSales.length; i++) {
@@ -786,11 +786,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updatedSales.push(updated);
         }
       }
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         updatedCount: updatedSales.length,
-        sales: updatedSales 
+        sales: updatedSales
       });
     } catch (error) {
       console.error("Error updating barter commission:", error);
@@ -801,48 +801,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/sales/recalculate-all", requireAuth, async (req, res) => {
     try {
       const userId = req.user!.id;
-      
+
       // Fetch all required data
       const [sales, categories, products] = await Promise.all([
         storage.getAllSales(),
         storage.getAllCategories(),
         storage.getAllProducts(),
       ]);
-      
+
       // Filter sales by user
       const userSales = sales.filter(sale => sale.userId === userId);
-      
+
       // Create lookup maps
       const categoryMap = new Map(categories.map(c => [c.id, c]));
       const productMap = new Map(products.map(p => [p.id, p]));
-      
+
       let updatedCount = 0;
       const errors: string[] = [];
-      
+
       for (const sale of userSales) {
         try {
           const category = categoryMap.get(sale.categoryId);
           const product = productMap.get(sale.productId);
-          
+
           if (!category) {
             errors.push(`Sale ${sale.id}: Category not found`);
             continue;
           }
-          
+
           const margin = parseFloat(sale.margin.toString());
           const totalAmount = parseFloat(sale.totalAmount.toString());
           const ivaRate = parseFloat(sale.ivaRate.toString());
-          
+
           // 1. Recalculate commission
           const greenMarginMin = parseFloat(category.greenMarginMin);
           const yellowMarginMin = parseFloat(category.yellowMarginMin);
           const yellowMarginMax = parseFloat(category.yellowMarginMax);
           const redMarginMin = parseFloat(category.redMarginMin);
           const redMarginMax = parseFloat(category.redMarginMax);
-          
+
           let commissionTier: string;
           let commissionRate: number;
-          
+
           if (margin >= greenMarginMin) {
             commissionTier = "verde";
             commissionRate = parseFloat(category.greenCommission);
@@ -856,10 +856,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             commissionTier = "abaixo_lista";
             commissionRate = parseFloat(category.belowListCommission);
           }
-          
+
           const amountBeforeIva = totalAmount / (1 + ivaRate / 100);
           const commissionAmount = amountBeforeIva * (commissionRate / 100);
-          
+
           // 2. Recalculate Timac points
           let timacPoints = null;
           if (product && category.id === 'cat-especialidades') {
@@ -868,21 +868,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .replace(/[\u0300-\u036f]/g, '')
               .toUpperCase()
               .replace(/\s+/g, '') || '';
-            
+
             if (normalizedMarca.startsWith('TIMAC')) {
               const quantity = sale.quantity ? parseFloat(sale.quantity.toString()) : 0;
               const normalizedProductName = product.name
                 ?.normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
                 .toUpperCase() || '';
-              
-              const pointsPerUnit = normalizedProductName.includes('FERTIACTYL') && 
-                                   normalizedProductName.includes('LEGUMINOSAS') ? 3 : 1;
-              
+
+              const pointsPerUnit = normalizedProductName.includes('FERTIACTYL') &&
+                normalizedProductName.includes('LEGUMINOSAS') ? 3 : 1;
+
               timacPoints = quantity * pointsPerUnit;
             }
           }
-          
+
           // Update sale
           await storage.updateSale(sale.id, {
             commissionTier,
@@ -890,13 +890,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             commissionAmount: commissionAmount.toString(),
             timacPoints: timacPoints !== null ? timacPoints.toString() : null,
           });
-          
+
           updatedCount++;
         } catch (error) {
           errors.push(`Sale ${sale.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
-      
+
       res.json({
         success: true,
         totalSales: userSales.length,
@@ -905,9 +905,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error recalculating sales:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to recalculate sales" 
+        error: error instanceof Error ? error.message : "Failed to recalculate sales"
       });
     }
   });
@@ -948,9 +948,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/sales/import-excel", requireAuth, upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Nenhum arquivo foi enviado" 
+          message: "Nenhum arquivo foi enviado"
         });
       }
 
@@ -963,9 +963,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const result = await importExcelFile(req.file.buffer, seasonId, req.user!.id);
-      
+
       console.log('Import result:', JSON.stringify(result, null, 2));
-      
+
       if (result.success) {
         res.json({
           success: true,
@@ -975,10 +975,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdProducts: result.createdProducts,
         });
       } else {
-        const errorMessage = result.errors.length > 0 
-          ? result.errors.join('; ') 
+        const errorMessage = result.errors.length > 0
+          ? result.errors.join('; ')
           : 'Nenhuma venda foi importada. Verifique o formato do arquivo.';
-        
+
         res.status(400).json({
           success: false,
           message: errorMessage,
@@ -989,7 +989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error('Import error:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : "Erro desconhecido ao importar arquivo",
       });
@@ -1044,17 +1044,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/clients/manager-team/market-rates/:seasonId", requireManager, async (req, res) => {
     try {
       const { seasonId } = req.params;
-      
+
       // Get all consultants in this manager's team
       const teamConsultants = await db.select()
         .from(users)
         .where(eq(users.managerId, req.user!.id));
-      
+
       const consultantIds = teamConsultants.map(c => c.id);
-      
+
       // Include manager themselves to find their own clients if they have no team or want to see their own config
       consultantIds.push(req.user!.id);
-      
+
       // Get one client used as reference to fetch the rates (they should all have the same values)
       const firstClient = await db.select()
         .from(userClientLinks)
@@ -1063,11 +1063,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(userClientLinks.includeInMarketArea, true)
         ))
         .limit(1);
-      
+
       if (firstClient.length === 0) {
         return res.json([]);
       }
-      
+
       // Query database directly for market rates for this client and season
       const rates = await db.select()
         .from(clientMarketRates)
@@ -1075,7 +1075,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(clientMarketRates.clientId, firstClient[0].id),
           eq(clientMarketRates.seasonId, seasonId)
         ));
-      
+
       res.json(rates);
     } catch (error) {
       console.error('Error fetching team market rates:', error);
@@ -1087,18 +1087,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/clients/manager-team/market-rates", requireManager, async (req, res) => {
     try {
       const { allRates } = req.body;
-      
+
       console.log('POST /api/clients/manager-team/market-rates');
       console.log('Manager ID:', req.user!.id);
       console.log('Received allRates:', JSON.stringify(allRates, null, 2));
-      
+
       // Get all consultants in this manager's team
       const teamConsultants = await db.select()
         .from(users)
         .where(eq(users.managerId, req.user!.id));
-      
+
       console.log('Team consultants found:', teamConsultants.length);
-      
+
       // Include team consultants + manager themselves
       const consultantIds = teamConsultants.map(c => c.id);
       consultantIds.push(req.user!.id); // Include manager's own clients
@@ -1112,22 +1112,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           inArray(userClientLinks.userId, consultantIds),
           eq(userClientLinks.includeInMarketArea, true)
         ));
-      
+
       console.log('Team clients with badge amarelo found:', teamClients.length);
-      
+
       if (teamClients.length === 0) {
         console.log('No clients with yellow badge, returning 0');
         return res.json({ success: true, message: "Nenhum cliente com badge amarelo (Incluir na Área de Mercado). Configure pelo menos um cliente.", count: 0, categoryCount: 0 });
       }
-      
+
       // Process all categories from allRates array
       let totalRatesCreated = 0;
-      
+
       if (allRates && Array.isArray(allRates) && allRates.length > 0) {
         // Process each category
         for (const rateConfig of allRates) {
           const { categoryId, seasonId, investmentPerHa, subcategories } = rateConfig;
-          
+
           // Apply this category's rate to all team clients
           for (const client of teamClients) {
             await storage.upsertClientMarketRate({
@@ -1142,12 +1142,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       const clientCount = teamClients.length;
       const categoryCount = allRates?.length || 0;
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         count: clientCount,
         categoryCount: categoryCount,
         totalRates: totalRatesCreated,
@@ -1167,19 +1167,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { categoryId, seasonId, investmentPerHa, subcategories } = req.body;
-      
+
       // Get all consultants in this manager's team
       const teamConsultants = await db.select()
         .from(users)
         .where(eq(users.managerId, req.user!.id));
-      
+
       const consultantIds = teamConsultants.map(c => c.id);
-      
+
       // If no team members found, just return empty
       if (consultantIds.length === 0) {
         return res.json({ success: true, message: "Nenhum consultor na equipe" });
       }
-      
+
       // Get all clients for these consultants (only those included in market area)
       const teamClients = await db.select()
         .from(userClientLinks)
@@ -1187,7 +1187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           inArray(userClientLinks.userId, consultantIds),
           eq(userClientLinks.includeInMarketArea, true)
         ));
-      
+
       // Create/update market rates for ALL clients in the team
       const rates = [];
       for (const client of teamClients) {
@@ -1201,7 +1201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         rates.push(rate);
       }
-      
+
       res.json({ success: true, count: rates.length, message: `Configuração aplicada a ${rates.length} cliente(s)` });
     } catch (error) {
       console.error('Error upserting client market rate:', error);
@@ -1235,14 +1235,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/market-benchmarks", requireAuth, async (req, res) => {
     try {
       const { categoryId, seasonId, marketPercentage } = req.body;
-      
+
       const benchmark = await storage.upsertMarketBenchmark({
         userId: req.user!.id,
         categoryId,
         seasonId,
         marketPercentage
       });
-      
+
       res.json(benchmark);
     } catch (error) {
       console.error('Error upserting market benchmark:', error);
@@ -1264,7 +1264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/market-potential", requireAuth, async (req, res) => {
     try {
       const { seasonId } = req.query;
-      
+
       if (!seasonId || typeof seasonId !== 'string') {
         return res.status(400).json({ error: "Season ID is required" });
       }
@@ -1328,7 +1328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Filter sales by authenticated user AND selected season
       const sales = allSales.filter(s => s.userId === req.user!.id && s.seasonId === seasonId);
-      
+
       // Create product-to-subcategory map
       const productSubcategoryMap = new Map(
         products
@@ -1346,17 +1346,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build family groups using union-find approach
       const clientToGroup = new Map<string, Set<string>>();
-      
+
       top8020Clients.forEach((client, idx) => {
         const relatedIds = allFamilyRelations[idx];
-        
+
         if (relatedIds.length === 0) {
           // Client has no family relations, create solo group
           clientToGroup.set(client.id, new Set([client.id]));
         } else {
           // Find existing group or create new one
           let existingGroup: Set<string> | null = null;
-          
+
           // Check if client or any related client already in a group
           for (const relatedId of [client.id, ...relatedIds]) {
             if (clientToGroup.has(relatedId)) {
@@ -1364,15 +1364,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
               break;
             }
           }
-          
+
           if (!existingGroup) {
             existingGroup = new Set();
           }
-          
+
           // Add all members to the group
           existingGroup.add(client.id);
           relatedIds.forEach(id => existingGroup!.add(id));
-          
+
           // Update all members to point to this group
           existingGroup.forEach(id => clientToGroup.set(id, existingGroup!));
         }
@@ -1381,17 +1381,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For each family group, determine the client with max planting area
       const effectivePlantingArea = new Map<string, number>();
       const processedGroups = new Set<Set<string>>();
-      
+
       top8020Clients.forEach(client => {
         const group = clientToGroup.get(client.id);
         if (!group || processedGroups.has(group)) return;
-        
+
         processedGroups.add(group);
-        
+
         // Find client with max planting area in this group
         let maxArea = 0;
         let maxAreaClientId = client.id;
-        
+
         group.forEach(clientId => {
           const groupClient = top8020Clients.find(c => c.id === clientId);
           if (groupClient) {
@@ -1402,11 +1402,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         });
-        
+
         // Set effective area: max area for representative client, 0 for others
         group.forEach(clientId => {
           effectivePlantingArea.set(
-            clientId, 
+            clientId,
             clientId === maxAreaClientId ? maxArea : 0
           );
         });
@@ -1421,7 +1421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         top8020Clients.map(c => storage.getClientMarketRates(c.id, req.user!.id, seasonId))
       );
       const clientRatesMap = new Map(
-        allClientRates.flatMap((rates, idx) => 
+        allClientRates.flatMap((rates, idx) =>
           rates.map(r => [`${top8020Clients[idx].id}-${r.categoryId}`, r])
         )
       );
@@ -1431,21 +1431,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         top8020Clients.map(c => storage.getExternalPurchases(c.id, req.user!.id, seasonId))
       );
       const externalPurchasesMap = new Map(
-        allExternalPurchases.flatMap((purchases, idx) => 
+        allExternalPurchases.flatMap((purchases, idx) =>
           purchases.map(p => [`${top8020Clients[idx].id}-${p.categoryId}`, p])
         )
       );
 
       const clientAnalysis = top8020Clients.map(client => {
         const clientSales = sales.filter(s => s.clientId === client.id);
-        
+
         // Calculate sales by category
         const salesByCategory = clientSales.reduce((acc, sale) => {
           const amount = parseFloat(sale.totalAmount);
           acc[sale.categoryId] = (acc[sale.categoryId] || 0) + amount;
           return acc;
         }, {} as Record<string, number>);
-        
+
         // Calculate sales by category and subcategory (for Agroquímicos)
         const salesBySubcategory = clientSales.reduce((acc, sale) => {
           const subcategoryId = productSubcategoryMap.get(sale.productId);
@@ -1467,7 +1467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Check if there's a custom rate for this client and category
           const customRate = clientRatesMap.get(`${client.id}-${category.id}`);
           const defaultRate = rateMap.get(category.id);
-          
+
           // Use custom rate if available, otherwise use default rate
           let investmentPerHa = 0;
           if (customRate) {
@@ -1480,11 +1480,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const plantingAreaForCalc = effectivePlantingArea.get(client.id) ?? parseFloat(client.plantingArea);
           const potential = plantingAreaForCalc * investmentPerHa;
           const cvaleAmount = salesByCategory[category.id] || 0;
-          
+
           // Get external purchases for this client and category
           const externalPurchase = externalPurchasesMap.get(`${client.id}-${category.id}`);
           const externalAmount = externalPurchase ? parseFloat(externalPurchase.amount) : 0;
-          
+
           const categoryTotalRealized = cvaleAmount + externalAmount;
           const percentage = potential > 0 ? (categoryTotalRealized / potential) * 100 : 0;
           const opportunity = potential - categoryTotalRealized;
@@ -1503,25 +1503,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               { id: 'sub-inseticidas', name: 'Inseticidas' },
               { id: 'sub-fungicidas', name: 'Fungicidas' }
             ];
-            
+
             const externalSubcategories = (externalPurchase?.subcategories as Record<string, number>) || {};
-            
+
             subcategoryDetails = agroquimicosSubcategories.map(subcat => {
               const cvaleSubAmount = salesBySubcategory[`${category.id}-${subcat.id}`] || 0;
               const externalSubAmount = externalSubcategories[subcat.id] || 0;
               const totalSubAmount = cvaleSubAmount + externalSubAmount;
-              
+
               // Get products sold in this subcategory for this client
               const subcategorySales = clientSales.filter(sale => {
                 const productSubcategoryId = productSubcategoryMap.get(sale.productId);
                 return sale.categoryId === category.id && productSubcategoryId === subcat.id;
               });
-              
+
               // Group by product
               const productDetails = subcategorySales.reduce((acc, sale) => {
                 const product = products.find(p => p.id === sale.productId);
                 if (!product) return acc;
-                
+
                 if (!acc[product.id]) {
                   acc[product.id] = {
                     productId: product.id,
@@ -1530,13 +1530,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     cvaleAmount: 0
                   };
                 }
-                
+
                 acc[product.id].quantity += sale.quantity ? parseFloat(sale.quantity) : 0;
                 acc[product.id].cvaleAmount += parseFloat(sale.totalAmount);
-                
+
                 return acc;
               }, {} as Record<string, { productId: string; productName: string; quantity: number; cvaleAmount: number }>);
-              
+
               return {
                 id: subcat.id,
                 name: subcat.name,
@@ -1582,16 +1582,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const percentages = clientAnalysis
           .map(c => c.categoryDetails[category.id]?.percentage || 0)
           .filter(p => p > 0);
-        
-        const average = percentages.length > 0 
-          ? percentages.reduce((sum, p) => sum + p, 0) / percentages.length 
+
+        const average = percentages.length > 0
+          ? percentages.reduce((sum, p) => sum + p, 0) / percentages.length
           : 0;
 
         benchmark[category.id] = average;
       });
 
       // Calculate opportunities (gaps)
-      const opportunities = clientAnalysis.flatMap(client => 
+      const opportunities = clientAnalysis.flatMap(client =>
         Object.entries(client.categoryDetails).map(([categoryId, details]) => ({
           clientId: client.clientId,
           clientName: client.clientName,
@@ -1620,16 +1620,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/timac-points", requireAuth, async (req, res) => {
     try {
       const { seasonId } = req.query;
-      
+
       // Buscar todas as vendas do usuário autenticado com pontos Timac
       const allSales = await storage.getAllSales();
       let sales = allSales.filter(s => s.userId === req.user!.id);
-      
+
       // Filtrar por season se fornecido
       if (seasonId) {
         sales = sales.filter(s => s.seasonId === seasonId);
       }
-      
+
       // Somar pontos Timac
       const totalPoints = sales.reduce((sum, sale) => {
         if (sale.timacPoints) {
@@ -1637,11 +1637,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         return sum;
       }, 0);
-      
+
       // Calcular premiação: total pontos × $0.76 USD
       const rewardPerPoint = 0.76;
       const totalReward = totalPoints * rewardPerPoint;
-      
+
       res.json({
         totalPoints: totalPoints.toFixed(2),
         rewardPerPoint: rewardPerPoint.toFixed(2),
@@ -1658,7 +1658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/alert-settings", requireAuth, async (req, res) => {
     try {
       const settings = await storage.getAlertSettings(req.user!.id);
-      
+
       if (!settings) {
         const defaults = {
           userId: req.user!.id,
@@ -1672,7 +1672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         return res.json(defaults);
       }
-      
+
       res.json(settings);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch alert settings" });
@@ -1712,11 +1712,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const success = await storage.markAlertAsRead(id, req.user!.id);
-      
+
       if (!success) {
         return res.status(404).json({ error: "Alert not found" });
       }
-      
+
       res.json({ success: true, message: "Alert marked as read" });
     } catch (error) {
       res.status(500).json({ error: "Failed to mark alert as read" });
@@ -1736,11 +1736,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const success = await storage.deleteAlert(id, req.user!.id);
-      
+
       if (!success) {
         return res.status(404).json({ error: "Alert not found" });
       }
-      
+
       res.json({ success: true, message: "Alert deleted successfully" });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete alert" });
@@ -1751,7 +1751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       let alertsCreated = 0;
-      
+
       const activeSeason = await storage.getActiveSeason();
       if (!activeSeason) {
         return res.json({ alertsCreated: 0, message: "No active season found" });
@@ -1759,13 +1759,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const settings = await storage.getAlertSettings(userId);
       const threshold = settings?.goalThresholdPercent ? parseFloat(settings.goalThresholdPercent) : 80;
-      
+
       const existingAlerts = await storage.getAlerts(userId);
       const recentAlertCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       const hasRecentAlert = (type: string, relatedId?: string) => {
-        return existingAlerts.some(alert => 
-          alert.type === type && 
+        return existingAlerts.some(alert =>
+          alert.type === type &&
           alert.relatedId === relatedId &&
           new Date(alert.createdAt) > recentAlertCutoff
         );
@@ -1773,20 +1773,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (settings?.goalAlerts !== false) {
         const goal = await storage.getSeasonGoal(activeSeason.id, userId);
-        
+
         if (goal) {
           const allSales = await storage.getAllSales();
-          const seasonSales = allSales.filter(s => 
+          const seasonSales = allSales.filter(s =>
             s.userId === userId && s.seasonId === activeSeason.id
           );
-          
-          const totalSales = seasonSales.reduce((sum, sale) => 
+
+          const totalSales = seasonSales.reduce((sum, sale) =>
             sum + parseFloat(sale.totalAmount), 0
           );
-          
+
           const goalAmount = parseFloat(goal.goalAmount);
           const progress = goalAmount > 0 ? (totalSales / goalAmount) * 100 : 0;
-          
+
           if (progress >= threshold && progress < 100 && !hasRecentAlert("meta", activeSeason.id)) {
             await storage.createAlert({
               userId,
@@ -1806,13 +1806,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (settings?.opportunityAlerts !== false) {
         const topClients = await storage.getTop80_20Clients();
         const allSales = await storage.getAllSales();
-        const seasonSales = allSales.filter(s => 
+        const seasonSales = allSales.filter(s =>
           s.userId === userId && s.seasonId === activeSeason.id
         );
-        
+
         const clientsWithSales = new Set(seasonSales.map(s => s.clientId));
         const clientsWithoutSales = topClients.filter(c => !clientsWithSales.has(c.id));
-        
+
         for (const client of clientsWithoutSales) {
           if (!hasRecentAlert("oportunidade", client.id)) {
             await storage.createAlert({
@@ -1834,7 +1834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const now = new Date();
         const endDate = new Date(activeSeason.endDate);
         const daysUntilEnd = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        
+
         if (daysUntilEnd <= 30 && daysUntilEnd > 0 && !hasRecentAlert("prazo_safra", activeSeason.id)) {
           await storage.createAlert({
             userId,
@@ -1850,11 +1850,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ 
-        alertsCreated, 
-        message: alertsCreated > 0 
-          ? `${alertsCreated} novo(s) alerta(s) criado(s)` 
-          : "Nenhum novo alerta" 
+      res.json({
+        alertsCreated,
+        message: alertsCreated > 0
+          ? `${alertsCreated} novo(s) alerta(s) criado(s)`
+          : "Nenhum novo alerta"
       });
     } catch (error) {
       console.error('Alert check error:', error);
@@ -1871,41 +1871,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const parsed = await parseCVALEPDF(req.file.buffer);
       const vendedorId = req.body.vendedorId || req.user!.id;
-      
+
       // Buscar clientes do usuário via user_client_links
       const userClients = await storage.getClientsForUser(vendedorId, false);
-      
+
       console.log(`[PDF Import] Looking for client: "${parsed.clientName}"`);
       console.log(`[PDF Import] Available clients (${userClients.length}):`, userClients.map(c => c.name).join(', '));
-      
-      const matchedClient = userClients.find(c => 
+
+      const matchedClient = userClients.find(c =>
         parsed.clientName && (
           c.name.toUpperCase().includes(parsed.clientName.toUpperCase()) ||
           parsed.clientName.toUpperCase().includes(c.name.toUpperCase())
         )
       );
-      
+
       if (!matchedClient) {
         console.log(`[PDF Import] No match found for "${parsed.clientName}"`);
-        return res.status(400).json({ 
-          error: "Cliente não encontrado no sistema", 
+        return res.status(400).json({
+          error: "Cliente não encontrado no sistema",
           clientName: parsed.clientName,
           suggestion: "Cadastre o cliente antes de importar o histórico"
         });
       }
-      
+
       console.log(`[PDF Import] Matched client: ${matchedClient.name}`);
-      
+
       const allSeasons = await storage.getAllSeasons();
-      const matchedSeason = allSeasons.find(s => 
-        parsed.seasonName.includes(s.name) || 
+      const matchedSeason = allSeasons.find(s =>
+        parsed.seasonName.includes(s.name) ||
         s.name.includes(parsed.seasonName.split(' ')[1] || '')
       );
-      
+
       const allProducts = await storage.getAllProducts();
       const allCategories = await storage.getAllCategories();
       const categoryIds = new Set(allCategories.map(c => c.id));
-      
+
       let outrosCategory = allCategories.find(c => c.name === 'Outros');
       if (!outrosCategory) {
         outrosCategory = await storage.createCategory({
@@ -1923,63 +1923,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
           defaultIva: '10.00'
         });
       }
-      
+
       const autoCreatedProducts: Array<{
         productName: string;
         productCode: string;
         categoryId: string;
         hasCategory: true;
       }> = [];
-      
+
       const uncategorizedProducts: Array<{
         productName: string;
         productCode: string;
         categoryId: string;
         hasCategory: false;
       }> = [];
-      
+
       for (const item of parsed.items) {
-        const existingProduct = allProducts.find(p => 
+        const existingProduct = allProducts.find(p =>
           p.name.toUpperCase().includes(item.productName.toUpperCase()) ||
           item.productName.toUpperCase().includes(p.name.toUpperCase())
         );
-        
+
         if (!existingProduct) {
           const { detectCategoryFromProductName } = await import('./parse-cvale-pdf');
           const detectedCategoryId = detectCategoryFromProductName(item.productName);
-          
+
           if (detectedCategoryId && categoryIds.has(detectedCategoryId)) {
             const newProduct = await storage.createProduct({
               name: item.productName,
               categoryId: detectedCategoryId
             });
-            
+
             autoCreatedProducts.push({
               productName: newProduct.name,
               productCode: item.productCode,
               categoryId: detectedCategoryId,
               hasCategory: true
             });
-            
+
             allProducts.push(newProduct);
           } else {
             const newProduct = await storage.createProduct({
               name: item.productName,
               categoryId: outrosCategory.id
             });
-            
+
             uncategorizedProducts.push({
               productName: newProduct.name,
               productCode: item.productCode,
               categoryId: outrosCategory.id,
               hasCategory: false
             });
-            
+
             allProducts.push(newProduct);
           }
         }
       }
-      
+
       res.json({
         clientId: matchedClient.id,
         clientName: matchedClient.name,
@@ -2002,24 +2002,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const vendedorId = req.body.vendedorId || req.user!.id;
       const { items, ...historyData } = req.body;
-      
+
       const validatedHistory = insertPurchaseHistorySchema.parse({
         ...historyData,
         userId: vendedorId
       });
-      
+
       const history = await storage.createPurchaseHistory(validatedHistory);
-      
+
       for (const item of items) {
         const validatedItem = insertPurchaseHistoryItemSchema.parse({
           ...item,
           purchaseHistoryId: history.id,
           purchaseDate: new Date(item.purchaseDate)
         });
-        
+
         await storage.createPurchaseHistoryItem(validatedItem);
       }
-      
+
       res.status(201).json(history);
     } catch (error) {
       console.error("Error creating purchase history:", error);
@@ -2031,13 +2031,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       const { clientId, seasonId } = req.query;
-      
+
       const histories = await storage.getPurchaseHistories(
         userId,
         clientId as string | undefined,
         seasonId as string | undefined
       );
-      
+
       res.json(histories);
     } catch (error) {
       console.error("Error fetching purchase histories:", error);
@@ -2049,7 +2049,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { clientId } = req.params;
       const userId = req.user!.id;
-      
+
       const histories = await storage.getPurchaseHistories(userId, clientId, undefined);
       res.json(histories);
     } catch (error) {
@@ -2062,12 +2062,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
-      
+
       const history = await storage.getPurchaseHistory(id, userId);
       if (!history) {
         return res.status(404).json({ error: "Purchase history not found" });
       }
-      
+
       const items = await storage.getPurchaseHistoryItems(id);
       res.json(items);
     } catch (error) {
@@ -2081,32 +2081,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { seasonId } = req.query;
       const userId = req.user!.id;
-      
+
       const history = await storage.getPurchaseHistory(id, userId);
       if (!history) {
         return res.status(404).json({ error: "Purchase history not found" });
       }
-      
+
       const historyItems = await storage.getPurchaseHistoryItems(id);
-      
+
       const allSales = await storage.getAllSales();
       const clientSales = allSales.filter(s => s.userId === userId && s.clientId === history.clientId);
-      
+
       const comparisonSeasonId = seasonId as string || history.seasonId;
       const currentSeasonSales = comparisonSeasonId
         ? clientSales.filter(s => s.seasonId === comparisonSeasonId)
         : clientSales;
-      
+
       const allProducts = await storage.getAllProducts();
       const allCategories = await storage.getAllCategories();
       const productMap = new Map(allProducts.map(p => [p.id, p]));
       const categoryMap = new Map(allCategories.map(c => [c.id, c]));
-      
+
       const outrosCategory = allCategories.find(c => c.name === 'Outros');
       const outrosCategoryId = outrosCategory?.id || 'uncategorized';
-      
+
       const findProductAndCategory = (historyItemName: string) => {
-        const matchedProduct = allProducts.find(p => 
+        const matchedProduct = allProducts.find(p =>
           p.name.toUpperCase() === historyItemName.toUpperCase() ||
           p.name.toUpperCase().includes(historyItemName.toUpperCase()) ||
           historyItemName.toUpperCase().includes(p.name.toUpperCase())
@@ -2117,18 +2117,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subcategoryId: matchedProduct?.subcategoryId || null
         };
       };
-      
+
       const groupedByCategory: Record<string, {
         categoryId: string;
         categoryName: string;
         historicalProducts: any[];
         currentSeasonProducts: any[];
       }> = {};
-      
+
       historyItems.forEach(item => {
         const { categoryId, segment, subcategoryId } = findProductAndCategory(item.productName);
         const categoryName = categoryMap.get(categoryId)?.name || 'Não Categorizado';
-        
+
         if (!groupedByCategory[categoryId]) {
           groupedByCategory[categoryId] = {
             categoryId,
@@ -2137,7 +2137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentSeasonProducts: []
           };
         }
-        
+
         groupedByCategory[categoryId].historicalProducts.push({
           productCode: item.productCode,
           productName: item.productName,
@@ -2150,14 +2150,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subcategoryId: subcategoryId
         });
       });
-      
+
       currentSeasonSales.forEach(sale => {
         const product = productMap.get(sale.productId);
         if (!product) return;
-        
+
         const categoryId = product.categoryId;
         const categoryName = categoryMap.get(categoryId)?.name || 'Não Categorizado';
-        
+
         if (!groupedByCategory[categoryId]) {
           groupedByCategory[categoryId] = {
             categoryId,
@@ -2166,11 +2166,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentSeasonProducts: []
           };
         }
-        
+
         const quantity = sale.quantity ? parseFloat(sale.quantity.toString()) : 0;
         const totalAmount = parseFloat(sale.totalAmount.toString());
         const unitPrice = quantity > 0 ? totalAmount / quantity : totalAmount;
-        
+
         groupedByCategory[categoryId].currentSeasonProducts.push({
           productId: product.id,
           productName: product.name,
@@ -2182,58 +2182,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subcategoryId: product.subcategoryId || null
         });
       });
-      
-      const categoriesData = Object.values(groupedByCategory).sort((a, b) => 
+
+      const categoriesData = Object.values(groupedByCategory).sort((a, b) =>
         a.categoryName.localeCompare(b.categoryName)
       );
-      
+
       const monthlyTimeline = Array.from({ length: 12 }, (_, i) => {
         const month = i + 1;
-        const monthItems = historyItems.filter(item => 
+        const monthItems = historyItems.filter(item =>
           new Date(item.purchaseDate).getMonth() === i
         );
-        
+
         return {
           month,
           monthName: new Date(2000, i, 1).toLocaleDateString('pt-BR', { month: 'short' }),
           hasPurchases: monthItems.length > 0,
           itemCount: monthItems.length,
-          totalValue: monthItems.reduce((sum, item) => 
+          totalValue: monthItems.reduce((sum, item) =>
             sum + parseFloat(item.totalPrice.toString()), 0
           ),
           isCurrentMonth: new Date().getMonth() === i
         };
       });
-      
+
       const currentSeasonMonthlyTimeline = Array.from({ length: 12 }, (_, i) => {
         const month = i + 1;
-        const monthSales = currentSeasonSales.filter(sale => 
+        const monthSales = currentSeasonSales.filter(sale =>
           new Date(sale.saleDate).getMonth() === i
         );
-        
+
         return {
           month,
           monthName: new Date(2000, i, 1).toLocaleDateString('pt-BR', { month: 'short' }),
           hasPurchases: monthSales.length > 0,
           itemCount: monthSales.length,
-          totalValue: monthSales.reduce((sum, sale) => 
+          totalValue: monthSales.reduce((sum, sale) =>
             sum + parseFloat(sale.totalAmount.toString()), 0
           ),
           isCurrentMonth: new Date().getMonth() === i
         };
       });
-      
+
       const totalSoldProducts = currentSeasonSales.length;
       const totalHistoricalProducts = historyItems.length;
-      
+
       const summary = {
         totalHistoricalProducts,
         totalSoldThisSeason: totalSoldProducts,
-        conversionRate: totalHistoricalProducts > 0 
+        conversionRate: totalHistoricalProducts > 0
           ? ((totalSoldProducts / totalHistoricalProducts) * 100).toFixed(1)
           : '0'
       };
-      
+
       let comparisonSeasonName = 'Safra Atual';
       if (comparisonSeasonId) {
         const allSeasons = await storage.getAllSeasons();
@@ -2242,7 +2242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           comparisonSeasonName = comparisonSeason.name;
         }
       }
-      
+
       res.json({
         clientId: history.clientId,
         seasonName: comparisonSeasonName,
@@ -2262,12 +2262,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
-      
+
       const success = await storage.deletePurchaseHistory(id, userId);
       if (!success) {
         return res.status(404).json({ error: "Purchase history not found" });
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting purchase history:", error);
@@ -2289,11 +2289,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const users = await storage.getAllUsers();
       const vendedores = users.filter(u => u.role !== 'administrador');
-      res.json(vendedores.map(u => ({ 
-        id: u.id, 
-        username: u.username, 
+      res.json(vendedores.map(u => ({
+        id: u.id,
+        username: u.username,
         name: u.name,
-        role: u.role 
+        role: u.role
       })));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch vendedores" });
@@ -2318,7 +2318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .from(userClientLinks)
         .leftJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id));
-      
+
       res.json(links);
     } catch (error) {
       console.error("Error fetching user client links:", error);
@@ -2329,11 +2329,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/admin/user-client-links/user/:userId", requireSuperAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
-      
+
       // Deletar todos os user_client_links do usuário
       await db.delete(userClientLinks)
         .where(eq(userClientLinks.userId, userId));
-      
+
       res.json({ success: true, message: "Clientes do consultor excluídos com sucesso" });
     } catch (error) {
       console.error("Error deleting user client links:", error);
@@ -2357,31 +2357,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/users/:id/data-check", requireSuperAdmin, async (req, res) => {
     try {
       const userId = req.params.id;
-      
+
       const clientsCount = await db.select({ count: sql<number>`count(*)` })
         .from(clients)
         .where(eq(clients.userId, userId));
-      
+
       const salesCount = await db.select({ count: sql<number>`count(*)` })
         .from(sales)
         .where(eq(sales.userId, userId));
-      
+
       const goalsCount = await db.select({ count: sql<number>`count(*)` })
         .from(seasonGoals)
         .where(eq(seasonGoals.userId, userId));
-      
+
       const marketRatesCount = await db.select({ count: sql<number>`count(*)` })
         .from(clientMarketRates)
         .where(eq(clientMarketRates.userId, userId));
-      
+
       const externalPurchasesCount = await db.select({ count: sql<number>`count(*)` })
         .from(externalPurchases)
         .where(eq(externalPurchases.userId, userId));
-      
+
       const purchaseHistoryCount = await db.select({ count: sql<number>`count(*)` })
         .from(purchaseHistory)
         .where(eq(purchaseHistory.userId, userId));
-      
+
       const marketBenchmarksCount = await db.select({ count: sql<number>`count(*)` })
         .from(marketBenchmarks)
         .where(eq(marketBenchmarks.userId, userId));
@@ -2416,7 +2416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.params.id;
       const confirmed = req.query.confirmed === 'true';
-      
+
       if (!confirmed) {
         return res.status(400).json({ error: "Deletion must be confirmed" });
       }
@@ -2429,12 +2429,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.delete(seasonGoals).where(eq(seasonGoals.userId, userId));
       await db.delete(sales).where(eq(sales.userId, userId));
       await db.delete(clients).where(eq(clients.userId, userId));
-      
+
       const success = await storage.deleteUser(userId);
       if (!success) {
         return res.status(404).json({ error: "User not found" });
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting user:", error);
@@ -2479,7 +2479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .set(req.body)
         .where(eq(subcategories.id, req.params.id))
         .returning();
-      
+
       if (!updated.length) {
         return res.status(404).json({ error: "Subcategory not found" });
       }
@@ -2694,12 +2694,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/products/auto-classify", requireSuperAdmin, async (req, res) => {
     try {
       const { classifyProductsBatch } = await import("./product-classifier");
-      
+
       const products = await storage.getAllProducts();
       const agroquimicosProducts = products.filter(p => p.categoryId === 'cat-agroquimicos' && !p.subcategoryId);
-      
+
       const classifications = classifyProductsBatch(agroquimicosProducts);
-      
+
       let updatedCount = 0;
       for (const classification of classifications) {
         const updated = await storage.updateProduct(classification.id, {
@@ -2709,7 +2709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updatedCount++;
         }
       }
-      
+
       res.json({
         success: true,
         totalProducts: agroquimicosProducts.length,
@@ -2727,24 +2727,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all sales and products
       const allSales = await storage.getAllSales();
       const products = await storage.getAllProducts();
-      
+
       // Create a map of productId -> current categoryId
       const productCategoryMap = new Map(
         products.map(p => [p.id, p.categoryId])
       );
-      
+
       let updatedCount = 0;
       let notFoundCount = 0;
-      
+
       // Update each sale's category to match current product category
       for (const sale of allSales) {
         const currentCategory = productCategoryMap.get(sale.productId);
-        
+
         if (!currentCategory) {
           notFoundCount++;
           continue;
         }
-        
+
         if (sale.categoryId !== currentCategory) {
           await db.update(sales)
             .set({ categoryId: currentCategory })
@@ -2752,7 +2752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updatedCount++;
         }
       }
-      
+
       res.json({
         success: true,
         totalSales: allSales.length,
@@ -2771,7 +2771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { timacSettings } = await import("@shared/schema");
       const settings = await db.select().from(timacSettings).limit(1);
-      
+
       // If no settings exist, return defaults
       if (!settings.length) {
         return res.json({
@@ -2780,7 +2780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           faturistasValue: "0.76"
         });
       }
-      
+
       res.json(settings[0]);
     } catch (error) {
       console.error("Error fetching Timac settings:", error);
@@ -2793,7 +2793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { timacSettings } = await import("@shared/schema");
       const settings = await db.select().from(timacSettings).limit(1);
-      
+
       // If no settings exist, return defaults
       if (!settings.length) {
         return res.json({
@@ -2802,7 +2802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           faturistasValue: "0.76"
         });
       }
-      
+
       res.json(settings[0]);
     } catch (error) {
       console.error("Error fetching Timac settings:", error);
@@ -2813,17 +2813,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/admin/timac-settings", requireSuperAdmin, async (req, res) => {
     try {
       const { timacSettings, insertTimacSettingsSchema } = await import("@shared/schema");
-      
+
       // Validate request body
       const data = insertTimacSettingsSchema.parse({
         consultorValue: String(req.body.consultorValue),
         gerentesValue: String(req.body.gerentesValue),
         faturistasValue: String(req.body.faturistasValue)
       });
-      
+
       // Check if settings exist
       const existing = await db.select().from(timacSettings).limit(1);
-      
+
       if (existing.length) {
         // Update existing
         const updated = await db.update(timacSettings)
@@ -2853,19 +2853,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { products } = await import("@shared/schema");
       const { timacPoints } = req.body;
-      
+
       // Convert to string for decimal field
       const pointsValue = String(timacPoints || "0");
-      
+
       const updated = await db.update(products)
         .set({ timacPoints: pointsValue })
         .where(eq(products.id, req.params.id))
         .returning();
-      
+
       if (!updated.length) {
         return res.status(404).json({ error: "Product not found" });
       }
-      
+
       res.json(updated[0]);
     } catch (error) {
       console.error("Error updating product Timac points:", error);
@@ -2927,10 +2927,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // 1. Delete deepest level dependencies first
         await tx.delete(barterSimulationItems); // references barter_simulations
         await tx.delete(purchaseHistoryItems); // references purchase_history
-        
+
         // 2. Delete barter simulations (references user_client_links)
         await tx.delete(barterSimulations);
-        
+
         // 3. Delete all data that references user_client_links
         await tx.delete(sales);
         await tx.delete(seasonGoals);
@@ -2940,17 +2940,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await tx.delete(marketBenchmarks);
         await tx.delete(salesHistory);
         await tx.delete(clientFamilyRelations);
-        
+
         // 4. Delete all user client links (references master_clients)
         await tx.delete(userClientLinks);
-        
+
         // 5. Finally, delete all master clients
         await tx.delete(masterClients);
       });
-      
-      res.json({ 
-        success: true, 
-        message: "Todos os clientes master e dados relacionados foram excluídos com sucesso" 
+
+      res.json({
+        success: true,
+        message: "Todos os clientes master e dados relacionados foram excluídos com sucesso"
       });
     } catch (error) {
       console.error('Delete all clients error:', error);
@@ -3004,7 +3004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const [normalizedName, clientGroup] of Array.from(clientsByName.entries())) {
         const firstClient = clientGroup[0];
-        
+
         let masterClient = await storage.findMasterClientByName(firstClient.name);
         if (!masterClient) {
           masterClient = await storage.createMasterClient({
@@ -3052,7 +3052,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/transfer-clients", requireSuperAdmin, async (req, res) => {
     try {
       const { fromUserId, toUserId } = req.body;
-      
+
       if (!fromUserId || !toUserId) {
         return res.status(400).json({ error: "fromUserId and toUserId are required" });
       }
@@ -3084,7 +3084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(userClientLinks.userId, toUserId));
 
       const targetMasterClientIds = new Set(targetLinks.map(l => l.masterClientId));
-      
+
       let transferred = 0;
       let skipped = 0;
 
@@ -3116,7 +3116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PRICE TABLE ROUTES (for product management)
-  
+
   app.get("/api/admin/price-table", requireSuperAdmin, async (req, res) => {
     try {
       const products = await db.select()
@@ -3149,7 +3149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [newProduct] = await db.insert(productsPriceTable)
         .values(productData)
         .returning();
-      
+
       res.json(newProduct);
     } catch (error) {
       console.error('Create price table product error:', error);
@@ -3277,7 +3277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/migrate-application-categories", requireSuperAdmin, async (req, res) => {
     try {
       const { clientApplicationTracking } = await import("@shared/schema");
-      
+
       // Map subcategories to main categories (include all variations with/without accents)
       const subcategoryVariations = [
         'FUNGICIDAS',
@@ -3287,21 +3287,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'DESSECACAO',
         'DESSECAÇÃO'
       ];
-      
+
       let updated = 0;
-      
+
       // Update each subcategory variation
       for (const subcategory of subcategoryVariations) {
         const result = await db.update(clientApplicationTracking)
           .set({ categoria: 'Agroquímicos' })
           .where(eq(clientApplicationTracking.categoria, subcategory));
-        
+
         console.log(`Migrated ${subcategory} -> Agroquímicos`);
         updated++;
       }
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         message: `Migração concluída. ${updated} tipos de subcategorias processadas.`,
         subcategories: subcategoryVariations
       });
@@ -3312,13 +3312,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SYSTEM SETTINGS - Configurações gerais do sistema (somente super admin)
-  
+
   app.get("/api/admin/system-settings", requireSuperAdmin, async (req, res) => {
     try {
       const [settings] = await db.select()
         .from(systemSettings)
         .limit(1);
-      
+
       // Se não existir, criar com valores padrão
       if (!settings) {
         const [newSettings] = await db.insert(systemSettings)
@@ -3326,7 +3326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .returning();
         return res.json(newSettings);
       }
-      
+
       res.json(settings);
     } catch (error) {
       console.error('Get system settings error:', error);
@@ -3337,16 +3337,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/system-settings", requireSuperAdmin, async (req, res) => {
     try {
       const { allowUserRegistration } = req.body;
-      
+
       if (typeof allowUserRegistration !== 'boolean') {
         return res.status(400).json({ error: "allowUserRegistration must be a boolean" });
       }
-      
+
       // Pegar o primeiro registro ou criar se não existir
       const [existingSettings] = await db.select()
         .from(systemSettings)
         .limit(1);
-      
+
       if (!existingSettings) {
         // Criar novo registro
         const [newSettings] = await db.insert(systemSettings)
@@ -3354,13 +3354,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .returning();
         return res.json(newSettings);
       }
-      
+
       // Atualizar registro existente
       const [updated] = await db.update(systemSettings)
         .set({ allowUserRegistration, updatedAt: sql`now()` })
         .where(eq(systemSettings.id, existingSettings.id))
         .returning();
-      
+
       res.json(updated);
     } catch (error) {
       console.error('Update system settings error:', error);
@@ -3376,7 +3376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })
         .from(systemSettings)
         .limit(1);
-      
+
       // Se não existir configuração, retornar padrão (permitir cadastro)
       res.json({
         allowUserRegistration: settings?.allowUserRegistration ?? true
@@ -3391,21 +3391,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PRICE TABLE PRODUCTS FOR CONSULTANTS (read-only access to products)
-  
+
   app.get("/api/price-table-products", requireAuth, async (req, res) => {
     try {
       const { categoria } = req.query;
-      
+
       const whereConditions = [eq(productsPriceTable.isActive, true)];
       if (categoria) {
         whereConditions.push(eq(productsPriceTable.categoria, categoria as string));
       }
-      
+
       const products = await db.select()
         .from(productsPriceTable)
         .where(and(...whereConditions))
         .orderBy(productsPriceTable.mercaderia);
-      
+
       res.json(products);
     } catch (error) {
       console.error('Get price table products error:', error);
@@ -3414,28 +3414,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GLOBAL MANAGEMENT APPLICATIONS ROUTES (Consultant's crop management plan)
-  
+
   app.get("/api/global-management", requireAuth, async (req, res) => {
     try {
       const seasonId = req.query.seasonId as string | undefined;
-      
+
       if (!seasonId) {
         return res.status(400).json({ error: "Season ID is required" });
       }
-      
+
       // GLOBAL applications - fetch ALL for the season (not filtered by user)
       const applications = await db.select()
         .from(globalManagementApplications)
         .leftJoin(productsPriceTable, eq(globalManagementApplications.productId, productsPriceTable.id))
         .where(eq(globalManagementApplications.seasonId, seasonId))
         .orderBy(globalManagementApplications.categoria, globalManagementApplications.applicationNumber);
-      
+
       // Transform to include product details
       const result = applications.map(app => ({
         ...app.global_management_applications,
         product: app.products_price_table
       }));
-      
+
       res.json(result);
     } catch (error) {
       console.error('Get global management error:', error);
@@ -3451,7 +3451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { categoria, applicationNumber, productId, priceTier, seasonId, customName, customPricePerHa } = req.body as any;
-      
+
       if (!seasonId) {
         return res.status(400).json({ error: "Season ID is required" });
       }
@@ -3486,39 +3486,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res
             .status(400)
             .json({ error: "Product ID or customName/customPricePerHa is required" });
-      }
-      
-      // Get product to extract price
+        }
+
+        // Get product to extract price
         const [product] = await db
           .select()
-        .from(productsPriceTable)
-        .where(eq(productsPriceTable.id, productId))
-        .limit(1);
-      
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-      
-      // Get price based on tier and calculate cost per hectare (price × dose)
-      let basePrice = "0.00";
-      if (priceTier === "verde") basePrice = product.precoVerde;
-      else if (priceTier === "amarela") basePrice = product.precoAmarela;
-      else if (priceTier === "vermelha") basePrice = product.precoVermelha;
-      
-      // Extract numeric dose from text (handles "2ml/Kg", "0,5ml/Kg", etc.)
-      let dose = 1;
-      if (product.dose) {
+          .from(productsPriceTable)
+          .where(eq(productsPriceTable.id, productId))
+          .limit(1);
+
+        if (!product) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+
+        // Get price based on tier and calculate cost per hectare (price × dose)
+        let basePrice = "0.00";
+        if (priceTier === "verde") basePrice = product.precoVerde;
+        else if (priceTier === "amarela") basePrice = product.precoAmarela;
+        else if (priceTier === "vermelha") basePrice = product.precoVermelha;
+
+        // Extract numeric dose from text (handles "2ml/Kg", "0,5ml/Kg", etc.)
+        let dose = 1;
+        if (product.dose) {
           const doseStr = product.dose.toString().replace(",", ".");
           const doseMatch = doseStr.match(/[\d.]+/);
-        if (doseMatch) {
-          dose = parseFloat(doseMatch[0]);
+          if (doseMatch) {
+            dose = parseFloat(doseMatch[0]);
+          }
         }
-      }
-      
+
         finalProductId = product.id;
         finalPricePerHa = (parseFloat(basePrice) * dose).toFixed(2);
       }
-      
+
       // GLOBAL application - shared across all consultants in the team
       const [newApp] = await db
         .insert(globalManagementApplications)
@@ -3531,7 +3531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           pricePerHa: finalPricePerHa,
         })
         .returning();
-      
+
       res.json(newApp);
     } catch (error) {
       console.error("Create global management error:", error);
@@ -3549,11 +3549,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [deleted] = await db.delete(globalManagementApplications)
         .where(eq(globalManagementApplications.id, req.params.id))
         .returning();
-      
+
       if (!deleted) {
         return res.status(404).json({ error: "Application not found" });
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error('Delete global management error:', error);
@@ -3566,7 +3566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const { clientId, seasonId } = req.params;
-      
+
       const trackingRecords = await db.select()
         .from(clientApplicationTracking)
         .leftJoin(globalManagementApplications, eq(clientApplicationTracking.globalApplicationId, globalManagementApplications.id))
@@ -3579,13 +3579,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         )
         .orderBy(clientApplicationTracking.categoria, clientApplicationTracking.applicationNumber);
-      
+
       const result = trackingRecords.map(record => ({
         ...record.client_application_tracking,
         globalApplication: record.global_management_applications,
         product: record.products_price_table
       }));
-      
+
       res.json(result);
     } catch (error) {
       console.error('Get client application tracking error:', error);
@@ -3600,7 +3600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId
       });
-      
+
       // UPSERT: Insert ou Update se já existir (baseado na unique constraint)
       const [newTracking] = await db.insert(clientApplicationTracking)
         .values(trackingData)
@@ -3619,7 +3619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         })
         .returning();
-      
+
       res.status(201).json(newTracking);
     } catch (error) {
       console.error('Create client application tracking error:', error);
@@ -3631,7 +3631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const { status, isLostToCompetitor, soldValue } = req.body;
-      
+
       const [updated] = await db.update(clientApplicationTracking)
         .set({
           status: status !== undefined ? status : undefined,
@@ -3646,11 +3646,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         )
         .returning();
-      
+
       if (!updated) {
         return res.status(404).json({ error: "Tracking record not found or unauthorized" });
       }
-      
+
       res.json(updated);
     } catch (error) {
       console.error('Update client application tracking error:', error);
@@ -3659,7 +3659,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // BARTER MODULE ROUTES
-  
+
   // Barter Products (Super Admin only)
   app.get("/api/admin/barter/products", requireSuperAdmin, async (req, res) => {
     try {
@@ -3685,7 +3685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/barter/products/:id", requireSuperAdmin, async (req, res) => {
     try {
       console.log("Updating barter product:", req.params.id, "with data:", req.body);
-      
+
       // Convert number fields to strings for decimal type validation
       const updateData = { ...req.body };
       if (updateData.priceUsd !== undefined && updateData.priceUsd !== null) {
@@ -3802,12 +3802,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         errors: errors.length,
         errorDetails: errors,
       };
-      
+
       console.log(`Bulk import result: ${created.length} created, ${errors.length} errors`);
       if (errors.length > 0) {
         console.log('First 5 errors:', errors.slice(0, 5));
       }
-      
+
       res.json(result);
     } catch (error) {
       console.error("Bulk import error:", error);
@@ -3878,7 +3878,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         grainQuantitySacks: typeof req.body.grainQuantitySacks === 'number' ? req.body.grainQuantitySacks.toString() : req.body.grainQuantitySacks,
       };
       const validatedData = insertBarterSimulationSchema.parse(simulationData);
-      
+
       // Convert numeric fields to strings in items
       const items = (req.body.items || []).map((item: any) => ({
         ...item,
@@ -3886,7 +3886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         priceUsd: typeof item.priceUsd === 'number' ? item.priceUsd.toString() : item.priceUsd,
         totalUsd: typeof item.totalUsd === 'number' ? item.totalUsd.toString() : item.totalUsd,
       }));
-      
+
       const newSimulation = await storage.createBarterSimulation(validatedData, items);
       res.status(201).json(newSimulation);
     } catch (error) {
@@ -3947,17 +3947,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ========== KANBAN DE METAS ROUTES ==========
-  
+
   // Get Kanban data (clients with potentials, sales, opportunities)
   app.get("/api/kanban-metas", requireAuth, async (req, res) => {
     try {
       const userId = req.user!.id;
       const seasonId = req.query.seasonId as string;
-      
+
       if (!seasonId) {
         return res.status(400).json({ error: "seasonId is required" });
       }
-      
+
       const data = await storage.getKanbanData(userId, seasonId);
       res.json(data);
     } catch (error) {
@@ -3969,12 +3969,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get category cards for Market Opportunity page
   app.get("/api/market-opportunity/category-cards/:seasonId", requireAuth, async (req, res) => {
     try {
-      const userId = req.user!.id;
+      if (!req.user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const userId = req.user.id;
       const { seasonId } = req.params;
-      
+
+      console.log(`[MARKET-CARDS] Fetching cards for Season: ${seasonId}, User: ${userId}`);
+
       // Get all categories
       const allCategories = await db.select().from(categories);
-      
+
       // Get user's clients with badge amarelo (includeInMarketArea) - for potential calculation
       const clientsAmarelo = await db.select({
         id: userClientLinks.id,
@@ -3988,49 +3993,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(userClientLinks.userId, userId),
           eq(userClientLinks.includeInMarketArea, true)
         ));
-      
+
       const clientAmareloIds = clientsAmarelo.map(c => c.id);
-      
+
       // Get client market rates for potential calculation (badge amarelo only)
-      const marketRates = clientAmareloIds.length > 0 
+      const marketRates = clientAmareloIds.length > 0
         ? await db.select()
-            .from(clientMarketRates)
-            .where(and(
-              eq(clientMarketRates.userId, userId),
-              eq(clientMarketRates.seasonId, seasonId),
-              inArray(clientMarketRates.clientId, clientAmareloIds)
-            ))
+          .from(clientMarketRates)
+          .where(and(
+            eq(clientMarketRates.userId, userId),
+            eq(clientMarketRates.seasonId, seasonId),
+            inArray(clientMarketRates.clientId, clientAmareloIds)
+          ))
         : [];
-      
+
       // Get ALL sales (C.Vale) for this user, regardless of badge
       const salesData = await db.select({
-          categoryId: sales.categoryId,
+        categoryId: sales.categoryId,
         totalAmount: sales.totalAmount,
         clientId: sales.clientId,
         saleDate: sales.saleDate
-        })
+      })
         .from(sales)
         .where(and(
           eq(sales.userId, userId),
           eq(sales.seasonId, seasonId)
         ));
-      
+
       console.log(`[MARKET-CARDS] User ${userId}: Found ${salesData.length} total sales`);
-      
+
       // Calculate Monthly Sales for Chart
       const monthlySalesMap = new Array(12).fill(0);
       salesData.forEach((sale: typeof salesData[0]) => {
-        if (sale.saleDate) {
-          const date = new Date(sale.saleDate);
-          const month = date.getMonth(); // 0 = Jan, 11 = Dec
-          monthlySalesMap[month] += parseFloat(sale.totalAmount || '0');
+        try {
+          if (sale.saleDate) {
+            const date = new Date(sale.saleDate);
+            const month = date.getMonth(); // 0 = Jan, 11 = Dec
+            if (!isNaN(month) && month >= 0 && month <= 11) {
+              monthlySalesMap[month] += parseFloat(sale.totalAmount || '0');
+            }
+          }
+        } catch (e) {
+          // Ignore individual sale error
         }
       });
 
       const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
       const monthlySales = monthlySalesMap.map((total: number, index: number) => ({
         month: monthNames[index],
-        total
+        total: isNaN(total) ? 0 : total
       }));
 
       // Get ALL pipeline statuses (General Categories)
@@ -4056,10 +4067,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           categoria: clientApplicationTracking.categoria,
           globalCategory: globalManagementApplications.categoria
         })
-        .from(clientApplicationTracking)
+          .from(clientApplicationTracking)
           .leftJoin(globalManagementApplications, eq(clientApplicationTracking.globalApplicationId, globalManagementApplications.id))
-        .where(and(
-          eq(clientApplicationTracking.userId, userId),
+          .where(and(
+            eq(clientApplicationTracking.userId, userId),
             eq(clientApplicationTracking.seasonId, seasonId)
           ));
 
@@ -4099,7 +4110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!str) return "";
         return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       };
-      
+
       // Calculate data per category
       const categoryData = new Map<string, {
         categoryId: string;
@@ -4125,7 +4136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }>
       }>();
 
-      
+
       // Initialize all categories
       allCategories.forEach(cat => {
         categoryData.set(cat.id, {
@@ -4140,22 +4151,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jaNegociadoUsd: 0
         });
       });
-      
+
       // Map Sales by Client -> Category
       const salesMap = new Map<string, Map<string, number>>();
       salesData.forEach(sale => {
         if (!sale.clientId) return;
         if (!salesMap.has(sale.clientId)) salesMap.set(sale.clientId, new Map());
         const clientSales = salesMap.get(sale.clientId)!;
-        const current = clientSales.get(sale.categoryId) || 0;
-        clientSales.set(sale.categoryId, current + parseFloat(sale.totalAmount || '0'));
+        const current = clientSales.get(sale.categoryId!) || 0; // Use non-null assertion if safe or optional chaining
+        // Safe check for categoryId
+        if (sale.categoryId) {
+          clientSales.set(sale.categoryId, current + parseFloat(sale.totalAmount || '0'));
+        }
       });
 
       // Map Pipeline Status by Client -> Category
       const pipelineMap = new Map<string, Map<string, string>>();
       pipelineStatuses.forEach(p => {
         if (!pipelineMap.has(p.clientId)) pipelineMap.set(p.clientId, new Map());
-        pipelineMap.get(p.clientId)!.set(p.categoryId, p.status || 'ABERTO');
+        if (p.categoryId) { // Check existence
+          pipelineMap.get(p.clientId)!.set(p.categoryId, p.status || 'ABERTO');
+        }
       });
       console.log(`[MARKET-CARDS] Pipeline Map Keys (Clients): ${pipelineMap.size}`);
 
@@ -4167,7 +4183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           catData.cvaleUsd += parseFloat(sale.totalAmount || '0');
         }
       });
-      
+
       // map market rates
       const ratesMap = new Map<string, Map<string, typeof marketRates[0]>>();
       marketRates.forEach(r => {
@@ -4176,164 +4192,140 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // 1. Process General Categories (Fertilizers, Seeds, etc.)
-      // Iterate ALL clients with badge, then ALL categories to ensure we capture Sales even if no Potential (Rate) is defined yet.
       clientsAmarelo.forEach(client => {
-        // Initialize client breakdown entry
-        if (!clientBreakdownMap.has(client.id)) {
-          clientBreakdownMap.set(client.id, {
-            clientId: client.id,
-            clientName: client.name || 'Unknown Client',
-            categories: new Map()
-          });
-        }
-        const clientEntry = clientBreakdownMap.get(client.id)!;
-
-        allCategories.forEach(category => {
-          const catData = categoryData.get(category.id);
-          if (!catData) return;
-
-          // Skip Agroquimicos logic here (handled by applications loop below)
-          // But we DO want to capture Sales for Agroquimicos here?
-          // The query for Sales includes ALL categories.
-          // The previous code summed C.Vale inside the marketRates loop.
-          // If we want correct C.Vale total, we should sum it here for everyone.
-
-          // However, for Agroquimicos, "Potential" logic might differ?
-          // Previous code: "Agroquimicos Potential also comes from here".
-          // So yes, we treat Agroquimicos same as others for Potential/Sales aggregation here.
-          // "Oportunidades"/"JaNegociado" for Agroquimicos is overwritten/handled by the App loop later?
-          // Actually, looking below loop 1, loop 2 (Applications) adds to Oportunidades/JaNegociado.
-          // And loop 1 ONLY adds to Oportunidades/JaNegociado if !isAgroquimico.
-          // So this structure is safe.
-
-          // Initialize category entry for client
-          if (!clientEntry.categories.has(category.id)) {
-            clientEntry.categories.set(category.id, {
-              potentialUsd: 0,
-              salesUsd: 0,
-              oportunidadesUsd: 0,
-              jaNegociadoUsd: 0
+        try {
+          // Initialize client breakdown entry
+          if (!clientBreakdownMap.has(client.id)) {
+            clientBreakdownMap.set(client.id, {
+              clientId: client.id,
+              clientName: client.name || 'Unknown Client',
+              categories: new Map()
             });
           }
-          const clientCatEntry = clientEntry.categories.get(category.id)!;
+          const clientEntry = clientBreakdownMap.get(client.id)!;
 
-          const rate = ratesMap.get(client.id)?.get(category.id);
+          allCategories.forEach(category => {
+            const catData = categoryData.get(category.id);
+            if (!catData) return;
 
-          // Calculate Potential
-          let potentialValue = 0;
-          let area = parseFloat(client.userArea || client.masterArea || '0');
-
-          if (rate) {
-            const investmentPerHa = parseFloat(rate.investmentPerHa || '0');
-            potentialValue = area * investmentPerHa;
-            catData.potentialUsd += potentialValue;
-            catData.potentialHa += area;
-
-            clientCatEntry.potentialUsd += potentialValue;
-          } else {
-            // If no rate, Potential is 0.
-            // We could imply default potential here if needed, but for now 0 is safer to avoid inflated guess.
-          }
-
-          // Sales for this specific client/category (for Residual calculation only)
-          const clientSalesValue = salesMap.get(client.id)?.get(category.id) || 0;
-          // REMOVED: catData.cvaleUsd += clientSalesValue; (Now calculated globally above)
-          catData.cvaleMarketUsd += clientSalesValue;
-          clientCatEntry.salesUsd += clientSalesValue;
-
-          // Logic for Oportunidades / Já Negociado (General Categories Only)
-          if (!isAgroquimico(catData.categoryType)) {
-            const residual = Math.max(0, potentialValue - clientSalesValue);
-            const status = pipelineMap.get(client.id)?.get(category.id);
-
-            if (status === 'FECHADO') {
-              catData.jaNegociadoUsd += residual;
-              clientCatEntry.jaNegociadoUsd += residual;
-            } else if (status === 'PARCIAL') {
-              catData.jaNegociadoUsd += residual / 2;
-              catData.oportunidadesUsd += residual / 2;
-              clientCatEntry.jaNegociadoUsd += residual / 2;
-              clientCatEntry.oportunidadesUsd += residual / 2;
-            } else {
-              // ABERTO or null
-              catData.oportunidadesUsd += residual;
-              clientCatEntry.oportunidadesUsd += residual;
+            // Initialize category entry for client
+            if (!clientEntry.categories.has(category.id)) {
+              clientEntry.categories.set(category.id, {
+                potentialUsd: 0,
+                salesUsd: 0,
+                oportunidadesUsd: 0,
+                jaNegociadoUsd: 0
+              });
             }
-          }
-        });
-      });
+            const clientCatEntry = clientEntry.categories.get(category.id)!;
 
-      // Note: salesData loop earlier was just for mapping. We summed C.Vale inside marketRates loop.
-      // Issue: What if there are sales for a client NOT in marketRates (e.g. no potential set)?
-      // For Market Progress, we usually care about the base of clients with Potential.
-      // So summing inside marketRates loop is consistent with "Penetration".
-      // If we want raw sales total, we might need a separate pass.
-      // However, usually we align Sales with Potential. Let's keep it this way for now.
+            const rate = ratesMap.get(client.id)?.get(category.id);
+
+            // Calculate Potential
+            let potentialValue = 0;
+            let area = parseFloat(client.userArea || client.masterArea || '0');
+
+            if (rate) {
+              const investmentPerHa = parseFloat(rate.investmentPerHa || '0');
+              potentialValue = area * investmentPerHa;
+              catData.potentialUsd += potentialValue;
+              catData.potentialHa += area;
+
+              clientCatEntry.potentialUsd += potentialValue;
+            }
+
+            // Sales for this specific client/category (for Residual calculation only)
+            const clientSalesValue = salesMap.get(client.id)?.get(category.id) || 0;
+            catData.cvaleMarketUsd += clientSalesValue;
+            clientCatEntry.salesUsd += clientSalesValue;
+
+            // Logic for Oportunidades / Já Negociado (General Categories Only)
+            if (!isAgroquimico(catData.categoryType)) {
+              const residual = Math.max(0, potentialValue - clientSalesValue);
+              const status = pipelineMap.get(client.id)?.get(category.id);
+
+              if (status === 'FECHADO') {
+                catData.jaNegociadoUsd += residual;
+                clientCatEntry.jaNegociadoUsd += residual;
+              } else if (status === 'PARCIAL') {
+                catData.jaNegociadoUsd += residual / 2;
+                catData.oportunidadesUsd += residual / 2;
+                clientCatEntry.jaNegociadoUsd += residual / 2;
+                clientCatEntry.oportunidadesUsd += residual / 2;
+              } else {
+                // ABERTO or null
+                catData.oportunidadesUsd += residual;
+                clientCatEntry.oportunidadesUsd += residual;
+              }
+            }
+          });
+        } catch (err) {
+          console.error('[MARKET-CARDS] Error processing client:', client.id, err);
+        }
+      });
 
       // 2. Process Agroquimicos via Application Tracking
-      // Iterate ALL tracked applications to sum up Oportunidades and JaNegociado
       validApps.forEach(app => {
-        // Map application categoria to main category (Agroquimicos)
-        // Safety check: skip if categoria is missing
-        if (!app.categoria && !app.globalCategory) {
-          console.warn('[MARKET-CARDS] Skipping app without categoria:', app);
-          return;
-        }
-        const normalizedName = normalizeCategoryName(app.categoria || app.globalCategory || '');
-        const target = normalizeString(normalizedName);
+        try {
+          // Map application categoria to main category (Agroquimicos)
+          if (!app.categoria && !app.globalCategory) {
+            return;
+          }
+          const normalizedName = normalizeCategoryName(app.categoria || app.globalCategory || '');
+          const target = normalizeString(normalizedName);
 
-        const category = allCategories.find(c => {
-          return normalizeString(c.name) === target || normalizeString(c.type) === target;
-        });
-        
-        if (category) {
-          const catData = categoryData.get(category.id);
+          const category = allCategories.find(c => {
+            return normalizeString(c.name) === target || normalizeString(c.type) === target;
+          });
 
-          if (catData && isAgroquimico(catData.categoryType)) {
-            // We only process apps for clients that are already in the market breakdown (80/20)
-            const clientEntry = clientBreakdownMap.get(app.clientId);
+          if (category) {
+            const catData = categoryData.get(category.id);
 
-            if (clientEntry) {
-              // Ensure category keys happen
-              if (!clientEntry.categories.has(category.id)) {
-                clientEntry.categories.set(category.id, {
-                  potentialUsd: 0,
-                  salesUsd: 0,
-                  oportunidadesUsd: 0,
-                  jaNegociadoUsd: 0
-                });
-              }
-              const clientCatEntry = clientEntry.categories.get(category.id)!;
+            if (catData && isAgroquimico(catData.categoryType)) {
+              const clientEntry = clientBreakdownMap.get(app.clientId);
 
-              const val = parseFloat(app.totalValue || '0');
+              if (clientEntry) {
+                if (!clientEntry.categories.has(category.id)) {
+                  clientEntry.categories.set(category.id, {
+                    potentialUsd: 0,
+                    salesUsd: 0,
+                    oportunidadesUsd: 0,
+                    jaNegociadoUsd: 0
+                  });
+                }
+                const clientCatEntry = clientEntry.categories.get(category.id)!;
 
-              if (app.status === 'FECHADO') {
-                catData.jaNegociadoUsd += val;
-                clientCatEntry.jaNegociadoUsd += val;
-              } else if (app.status === 'PARCIAL') {
-                catData.jaNegociadoUsd += val / 2;
-                catData.oportunidadesUsd += val / 2;
-                clientCatEntry.jaNegociadoUsd += val / 2;
-                clientCatEntry.oportunidadesUsd += val / 2;
-              } else if (app.status === 'ABERTO' || !app.status) {
-                // Treat Open or Null as "Oportunidades"
-                catData.oportunidadesUsd += val;
-                clientCatEntry.oportunidadesUsd += val;
+                const val = parseFloat(app.totalValue || '0');
+
+                if (app.status === 'FECHADO') {
+                  catData.jaNegociadoUsd += val;
+                  clientCatEntry.jaNegociadoUsd += val;
+                } else if (app.status === 'PARCIAL') {
+                  catData.jaNegociadoUsd += val / 2;
+                  catData.oportunidadesUsd += val / 2;
+                  clientCatEntry.jaNegociadoUsd += val / 2;
+                  clientCatEntry.oportunidadesUsd += val / 2;
+                } else if (app.status === 'ABERTO' || !app.status) {
+                  catData.oportunidadesUsd += val;
+                  clientCatEntry.oportunidadesUsd += val;
+                }
               }
             }
           }
+        } catch (err) {
+          console.error('[MARKET-CARDS] Error processing app:', app.id, err);
         }
       });
-      
+
       // Build response
       const cards = Array.from(categoryData.values())
         .filter(cat => cat.potentialUsd > 0 || cat.cvaleUsd > 0 || cat.oportunidadesUsd > 0 || cat.jaNegociadoUsd > 0)
         .map(cat => {
           const totalCapturedUsd = cat.cvaleUsd + cat.jaNegociadoUsd;
-          const penetrationPercent = cat.potentialUsd > 0 
-            ? (totalCapturedUsd / cat.potentialUsd) * 100 
+          const penetrationPercent = cat.potentialUsd > 0
+            ? (totalCapturedUsd / cat.potentialUsd) * 100
             : 0;
-          
+
           return {
             categoryId: cat.categoryId,
             categoryName: cat.categoryName,
@@ -4347,7 +4339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             penetrationPercent: Math.min(penetrationPercent, 100)
           };
         });
-      
+
       // Convert Client Breakdown Map to Array
       const clientBreakdown = Array.from(clientBreakdownMap.values()).map(client => ({
         clientId: client.clientId,
@@ -4372,30 +4364,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 1. Agroquimicos Breakdown (from Applications)
       validApps.forEach(app => {
-        // Safety check: skip if categoria is missing
-        if (!app.categoria && !app.globalCategory) {
-          return;
-        }
-        // Only count tracked apps that are Open or Partial (Oportunidades)
-        let val = 0;
-        const totalVal = parseFloat(app.totalValue || '0');
+        try {
+          if (!app.categoria && !app.globalCategory) {
+            return;
+          }
+          let val = 0;
+          const totalVal = parseFloat(app.totalValue || '0');
 
-        if (app.status === 'ABERTO' || !app.status) {
-          val = totalVal;
-        } else if (app.status === 'PARCIAL') {
-          val = totalVal / 2;
-        }
+          if (app.status === 'ABERTO' || !app.status) {
+            val = totalVal;
+          } else if (app.status === 'PARCIAL') {
+            val = totalVal / 2;
+          }
 
-        if (val > 0) {
-          // Normalize subcategory name
-          // Prefer globalCategory (from join) as it contains granular type (FUNGICIDAS, INSETICIDAS)
-          // Fallback to local categoria if global is missing
-          let subName = app.globalCategory || app.categoria || 'Outros';
-          // Capitalize first letter
-          subName = subName.charAt(0).toUpperCase() + subName.slice(1).toLowerCase();
+          if (val > 0) {
+            let subName = app.globalCategory || app.categoria || 'Outros';
+            subName = subName.charAt(0).toUpperCase() + subName.slice(1).toLowerCase();
 
-          segmentBreakdown.agroquimicos.total += val;
-          segmentBreakdown.agroquimicos.subcategories[subName] = (segmentBreakdown.agroquimicos.subcategories[subName] || 0) + val;
+            segmentBreakdown.agroquimicos.total += val;
+            segmentBreakdown.agroquimicos.subcategories[subName] = (segmentBreakdown.agroquimicos.subcategories[subName] || 0) + val;
+          }
+        } catch (e) {
+          // ignore segment error
         }
       });
 
@@ -4438,7 +4428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       const { clientId } = req.params;
       const { segmento, investmentPerHa, seasonId } = req.body;
-      
+
       if (!segmento || investmentPerHa === undefined || !seasonId) {
         return res.status(400).json({ error: "segmento, investmentPerHa, and seasonId are required" });
       }
@@ -4487,7 +4477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
           .where(eq(clientMarketRates.id, existingRate[0].id))
           .returning();
-        
+
         res.json(updated);
       } else {
         // Criar novo registro
@@ -4500,7 +4490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             investmentPerHa: investmentPerHa.toString()
           })
           .returning();
-        
+
         res.json(created);
       }
     } catch (error) {
@@ -4601,7 +4591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Import product classifier for subcategory detection
       const { detectSubcategory } = await import("./product-classifier");
-      
+
       // Map subcategory IDs to friendly names
       const subcategoryNames: Record<string, string> = {
         'sub-tratamento-sementes': 'Tratamento de semente',
@@ -4615,13 +4605,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const categoryId = productToCategory.get(sale.productId);
         const productName = productToName.get(sale.productId);
         const saleAmount = parseFloat(sale.totalAmount || '0');
-        
+
         if (categoryId) {
           if (!cValeByCategoryId[categoryId]) {
             cValeByCategoryId[categoryId] = { total: 0, subcategories: {} };
           }
           cValeByCategoryId[categoryId].total += saleAmount;
-          
+
           // For Agroquímicos, also classify by subcategory
           if (categoryId === 'cat-agroquimicos' && productName) {
             const classification = detectSubcategory(productName);
@@ -4631,7 +4621,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (!cValeByCategoryId[categoryId].subcategories) {
                   cValeByCategoryId[categoryId].subcategories = {};
                 }
-                cValeByCategoryId[categoryId].subcategories[subcategoryName] = 
+                cValeByCategoryId[categoryId].subcategories[subcategoryName] =
                   (cValeByCategoryId[categoryId].subcategories[subcategoryName] || 0) + saleAmount;
               }
             }
@@ -4642,7 +4632,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get applications from Global Management
       // CRITICAL: Fetch ALL global applications for the season, then LEFT JOIN with client tracking
       const { clientApplicationTracking, globalManagementApplications, productsPriceTable } = await import("@shared/schema");
-      
+
       const applications = await db.select({
         globalAppId: globalManagementApplications.id,
         categoria: globalManagementApplications.categoria,
@@ -4763,7 +4753,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       const { clientId } = req.params;
       const { creditLine, marketValues, applicationStatuses, pipelineStatuses, seasonId } = req.body;
-      
+
       console.log("PATCH /api/client-market-panel", { clientId, userId, creditLine, seasonId });
 
       // Verify client belongs to user and get masterClientId + area
@@ -4828,12 +4818,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Now using categoria-applicationNumber key (e.g., "FUNGICIDAS-2")
       if (applicationStatuses && Array.isArray(applicationStatuses)) {
         const { clientApplicationTracking, globalManagementApplications } = await import("@shared/schema");
-        
+
         for (const appStatus of applicationStatuses) {
           // Parse the key "FUNGICIDAS-2" -> categoria: FUNGICIDAS, applicationNumber: 2
           const [categoria, appNumStr] = appStatus.id.split('-');
           const applicationNumber = parseInt(appNumStr, 10);
-          
+
           // Get all global applications for this categoria + applicationNumber
           const globalApps = await db.select()
             .from(globalManagementApplications)
@@ -4842,7 +4832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               eq(globalManagementApplications.categoria, categoria),
               eq(globalManagementApplications.applicationNumber, applicationNumber)
             ));
-          
+
           // Update or create tracking for each global application
           for (const globalApp of globalApps) {
             // Check if tracking exists
@@ -4853,7 +4843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 eq(clientApplicationTracking.globalApplicationId, globalApp.id)
               ))
               .limit(1);
-            
+
             if (existing.length > 0) {
               // Update existing
               await db.update(clientApplicationTracking)
@@ -4864,7 +4854,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const clientArea = parseFloat(userClientArea || masterClientArea || '0');
               const pricePerHa = parseFloat(globalApp.pricePerHa || '0');
               const totalValue = pricePerHa * clientArea;
-              
+
               // Map subcategory to main category
               const subcategoryToCategory: Record<string, string> = {
                 'FUNGICIDAS': 'Agroquímicos',
@@ -4875,7 +4865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 'DESSECAÇÃO': 'Agroquímicos',
               };
               const mainCategoria = subcategoryToCategory[globalApp.categoria.toUpperCase()] || globalApp.categoria;
-              
+
               await db.insert(clientApplicationTracking)
                 .values({
                   userId,
@@ -4918,11 +4908,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       const { clientId, segmento, valorCapturado, seasonId, subcategories } = req.body;
-      
+
       if (!clientId || !segmento || typeof valorCapturado !== 'number' || !seasonId) {
         return res.status(400).json({ error: "clientId, segmento, valorCapturado, and seasonId are required" });
       }
-      
+
       const target = await storage.createSalesTarget(userId, clientId, segmento, valorCapturado, seasonId, subcategories);
       res.status(201).json(target);
     } catch (error) {
@@ -4936,7 +4926,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       const { targets, seasonId } = req.body;
-      
+
       if (!Array.isArray(targets) || targets.length === 0 || !seasonId) {
         return res.status(400).json({ error: "targets array and seasonId are required" });
       }
@@ -4974,11 +4964,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { valorCapturado, subcategories } = req.body;
-      
+
       if (typeof valorCapturado !== 'number') {
         return res.status(400).json({ error: "valorCapturado is required" });
       }
-      
+
       const updated = await storage.updateSalesTarget(id, valorCapturado, subcategories);
       res.json(updated);
     } catch (error) {
@@ -4993,7 +4983,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       const { id } = req.params;
       const { salesTargets } = await import("@shared/schema");
-      
+
       // Primeiro, buscar o target para pegar clientId e seasonId
       const [target] = await db.select()
         .from(salesTargets)
@@ -5004,11 +4994,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         )
         .limit(1);
-      
+
       if (!target) {
         return res.status(404).json({ error: "Sales target not found" });
       }
-      
+
       // Deletar tracking records associados a este cliente + temporada
       // Apenas para agroquímicos (que têm tracking de aplicações)
       if (target.segmento === 'agroquimicos') {
@@ -5018,7 +5008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId,
           segmento: target.segmento
         });
-        
+
         const result = await db.delete(clientApplicationTracking)
           .where(
             and(
@@ -5027,10 +5017,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               eq(clientApplicationTracking.userId, userId)
             )
           );
-        
+
         console.log('[DELETE TARGET] Tracking records deletados:', result);
       }
-      
+
       // Deletar o target
       await storage.deleteSalesTarget(id, userId);
       res.json({ success: true });
@@ -5047,14 +5037,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { seasonId } = req.params;
       const { categories, products, clientApplicationTracking, globalManagementApplications, productsPriceTable, userClientLinks, masterClients } = await import("@shared/schema");
       const { inArray } = await import("drizzle-orm");
-      
+
       // Get categories to map categoryId -> segmento
       const categoriesList = await db.select().from(categories);
       const categoryToSegment = new Map<string, string>();
       categoriesList.forEach(cat => {
         categoryToSegment.set(cat.id, cat.type);
       });
-      
+
       // Get market clients (includeInMarketArea=true) to filter sales
       const marketClientIds = await db.select({ id: userClientLinks.id })
         .from(userClientLinks)
@@ -5062,27 +5052,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(userClientLinks.userId, userId),
           eq(userClientLinks.includeInMarketArea, true)
         ));
-      
+
       const marketClientIdList = marketClientIds.map(c => c.id);
-      
+
       // Get sales ONLY from market clients
-      const userSales = marketClientIdList.length > 0 
+      const userSales = marketClientIdList.length > 0
         ? await db.select()
-            .from(sales)
-            .where(and(
-              eq(sales.userId, userId),
-              eq(sales.seasonId, seasonId),
-              inArray(sales.clientId, marketClientIdList)
-            ))
+          .from(sales)
+          .where(and(
+            eq(sales.userId, userId),
+            eq(sales.seasonId, seasonId),
+            inArray(sales.clientId, marketClientIdList)
+          ))
         : [];
-      
+
       // Get all products to map productId -> categoryId
       const productsList = await db.select().from(products);
       const productToCategory = new Map<string, string>();
       productsList.forEach(prod => {
         productToCategory.set(prod.id, prod.categoryId);
       });
-      
+
       // Aggregate sales by segment
       const salesBySegment: Record<string, number> = {
         fertilizantes: 0,
@@ -5091,7 +5081,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sementes_soja: 0,
         corretivos: 0
       };
-      
+
       userSales.forEach(sale => {
         const categoryId = productToCategory.get(sale.productId);
         if (categoryId) {
@@ -5101,7 +5091,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       });
-      
+
       // Get FECHADAS applications (lost opportunities) for this user in this season
       const fechadasApplications = await db.select()
         .from(clientApplicationTracking)
@@ -5114,7 +5104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(clientApplicationTracking.seasonId, seasonId),
           eq(clientApplicationTracking.status, 'FECHADO')
         ));
-      
+
       // Aggregate FECHADAS by segment (only agroquímicos)
       const fechadasBySegment: Record<string, number> = {
         fertilizantes: 0,
@@ -5123,18 +5113,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sementes_soja: 0,
         corretivos: 0
       };
-      
+
       fechadasApplications.forEach(app => {
         if (!app.client_application_tracking || !app.global_management_applications) return;
-        
+
         const pricePerHa = parseFloat(app.global_management_applications.pricePerHa || '0');
         const plantingArea = app.master_clients ? parseFloat(app.master_clients.plantingArea || '0') : 0;
         const totalValue = pricePerHa * plantingArea;
-        
+
         // All fechadas applications are agroquímicos
         fechadasBySegment.agroquimicos += totalValue;
       });
-      
+
       // Get ALL client market rates for this user in this season (including all categories)
       // This gives us the TOTAL configured potential per segment
       // Only include clients marked as includeInMarketArea
@@ -5147,7 +5137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(clientMarketRates.seasonId, seasonId),
           eq(userClientLinks.includeInMarketArea, true)
         ));
-      
+
       // Aggregate potential by segment
       // Potential = plantingArea * investmentPerHa for each client/category combination
       const potentialBySegment: Record<string, number> = {
@@ -5157,13 +5147,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sementes_soja: 0,
         corretivos: 0
       };
-      
+
       allClientRates.forEach(rate => {
         const marketRate = rate.client_market_rates;
         const client = rate.master_clients;
         const categoryId = marketRate.categoryId;
         const segmento = categoryToSegment.get(categoryId);
-        
+
         if (segmento && potentialBySegment.hasOwnProperty(segmento)) {
           // Potential = plantingArea * investmentPerHa
           const plantingArea = parseFloat(client.plantingArea || '0');
@@ -5172,21 +5162,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           potentialBySegment[segmento] += clientPotential;
         }
       });
-      
+
       // Calculate percentage for each segment: (sales + fechadas) / potential * 100
       const percentageBySegment: Record<string, number> = {};
-      
+
       Object.keys(salesBySegment).forEach(segmento => {
         const totalRealized = salesBySegment[segmento] + fechadasBySegment[segmento];
         const potential = potentialBySegment[segmento];
-        
+
         if (potential > 0) {
           percentageBySegment[segmento] = (totalRealized / potential) * 100;
         } else {
           percentageBySegment[segmento] = 0;
         }
       });
-      
+
       res.json(percentageBySegment);
     } catch (error) {
       console.error('Get market percentage error:', error);
@@ -5202,36 +5192,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentSeasonId = req.query.seasonId as string;
       const { sales: salesTable, products, seasons, categories: categoriesTable } = await import("@shared/schema");
       const { and, desc, inArray, lt } = await import("drizzle-orm");
-      
+
       if (!currentSeasonId) {
         return res.status(400).json({ error: "seasonId is required" });
       }
-      
+
       // Get all products for this category
       const categoryProducts = await db
         .select({ id: products.id })
         .from(products)
         .where(eq(products.categoryId, categoryId));
-      
+
       const productIds = categoryProducts.map(p => p.id);
-      
+
       if (productIds.length === 0) {
         return res.json({ totalSales: 0, lastSeasonName: null, lastSeasonSales: 0 });
       }
-      
+
       // Get current season to find its type
       const currentSeasonResult = await db
         .select()
         .from(seasons)
         .where(eq(seasons.id, currentSeasonId))
         .limit(1);
-      
+
       if (currentSeasonResult.length === 0) {
         return res.json({ totalSales: 0, lastSeasonName: null, lastSeasonSales: 0 });
       }
-      
+
       const currentSeason = currentSeasonResult[0];
-      
+
       // Get all seasons of the same type with year less than current
       const previousSeasons = await db
         .select()
@@ -5242,13 +5232,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ))
         .orderBy(desc(seasons.year))
         .limit(1);
-      
+
       if (previousSeasons.length === 0) {
         return res.json({ totalSales: 0, lastSeasonName: null, lastSeasonSales: 0 });
       }
-      
+
       const lastSeason = previousSeasons[0];
-      
+
       // Get sales for this client in this category in the last season
       const clientSales = await db
         .select()
@@ -5259,12 +5249,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(salesTable.seasonId, lastSeason.id),
           inArray(salesTable.productId, productIds)
         ));
-      
+
       // Calculate total
       const lastSeasonSales = clientSales.reduce((sum, sale) => {
         return sum + parseFloat(sale.totalAmount || '0');
       }, 0);
-      
+
       res.json({
         totalSales: lastSeasonSales,
         lastSeasonName: lastSeason.name,
@@ -5284,36 +5274,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentSeasonId = req.query.seasonId as string;
       const { sales: salesTable, products, seasons } = await import("@shared/schema");
       const { and, desc, inArray, lt } = await import("drizzle-orm");
-      
+
       if (!currentSeasonId) {
         return res.status(400).json({ error: "seasonId is required" });
       }
-      
+
       // Get all products for this category
       const categoryProducts = await db
         .select({ id: products.id })
         .from(products)
         .where(eq(products.categoryId, categoryId));
-      
+
       const productIds = categoryProducts.map(p => p.id);
-      
+
       if (productIds.length === 0) {
         return res.json({ sales: [], lastSeasonName: null });
       }
-      
+
       // Get current season to find its type
       const currentSeasonResult = await db
         .select()
         .from(seasons)
         .where(eq(seasons.id, currentSeasonId))
         .limit(1);
-      
+
       if (currentSeasonResult.length === 0) {
         return res.json({ sales: [], lastSeasonName: null });
       }
-      
+
       const currentSeason = currentSeasonResult[0];
-      
+
       // Get all seasons of the same type with year less than current
       const previousSeasons = await db
         .select()
@@ -5324,13 +5314,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ))
         .orderBy(desc(seasons.year))
         .limit(1);
-      
+
       if (previousSeasons.length === 0) {
         return res.json({ sales: [], lastSeasonName: null });
       }
-      
+
       const lastSeason = previousSeasons[0];
-      
+
       // Get sales with product details
       const clientSales = await db
         .select({
@@ -5347,7 +5337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(salesTable.seasonId, lastSeason.id),
           inArray(salesTable.productId, productIds)
         ));
-      
+
       res.json({
         sales: clientSales,
         lastSeasonName: lastSeason.name
@@ -5371,7 +5361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Find user by username
       const user = await db.select().from(users).where(eq(users.username, username)).limit(1);
-      
+
       if (!user || user.length === 0) {
         // Don't reveal if user exists or not for security
         return res.json({ message: "If the username exists, a password reset email has been sent." });
@@ -5471,13 +5461,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ========== ADMIN DASHBOARD ROUTES ==========
-  
+
   // Get regional sales analysis for admin dashboard
   app.get("/api/admin/regional-sales", requireSuperAdmin, async (req, res) => {
     try {
       const { sales, userClientLinks, masterClients, products, regions } = await import("@shared/schema");
       const { inArray, sql } = await import("drizzle-orm");
-      
+
       // Get all sales with client and product details
       const allSales = await db
         .select({
@@ -5497,10 +5487,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .leftJoin(userClientLinks, eq(sales.clientId, userClientLinks.id))
         .leftJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
         .leftJoin(products, eq(sales.productId, products.id));
-      
+
       // Get all regions
       const allRegions = await db.select().from(regions);
-      
+
       // Aggregate data by region
       const regionalData: Record<string, {
         regionName: string;
@@ -5515,7 +5505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           category: string;
         }>;
       }> = {};
-      
+
       // Initialize regions
       allRegions.forEach(region => {
         regionalData[region.id] = {
@@ -5526,11 +5516,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           products: {},
         };
       });
-      
+
       // Aggregate sales data
       allSales.forEach(sale => {
         const regionId = sale.regionId || 'unknown';
-        
+
         // Initialize region if not exists
         if (!regionalData[regionId]) {
           regionalData[regionId] = {
@@ -5541,18 +5531,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             products: {},
           };
         }
-        
+
         const amount = parseFloat(sale.totalAmount || "0");
         const volume = parseFloat(sale.quantity || "0");
-        
+
         regionalData[regionId].totalSales += amount;
         regionalData[regionId].totalVolume += volume;
         regionalData[regionId].salesCount++;
-        
+
         // Aggregate by product
         if (sale.productId && sale.productName) {
           const productKey = `${sale.productId} -${sale.productBrand || 'no-brand'} `;
-          
+
           if (!regionalData[regionId].products[productKey]) {
             regionalData[regionId].products[productKey] = {
               productName: sale.productName,
@@ -5562,12 +5552,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               category: sale.categoryId || 'N/A',
             };
           }
-          
+
           regionalData[regionId].products[productKey].volume += volume;
           regionalData[regionId].products[productKey].sales += amount;
         }
       });
-      
+
       // Convert to array and sort products
       const result = Object.entries(regionalData).map(([regionId, data]) => ({
         regionId,
@@ -5579,23 +5569,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .sort((a, b) => b.sales - a.sales)
           .slice(0, 5),
       })).sort((a, b) => b.totalSales - a.totalSales);
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching regional sales:", error);
       res.status(500).json({ error: "Failed to fetch regional sales data" });
     }
   });
-  
+
   // ========== MANAGER ROUTES ==========
-  
+
   // Get team aggregated data for dashboard
   app.get("/api/manager/team-data", requireManager, async (req, res) => {
     try {
       const { users, sales, products } = await import("@shared/schema");
       const { inArray } = await import("drizzle-orm");
       const managerId = req.user!.id;
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({
@@ -5604,9 +5594,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({
           totalSales: 0,
@@ -5617,7 +5607,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           teamMembers: [],
         });
       }
-      
+
       // Get all sales from team with products
       const teamSales = await db
         .select({
@@ -5627,7 +5617,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(sales)
         .leftJoin(products, eq(sales.productId, products.id))
         .where(inArray(sales.userId, teamIds));
-      
+
       // Calculate aggregations
       let totalSales = 0;
       const salesByCategory: Record<string, number> = {};
@@ -5635,15 +5625,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientSales: Record<string, number> = {};
       const memberSales: Record<string, { totalSales: number; timacPoints: number }> = {};
       let totalTimacPoints = 0;
-      
+
       // Initialize member sales
       teamMembers.forEach(member => {
         memberSales[member.id] = { totalSales: 0, timacPoints: 0 };
       });
-      
+
       // Get unique client IDs from sales
       const clientIds = Array.from(new Set(teamSales.map(s => s.sale.clientId).filter(Boolean)));
-      
+
       // Fetch client details
       const { userClientLinks, masterClients } = await import("@shared/schema");
       const clientDetails = await db
@@ -5654,56 +5644,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(userClientLinks)
         .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
         .where(inArray(userClientLinks.id, clientIds as string[]));
-      
+
       const clientNameMap = new Map(
         clientDetails.map(c => [c.linkId, c.clientName])
       );
-      
+
       teamSales.forEach(({ sale, product }) => {
         const value = parseFloat(sale.totalAmount || "0");
-        
+
         // Total sales
         totalSales += value;
-        
+
         // Sales by category
         if (sale.categoryId) {
           salesByCategory[sale.categoryId] = (salesByCategory[sale.categoryId] || 0) + value;
         }
-        
+
         // Sales by season
         if (sale.seasonId) {
           salesBySeason[sale.seasonId] = (salesBySeason[sale.seasonId] || 0) + value;
         }
-        
+
         // Sales by client (use client name instead of ID)
         if (sale.clientId) {
           const clientName = clientNameMap.get(sale.clientId) || sale.clientId;
           clientSales[clientName] = (clientSales[clientName] || 0) + value;
         }
-        
+
         // Member sales
         if (memberSales[sale.userId]) {
           memberSales[sale.userId].totalSales += value;
         }
-        
+
         // Timac points calculation
         if (product && product.marca?.toLowerCase().includes('timac') && sale.categoryId === 'cat-especialidades') {
           const quantity = parseFloat(sale.quantity || "0");
           const packageSize = parseFloat(product.packageSize || "1");
           const timacPoints = parseFloat(product.timacPoints || "0");
-          
+
           const cantPedido = packageSize > 0 ? quantity / packageSize : 0;
           const quantidadeTotal = cantPedido * packageSize;
           const points = timacPoints * quantidadeTotal;
-          
+
           totalTimacPoints += points;
-          
+
           if (memberSales[sale.userId]) {
             memberSales[sale.userId].timacPoints += points;
           }
         }
       });
-      
+
       // Build team members array with their data
       const teamMembersData = teamMembers.map(member => ({
         id: member.id,
@@ -5711,12 +5701,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalSales: memberSales[member.id].totalSales,
         timacPoints: memberSales[member.id].timacPoints,
       }));
-      
+
       // Get Timac settings for gerentes value
       const { timacSettings } = await import("@shared/schema");
       const timacConfig = await db.select().from(timacSettings).limit(1);
       const gerentesValue = timacConfig[0]?.gerentesValue || "0.76";
-      
+
       res.json({
         totalSales,
         salesByCategory,
@@ -5731,13 +5721,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch team data" });
     }
   });
-  
+
   // Get team consultors
   app.get("/api/manager/team", requireManager, async (req, res) => {
     try {
       const { users } = await import("@shared/schema");
       const managerId = req.user!.id;
-      
+
       const teamMembers = await db
         .select({
           id: users.id,
@@ -5747,7 +5737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       res.json(teamMembers);
     } catch (error) {
       console.error("Error fetching team:", error);
@@ -5761,15 +5751,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { users, sales } = await import("@shared/schema");
       const { inArray } = await import("drizzle-orm");
       const managerId = req.user!.id;
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({
           totalSales: 0,
@@ -5778,23 +5768,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           topClients: [],
         });
       }
-      
+
       // Get all sales from team
       const teamSales = await db
         .select()
         .from(sales)
         .where(inArray(sales.userId, teamIds));
-      
+
       // Calculate aggregations
       const totalSales = teamSales.reduce((sum, sale) => sum + parseFloat(sale.totalAmount || "0"), 0);
-      
+
       const salesByCategory: Record<string, number> = {};
       const salesBySeason: Record<string, number> = {};
       const clientSales: Record<string, number> = {};
-      
+
       // Get unique client IDs from sales
       const clientIds = Array.from(new Set(teamSales.map(s => s.clientId).filter(Boolean)));
-      
+
       // Fetch client details
       const { userClientLinks, masterClients } = await import("@shared/schema");
       const clientDetails = await db
@@ -5805,14 +5795,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(userClientLinks)
         .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
         .where(inArray(userClientLinks.id, clientIds as string[]));
-      
+
       const clientNameMap = new Map(
         clientDetails.map(c => [c.linkId, c.clientName])
       );
-      
+
       teamSales.forEach(sale => {
         const value = parseFloat(sale.totalAmount || "0");
-        
+
         if (sale.categoryId) {
           salesByCategory[sale.categoryId] = (salesByCategory[sale.categoryId] || 0) + value;
         }
@@ -5824,13 +5814,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clientSales[clientName] = (clientSales[clientName] || 0) + value;
         }
       });
-      
+
       // Top 5 clients
       const topClients = Object.entries(clientSales)
         .map(([clientId, value]) => ({ clientId, value }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 5);
-      
+
       res.json({
         totalSales,
         salesByCategory,
@@ -5849,19 +5839,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { users, sales, products } = await import("@shared/schema");
       const { inArray } = await import("drizzle-orm");
       const managerId = req.user!.id;
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({ totalPoints: 0, pointsByConsultor: [] });
       }
-      
+
       // Get all Timac sales (marca = Timac AND categoria = Especialidades)
       const teamSales = await db
         .select({
@@ -5871,29 +5861,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(sales)
         .leftJoin(products, eq(sales.productId, products.id))
         .where(inArray(sales.userId, teamIds));
-      
+
       let totalPoints = 0;
       const pointsByConsultor: Record<string, { consultorId: string; points: number }> = {};
-      
+
       teamSales.forEach(({ sale, product }) => {
         if (product && product.marca?.toLowerCase().includes('timac') && sale.categoryId === 'cat-especialidades') {
           const quantity = parseFloat(sale.quantity || "0");
           const packageSize = parseFloat(product.packageSize || "1");
           const timacPoints = parseFloat(product.timacPoints || "0");
-          
+
           const cantPedido = packageSize > 0 ? quantity / packageSize : 0;
           const quantidadeTotal = cantPedido * packageSize;
           const points = timacPoints * quantidadeTotal;
-          
+
           totalPoints += points;
-          
+
           if (!pointsByConsultor[sale.userId]) {
             pointsByConsultor[sale.userId] = { consultorId: sale.userId, points: 0 };
           }
           pointsByConsultor[sale.userId].points += points;
         }
       });
-      
+
       res.json({
         totalPoints,
         pointsByConsultor: Object.values(pointsByConsultor),
@@ -5910,19 +5900,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { users, seasonGoals } = await import("@shared/schema");
       const { inArray, sql } = await import("drizzle-orm");
       const managerId = req.user!.id;
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json([]);
       }
-      
+
       // Get aggregated goals by season
       const goals = await db
         .select({
@@ -5932,7 +5922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(seasonGoals)
         .where(inArray(seasonGoals.userId, teamIds))
         .groupBy(seasonGoals.seasonId);
-      
+
       res.json(goals);
     } catch (error) {
       console.error("Error fetching team goals:", error);
@@ -5946,19 +5936,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { users, sales, products, categories } = await import("@shared/schema");
       const { inArray, sql } = await import("drizzle-orm");
       const managerId = req.user!.id;
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json([]);
       }
-      
+
       // Get sales grouped by month and category
       const monthlySalesByCategory = await db
         .select({
@@ -5972,7 +5962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(inArray(sales.userId, teamIds))
         .groupBy(sql`TO_CHAR(${sales.saleDate}, 'YYYY-MM')`, categories.name)
         .orderBy(sql`TO_CHAR(${sales.saleDate}, 'YYYY-MM')`);
-      
+
       res.json(monthlySalesByCategory);
     } catch (error) {
       console.error("Error fetching team sales evolution:", error);
@@ -5987,27 +5977,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { inArray: inArrayOp, and } = await import("drizzle-orm");
       const managerId = req.user!.id;
       const seasonIds = (req.query.seasonIds as string)?.split(',').filter(Boolean) || [];
-      
+
       if (seasonIds.length === 0) {
         return res.json({});
       }
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({});
       }
-      
+
       // Get categories to map categoryId to name
       const categories = await storage.getAllCategories();
       const categoryMap = new Map(categories.map(c => [c.id, c.name]));
-      
+
       // Get benchmarks for team members and requested seasons
       const benchmarks = await db
         .select()
@@ -6016,16 +6006,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           inArrayOp(marketBenchmarks.userId, teamIds),
           inArrayOp(marketBenchmarks.seasonId, seasonIds)
         ));
-      
+
       // Group by season and calculate average per category
       const result: Record<string, Record<string, number>> = {};
-      
+
       seasonIds.forEach(seasonId => {
         const seasonBenchmarks = benchmarks.filter(b => b.seasonId === seasonId);
-        
+
         // Group by category and collect all percentages
         const categoryPercentages: Record<string, number[]> = {};
-        
+
         seasonBenchmarks.forEach(benchmark => {
           const categoryName = categoryMap.get(benchmark.categoryId);
           if (categoryName) {
@@ -6035,7 +6025,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             categoryPercentages[categoryName].push(parseFloat(benchmark.marketPercentage));
           }
         });
-        
+
         // Calculate average for each category
         const categoryAverages: Record<string, number> = {};
         Object.entries(categoryPercentages).forEach(([categoryName, percentages]) => {
@@ -6044,10 +6034,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             categoryAverages[categoryName] = average;
           }
         });
-        
+
         result[seasonId] = categoryAverages;
       });
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching multi-season team market benchmarks:", error);
@@ -6062,19 +6052,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { inArray } = await import("drizzle-orm");
       const { seasonId } = req.params;
       const managerId = req.user!.id;
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json([]);
       }
-      
+
       // Get any team member's benchmarks (they should all be the same for the organization)
       // Or we could aggregate/average them
       const benchmarks = await db
@@ -6082,7 +6072,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(marketBenchmarks)
         .where(eq(marketBenchmarks.seasonId, seasonId))
         .limit(10); // Get first set of benchmarks for this season
-      
+
       res.json(benchmarks);
     } catch (error) {
       console.error("Error fetching team market benchmarks:", error);
@@ -6097,26 +6087,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { inArray, and } = await import("drizzle-orm");
       const managerId = req.user!.id;
       const seasonIds = (req.query.seasonIds as string)?.split(',').filter(Boolean) || [];
-      
+
       if (seasonIds.length === 0) {
         return res.json({});
       }
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({});
       }
-      
+
       const categories = await storage.getAllCategories();
       const products = await storage.getAllProducts();
-      
+
       // Create product-to-category map
       const productCategoryMap = new Map<string, string>();
       products.forEach(p => {
@@ -6124,17 +6114,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productCategoryMap.set(p.id, p.categoryId);
         }
       });
-      
+
       // Result structure: { seasonId: { categoryName: percentage } }
       const result: Record<string, Record<string, number>> = {};
-      
+
       for (const seasonId of seasonIds) {
         const categoryDataById: Record<string, {
           categoryName: string;
           cvaleAmount: number;
           totalAmount: number;
         }> = {};
-        
+
         // Initialize categories
         categories.forEach(cat => {
           categoryDataById[cat.id] = {
@@ -6143,7 +6133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalAmount: 0,
           };
         });
-        
+
         // Get team sales for this season
         const teamSeasonSales = await db
           .select()
@@ -6152,7 +6142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             inArray(salesTable.userId, teamIds),
             eq(salesTable.seasonId, seasonId)
           ));
-        
+
         // Get external purchases for this season
         const teamExternalPurchases = await db
           .select()
@@ -6161,7 +6151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             inArray(externalPurchases.userId, teamIds),
             eq(externalPurchases.seasonId, seasonId)
           ));
-        
+
         // Aggregate C.Vale sales
         teamSeasonSales.forEach(sale => {
           const categoryId = productCategoryMap.get(sale.productId);
@@ -6171,7 +6161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             categoryDataById[categoryId].totalAmount += amount;
           }
         });
-        
+
         // Add external purchases
         teamExternalPurchases.forEach(purchase => {
           const categoryId = purchase.categoryId;
@@ -6180,17 +6170,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             categoryDataById[categoryId].totalAmount += amount;
           }
         });
-        
+
         // Transform to category name -> percentage
         const categoryPercentages: Record<string, number> = {};
         Object.values(categoryDataById).forEach(cat => {
           const percentage = cat.totalAmount > 0 ? (cat.cvaleAmount / cat.totalAmount) * 100 : 0;
           categoryPercentages[cat.categoryName] = percentage;
         });
-        
+
         result[seasonId] = categoryPercentages;
       }
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching multi-season team market analysis:", error);
@@ -6205,28 +6195,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { inArray, and } = await import("drizzle-orm");
       const managerId = req.user!.id;
       const seasonIds = (req.query.seasonIds as string)?.split(',').filter(Boolean) || [];
-      
+
       if (seasonIds.length === 0) {
         return res.json({});
       }
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({});
       }
-      
+
       // Get all necessary data
       const allSales = await storage.getAllSales();
       const categories = await storage.getAllCategories();
       const products = await storage.getAllProducts();
-      
+
       // Get manager's goals for all requested seasons
       const managerGoals = await db
         .select()
@@ -6235,7 +6225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(seasonGoals.userId, managerId),
           inArray(seasonGoals.seasonId, seasonIds)
         ));
-      
+
       // Create maps
       const productCategoryMap = new Map<string, string>();
       products.forEach(p => {
@@ -6243,12 +6233,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productCategoryMap.set(p.id, p.categoryId);
         }
       });
-      
+
       const categoryNameMap = new Map<string, string>();
       categories.forEach(cat => {
         categoryNameMap.set(cat.id, cat.name);
       });
-      
+
       // Category name to meta field mapping
       const categoryMetaFieldMap: Record<string, string> = {
         'Agroquímicos': 'metaAgroquimicos',
@@ -6260,24 +6250,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Sementes Trigo': 'metaSementesTrigo',
         'Sementes Diversas': 'metaSementesDiversas',
       };
-      
+
       const result: Record<string, Record<string, number>> = {};
-      
+
       // Process each season
       for (const seasonId of seasonIds) {
         // Find manager's goal for this season
         const seasonGoal = managerGoals.find(g => g.seasonId === seasonId);
-        
+
         if (!seasonGoal) {
           result[seasonId] = {};
           continue;
         }
-        
+
         // Get team sales for this season
-        const seasonSales = allSales.filter(s => 
+        const seasonSales = allSales.filter(s =>
           teamIds.includes(s.userId) && s.seasonId === seasonId
         );
-        
+
         // Aggregate sales by category
         const categorySales: Record<string, number> = {};
         seasonSales.forEach(sale => {
@@ -6292,20 +6282,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         });
-        
+
         // Calculate percentages (sales / goal * 100)
         const categoryPercentages: Record<string, number> = {};
         Object.entries(categoryMetaFieldMap).forEach(([categoryName, metaField]) => {
           const salesAmount = categorySales[categoryName] || 0;
           const goalAmount = parseFloat((seasonGoal as any)[metaField] || '0');
-          
+
           const percentage = goalAmount > 0 ? (salesAmount / goalAmount) * 100 : 0;
           categoryPercentages[categoryName] = percentage;
         });
-        
+
         result[seasonId] = categoryPercentages;
       }
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching team sales vs goals:", error);
@@ -6320,27 +6310,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { inArray, and } = await import("drizzle-orm");
       const managerId = req.user!.id;
       const seasonIds = (req.query.seasonIds as string)?.split(',').filter(Boolean) || [];
-      
+
       if (seasonIds.length === 0) {
         return res.json({});
       }
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({});
       }
-      
+
       const categories = await storage.getAllCategories();
       const products = await storage.getAllProducts();
       const allSales = await storage.getAllSales();
-      
+
       // Create product-to-category map
       const productCategoryMap = new Map<string, string>();
       products.forEach(p => {
@@ -6348,16 +6338,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productCategoryMap.set(p.id, p.categoryId);
         }
       });
-      
+
       // Create category name map
       const categoryNameMap = new Map<string, string>();
       categories.forEach(cat => {
         categoryNameMap.set(cat.id, cat.name);
       });
-      
+
       // Result structure: { seasonId: { categoryName: marketPercentage } }
       const result: Record<string, Record<string, number>> = {};
-      
+
       for (const seasonId of seasonIds) {
         // Get market clients for the team (includeInMarketArea=true)
         const teamMarketClients = await db.select({ id: userClientLinks.id })
@@ -6366,29 +6356,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             inArray(userClientLinks.userId, teamIds),
             eq(userClientLinks.includeInMarketArea, true)
           ));
-        
+
         const teamMarketClientIds = teamMarketClients.map(c => c.id);
-        
+
         // Get team sales ONLY from market clients
-        const teamSales = allSales.filter(s => 
-          teamIds.includes(s.userId) && 
+        const teamSales = allSales.filter(s =>
+          teamIds.includes(s.userId) &&
           s.seasonId === seasonId &&
           teamMarketClientIds.includes(s.clientId)
         );
-        
+
         // Aggregate sales by category
         const salesByCategory: Record<string, number> = {};
         categories.forEach(cat => {
           salesByCategory[cat.id] = 0;
         });
-        
+
         teamSales.forEach(sale => {
           const categoryId = productCategoryMap.get(sale.productId);
           if (categoryId) {
             salesByCategory[categoryId] += parseFloat(sale.totalAmount || '0');
           }
         });
-        
+
         // Get all client market rates for the team in this season
         // Only include clients marked as includeInMarketArea
         const teamMarketRates = await db.select()
@@ -6400,30 +6390,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(clientMarketRates.seasonId, seasonId),
             eq(userClientLinks.includeInMarketArea, true)
           ));
-        
+
         // Calculate total potential by category
         const potentialByCategory: Record<string, number> = {};
         categories.forEach(cat => {
           potentialByCategory[cat.id] = 0;
         });
-        
+
         teamMarketRates.forEach(rate => {
           const categoryId = rate.client_market_rates.categoryId;
           const plantingArea = parseFloat(rate.master_clients.plantingArea || '0');
           const investmentPerHa = parseFloat(rate.client_market_rates.investmentPerHa || '0');
           const potential = plantingArea * investmentPerHa;
-          
+
           if (potentialByCategory.hasOwnProperty(categoryId)) {
             potentialByCategory[categoryId] += potential;
           }
         });
-        
+
         // Get FECHADO values from client_application_tracking
         // These are applications marked as "lost to competitor" in the Market Management Panel
         // All applications are under Agroquímicos category
         const agroquimicosCategory = categories.find(c => c.type === 'agroquimicos');
         const agroquimicosCategoryId = agroquimicosCategory?.id || '';
-        
+
         const teamApplicationTrackingRaw = await db.select({
           clientId: clientApplicationTracking.clientId,
           productId: globalManagementApplications.productId,
@@ -6439,7 +6429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(userClientLinks.includeInMarketArea, true),
             eq(clientApplicationTracking.status, 'FECHADO')
           ));
-        
+
         // Get product prices for FECHADO applications
         const productIds = Array.from(new Set(teamApplicationTrackingRaw.map(t => t.productId)));
         const productPrices = productIds.length > 0 ? await db.select({
@@ -6448,9 +6438,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
           .from(productsPriceTable)
           .where(inArray(productsPriceTable.id, productIds)) : [];
-        
+
         const productPriceMap = new Map(productPrices.map(p => [p.id, parseFloat(p.precoVerde || '0')]));
-        
+
         // Calculate total FECHADO value for Agroquímicos
         let totalFechadoAgroquimicos = 0;
         teamApplicationTrackingRaw.forEach(tracking => {
@@ -6458,38 +6448,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const area = parseFloat(tracking.plantingArea || '0');
           totalFechadoAgroquimicos += pricePerHa * area;
         });
-        
+
         // Aggregate FECHADO values by category
         const fechadoByCategory: Record<string, number> = {};
         categories.forEach(cat => {
           fechadoByCategory[cat.id] = 0;
         });
-        
+
         if (agroquimicosCategoryId) {
           fechadoByCategory[agroquimicosCategoryId] = totalFechadoAgroquimicos;
         }
-        
+
         // Calculate Mercado automatically: Mercado = Potencial - C.Vale - FECHADO
         const marketValuesByCategory: Record<string, number> = {};
         categories.forEach(cat => {
           const potential = potentialByCategory[cat.id] || 0;
           const sales = salesByCategory[cat.id] || 0;
           const fechado = fechadoByCategory[cat.id] || 0;
-          
+
           // Mercado = Potential - Sales - Closed Applications
           const mercado = Math.max(0, potential - sales - fechado);
           marketValuesByCategory[cat.id] = mercado;
         });
-        
+
         // Calculate market penetration: (C.Vale + Mercado) / potential * 100
         // Mercado = values from clientMarketValues (column Mercado in modal)
         // Ensure we include all major categories even if they have no data
         const categoryPercentages: Record<string, number> = {};
-        
+
         // Define standard category names to ensure consistency with sales-vs-goals endpoint
         const standardCategories = [
           'Agroquímicos',
-          'Especialidades', 
+          'Especialidades',
           'Fertilizantes',
           'Corretivos',
           'Sementes Soja',
@@ -6497,29 +6487,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'Sementes Trigo',
           'Sementes Diversas'
         ];
-        
+
         // Initialize all standard categories with 0
         standardCategories.forEach(catName => {
           categoryPercentages[catName] = 0;
         });
-        
+
         // Calculate and populate actual values
         categories.forEach(cat => {
           const potential = potentialByCategory[cat.id] || 0;
           const sales = salesByCategory[cat.id] || 0;
           const mercado = marketValuesByCategory[cat.id] || 0;
           const totalWorked = sales + mercado; // C.Vale + Mercado
-          
+
           const marketPercentage = potential > 0 ? (totalWorked / potential) * 100 : 0;
           const categoryName = categoryNameMap.get(cat.id);
           if (categoryName) {
             categoryPercentages[categoryName] = marketPercentage;
           }
         });
-        
+
         result[seasonId] = categoryPercentages;
       }
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching team market percentages:", error);
@@ -6534,26 +6524,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { inArray, and } = await import("drizzle-orm");
       const managerId = req.user!.id;
       const seasonId = req.query.seasonId as string | undefined;
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({
           consolidatedByCategory: {},
         });
       }
-      
+
       // Get sales and categories
       const allSales = await storage.getAllSales();
       const categories = await storage.getAllCategories();
       const products = await storage.getAllProducts();
-      
+
       // Get manager's goals for the season (if seasonId provided)
       let managerGoals: any = null;
       if (seasonId) {
@@ -6566,7 +6556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .limit(1);
         managerGoals = goals[0] || null;
       }
-      
+
       // Create product-to-category map (always use categoryId for aggregation)
       const productCategoryMap = new Map<string, string>();
       products.forEach(p => {
@@ -6574,13 +6564,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           productCategoryMap.set(p.id, p.categoryId);
         }
       });
-      
+
       // Create category type map (categoryId -> type for segment mapping)
       const categoryToType = new Map<string, string>();
       categories.forEach(cat => {
         categoryToType.set(cat.id, cat.type);
       });
-      
+
       // Aggregate sales by category for the team
       const consolidatedByCategory: Record<string, {
         categoryName: string;
@@ -6589,7 +6579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         percentage: number;
         marketPercentage: number;
       }> = {};
-      
+
       // Initialize categories
       categories.forEach(cat => {
         consolidatedByCategory[cat.id] = {
@@ -6600,12 +6590,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           marketPercentage: 0,
         };
       });
-      
+
       // Aggregate C.Vale sales (all sales in sales table are C.Vale)
-      const teamSales = seasonId 
+      const teamSales = seasonId
         ? allSales.filter(s => teamIds.includes(s.userId) && s.seasonId === seasonId)
         : allSales.filter(s => teamIds.includes(s.userId));
-      
+
       teamSales.forEach(sale => {
         const categoryId = productCategoryMap.get(sale.productId);
         if (categoryId && consolidatedByCategory[categoryId]) {
@@ -6613,7 +6603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           consolidatedByCategory[categoryId].cvaleAmount += amount;
         }
       });
-      
+
       // Calculate C.Vale percentage: (vendas equipe / meta do gestor) * 100
       if (managerGoals) {
         const categoryMetaFieldMap: Record<string, string> = {
@@ -6623,7 +6613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'Corretivos': 'metaCorretivos',
           'Sementes Soja': 'metaSementesSoja',
         };
-        
+
         Object.keys(consolidatedByCategory).forEach(catId => {
           const cat = consolidatedByCategory[catId];
           const metaField = categoryMetaFieldMap[cat.categoryName];
@@ -6633,7 +6623,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
       }
-      
+
       // Calculate Market percentage: (vendas + aplicações FECHADAS) / potencial total * 100
       if (seasonId) {
         // Get all client market rates for the team in this season
@@ -6647,24 +6637,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(clientMarketRates.seasonId, seasonId),
             eq(userClientLinks.includeInMarketArea, true)
           ));
-        
+
         // Calculate total potential by category
         const potentialByCategory: Record<string, number> = {};
         categories.forEach(cat => {
           potentialByCategory[cat.id] = 0;
         });
-        
+
         teamMarketRates.forEach(rate => {
           const categoryId = rate.client_market_rates.categoryId;
           const plantingArea = parseFloat(rate.master_clients.plantingArea || '0');
           const investmentPerHa = parseFloat(rate.client_market_rates.investmentPerHa || '0');
           const potential = plantingArea * investmentPerHa;
-          
+
           if (potentialByCategory.hasOwnProperty(categoryId)) {
             potentialByCategory[categoryId] += potential;
           }
         });
-        
+
         // Get all FECHADAS applications for the team in this season
         const fechadasApplications = await db.select()
           .from(clientApplicationTracking)
@@ -6677,20 +6667,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(clientApplicationTracking.seasonId, seasonId),
             eq(clientApplicationTracking.status, 'FECHADO')
           ));
-        
+
         // Aggregate FECHADAS by category
         const fechadasByCategory: Record<string, number> = {};
         categories.forEach(cat => {
           fechadasByCategory[cat.id] = 0;
         });
-        
+
         fechadasApplications.forEach(app => {
           if (!app.client_application_tracking || !app.global_management_applications) return;
-          
+
           const pricePerHa = parseFloat(app.global_management_applications.pricePerHa || '0');
           const plantingArea = app.master_clients ? parseFloat(app.master_clients.plantingArea || '0') : 0;
           const totalValue = pricePerHa * plantingArea;
-          
+
           // All fechadas applications are agroquímicos - find the agroquímicos category
           const agroquimicosCategory = categories.find(cat => cat.type === 'agroquimicos');
           if (agroquimicosCategory) {
@@ -6698,7 +6688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             fechadasByCategory[agroquimicosCategory.id] += totalValue;
           }
         });
-        
+
         // Calculate market percentage: (sales + fechadas) / potential * 100
         Object.keys(consolidatedByCategory).forEach(catId => {
           const cat = consolidatedByCategory[catId];
@@ -6706,11 +6696,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const sales = cat.cvaleAmount;
           const fechadas = fechadasByCategory[catId] || 0;
           const totalRealized = sales + fechadas;
-          
+
           cat.marketPercentage = potential > 0 ? (totalRealized / potential) * 100 : 0;
         });
       }
-      
+
       res.json({
         consolidatedByCategory,
       });
@@ -6727,19 +6717,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { users, seasons, clientApplicationTracking, globalManagementApplications, userClientLinks, masterClients } = await import("@shared/schema");
       const { inArray, and, sql: sqlFn } = await import("drizzle-orm");
       const managerId = req.user!.id;
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({ totalsBySeason: {} });
       }
-      
+
       // Get all ABERTO applications (opportunities) for the team
       // Only include clients marked as 80-20 (isTop80_20 = true)
       const abertoApplications = await db
@@ -6762,7 +6752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(clientApplicationTracking.status, 'ABERTO'),
           eq(userClientLinks.isTop80_20, true)
         ));
-      
+
       // Map segment to category name
       const segmentToCategoryName: Record<string, string> = {
         'fertilizantes': 'Fertilizantes',
@@ -6771,7 +6761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'sementes': 'Sementes',
         'corretivos': 'Corretivos',
       };
-      
+
       // Map categoria to subcategory name
       const categoriaToSubcategoryName: Record<string, string> = {
         'FUNGICIDAS': 'Fungicidas',
@@ -6779,7 +6769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'TRATAMENTO_SEMENTE': 'Tratamento de semente',
         'DESSECACAO': 'Dessecação',
       };
-      
+
       // Aggregate by season, then by category
       const totalsBySeason: Record<string, {
         seasonName: string;
@@ -6790,14 +6780,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subcategories?: Record<string, number>;
         }>;
       }> = {};
-      
+
       // Process ABERTO applications (open opportunities)
       abertoApplications.forEach(app => {
         if (!app.pricePerHa || !app.plantingArea) return;
-        
+
         const seasonId = app.seasonId;
         const seasonName = String(app.seasonName || 'Safra sem nome');
-        
+
         // Map category name to segmento (reverse lookup)
         const categoryNameToSegment: Record<string, string> = {
           'Fertilizantes': 'fertilizantes',
@@ -6806,13 +6796,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'Sementes': 'sementes',
           'Corretivos': 'corretivos',
         };
-        
+
         const segmento = categoryNameToSegment[app.categoria] || app.categoria.toLowerCase();
         const categoryName = app.categoria;
         const pricePerHa = parseFloat(app.pricePerHa || '0');
         const plantingArea = parseFloat(app.plantingArea || '0');
         const valor = pricePerHa * plantingArea;
-        
+
         // Initialize season if not exists
         if (!totalsBySeason[seasonId]) {
           totalsBySeason[seasonId] = {
@@ -6821,10 +6811,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             categories: {},
           };
         }
-        
+
         // Add to season total
         totalsBySeason[seasonId].seasonTotal += valor;
-        
+
         // Initialize category if not exists
         if (!totalsBySeason[seasonId].categories[segmento]) {
           totalsBySeason[seasonId].categories[segmento] = {
@@ -6832,10 +6822,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             total: 0,
           };
         }
-        
+
         // Add to category total
         totalsBySeason[seasonId].categories[segmento].total += valor;
-        
+
         // Add to subcategory only for agroquimicos
         if (segmento === 'agroquimicos' && app.subcategoria) {
           const subcatName = categoriaToSubcategoryName[app.subcategoria] || app.subcategoria;
@@ -6849,7 +6839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subcat[subcatName] += valor;
         }
       });
-      
+
       res.json({ totalsBySeason });
     } catch (error) {
       console.error("Error fetching team captured totals:", error);
@@ -6867,23 +6857,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const managerId = req.user!.id;
       const { segmento } = req.params;
       const seasonId = req.query.seasonId as string;
-      
+
       if (!seasonId) {
         return res.status(400).json({ error: "seasonId is required" });
       }
-      
+
       // Get team member IDs
       const teamMembers = await db
         .select({ id: users.id, username: users.username })
         .from(users)
         .where(eq(users.managerId, managerId));
-      
+
       const teamIds = teamMembers.map(m => m.id);
-      
+
       if (teamIds.length === 0) {
         return res.json({ clientTargets: [] });
       }
-      
+
       // Map segment to category name for applications
       const segmentToCategoryName: Record<string, string> = {
         'fertilizantes': 'Fertilizantes',
@@ -6892,7 +6882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'sementes': 'Sementes',
       };
       const categoryName = segmentToCategoryName[segmento.toLowerCase()];
-      
+
       // Get ABERTO applications for this category AND season (only 80-20 clients)
       let abertoApplications: Array<{
         clientId: string;
@@ -6902,7 +6892,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         applicationNumber: number;
         applicationSubcategory: string | null;
       }> = [];
-      
+
       if (categoryName) {
         abertoApplications = await db
           .select({
@@ -6925,7 +6915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(userClientLinks.isTop80_20, true)
           ));
       }
-      
+
       // Aggregate by client
       const clientMap = new Map<string, {
         clientId: string;
@@ -6933,13 +6923,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         valorCapturado: number;
         subcategories: Record<string, number> | null;
       }>();
-      
+
       // Process ABERTO applications
       abertoApplications.forEach(app => {
         const pricePerHa = parseFloat(app.pricePerHa || '0');
         const plantingArea = parseFloat(app.plantingArea || '0');
         const totalValue = pricePerHa * plantingArea;
-        
+
         if (!clientMap.has(app.clientId)) {
           clientMap.set(app.clientId, {
             clientId: app.clientId,
@@ -6951,7 +6941,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const existing = clientMap.get(app.clientId)!;
           existing.valorCapturado += totalValue;
         }
-        
+
         // Handle subcategories for agroquimicos
         if (segmento.toLowerCase() === 'agroquimicos' && app.applicationSubcategory) {
           const existing = clientMap.get(app.clientId)!;
@@ -6964,30 +6954,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           existing.subcategories[app.applicationSubcategory] += totalValue;
         }
       });
-      
+
       // Get client details for all unique clients
       const uniqueClientIds = Array.from(clientMap.keys());
       if (uniqueClientIds.length === 0) {
         return res.json({ clientTargets: [] });
       }
-      
+
       const userClientLinksData = await db
         .select()
         .from(userClientLinks)
         .where(inArray(userClientLinks.id, uniqueClientIds));
-      
+
       const masterClientIds = userClientLinksData.map(link => link.masterClientId);
       const masterClientsData = await db
         .select()
         .from(masterClients)
         .where(inArray(masterClients.id, masterClientIds));
-      
+
       // Build response with client details
       const clientTargets = Array.from(clientMap.values()).map(clientData => {
         const userClientLink = userClientLinksData.find(link => link.id === clientData.clientId);
         const masterClient = masterClientsData.find(mc => mc.id === userClientLink?.masterClientId);
         const consultor = teamMembers.find(m => m.id === clientData.userId);
-        
+
         return {
           clientId: clientData.clientId,
           clientName: masterClient?.name || 'Cliente Desconhecido',
@@ -6996,10 +6986,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subcategories: clientData.subcategories,
         };
       });
-      
+
       // Sort by value descending
       clientTargets.sort((a, b) => b.valorCapturado - a.valorCapturado);
-      
+
       res.json({ clientTargets });
     } catch (error) {
       console.error("Error fetching team captured by category:", error);
@@ -7012,12 +7002,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlans } = await import("@shared/schema");
       const managerId = req.user!.id;
-      
+
       const plans = await db
         .select()
         .from(actionPlans)
         .where(eq(actionPlans.managerId, managerId));
-      
+
       res.json(plans);
     } catch (error) {
       console.error("Error fetching action plans:", error);
@@ -7029,18 +7019,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlans, seasons } = await import("@shared/schema");
       const { title, meetingDate, strengths, challenges, opportunities, nextMeetingDate } = req.body;
-      
+
       // Get active season
       const [activeSeason] = await db
         .select()
         .from(seasons)
         .where(eq(seasons.isActive, true))
         .limit(1);
-      
+
       if (!activeSeason) {
         return res.status(400).json({ error: "No active season found" });
       }
-      
+
       const [plan] = await db.insert(actionPlans).values({
         title,
         managerId: req.user!.id,
@@ -7054,7 +7044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         opportunities: opportunities || null,
         nextMeetingDate: nextMeetingDate ? new Date(nextMeetingDate) : null,
       }).returning();
-      
+
       res.json(plan);
     } catch (error) {
       console.error("Error creating action plan:", error);
@@ -7066,30 +7056,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlans, actionPlanItems, actionPlanParticipants } = await import("@shared/schema");
       const planId = req.params.id;
-      
+
       const [plan] = await db
         .select()
         .from(actionPlans)
         .where(eq(actionPlans.id, planId));
-      
+
       if (!plan) {
         return res.status(404).json({ error: "Action plan not found" });
       }
-      
+
       if (plan.managerId !== req.user!.id) {
         return res.status(403).json({ error: "Forbidden" });
       }
-      
+
       const items = await db
         .select()
         .from(actionPlanItems)
         .where(eq(actionPlanItems.planId, planId));
-      
+
       const participants = await db
         .select()
         .from(actionPlanParticipants)
         .where(eq(actionPlanParticipants.planId, planId));
-      
+
       res.json({ ...plan, items, participants });
     } catch (error) {
       console.error("Error fetching action plan:", error);
@@ -7101,22 +7091,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlans } = await import("@shared/schema");
       const planId = req.params.id;
-      
+
       const [existing] = await db
         .select()
         .from(actionPlans)
         .where(eq(actionPlans.id, planId));
-      
+
       if (!existing || existing.managerId !== req.user!.id) {
         return res.status(404).json({ error: "Action plan not found" });
       }
-      
+
       const [updated] = await db
         .update(actionPlans)
         .set({ ...req.body, updatedAt: sql`now()` })
         .where(eq(actionPlans.id, planId))
         .returning();
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating action plan:", error);
@@ -7128,16 +7118,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlans } = await import("@shared/schema");
       const planId = req.params.id;
-      
+
       const [existing] = await db
         .select()
         .from(actionPlans)
         .where(eq(actionPlans.id, planId));
-      
+
       if (!existing || existing.managerId !== req.user!.id) {
         return res.status(404).json({ error: "Action plan not found" });
       }
-      
+
       await db.delete(actionPlans).where(eq(actionPlans.id, planId));
       res.json({ success: true });
     } catch (error) {
@@ -7151,23 +7141,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlans, actionPlanItems, insertActionPlanItemSchema } = await import("@shared/schema");
       const planId = req.params.planId;
-      
+
       const [plan] = await db
         .select()
         .from(actionPlans)
         .where(eq(actionPlans.id, planId));
-      
+
       if (!plan || plan.managerId !== req.user!.id) {
         return res.status(404).json({ error: "Action plan not found" });
       }
-      
+
       const data = insertActionPlanItemSchema.parse(req.body);
-      
+
       const [item] = await db.insert(actionPlanItems).values({
         ...data,
         planId,
       }).returning();
-      
+
       res.json(item);
     } catch (error) {
       console.error("Error creating action plan item:", error);
@@ -7179,31 +7169,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlanItems, actionPlans } = await import("@shared/schema");
       const itemId = req.params.id;
-      
+
       const [item] = await db
         .select()
         .from(actionPlanItems)
         .where(eq(actionPlanItems.id, itemId));
-      
+
       if (!item) {
         return res.status(404).json({ error: "Action plan item not found" });
       }
-      
+
       const [plan] = await db
         .select()
         .from(actionPlans)
         .where(eq(actionPlans.id, item.planId));
-      
+
       if (!plan || plan.managerId !== req.user!.id) {
         return res.status(403).json({ error: "Forbidden" });
       }
-      
+
       const [updated] = await db
         .update(actionPlanItems)
         .set(req.body)
         .where(eq(actionPlanItems.id, itemId))
         .returning();
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating action plan item:", error);
@@ -7215,25 +7205,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlanItems, actionPlans } = await import("@shared/schema");
       const itemId = req.params.id;
-      
+
       const [item] = await db
         .select()
         .from(actionPlanItems)
         .where(eq(actionPlanItems.id, itemId));
-      
+
       if (!item) {
         return res.status(404).json({ error: "Action plan item not found" });
       }
-      
+
       const [plan] = await db
         .select()
         .from(actionPlans)
         .where(eq(actionPlans.id, item.planId));
-      
+
       if (!plan || plan.managerId !== req.user!.id) {
         return res.status(403).json({ error: "Forbidden" });
       }
-      
+
       await db.delete(actionPlanItems).where(eq(actionPlanItems.id, itemId));
       res.json({ success: true });
     } catch (error) {
@@ -7247,12 +7237,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { actionPlanItems } = await import("@shared/schema");
       const userId = req.user!.id;
-      
+
       const actions = await db
         .select()
         .from(actionPlanItems)
         .where(eq(actionPlanItems.consultorId, userId));
-      
+
       res.json(actions);
     } catch (error) {
       console.error("Error fetching consultor actions:", error);
@@ -7265,22 +7255,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { actionPlanItems } = await import("@shared/schema");
       const actionId = req.params.id;
       const userId = req.user!.id;
-      
+
       const [action] = await db
         .select()
         .from(actionPlanItems)
         .where(eq(actionPlanItems.id, actionId));
-      
+
       if (!action || action.consultorId !== userId) {
         return res.status(404).json({ error: "Action not found" });
       }
-      
+
       const [updated] = await db
         .update(actionPlanItems)
         .set(req.body)
         .where(eq(actionPlanItems.id, actionId))
         .returning();
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating action:", error);
@@ -7292,7 +7282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/commodity/soybean", requireAuth, async (req, res) => {
     try {
       const apiKey = process.env.TWELVE_DATA_API_KEY;
-      
+
       if (!apiKey) {
         return res.status(500).json({ error: "API key not configured" });
       }
@@ -7305,10 +7295,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const data = await response.json();
-      
+
       // Check if we got a valid price
       if (data.price) {
-        res.json({ 
+        res.json({
           price: parseFloat(data.price),
           name: 'Soybean Futures',
           unit: 'per bushel'
@@ -7377,8 +7367,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedItems = await parseInventoryPDF(req.file.buffer);
 
       if (!parsedItems || parsedItems.length === 0) {
-        return res.status(400).json({ 
-          error: "Nenhum item foi encontrado no PDF. Verifique se o formato está correto (C.VALE com colunas: Cód.Int, Mercaderia, Embalaje, Cantidad)." 
+        return res.status(400).json({
+          error: "Nenhum item foi encontrado no PDF. Verifique se o formato está correto (C.VALE com colunas: Cód.Int, Mercaderia, Embalaje, Cantidad)."
         });
       }
 
@@ -7400,10 +7390,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .set({ inventoryFileName: req.file.originalname })
         .where(eq(uploadSessions.id, sessionId));
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         itemsCount: items.length,
-        items 
+        items
       });
     } catch (error) {
       console.error("Error uploading inventory:", error);
@@ -7445,8 +7435,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (!allOrders || allOrders.length === 0) {
-        return res.status(400).json({ 
-          error: "Nenhum pedido foi encontrado nos PDFs. Verifique se o formato está correto (C.VALE com colunas: Cód.Int, Mercaderia, Cant. Falta, Cliente, Vendedor)." 
+        return res.status(400).json({
+          error: "Nenhum pedido foi encontrado nos PDFs. Verifique se o formato está correto (C.VALE com colunas: Cód.Int, Mercaderia, Cant. Falta, Cliente, Vendedor)."
         });
       }
 
@@ -7471,11 +7461,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .set({ orderFilesCount: req.files.length })
         .where(eq(uploadSessions.id, sessionId));
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         ordersCount: orders.length,
         filesProcessed: req.files.length,
-        orders 
+        orders
       });
     } catch (error) {
       console.error("Error uploading orders:", error);
@@ -7530,14 +7520,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         return acc;
       }, {} as Record<string, { totalQuantity: number; clients: Array<{ clientName: string; quantity: number }> }>);
-      
+
       console.log('=== ORDERS BY PRODUCT ===');
       console.log('Order codes:', Object.keys(ordersByProduct).slice(0, 10));
       console.log('Total order types:', Object.keys(ordersByProduct).length);
 
       // Calculate availability for each inventory item
       const analysisResults = [];
-      
+
       console.log('=== INVENTORY ITEMS ===');
       console.log('First 10 inventory codes:', inventory.slice(0, 10).map(i => i.productCode));
       console.log('Total inventory items:', inventory.length);
@@ -7546,22 +7536,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const stockQty = parseFloat(item.quantity);
         const ordersData = ordersByProduct[item.productCode];
         const ordersQty = ordersData ? ordersData.totalQuantity : 0;
-        
+
         if (ordersQty > 0) {
           console.log(`Match found: ${item.productCode} - Stock: ${stockQty}, Orders: ${ordersQty}`);
         }
-        
+
         let status = 'DISPONÍVEL';
         let percentage = 100;
 
         if (ordersQty > 0) {
           percentage = (stockQty / ordersQty) * 100;
-          
+
           // Limit percentage to 999.99 (database constraint)
           if (percentage > 999.99) {
             percentage = 999.99;
           }
-          
+
           if (percentage >= 100) {
             status = 'DISPONÍVEL';
           } else if (percentage >= 50) {
@@ -7594,13 +7584,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update session status
       await db
         .update(uploadSessions)
-        .set({ 
+        .set({
           status: 'completed',
           completedAt: new Date()
         })
         .where(eq(uploadSessions.id, sessionId));
 
-      res.json({ 
+      res.json({
         success: true,
         resultsCount: results.length,
         results
@@ -7683,7 +7673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await db.delete(uploadSessions).where(eq(uploadSessions.id, sessionId));
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting session:", error);
@@ -7699,7 +7689,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/visits", requireAuth, async (req: any, res) => {
     const { assignee, updated_since } = req.query as { assignee?: string; updated_since?: string };
     const data = await CRMStorage.getVisits({ assignee, updatedSince: updated_since });
-    
+
     // Enrich visits with farm coordinates
     const enriched = await Promise.all(data.map(async (visit: any) => {
       if (visit.farm_id) {
@@ -7710,7 +7700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       return visit;
     }));
-    
+
     res.json(enriched);
   });
 
@@ -7722,35 +7712,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/visits", requireAuth, async (req: any, res) => {
     const payload = Array.isArray(req.body) ? req.body : [req.body];
-    
+
     console.log('📥 [DEBUG] POST /api/visits - Payload recebido:', JSON.stringify(payload, null, 2));
-    
+
     // Validação: client_id é obrigatório e não pode ser vazio
     const invalidItems = payload.filter((v: any) => {
       const clientId = v.clientId || v.client_id;
       const isInvalid = !clientId || (typeof clientId === 'string' && clientId.trim() === '');
-      
+
       if (isInvalid) {
-        console.log('❌ Item inválido detectado:', { 
-          id: v.id, 
-          clientId: v.clientId, 
+        console.log('❌ Item inválido detectado:', {
+          id: v.id,
+          clientId: v.clientId,
           client_id: v.client_id,
-          notes: v.notes 
+          notes: v.notes
         });
       }
-      
+
       return isInvalid;
     });
-    
+
     if (invalidItems.length > 0) {
       console.error('❌ Visitas inválidas sem client_id:', invalidItems);
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "client_id é obrigatório para todas as visitas",
         invalid_count: invalidItems.length,
         invalid_items: invalidItems.map((v: any) => ({ id: v.id, notes: v.notes }))
       });
     }
-    
+
     const created = await CRMStorage.createVisitsBulk(payload);
     res.status(201).json(created);
   });
@@ -7758,28 +7748,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/visits/:id", requireAuth, async (req: any, res) => {
     const { id } = req.params;
     const data = req.body;
-    
+
     // Validação: se client_id estiver presente, não pode ser vazio
     if (data.client_id !== undefined) {
       if (!data.client_id || (typeof data.client_id === 'string' && data.client_id.trim() === '')) {
         return res.status(400).json({ error: "client_id não pode ser vazio" });
       }
     }
-    
+
     const [updated] = await db.update(visits)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(visits.id, id))
       .returning();
-    
+
     if (!updated) {
       return res.status(404).json({ error: "Visita não encontrada" });
     }
-    
+
     res.json(updated);
   });
 
   app.patch("/api/visits/:id/status", requireAuth, async (req: any, res) => {
-    const { id } = req.params; 
+    const { id } = req.params;
     const { status } = req.body as { status: any };
     const updated = await CRMStorage.updateVisitStatus(id, status);
     res.json(updated);
@@ -7806,7 +7796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/trips/:id/end", requireAuth, async (req: any, res) => {
-    const { id } = req.params; 
+    const { id } = req.params;
     const { odometer } = req.body || {};
     const t = await CRMStorage.endTrip(id, odometer ?? null);
     res.json({ ok: true, trip: t });
@@ -7877,7 +7867,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GEO
   app.get("/api/geo/fields/:id/contains", requireAuth, async (req: any, res) => {
-    const { id } = req.params; 
+    const { id } = req.params;
     const { lat, lng } = req.query as any;
     if (!lat || !lng) return res.status(400).json({ error: "lat/lng obrigatórios" });
     const inside = await CRMStorage.pointInsideField(id, parseFloat(lat), parseFloat(lng));
@@ -7895,18 +7885,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/agenda/confirm", requireAuth, async (req: any, res) => {
     const { items } = req.body || {};
     if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "items vazio" });
-    
+
     // Filtra apenas items com client_id válido
     const validItems = items.filter(v => v.client_id);
     const invalidItems = items.filter(v => !v.client_id);
-    
+
     if (validItems.length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Nenhum cliente reconhecido",
         invalid: invalidItems.map(i => i.client_name || i.notes || "Item desconhecido")
       });
     }
-    
+
     const payload = validItems.map((v: any) => ({
       clientId: v.client_id,
       farmId: v.farm_id ?? null,
@@ -7918,11 +7908,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       assignee: req.user?.id ?? null,
       notes: v.notes ?? null
     }));
-    
+
     const created = await CRMStorage.createVisitsBulk(payload);
-    
-    res.status(201).json({ 
-      created: created.length, 
+
+    res.status(201).json({
+      created: created.length,
       visits: created,
       skipped: invalidItems.length,
       invalid_items: invalidItems.map(i => i.client_name || i.notes || "Item desconhecido")
