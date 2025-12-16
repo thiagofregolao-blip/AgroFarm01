@@ -3926,7 +3926,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[MARKET-CARDS] Fetching cards for Season: ${seasonId}, User: ${userId}`);
 
       // Get all categories
-      const allCategories = await db.select().from(categories);
+      let allCategories = await db.select().from(categories);
+
+      // Rule: In "Milho" season, exclude "Sementes Soja"
+      try {
+        const currentSeason = await db.select().from(seasons).where(eq(seasons.id, seasonId)).limit(1);
+        const seasonName = currentSeason[0]?.name || '';
+        if (seasonName.toLowerCase().includes('milho')) {
+          allCategories = allCategories.filter(c => !c.name.toLowerCase().includes('soja'));
+        }
+      } catch (err) {
+        console.error('[MARKET-CARDS] Error filtering categories by season:', err);
+      }
 
       // Get user's clients with badge amarelo (includeInMarketArea) ONLY - for market potential calculation
       // NOTE: 80/20 badge is for different purpose, not for market potential
