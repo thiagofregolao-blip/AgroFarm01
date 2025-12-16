@@ -4788,7 +4788,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { clientId } = req.params;
       const { creditLine, marketValues, applicationStatuses, pipelineStatuses, seasonId } = req.body;
 
+      console.log("PATCH /api/client-market-panel RAW BODY:", JSON.stringify(req.body, null, 2));
       console.log("PATCH /api/client-market-panel", { clientId, userId, creditLine, seasonId });
+      console.log("PATCH pipelineStatuses from body:", JSON.stringify(pipelineStatuses, null, 2));
+      console.log("PATCH pipelineStatuses type:", typeof pipelineStatuses, "isArray:", Array.isArray(pipelineStatuses), "length:", pipelineStatuses?.length);
 
       // Verify client belongs to user and get masterClientId + area
       const clientData = await db.select({
@@ -4840,19 +4843,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           console.log(`[CLIENT-MARKET-PANEL] Updating pipeline for client ${clientId}, season ${seasonId}, items: ${pipelineStatuses.length}`);
           console.log(`[CLIENT-MARKET-PANEL] Pipeline statuses payload:`, JSON.stringify(pipelineStatuses, null, 2));
-          
+
           const finalSeasonId = seasonId || (await storage.getActiveSeason())?.id;
           if (!finalSeasonId) {
             console.error('[CLIENT-MARKET-PANEL] No seasonId available for pipeline update');
             return res.status(400).json({ error: "seasonId is required" });
           }
-          
+
           for (const ps of pipelineStatuses) {
             // Filter out null statuses - if status is null, we should delete the record or set to ABERTO
             const finalStatus = ps.status === null ? 'ABERTO' : ps.status;
-            
+
             console.log(`[CLIENT-MARKET-PANEL] Upserting pipeline: category=${ps.categoryId}, status=${finalStatus} (original: ${ps.status}), season=${finalSeasonId}`);
-            
+
             const result = await storage.upsertClientCategoryPipeline({
               clientId,
               categoryId: ps.categoryId,
