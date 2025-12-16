@@ -260,21 +260,6 @@ export const marketBenchmarks = pgTable("market_benchmarks", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
-// Client Category Pipeline - Status de negociação por categoria (ABERTO, FECHADO, PARCIAL)
-export const clientCategoryPipeline = pgTable("client_category_pipeline", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  clientId: varchar("client_id").notNull().references(() => userClientLinks.id, { onDelete: "cascade" }),
-  categoryId: varchar("category_id").notNull().references(() => categories.id),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  seasonId: varchar("season_id").notNull().references(() => seasons.id),
-  status: text("status"), // 'ABERTO' | 'FECHADO' | 'PARCIAL' | null
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
-}, (table) => ({
-  // Unique constraint: um cliente não pode ter múltiplos status para a mesma categoria na mesma safra
-  uniquePipeline: unique().on(table.clientId, table.categoryId, table.seasonId),
-}));
-
 export const externalPurchases = pgTable("external_purchases", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),

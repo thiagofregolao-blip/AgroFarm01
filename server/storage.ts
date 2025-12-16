@@ -2741,55 +2741,6 @@ export class DBStorage implements IStorage {
       allowUserRegistration: settings.allowUserRegistration
     } : undefined;
   }
-
-  async getClientCategoryPipeline(clientId: string, userId: string, seasonId: string): Promise<ClientCategoryPipeline[]> {
-    return await db.select().from(clientCategoryPipeline)
-      .where(and(
-        eq(clientCategoryPipeline.clientId, clientId),
-        eq(clientCategoryPipeline.userId, userId),
-        eq(clientCategoryPipeline.seasonId, seasonId)
-      ));
-  }
-
-  async upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline> {
-    console.log('[PIPELINE-UPSERT] Input:', JSON.stringify(pipeline));
-
-    // Query by the unique constraint columns: clientId, seasonId, categoryId
-    // Note: userId is NOT part of the unique constraint, so we don't filter by it here
-    const existing = await db.select().from(clientCategoryPipeline)
-      .where(and(
-        eq(clientCategoryPipeline.clientId, pipeline.clientId),
-        eq(clientCategoryPipeline.categoryId, pipeline.categoryId),
-        eq(clientCategoryPipeline.seasonId, pipeline.seasonId)
-      ))
-      .limit(1);
-
-    console.log('[PIPELINE-UPSERT] Existing record:', existing.length > 0 ? JSON.stringify(existing[0]) : 'None');
-
-    if (existing.length > 0) {
-      const updated = await db.update(clientCategoryPipeline)
-        .set({
-          status: pipeline.status,
-          userId: pipeline.userId, // Update userId in case it changed
-          updatedAt: new Date()
-        })
-        .where(eq(clientCategoryPipeline.id, existing[0].id))
-        .returning();
-      console.log('[PIPELINE-UPSERT] Updated:', JSON.stringify(updated[0]));
-      return updated[0];
-    } else {
-      const id = randomUUID();
-      const inserted = await db.insert(clientCategoryPipeline)
-        .values({
-          id,
-          ...pipeline,
-          status: pipeline.status ?? 'ABERTO'
-        })
-        .returning();
-      console.log('[PIPELINE-UPSERT] Inserted:', JSON.stringify(inserted[0]));
-      return inserted[0];
-    }
-  }
 }
 
 export const storage = new DBStorage();
