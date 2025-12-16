@@ -4073,9 +4073,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return name;
       };
 
-      const normalizeString = (str: string | null | undefined) => {
+      const normalizeString = (str: any) => {
         if (!str) return "";
-        return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       };
 
       // Calculate data per category
@@ -4383,10 +4383,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      res.json({ cards, clientBreakdown, monthlySales, segmentBreakdown });
+      return res.json({
+        cards,
+        clientBreakdown,
+        monthlySales,
+        segmentBreakdown
+      });
+
     } catch (error) {
-      console.error("Error fetching market opportunity category cards:", error);
-      res.status(500).json({ error: "Failed to fetch category cards" });
+      console.error('[MARKET-CARDS] Critical Error:', error);
+      return res.status(500).json({
+        error: 'Internal Server Error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
