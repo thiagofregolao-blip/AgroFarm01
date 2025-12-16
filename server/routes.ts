@@ -4615,7 +4615,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const marketValues = await storage.getClientMarketValues(clientId, userId, seasonId);
 
       // Get pipeline data
-      const pipeline = await storage.getClientCategoryPipeline(clientId, userId, seasonId);
+      // Em alguns bancos (como produção antiga) a tabela client_category_pipeline pode não existir ainda.
+      // Neste caso, tratamos como se não houvesse pipeline configurado e seguimos normalmente.
+      let pipeline: any[] = [];
+      try {
+        pipeline = await storage.getClientCategoryPipeline(clientId, userId, seasonId);
+      } catch (pipelineError: any) {
+        const message = pipelineError?.message || String(pipelineError);
+        if (message.includes('client_category_pipeline') || message.includes('relation "client_category_pipeline" does not exist')) {
+          console.warn('[CLIENT-MARKET-PANEL] client_category_pipeline table missing, continuing with empty pipeline.');
+          pipeline = [];
+        } else {
+          // Se for outro erro, relança para ser tratado pelo catch externo
+          throw pipelineError;
+        }
+      }
 
       // Get C.Vale (vendas reais) by category
       const categoriesList = await db.select().from(categories);
