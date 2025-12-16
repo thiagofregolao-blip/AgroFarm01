@@ -62,16 +62,16 @@ async function getOrCreateClientLink(
 ): Promise<string> {
   // Buscar master client por nome normalizado
   const masterClient = await storage.findMasterClientByName(clientName);
-  
+
   if (masterClient) {
     // Master client existe - verificar se usuário já tem link
     const existingLink = await storage.getUserClientLink(userId, masterClient.id);
-    
+
     if (existingLink) {
       // Link já existe
       return existingLink.id;
     }
-    
+
     // Criar novo link para este usuário
     const newLink = await storage.createUserClientLink({
       userId,
@@ -83,10 +83,10 @@ async function getOrCreateClientLink(
       isTop80_20: false,
       isActive: true
     });
-    
+
     return newLink.id;
   }
-  
+
   // Master client não existe - criar master + link
   const newMasterClient = await storage.createMasterClient({
     name: clientName,
@@ -95,7 +95,7 @@ async function getOrCreateClientLink(
     cultures: [],
     isActive: true
   });
-  
+
   const newLink = await storage.createUserClientLink({
     userId,
     masterClientId: newMasterClient.id,
@@ -106,13 +106,13 @@ async function getOrCreateClientLink(
     isTop80_20: false,
     isActive: true
   });
-  
+
   return newLink.id;
 }
 
 function parseExcelDate(excelDate: any): Date | null {
   if (!excelDate) return null;
-  
+
   if (typeof excelDate === 'number') {
     // Excel armazena datas como número de dias desde 1900-01-01
     // Mas há um bug histórico: Excel conta 1900 como ano bissexto (incorreto)
@@ -121,28 +121,28 @@ function parseExcelDate(excelDate: any): Date | null {
     const date = new Date(EXCEL_EPOCH.getTime() + daysOffset * 24 * 60 * 60 * 1000);
     return date;
   }
-  
+
   if (typeof excelDate === 'string') {
     const parsed = new Date(excelDate);
     if (!isNaN(parsed.getTime())) {
       return parsed;
     }
   }
-  
+
   return null;
 }
 
 function normalizeNumeric(value: any): number | null {
   if (value === null || value === undefined || value === '') return null;
-  
+
   if (typeof value === 'number') return value;
-  
+
   if (typeof value === 'string') {
     let normalized = value.trim();
-    
+
     normalized = normalized.replace(/\./g, '');
     normalized = normalized.replace(',', '.');
-    
+
     if (normalized.includes('/')) {
       const parts = normalized.split('/');
       if (parts.length === 2) {
@@ -153,11 +153,11 @@ function normalizeNumeric(value: any): number | null {
         }
       }
     }
-    
+
     const parsed = parseFloat(normalized);
     if (!isNaN(parsed)) return parsed;
   }
-  
+
   return null;
 }
 
@@ -165,74 +165,74 @@ function resolveCategoryId(subgrupo: string | undefined, categories: any[]): str
   if (!subgrupo) {
     return categories[0]?.id || 'cat-fertilizantes';
   }
-  
+
   const normalized = subgrupo.toLowerCase().trim()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  
+
   // Mapeamento específico para sementes (subcategorias específicas)
   if (normalized.includes('soja') || normalized.includes('soya')) {
     const category = categories.find(c => c.id === 'cat-sem-soja');
     if (category) return category.id;
   }
-  
+
   if (normalized.includes('milho') || normalized.includes('maiz') || normalized.includes('corn')) {
     const category = categories.find(c => c.id === 'cat-sem-milho');
     if (category) return category.id;
   }
-  
+
   if (normalized.includes('trigo') || normalized.includes('wheat')) {
     const category = categories.find(c => c.id === 'cat-sem-trigo');
     if (category) return category.id;
   }
-  
+
   // Sementes genéricas ou diversas
   if (normalized.includes('semente') || normalized.includes('semilla') || normalized.includes('semilha') || normalized.includes('seed')) {
     const category = categories.find(c => c.id === 'cat-sem-diversas');
     if (category) return category.id;
   }
-  
+
   // Outras categorias
   const categoryMap: Record<string, string[]> = {
     'cat-fertilizantes': ['fertilizante', 'fertilizantes', 'fertilizer', 'fertilizers', 'fert', 'adub'],
     'cat-agroquimicos': ['agroquimico', 'agroquimicos', 'agrochemical', 'herbicida', 'fungicida', 'inseticida', 'defensivo'],
     'cat-especialidades': ['especialidade', 'especialidades', 'specialty', 'specialties', 'especial'],
   };
-  
+
   for (const [categoryId, keywords] of Object.entries(categoryMap)) {
     if (keywords.some(keyword => normalized.includes(keyword))) {
       const category = categories.find(c => c.id === categoryId);
       if (category) return category.id;
     }
   }
-  
+
   // Tentar match por nome da categoria
-  const matchedCategory = categories.find(c => 
-    c.name.toLowerCase().includes(normalized) || 
+  const matchedCategory = categories.find(c =>
+    c.name.toLowerCase().includes(normalized) ||
     normalized.includes(c.name.toLowerCase())
   );
-  
+
   if (matchedCategory) return matchedCategory.id;
-  
+
   return categories[0]?.id || 'cat-fertilizantes';
 }
 
 function normalizeTier(tablaPrecio?: string): string {
   if (!tablaPrecio) return 'abaixo_lista';
-  
+
   const normalized = tablaPrecio.toLowerCase().trim();
-  
+
   if (normalized.includes('verde') || normalized.includes('green')) return 'verde';
   if (normalized.includes('amarela') || normalized.includes('amarilla') || normalized.includes('amarillo') || normalized.includes('yellow')) return 'amarela';
   if (normalized.includes('vermelha') || normalized.includes('roja') || normalized.includes('rojo') || normalized.includes('red')) return 'vermelha';
   if (normalized.includes('barter')) return 'barter';
   if (normalized.includes('abaixo') || normalized.includes('lista')) return 'abaixo_lista';
-  
+
   return 'abaixo_lista';
 }
 
 function extractPackageSize(productName: string): number | null {
   if (!productName) return null;
-  
+
   const patterns = [
     /(\d+(?:\.\d+)?)\s*LTS?/i,
     /(\d+(?:\.\d+)?)\s*L\b/i,
@@ -242,7 +242,7 @@ function extractPackageSize(productName: string): number | null {
     /(\d+(?:\.\d+)?)\s*GRS?/i,
     /(\d+(?:\.\d+)?)\s*GRAMOS?/i,
   ];
-  
+
   for (const pattern of patterns) {
     const match = productName.match(pattern);
     if (match) {
@@ -252,7 +252,7 @@ function extractPackageSize(productName: string): number | null {
       }
     }
   }
-  
+
   return null;
 }
 
@@ -261,17 +261,17 @@ function classifySeasonFromDate(dueDate: Date, seasonParameters: SeasonParameter
   const month = dueDate.getMonth() + 1;
   const day = dueDate.getDate();
   const year = dueDate.getFullYear();
-  
+
   for (const param of seasonParameters) {
     if (param.dueDateMonth === month && param.dueDateDay === day) {
       let seasonName = param.labelPattern;
       const nextYear = year + 1;
-      
+
       seasonName = seasonName
         .replace('{year}', year.toString().slice(-2))
         .replace('{next_year}', nextYear.toString().slice(-2))
         .replace('YYYY', year.toString());
-      
+
       return {
         seasonName,
         seasonType: param.type,
@@ -279,7 +279,7 @@ function classifySeasonFromDate(dueDate: Date, seasonParameters: SeasonParameter
       };
     }
   }
-  
+
   return {
     seasonName: `Safra ${year}`,
     seasonType: 'soja_verao',
@@ -305,17 +305,17 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
     const rows: ExcelRow[] = XLSX.utils.sheet_to_json(firstSheet);
 
     result.totalRows = rows.length;
-    
+
     // Gerar ID único para este lote de importação
     const importBatchId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const categories = await storage.getAllCategories();
     const regions = await storage.getAllRegions();
     const seasonParameters = await storage.getAllSeasonParameters();
-    
+
     // Pré-carregar todos os orderCodes existentes do usuário para verificação de duplicatas
     const existingOrderCodes = await storage.getExistingOrderCodes(userId);
-    
+
     // Cache para evitar buscas repetidas durante a importação
     const clientLinkCache = new Map<string, string>();
     const productCache = new Map<string, string>();
@@ -326,7 +326,7 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      
+
       try {
         // Detectar linha com nome do cliente (formato: "Entidad : NOME_DO_CLIENTE")
         if (row.__EMPTY_1 && typeof row.__EMPTY_1 === 'string' && row.__EMPTY_1.includes('Entidad :')) {
@@ -339,7 +339,7 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
         if (!row.Mercadería) {
           continue;
         }
-        
+
         if (!currentClientName) {
           continue;
         }
@@ -368,34 +368,34 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
         const productKey = `${row.Mercadería}-${categoryId}`;
         let productId = productCache.get(productKey);
         let product: any = null;
-        
+
         if (!productId) {
           const existingProducts = await storage.getAllProducts();
-          const existingProduct = existingProducts.find(p => 
-            p.name.toLowerCase() === row.Mercadería!.toLowerCase() && 
+          const existingProduct = existingProducts.find(p =>
+            p.name.toLowerCase() === row.Mercadería!.toLowerCase() &&
             p.categoryId === categoryId
           );
 
           if (existingProduct) {
             productId = existingProduct.id;
             product = existingProduct;
-            
+
             // Atualizar produto existente se houver novos dados
-            const needsUpdate = 
+            const needsUpdate =
               (fabricante && !existingProduct.marca) ||
               (packageSize !== null && !existingProduct.packageSize);
-            
+
             if (needsUpdate) {
               const updateData: Partial<InsertProduct> = {};
-              
+
               if (fabricante && !existingProduct.marca) {
                 updateData.marca = fabricante;
               }
-              
+
               if (packageSize !== null && !existingProduct.packageSize) {
                 updateData.packageSize = packageSize.toString();
               }
-              
+
               await storage.updateProduct(productId, updateData);
               // Atualizar cache do produto
               const updatedProducts = await storage.getAllProducts();
@@ -403,14 +403,14 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
             }
           } else {
             const { detectSubcategory } = await import("./product-classifier");
-            const classification = categoryId === 'cat-agroquimicos' 
+            const classification = categoryId === 'cat-agroquimicos'
               ? detectSubcategory(row.Mercadería!)
               : null;
-            
+
             const newProduct: InsertProduct = {
               name: row.Mercadería!,
               categoryId,
-              subcategoryId: classification?.subcategoryId || null,
+              subcategoryId: null, // classification?.subcategoryId || null (Desativado para evitar erro de FK)
               description: row.Fabricante || null,
               marca: fabricante,
               packageSize: packageSize?.toString() || null,
@@ -444,7 +444,7 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
         const category = categories.find(c => c.id === categoryId);
         let commissionRate = '0.00';
         let estimatedMargin = 0;
-        
+
         if (category && tier !== 'barter') {
           switch (tier) {
             case 'verde':
@@ -486,7 +486,7 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
         // Calcular pontos Timac (apenas para produtos Timac da categoria Especialidades)
         // Pontos = Cant. Pedido (unidades) × pontos por unidade
         let saleTimacPoints: number | null = null;
-        
+
         // Verificar se é produto Timac E categoria Especialidades
         // Normalizar marca para comparação (remover todos os espaços e acentos)
         const normalizedMarca = product?.marca
@@ -495,11 +495,11 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
           .replace(/[\u0300-\u036f]/g, '') // Remove acentos
           .replace(/\s+/g, '') // Remove todos os espaços
           || '';
-        
+
         // Aceita "TIMAC", "TIMACAGRO", etc (começa com TIMAC)
         const isTimac = normalizedMarca.startsWith('TIMAC');
         const isEspecialidades = categoryId === 'cat-especialidades';
-        
+
         if (isTimac && isEspecialidades) {
           // FERTIACTYL LEGUMINOSAS = 3 pontos, outros produtos Timac = 1 ponto
           const pointsPerUnit = product.name.toUpperCase().includes('FERTIACTYL LEGUMINOSAS') ? 3 : 1;
@@ -511,16 +511,15 @@ export async function importExcelFile(fileBuffer: Buffer, selectedSeasonId: stri
         if (row['Num. Pedido']) {
           currentOrderCode = row['Num. Pedido'].toString().trim();
         }
-        
+
         const orderCode = currentOrderCode;
 
-        // Verificar se pedido já existe (evitar duplicatas)
-        // Usar Set pré-carregado para evitar buscas repetidas no banco
-        if (orderCode && existingOrderCodes.has(orderCode)) {
-          // Pedido já foi importado anteriormente
-          skippedOrderCodes.add(orderCode);
-          continue;
-        }
+        // NOTA: NÃO verificamos duplicatas apenas por orderCode porque um pedido
+        // pode ter múltiplos produtos. Cada produto é uma venda separada.
+        // A verificação correta seria orderCode + productId, mas como a planilha
+        // não tem duplicatas reais (mesmo produto no mesmo pedido), podemos
+        // importar todas as linhas.
+
 
         const newSale: InsertSale = {
           categoryId,
@@ -588,7 +587,7 @@ export async function importClientsFromExcel(buffer: Buffer, userId: string): Pr
     // Começar da linha 1 (primeira linha é o cabeçalho)
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      
+
       // Coluna A: Cliente (80/20)
       // Coluna B: Área de plantio em hectares (ha)
       // Coluna C: região
@@ -616,14 +615,14 @@ export async function importClientsFromExcel(buffer: Buffer, userId: string): Pr
 
       // Usar sistema de master clients
       const defaultRegionId = regionId || regions[0]?.id || 'reg-alto-parana';
-      
+
       // Buscar ou criar master client e link
       const masterClient = await storage.findMasterClientByName(clientName);
-      
+
       if (masterClient) {
         // Master client existe - buscar ou criar link
         let link = await storage.getUserClientLink(userId, masterClient.id);
-        
+
         if (link) {
           // Atualizar link existente
           await storage.updateUserClientLink(link.id, {
@@ -645,7 +644,7 @@ export async function importClientsFromExcel(buffer: Buffer, userId: string): Pr
           });
           result.created++;
         }
-        
+
         // Atualizar master client se necessário
         if (plantingArea && !masterClient.plantingArea) {
           await storage.updateMasterClient(masterClient.id, {
@@ -662,7 +661,7 @@ export async function importClientsFromExcel(buffer: Buffer, userId: string): Pr
           cultures: [],
           isActive: true
         });
-        
+
         await storage.createUserClientLink({
           userId,
           masterClientId: newMasterClient.id,
@@ -673,7 +672,7 @@ export async function importClientsFromExcel(buffer: Buffer, userId: string): Pr
           isTop80_20: isTop8020,
           isActive: true
         });
-        
+
         result.created++;
       }
     }

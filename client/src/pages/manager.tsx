@@ -21,6 +21,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import pptxgen from 'pptxgenjs';
 import type { Season, SeasonGoal, InsertSeasonGoal } from '@shared/schema';
+import { GestaoPotencialTabContent } from '@/components/gestao-potencial-tab';
 
 interface TeamData {
   totalSales: number;
@@ -44,7 +45,7 @@ export default function ManagerDashboard() {
   // Read hash from URL to determine active tab
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['dashboard', 'team', 'action-plans', 'metas'].includes(hash)) {
+    if (hash && ['dashboard', 'team', 'action-plans', 'metas', 'gestao-potencial'].includes(hash)) {
       setActiveTab(hash);
     } else {
       setActiveTab('dashboard');
@@ -52,7 +53,7 @@ export default function ManagerDashboard() {
 
     const handleHashChange = () => {
       const newHash = window.location.hash.replace('#', '');
-      if (newHash && ['dashboard', 'team', 'action-plans', 'metas'].includes(newHash)) {
+      if (newHash && ['dashboard', 'team', 'action-plans', 'metas', 'gestao-potencial'].includes(newHash)) {
         setActiveTab(newHash);
       } else {
         setActiveTab('dashboard');
@@ -72,19 +73,19 @@ export default function ManagerDashboard() {
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
-    
+
     // Title
     doc.setFontSize(20);
     doc.text('Painel Gerente - Relatório Consolidado', pageWidth / 2, 15, { align: 'center' });
-    
+
     // Date
     doc.setFontSize(10);
     doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, pageWidth / 2, 22, { align: 'center' });
-    
+
     // Summary metrics
     doc.setFontSize(12);
     doc.text('Resumo Executivo', 14, 35);
-    
+
     doc.setFontSize(10);
     let yPos = 45;
     doc.text(`Total de Vendas: $${teamData.totalSales.toLocaleString()}`, 14, yPos);
@@ -93,18 +94,18 @@ export default function ManagerDashboard() {
     yPos += 7;
     doc.text(`Membros da Equipe: ${teamData.teamMembers.length}`, 14, yPos);
     yPos += 15;
-    
+
     // Team ranking table
     doc.setFontSize(12);
     doc.text('Ranking da Equipe', 14, yPos);
     yPos += 5;
-    
+
     const sortedMembers = [...teamData.teamMembers].sort((a, b) => b.totalSales - a.totalSales);
     const tableData = sortedMembers.map((member, index) => {
-      const percentage = teamData.totalSales > 0 
+      const percentage = teamData.totalSales > 0
         ? ((member.totalSales / teamData.totalSales) * 100).toFixed(1)
         : '0.0';
-      
+
       return [
         `${index + 1}º`,
         member.name,
@@ -113,7 +114,7 @@ export default function ManagerDashboard() {
         member.timacPoints.toLocaleString(),
       ];
     });
-    
+
     autoTable(doc, {
       startY: yPos,
       head: [['#', 'Consultor', 'Vendas', '% Total', 'Pontos Timac']],
@@ -121,10 +122,10 @@ export default function ManagerDashboard() {
       theme: 'grid',
       headStyles: { fillColor: [34, 197, 94] },
     });
-    
+
     // Save PDF
     doc.save(`painel-gerente-${new Date().toISOString().split('T')[0]}.pdf`);
-    
+
     toast({
       title: 'PDF exportado',
       description: 'O relatório foi baixado com sucesso.',
@@ -143,7 +144,7 @@ export default function ManagerDashboard() {
     <div className="flex flex-col h-screen overflow-hidden" data-testid="manager-dashboard-container">
       <Header />
       <ManagerNavbar activeTab={activeTab} onTabChange={setActiveTab} />
-      
+
       <main className="flex-1 overflow-y-auto">
         <div className="p-8">
           {activeTab === 'dashboard' && (
@@ -163,6 +164,18 @@ export default function ManagerDashboard() {
           {activeTab === 'action-plans' && <ActionPlansTab />}
 
           {activeTab === 'metas' && <ManagerGoalsTab />}
+
+          {activeTab === 'gestao-potencial' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Gestão de Potencial</h2>
+                  <p className="text-muted-foreground">Configure o potencial de mercado e manejo para toda a equipe</p>
+                </div>
+              </div>
+              <GestaoPotencialTabContent />
+            </div>
+          )}
         </div>
       </main>
     </div>
@@ -207,7 +220,7 @@ function DashboardTab({ teamData }: { teamData?: TeamData }) {
     .slice(0, 10);
 
   const timacValue = teamData.totalTimacPoints * parseFloat(teamData.gerentesValue || '0');
-  
+
   // Helper to get text color for deviation based on performance
   const getDeviationColor = (deviation: number) => {
     if (deviation > 0) return 'text-green-600 font-semibold';
@@ -218,22 +231,22 @@ function DashboardTab({ teamData }: { teamData?: TeamData }) {
   // Transform sales evolution data for multi-line chart
   const chartData = useMemo(() => {
     if (!salesEvolution || salesEvolution.length === 0) return [];
-    
+
     // Group by month
     const monthlyData: Record<string, any> = {};
-    
+
     salesEvolution.forEach((item: any) => {
       const month = item.month;
       const category = item.category || 'Outros';
       const amount = parseFloat(item.totalAmount || '0');
-      
+
       if (!monthlyData[month]) {
         monthlyData[month] = { month };
       }
-      
+
       monthlyData[month][category] = amount;
     });
-    
+
     return Object.values(monthlyData).sort((a: any, b: any) => a.month.localeCompare(b.month));
   }, [salesEvolution]);
 
@@ -310,8 +323,6 @@ function DashboardTab({ teamData }: { teamData?: TeamData }) {
             <p className="text-xs text-muted-foreground mt-1">Consultores ativos</p>
           </CardContent>
         </Card>
-
-        <SoybeanPriceCard />
       </div>
 
       {/* Market Penetration Analysis */}
@@ -381,7 +392,7 @@ function DashboardTab({ teamData }: { teamData?: TeamData }) {
                   <span className="font-medium">{goalProgress.toFixed(1)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
-                  <div 
+                  <div
                     className={`h-4 rounded-full transition-all ${goalProgress >= 100 ? 'bg-green-600' : 'bg-primary'}`}
                     style={{ width: `${Math.min(goalProgress, 100)}%` }}
                   ></div>
@@ -493,7 +504,7 @@ function MarketPenetrationTab({
   setSeason3: (value: string) => void;
 }) {
   const { toast } = useToast();
-  
+
   const { data: seasons } = useQuery<any[]>({
     queryKey: ['/api/seasons'],
   });
@@ -503,7 +514,7 @@ function MarketPenetrationTab({
 
   // Get market percentages (for Mercado column) - uses (sales + FECHADAS) / potential
   const { data: marketPercentagesMulti } = useQuery<any>({
-    queryKey: seasonIds 
+    queryKey: seasonIds
       ? [`/api/manager/team-market-percentages-multi?seasonIds=${seasonIds}`]
       : ['/api/manager/team-market-percentages-multi'],
     enabled: !!seasonIds,
@@ -571,16 +582,16 @@ function MarketPenetrationTab({
   const allCategories = Array.from(categoriesSet).sort((a, b) => {
     const indexA = categoryOrder.indexOf(a);
     const indexB = categoryOrder.indexOf(b);
-    
+
     // If both are in the order list, sort by their position
     if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-    
+
     // If only A is in the list, it comes first
     if (indexA !== -1) return -1;
-    
+
     // If only B is in the list, it comes first
     if (indexB !== -1) return 1;
-    
+
     // If neither is in the list, sort alphabetically
     return a.localeCompare(b);
   });
@@ -623,7 +634,7 @@ function MarketPenetrationTab({
     const headerRow1: any[] = [
       { text: 'Família', options: { fill: '2a4a6f', color: 'FFFFFF', bold: true, align: 'left' } }
     ];
-    
+
     if (season1) {
       headerRow1.push(
         { text: '', options: { fill: '2a4a6f', color: 'FFFFFF', bold: true, align: 'center' } },
@@ -650,7 +661,7 @@ function MarketPenetrationTab({
     const headerRow2: any[] = [
       { text: '', options: { fill: '2a4a6f', color: 'FFFFFF', bold: true } }
     ];
-    
+
     if (season1) {
       headerRow2.push(
         { text: 'C.Vale', options: { fill: '2a4a6f', color: 'FFFFFF', bold: true, align: 'center' } },
@@ -749,7 +760,7 @@ function MarketPenetrationTab({
 
     // Save file
     await pptx.writeFile({ fileName: 'Penetracao_Mercado.pptx' });
-    
+
     toast({
       title: 'Exportado com sucesso',
       description: 'A apresentação PowerPoint foi gerada.',
@@ -908,7 +919,7 @@ function TeamTab({ teamData }: { teamData?: TeamData }) {
 
   // Sort by total sales descending
   const sortedMembers = [...teamData.teamMembers].sort((a, b) => b.totalSales - a.totalSales);
-  
+
   // Calculate max values for percentage bars
   const maxSales = Math.max(...teamData.teamMembers.map(m => m.totalSales), 1);
   const maxTimac = Math.max(...teamData.teamMembers.map(m => m.timacPoints), 1);
@@ -936,7 +947,7 @@ function TeamTab({ teamData }: { teamData?: TeamData }) {
               {sortedMembers.map((member, index) => {
                 const salesPercent = (member.totalSales / teamData.totalSales) * 100;
                 const timacPercent = (member.timacPoints / teamData.totalTimacPoints) * 100;
-                
+
                 return (
                   <TableRow key={member.id} data-testid={`team-member-${member.id}`}>
                     <TableCell className="font-medium">{index + 1}º</TableCell>
@@ -945,8 +956,8 @@ function TeamTab({ teamData }: { teamData?: TeamData }) {
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div 
-                            className="bg-primary h-2 rounded-full" 
+                          <div
+                            className="bg-primary h-2 rounded-full"
                             style={{ width: `${(member.totalSales / maxSales) * 100}%` }}
                           ></div>
                         </div>
@@ -957,8 +968,8 @@ function TeamTab({ teamData }: { teamData?: TeamData }) {
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full" 
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
                             style={{ width: `${(member.timacPoints / maxTimac) * 100}%` }}
                           ></div>
                         </div>
@@ -999,8 +1010,8 @@ function ActionPlansTab() {
           <h2 className="text-2xl font-bold">Planos de Ação</h2>
           <p className="text-muted-foreground">Gerencie reuniões e ações da equipe</p>
         </div>
-        <CreateActionPlanDialog 
-          open={showNewPlanDialog} 
+        <CreateActionPlanDialog
+          open={showNewPlanDialog}
           onOpenChange={setShowNewPlanDialog}
         />
       </div>
@@ -1012,8 +1023,8 @@ function ActionPlansTab() {
       ) : actionPlans && actionPlans.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {actionPlans.map((plan) => (
-            <Card 
-              key={plan.id} 
+            <Card
+              key={plan.id}
               className="cursor-pointer hover:shadow-lg transition-shadow"
               onClick={() => setSelectedPlan(plan)}
               data-testid={`action-plan-card-${plan.id}`}
@@ -1204,14 +1215,28 @@ function ManagerGoalsTab() {
   const [globalSubcategoryValues, setGlobalSubcategoryValues] = useState<Record<string, Record<string, string>>>({});
   const [viewSeasonId, setViewSeasonId] = useState<string>("");
 
-  // Estados para "Configurar Manejo"
+  // Estados para "Configurar Manejo" (mantidos aqui apenas para compatibilidade do JSX abaixo,
+  // mas o acesso principal foi movido para a aba "Gestão de Potencial")
   const [showManejoDialog, setShowManejoDialog] = useState(false);
   const [showAddApplicationDialog, setShowAddApplicationDialog] = useState(false);
-  const [applicationCategory, setApplicationCategory] = useState<"FUNGICIDAS" | "INSETICIDAS">("FUNGICIDAS");
+  type ApplicationCategory =
+    | "FUNGICIDAS"
+    | "INSETICIDAS"
+    | "DESSECAÇÃO"
+    | "TRATAMENTO DE SEMENTE"
+    | "FERTILIZANTES"
+    | "SEMENTES"
+    | "ESPECIALIDADES"
+    | "CORRETIVOS";
+  const [applicationCategory, setApplicationCategory] = useState<ApplicationCategory>("FUNGICIDAS");
   const [applicationNumber, setApplicationNumber] = useState<number>(1);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [selectedPriceTier, setSelectedPriceTier] = useState<string>("verde");
-  const [productsInApplication, setProductsInApplication] = useState<Array<{productId: string; priceTier: string}>>([]);
+  const [customProductName, setCustomProductName] = useState<string>("");
+  const [customPricePerHa, setCustomPricePerHa] = useState<string>("");
+  const [productsInApplication, setProductsInApplication] = useState<
+    Array<{ productId?: string; priceTier?: string; customName?: string; customPricePerHa?: string }>
+  >([]);
 
   const [formData, setFormData] = useState({
     seasonId: "",
@@ -1244,12 +1269,12 @@ function ManagerGoalsTab() {
 
   const { data: globalManagementApplications } = useQuery<any[]>({
     queryKey: ["/api/global-management", viewSeasonId],
-    queryFn: viewSeasonId 
+    queryFn: viewSeasonId
       ? async () => {
-          const res = await fetch(`/api/global-management?seasonId=${viewSeasonId}`);
-          if (!res.ok) throw new Error('Failed to fetch global management');
-          return res.json();
-        }
+        const res = await fetch(`/api/global-management?seasonId=${viewSeasonId}`);
+        if (!res.ok) throw new Error('Failed to fetch global management');
+        return res.json();
+      }
       : undefined,
     enabled: !!viewSeasonId,
   });
@@ -1259,18 +1284,23 @@ function ManagerGoalsTab() {
     queryKey: ["/api/clients/manager-team/market-rates", globalSeasonId],
     queryFn: globalSeasonId
       ? async () => {
-          const res = await fetch(`/api/clients/manager-team/market-rates/${globalSeasonId}`);
-          if (!res.ok) throw new Error('Failed to fetch market rates');
-          const data = await res.json();
-          console.log('API Response for market rates:', data);
-          return data;
-        }
+        const res = await fetch(`/api/clients/manager-team/market-rates/${globalSeasonId}`);
+        if (!res.ok) throw new Error('Failed to fetch market rates');
+        const data = await res.json();
+        console.log('API Response for market rates:', data);
+        return data;
+      }
       : undefined,
     enabled: !!globalSeasonId && showGlobalConfig,
   });
 
   const fungicidasProducts = priceTableProducts?.filter((p: any) => p.categoria === "FUNGICIDAS") || [];
   const inseticidasProducts = priceTableProducts?.filter((p: any) => p.categoria === "INSETICIDAS") || [];
+  const desseccaoProducts = priceTableProducts?.filter((p: any) => p.categoria === "DESSECAÇÃO") || [];
+  const tratamentoSementeProducts =
+    priceTableProducts?.filter((p: any) => p.categoria === "TRATAMENTO_SEMENTE") || [];
+  const especialidadesProducts =
+    priceTableProducts?.filter((p: any) => p.categoria === "ESPECIALIDADES") || [];
 
   const { data: seasonGoals, isLoading: goalsLoading } = useQuery<SeasonGoal[]>({
     queryKey: ["/api/season-goals"],
@@ -1354,7 +1384,7 @@ function ManagerGoalsTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/market-analysis"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kanban-metas"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients/manager-team/market-rates", globalSeasonId] });
-      
+
       const count = response?.count || 0;
       const categoryCount = response?.categoryCount || 0;
       toast({
@@ -1380,12 +1410,12 @@ function ManagerGoalsTab() {
       if (!globalSeasonId) {
         throw new Error("Safra não selecionada");
       }
-      
+
       // Use existing market rates data to recalculate
       if (!existingMarketRates || existingMarketRates.length === 0) {
         throw new Error("Nenhum valor de potencial salvo para esta safra");
       }
-      
+
       // Build rates array from existing data
       const rates = existingMarketRates.map((rate: any) => ({
         categoryId: rate.categoryId,
@@ -1393,7 +1423,7 @@ function ManagerGoalsTab() {
         investmentPerHa: rate.investmentPerHa,
         subcategories: rate.subcategories || null
       }));
-      
+
       return apiRequest("POST", `/api/clients/manager-team/market-rates`, {
         allRates: rates
       });
@@ -1401,7 +1431,7 @@ function ManagerGoalsTab() {
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/market-analysis"] });
       queryClient.invalidateQueries({ queryKey: ["/api/kanban-metas"] });
-      
+
       const count = response?.count || 0;
       const categoryCount = existingMarketRates?.length || 0;
       toast({
@@ -1420,7 +1450,15 @@ function ManagerGoalsTab() {
 
   // Mutations para "Configurar Manejo"
   const createApplicationMutation = useMutation({
-    mutationFn: async (data: { categoria: string; applicationNumber: number; productId: string; priceTier: string; seasonId: string }) => {
+    mutationFn: async (data: {
+      categoria: string;
+      applicationNumber: number;
+      seasonId: string;
+      productId?: string;
+      priceTier?: string;
+      customName?: string;
+      customPricePerHa?: string;
+    }) => {
       return apiRequest("POST", "/api/global-management", data);
     },
     onSuccess: () => {
@@ -1500,18 +1538,18 @@ function ManagerGoalsTab() {
       if (existingMarketRates.length > 0) {
         const rateValues: Record<string, string> = {};
         const subValues: Record<string, Record<string, string>> = {};
-        
+
         existingMarketRates.forEach((rate: any) => {
           // Convert investment to string, handling both number and string types
           const investmentValue = rate.investmentPerHa ? String(rate.investmentPerHa) : '';
           console.log(`Setting rate for ${rate.categoryId}:`, investmentValue);
           rateValues[rate.categoryId] = investmentValue;
-          
+
           if (rate.subcategories) {
             subValues[rate.categoryId] = rate.subcategories;
           }
         });
-        
+
         console.log('Final rateValues:', rateValues);
         setGlobalRateValues(rateValues);
         setGlobalSubcategoryValues(subValues);
@@ -1542,10 +1580,10 @@ function ManagerGoalsTab() {
       categories.forEach((category: any) => {
         const categoryId = category.id;
         const investmentPerHa = globalRateValues[categoryId];
-        
+
         if (investmentPerHa) {
           const isAgroquimicos = category.name.toLowerCase().includes('agroqu');
-          const subcategories = isAgroquimicos && globalSubcategoryValues[categoryId] 
+          const subcategories = isAgroquimicos && globalSubcategoryValues[categoryId]
             ? globalSubcategoryValues[categoryId]
             : undefined;
 
@@ -1612,9 +1650,9 @@ function ManagerGoalsTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const globalGoal = calculateGlobalGoal();
-    
+
     if (!formData.seasonId || globalGoal === 0) {
       toast({
         title: "Campos obrigatórios",
@@ -1676,7 +1714,7 @@ function ManagerGoalsTab() {
   const goalsWithDetails = (seasonGoals || []).map(goal => {
     const season = seasons?.find(s => s.id === goal.seasonId);
     const goalSales = (sales as any[])?.filter(s => s.seasonId === goal.seasonId) || [];
-    
+
     const categoryMap: Record<string, string> = {
       "Agroquímicos": "cat-agroquimicos",
       "Especialidades": "cat-especialidades",
@@ -1687,14 +1725,14 @@ function ManagerGoalsTab() {
       "Fertilizantes": "cat-fertilizantes",
       "Corretivos": "cat-corretivos",
     };
-    
+
     const salesByCategory = goalSales.reduce((acc: Record<string, number>, sale: any) => {
       const categoryId = sale.categoryId;
       const amount = parseFloat(sale.totalAmount || "0");
       acc[categoryId] = (acc[categoryId] || 0) + amount;
       return acc;
     }, {});
-    
+
     const realizadoAgroquimicos = salesByCategory[categoryMap["Agroquímicos"]] || 0;
     const realizadoEspecialidades = salesByCategory[categoryMap["Especialidades"]] || 0;
     const realizadoSementesMilho = salesByCategory[categoryMap["Sementes Milho"]] || 0;
@@ -1703,12 +1741,12 @@ function ManagerGoalsTab() {
     const realizadoSementesDiversas = salesByCategory[categoryMap["Sementes Diversas"]] || 0;
     const realizadoFertilizantes = salesByCategory[categoryMap["Fertilizantes"]] || 0;
     const realizadoCorretivos = salesByCategory[categoryMap["Corretivos"]] || 0;
-    
-    const achievedAmount = realizadoAgroquimicos + realizadoEspecialidades + 
-                          realizadoSementesMilho + realizadoSementesSoja + 
-                          realizadoSementesTrigo + realizadoSementesDiversas + 
-                          realizadoFertilizantes + realizadoCorretivos;
-    
+
+    const achievedAmount = realizadoAgroquimicos + realizadoEspecialidades +
+      realizadoSementesMilho + realizadoSementesSoja +
+      realizadoSementesTrigo + realizadoSementesDiversas +
+      realizadoFertilizantes + realizadoCorretivos;
+
     const metaAgroquimicosNum = parseFloat(goal.metaAgroquimicos || "0");
     const metaEspecialidadesNum = parseFloat(goal.metaEspecialidades || "0");
     const metaSementesMilhoNum = parseFloat(goal.metaSementesMilho || "0");
@@ -1717,7 +1755,7 @@ function ManagerGoalsTab() {
     const metaSementesDiversasNum = parseFloat(goal.metaSementesDiversas || "0");
     const metaFertilizantesNum = parseFloat(goal.metaFertilizantes || "0");
     const metaCorretivosNum = parseFloat(goal.metaCorretivos || "0");
-    
+
     const percentAgroquimicos = metaAgroquimicosNum > 0 ? (realizadoAgroquimicos / metaAgroquimicosNum) * 100 : 0;
     const percentEspecialidades = metaEspecialidadesNum > 0 ? (realizadoEspecialidades / metaEspecialidadesNum) * 100 : 0;
     const percentSementesMilho = metaSementesMilhoNum > 0 ? (realizadoSementesMilho / metaSementesMilhoNum) * 100 : 0;
@@ -1726,7 +1764,7 @@ function ManagerGoalsTab() {
     const percentSementesDiversas = metaSementesDiversasNum > 0 ? (realizadoSementesDiversas / metaSementesDiversasNum) * 100 : 0;
     const percentFertilizantes = metaFertilizantesNum > 0 ? (realizadoFertilizantes / metaFertilizantesNum) * 100 : 0;
     const percentCorretivos = metaCorretivosNum > 0 ? (realizadoCorretivos / metaCorretivosNum) * 100 : 0;
-    
+
     const goalAmountNum = parseFloat(goal.goalAmount);
     const percentage = goalAmountNum > 0 ? (achievedAmount / goalAmountNum) * 100 : 0;
 
@@ -1768,8 +1806,8 @@ function ManagerGoalsTab() {
 
   const totalGoals = goalsWithDetails.length;
   const activeGoals = goalsWithDetails.filter(g => g.status === "em_andamento").length;
-  const averageAchievement = totalGoals > 0 
-    ? goalsWithDetails.reduce((sum, goal) => sum + goal.percentage, 0) / totalGoals 
+  const averageAchievement = totalGoals > 0
+    ? goalsWithDetails.reduce((sum, goal) => sum + goal.percentage, 0) / totalGoals
     : 0;
 
   return (
@@ -1838,27 +1876,13 @@ function ManagerGoalsTab() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Minhas Metas por Safra</CardTitle>
           <div className="flex gap-2">
-            <Button 
+            <Button
               variant="outline"
               onClick={openGlobalConfigDialog}
               data-testid="button-incluir-potencial-geral"
             >
               <Settings className="h-4 w-4 mr-2" />
               Incluir Potencial Geral
-            </Button>
-            <Button 
-              variant="outline"
-              onClick={() => {
-                const activeSeason = seasons?.find(s => s.isActive);
-                if (activeSeason) {
-                  setViewSeasonId(activeSeason.id);
-                }
-                setShowManejoDialog(true);
-              }}
-              data-testid="button-configurar-manejo"
-            >
-              <Target className="h-4 w-4 mr-2" />
-              Configurar Manejo
             </Button>
             <Dialog open={showNewGoalModal} onOpenChange={(open) => {
               setShowNewGoalModal(open);
@@ -1871,166 +1895,166 @@ function ManagerGoalsTab() {
                 </Button>
               </DialogTrigger>
               <DialogContent data-testid="new-goal-modal" className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingGoal ? "Editar Meta de Safra" : "Nova Meta de Safra"}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="season">Safra *</Label>
-                  <Select value={formData.seasonId} onValueChange={(value) => 
-                    setFormData(prev => ({ ...prev, seasonId: value }))
-                  }>
-                    <SelectTrigger data-testid="select-season">
-                      <SelectValue placeholder="Selecione a safra" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {seasons?.map((season) => (
-                        <SelectItem key={season.id} value={season.id}>
-                          {season.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <DialogHeader>
+                  <DialogTitle>{editingGoal ? "Editar Meta de Safra" : "Nova Meta de Safra"}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="season">Safra *</Label>
+                    <Select value={formData.seasonId} onValueChange={(value) =>
+                      setFormData(prev => ({ ...prev, seasonId: value }))
+                    }>
+                      <SelectTrigger data-testid="select-season">
+                        <SelectValue placeholder="Selecione a safra" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {seasons?.map((season) => (
+                          <SelectItem key={season.id} value={season.id}>
+                            {season.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold">Metas por Categoria (USD)</Label>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="metaAgroquimicos">Agroquímicos</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.metaAgroquimicos}
-                        onChange={(e) => setFormData(prev => ({ ...prev, metaAgroquimicos: e.target.value }))}
-                        placeholder="0.00"
-                        className="font-mono"
-                        data-testid="input-meta-agroquimicos"
-                      />
-                    </div>
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold">Metas por Categoria (USD)</Label>
 
-                    <div>
-                      <Label htmlFor="metaEspecialidades">Especialidades</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.metaEspecialidades}
-                        onChange={(e) => setFormData(prev => ({ ...prev, metaEspecialidades: e.target.value }))}
-                        placeholder="0.00"
-                        className="font-mono"
-                        data-testid="input-meta-especialidades"
-                      />
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="metaAgroquimicos">Agroquímicos</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.metaAgroquimicos}
+                          onChange={(e) => setFormData(prev => ({ ...prev, metaAgroquimicos: e.target.value }))}
+                          placeholder="0.00"
+                          className="font-mono"
+                          data-testid="input-meta-agroquimicos"
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor="metaSementesMilho">Sementes Milho</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.metaSementesMilho}
-                        onChange={(e) => setFormData(prev => ({ ...prev, metaSementesMilho: e.target.value }))}
-                        placeholder="0.00"
-                        className="font-mono"
-                        data-testid="input-meta-sementes-milho"
-                      />
-                    </div>
+                      <div>
+                        <Label htmlFor="metaEspecialidades">Especialidades</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.metaEspecialidades}
+                          onChange={(e) => setFormData(prev => ({ ...prev, metaEspecialidades: e.target.value }))}
+                          placeholder="0.00"
+                          className="font-mono"
+                          data-testid="input-meta-especialidades"
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor="metaSementesSoja">Sementes Soja</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.metaSementesSoja}
-                        onChange={(e) => setFormData(prev => ({ ...prev, metaSementesSoja: e.target.value }))}
-                        placeholder="0.00"
-                        className="font-mono"
-                        data-testid="input-meta-sementes-soja"
-                      />
-                    </div>
+                      <div>
+                        <Label htmlFor="metaSementesMilho">Sementes Milho</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.metaSementesMilho}
+                          onChange={(e) => setFormData(prev => ({ ...prev, metaSementesMilho: e.target.value }))}
+                          placeholder="0.00"
+                          className="font-mono"
+                          data-testid="input-meta-sementes-milho"
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor="metaSementesTrigo">Sementes Trigo</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.metaSementesTrigo}
-                        onChange={(e) => setFormData(prev => ({ ...prev, metaSementesTrigo: e.target.value }))}
-                        placeholder="0.00"
-                        className="font-mono"
-                        data-testid="input-meta-sementes-trigo"
-                      />
-                    </div>
+                      <div>
+                        <Label htmlFor="metaSementesSoja">Sementes Soja</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.metaSementesSoja}
+                          onChange={(e) => setFormData(prev => ({ ...prev, metaSementesSoja: e.target.value }))}
+                          placeholder="0.00"
+                          className="font-mono"
+                          data-testid="input-meta-sementes-soja"
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor="metaSementesDiversas">Sementes Diversas</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.metaSementesDiversas}
-                        onChange={(e) => setFormData(prev => ({ ...prev, metaSementesDiversas: e.target.value }))}
-                        placeholder="0.00"
-                        className="font-mono"
-                        data-testid="input-meta-sementes-diversas"
-                      />
-                    </div>
+                      <div>
+                        <Label htmlFor="metaSementesTrigo">Sementes Trigo</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.metaSementesTrigo}
+                          onChange={(e) => setFormData(prev => ({ ...prev, metaSementesTrigo: e.target.value }))}
+                          placeholder="0.00"
+                          className="font-mono"
+                          data-testid="input-meta-sementes-trigo"
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor="metaFertilizantes">Fertilizantes</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.metaFertilizantes}
-                        onChange={(e) => setFormData(prev => ({ ...prev, metaFertilizantes: e.target.value }))}
-                        placeholder="0.00"
-                        className="font-mono"
-                        data-testid="input-meta-fertilizantes"
-                      />
-                    </div>
+                      <div>
+                        <Label htmlFor="metaSementesDiversas">Sementes Diversas</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.metaSementesDiversas}
+                          onChange={(e) => setFormData(prev => ({ ...prev, metaSementesDiversas: e.target.value }))}
+                          placeholder="0.00"
+                          className="font-mono"
+                          data-testid="input-meta-sementes-diversas"
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor="metaCorretivos">Corretivos</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.metaCorretivos}
-                        onChange={(e) => setFormData(prev => ({ ...prev, metaCorretivos: e.target.value }))}
-                        placeholder="0.00"
-                        className="font-mono"
-                        data-testid="input-meta-corretivos"
-                      />
+                      <div>
+                        <Label htmlFor="metaFertilizantes">Fertilizantes</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.metaFertilizantes}
+                          onChange={(e) => setFormData(prev => ({ ...prev, metaFertilizantes: e.target.value }))}
+                          placeholder="0.00"
+                          className="font-mono"
+                          data-testid="input-meta-fertilizantes"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="metaCorretivos">Corretivos</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.metaCorretivos}
+                          onChange={(e) => setFormData(prev => ({ ...prev, metaCorretivos: e.target.value }))}
+                          placeholder="0.00"
+                          className="font-mono"
+                          data-testid="input-meta-corretivos"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="bg-muted p-4 rounded-lg">
-                  <Label className="text-base font-semibold">Meta Global (USD)</Label>
-                  <p className="text-2xl font-bold font-mono mt-2 text-primary">
-                    ${calculateGlobalGoal().toLocaleString()}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Soma das metas por categoria
-                  </p>
-                </div>
+                  <div className="bg-muted p-4 rounded-lg">
+                    <Label className="text-base font-semibold">Meta Global (USD)</Label>
+                    <p className="text-2xl font-bold font-mono mt-2 text-primary">
+                      ${calculateGlobalGoal().toLocaleString()}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Soma das metas por categoria
+                    </p>
+                  </div>
 
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowNewGoalModal(false)}
-                    data-testid="button-cancel"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={createGoalMutation.isPending}
-                    data-testid="button-save"
-                  >
-                    {createGoalMutation.isPending ? "Salvando..." : "Salvar Meta"}
-                  </Button>
-                </div>
-              </form>
+                  <div className="flex justify-end gap-3 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowNewGoalModal(false)}
+                      data-testid="button-cancel"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={createGoalMutation.isPending}
+                      data-testid="button-save"
+                    >
+                      {createGoalMutation.isPending ? "Salvando..." : "Salvar Meta"}
+                    </Button>
+                  </div>
+                </form>
               </DialogContent>
             </Dialog>
           </div>
@@ -2044,7 +2068,7 @@ function ManagerGoalsTab() {
             <div className="text-center py-12">
               <Target className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">Nenhuma meta definida</p>
-              <Button 
+              <Button
                 onClick={() => setShowNewGoalModal(true)}
                 data-testid="button-first-goal"
               >
@@ -2149,7 +2173,7 @@ function ManagerGoalsTab() {
           <DialogHeader>
             <DialogTitle>Incluir Potencial Geral</DialogTitle>
           </DialogHeader>
-          
+
           {/* Season Selection */}
           <div className="mt-4">
             <Label htmlFor="global-season-select" className="text-base font-semibold">Safra</Label>
@@ -2172,9 +2196,9 @@ function ManagerGoalsTab() {
               const categoryId = category.id;
               const categoryName = category.name;
               const isAgroquimicos = categoryName.toLowerCase().includes('agroqu');
-              const hasSubcategoryValues = isAgroquimicos && globalSubcategoryValues[categoryId] 
+              const hasSubcategoryValues = isAgroquimicos && globalSubcategoryValues[categoryId]
                 && Object.values(globalSubcategoryValues[categoryId]).some(v => v?.trim() !== '');
-              
+
               return (
                 <div key={categoryId} className="border rounded-lg p-4 space-y-3">
                   <Label htmlFor={`global-rate-${categoryId}`} className="text-base font-semibold">
@@ -2202,7 +2226,7 @@ function ManagerGoalsTab() {
                       </p>
                     )}
                   </div>
-                  
+
                   {/* Subcategories for Agroquímicos */}
                   {isAgroquimicos && (
                     <div className="mt-4 pl-4 border-l-2 border-primary/20 space-y-3">
@@ -2251,7 +2275,7 @@ function ManagerGoalsTab() {
                       Clique aqui para reaplicar os valores já configurados para todos os clientes da equipe (incluindo novos clientes adicionados após a última configuração).
                     </p>
                   </div>
-                  <Button 
+                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => recalculatePotentialMutation.mutate()}
@@ -2272,8 +2296,8 @@ function ManagerGoalsTab() {
                 <Button variant="outline" onClick={closeGlobalConfigDialog} data-testid="button-cancel-global">
                   Cancelar
                 </Button>
-                <Button 
-                  onClick={handleSaveGlobalRates} 
+                <Button
+                  onClick={handleSaveGlobalRates}
                   disabled={saveGlobalRatesMutation.isPending}
                   data-testid="button-save-global"
                 >
@@ -2317,219 +2341,875 @@ function ManagerGoalsTab() {
                 </p>
               )}
             </div>
-            {/* Fungicidas */}
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Fungicidas</h3>
-                  <Button
-                    size="sm"
-                    disabled={!viewSeasonId}
-                    onClick={() => {
-                      if (!viewSeasonId) {
-                        toast({
-                          title: "Safra não selecionada",
-                          description: "Selecione uma safra antes de adicionar aplicações.",
-                          variant: "destructive"
-                        });
-                        return;
-                      }
-                      if (fungicidasProducts.length === 0) {
-                        toast({
-                          title: "Sem produtos",
-                          description: "Cadastre produtos de fungicidas primeiro no painel admin.",
-                          variant: "destructive"
-                        });
-                        return;
-                      }
-                      setApplicationCategory("FUNGICIDAS");
-                      const existingApps = globalManagementApplications?.filter((a: any) => a.categoria === "FUNGICIDAS") || [];
-                      const maxNumber = existingApps.length > 0 ? Math.max(...existingApps.map((a: any) => a.applicationNumber)) : 0;
-                      setApplicationNumber(maxNumber + 1);
-                      setSelectedProductId(fungicidasProducts[0]?.id || "");
-                      setSelectedPriceTier("verde");
-                      setProductsInApplication([]);
-                      setShowAddApplicationDialog(true);
-                    }}
-                    data-testid="button-add-fungicida"
-                  >
-                    <Target className="h-4 w-4 mr-1" />
-                    Adicionar Aplicação
-                  </Button>
-                </div>
+            {/* Tabs principais do manejo: Fertilizantes, Agroquímicos, Sementes, Especialidades, Corretivos */}
+            <Tabs defaultValue="AGROQUIMICOS" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="FERTILIZANTES">Fertilizantes</TabsTrigger>
+                <TabsTrigger value="AGROQUIMICOS">Agroquímicos</TabsTrigger>
+                <TabsTrigger value="SEMENTES">Sementes</TabsTrigger>
+                <TabsTrigger value="ESPECIALIDADES">Especialidades</TabsTrigger>
+                <TabsTrigger value="CORRETIVOS">Corretivos</TabsTrigger>
+              </TabsList>
 
-                <div className="space-y-2">
-                  {(() => {
-                    const fungicidasApps = globalManagementApplications?.filter((a: any) => a.categoria === "FUNGICIDAS") || [];
-                    
-                    const groupedApps = fungicidasApps.reduce((acc: any, app: any) => {
-                      if (!acc[app.applicationNumber]) {
-                        acc[app.applicationNumber] = [];
-                      }
-                      acc[app.applicationNumber].push(app);
-                      return acc;
-                    }, {});
-                    
-                    const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
-                    
-                    if (appNumbers.length === 0) {
-                      return (
-                        <p className="text-muted-foreground text-sm text-center py-4">
-                          Nenhuma aplicação de fungicida configurada
-                        </p>
-                      );
-                    }
-                    
-                    return appNumbers.map(appNum => {
-                      const apps = groupedApps[appNum];
-                      const totalCost = apps.reduce((sum: number, app: any) => sum + Number(app.pricePerHa || 0), 0);
-                      
-                      return (
-                        <div key={appNum} className="border rounded p-2">
-                          <div className="flex items-start gap-2">
-                            <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
-                            <div className="flex-1 space-y-1">
-                              {apps.map((app: any) => {
-                                const product = priceTableProducts?.find((p: any) => p.id === app.productId);
-                                return (
-                                  <div key={app.id} className="flex items-center gap-2 text-sm">
-                                    <span className="flex-1">{product?.mercaderia || "Produto"}</span>
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                      app.priceTier === "verde" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : 
-                                      app.priceTier === "amarela" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" : 
-                                      "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
-                                    }`}>
-                                      {app.priceTier === "verde" ? "Verde" : app.priceTier === "amarela" ? "Amarela" : "Vermelha"}
-                                    </span>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6"
-                                      onClick={() => deleteApplicationMutation.mutate(app.id)}
-                                      data-testid={`button-delete-app-${app.id}`}
-                                    >
-                                      <Trash className="h-3 w-3 text-red-600" />
-                                    </Button>
-                                  </div>
-                                );
-                              })}
+              {/* Aba Agroquímicos com subcategorias */}
+              <TabsContent value="AGROQUIMICOS" className="space-y-4">
+                {/* Fungicidas */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Fungicidas</h3>
+                      <Button
+                        size="sm"
+                        disabled={!viewSeasonId}
+                        onClick={() => {
+                          if (!viewSeasonId) {
+                            toast({
+                              title: "Safra não selecionada",
+                              description: "Selecione uma safra antes de adicionar aplicações.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          if (fungicidasProducts.length === 0) {
+                            toast({
+                              title: "Sem produtos",
+                              description: "Cadastre produtos de fungicidas primeiro no painel admin.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setApplicationCategory("FUNGICIDAS");
+                          const existingApps =
+                            globalManagementApplications?.filter((a: any) => a.categoria === "FUNGICIDAS") || [];
+                          const maxNumber =
+                            existingApps.length > 0
+                              ? Math.max(...existingApps.map((a: any) => a.applicationNumber))
+                              : 0;
+                          setApplicationNumber(maxNumber + 1);
+                          setSelectedProductId(fungicidasProducts[0]?.id || "");
+                          setSelectedPriceTier("verde");
+                          setProductsInApplication([]);
+                          setShowAddApplicationDialog(true);
+                        }}
+                        data-testid="button-add-fungicida"
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Adicionar Aplicação
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(() => {
+                        const fungicidasApps =
+                          globalManagementApplications?.filter((a: any) => a.categoria === "FUNGICIDAS") || [];
+
+                        const groupedApps = fungicidasApps.reduce((acc: any, app: any) => {
+                          if (!acc[app.applicationNumber]) {
+                            acc[app.applicationNumber] = [];
+                          }
+                          acc[app.applicationNumber].push(app);
+                          return acc;
+                        }, {});
+
+                        const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
+
+                        if (appNumbers.length === 0) {
+                          return (
+                            <p className="text-muted-foreground text-sm text-center py-4">
+                              Nenhuma aplicação de fungicida configurada
+                            </p>
+                          );
+                        }
+
+                        return appNumbers.map((appNum) => {
+                          const apps = groupedApps[appNum];
+                          const totalCost = apps.reduce(
+                            (sum: number, app: any) => sum + Number(app.pricePerHa || 0),
+                            0,
+                          );
+
+                          return (
+                            <div key={appNum} className="border rounded p-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
+                                <div className="flex-1 space-y-1">
+                                  {apps.map((app: any) => {
+                                    const product = priceTableProducts?.find((p: any) => p.id === app.productId);
+                                    return (
+                                      <div key={app.id} className="flex items-center gap-2 text-sm">
+                                        <span className="flex-1">{product?.mercaderia || "Produto"}</span>
+                                        <span
+                                          className={`px-2 py-0.5 rounded text-xs font-medium ${app.priceTier === "verde"
+                                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+                                            : app.priceTier === "amarela"
+                                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100"
+                                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                                            }`}
+                                        >
+                                          {app.priceTier === "verde"
+                                            ? "Verde"
+                                            : app.priceTier === "amarela"
+                                              ? "Amarela"
+                                              : "Vermelha"}
+                                        </span>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6"
+                                          onClick={() => deleteApplicationMutation.mutate(app.id)}
+                                          data-testid={`button-delete-app-${app.id}`}
+                                        >
+                                          <Trash className="h-3 w-3 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
+                              </div>
                             </div>
-                            <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Inseticidas */}
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Inseticidas</h3>
-                  <Button
-                    size="sm"
-                    disabled={!viewSeasonId}
-                    onClick={() => {
-                      if (!viewSeasonId) {
-                        toast({
-                          title: "Safra não selecionada",
-                          description: "Selecione uma safra antes de adicionar aplicações.",
-                          variant: "destructive"
+                          );
                         });
-                        return;
-                      }
-                      if (inseticidasProducts.length === 0) {
-                        toast({
-                          title: "Sem produtos",
-                          description: "Cadastre produtos de inseticidas primeiro no painel admin.",
-                          variant: "destructive"
-                        });
-                        return;
-                      }
-                      setApplicationCategory("INSETICIDAS");
-                      const existingApps = globalManagementApplications?.filter((a: any) => a.categoria === "INSETICIDAS") || [];
-                      const maxNumber = existingApps.length > 0 ? Math.max(...existingApps.map((a: any) => a.applicationNumber)) : 0;
-                      setApplicationNumber(maxNumber + 1);
-                      setSelectedProductId(inseticidasProducts[0]?.id || "");
-                      setSelectedPriceTier("verde");
-                      setProductsInApplication([]);
-                      setShowAddApplicationDialog(true);
-                    }}
-                    data-testid="button-add-inseticida"
-                  >
-                    <Target className="h-4 w-4 mr-1" />
-                    Adicionar Aplicação
-                  </Button>
-                </div>
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <div className="space-y-2">
-                  {(() => {
-                    const inseticidasApps = globalManagementApplications?.filter((a: any) => a.categoria === "INSETICIDAS") || [];
-                    
-                    const groupedApps = inseticidasApps.reduce((acc: any, app: any) => {
-                      if (!acc[app.applicationNumber]) {
-                        acc[app.applicationNumber] = [];
-                      }
-                      acc[app.applicationNumber].push(app);
-                      return acc;
-                    }, {});
-                    
-                    const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
-                    
-                    if (appNumbers.length === 0) {
-                      return (
-                        <p className="text-muted-foreground text-sm text-center py-4">
-                          Nenhuma aplicação de inseticida configurada
-                        </p>
-                      );
-                    }
-                    
-                    return appNumbers.map(appNum => {
-                      const apps = groupedApps[appNum];
-                      const totalCost = apps.reduce((sum: number, app: any) => sum + Number(app.pricePerHa || 0), 0);
-                      
-                      return (
-                        <div key={appNum} className="border rounded p-2">
-                          <div className="flex items-start gap-2">
-                            <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
-                            <div className="flex-1 space-y-1">
-                              {apps.map((app: any) => {
-                                const product = priceTableProducts?.find((p: any) => p.id === app.productId);
-                                return (
-                                  <div key={app.id} className="flex items-center gap-2 text-sm">
-                                    <span className="flex-1">{product?.mercaderia || "Produto"}</span>
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                      app.priceTier === "verde" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : 
-                                      app.priceTier === "amarela" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" : 
-                                      "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
-                                    }`}>
-                                      {app.priceTier === "verde" ? "Verde" : app.priceTier === "amarela" ? "Amarela" : "Vermelha"}
-                                    </span>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6"
-                                      onClick={() => deleteApplicationMutation.mutate(app.id)}
-                                      data-testid={`button-delete-app-${app.id}`}
-                                    >
-                                      <Trash className="h-3 w-3 text-red-600" />
-                                    </Button>
-                                  </div>
-                                );
-                              })}
+                {/* Inseticidas */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Inseticidas</h3>
+                      <Button
+                        size="sm"
+                        disabled={!viewSeasonId}
+                        onClick={() => {
+                          if (!viewSeasonId) {
+                            toast({
+                              title: "Safra não selecionada",
+                              description: "Selecione uma safra antes de adicionar aplicações.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          if (inseticidasProducts.length === 0) {
+                            toast({
+                              title: "Sem produtos",
+                              description: "Cadastre produtos de inseticidas primeiro no painel admin.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setApplicationCategory("INSETICIDAS");
+                          const existingApps =
+                            globalManagementApplications?.filter((a: any) => a.categoria === "INSETICIDAS") || [];
+                          const maxNumber =
+                            existingApps.length > 0
+                              ? Math.max(...existingApps.map((a: any) => a.applicationNumber))
+                              : 0;
+                          setApplicationNumber(maxNumber + 1);
+                          setSelectedProductId(inseticidasProducts[0]?.id || "");
+                          setSelectedPriceTier("verde");
+                          setProductsInApplication([]);
+                          setShowAddApplicationDialog(true);
+                        }}
+                        data-testid="button-add-inseticida"
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Adicionar Aplicação
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(() => {
+                        const inseticidasApps =
+                          globalManagementApplications?.filter((a: any) => a.categoria === "INSETICIDAS") || [];
+
+                        const groupedApps = inseticidasApps.reduce((acc: any, app: any) => {
+                          if (!acc[app.applicationNumber]) {
+                            acc[app.applicationNumber] = [];
+                          }
+                          acc[app.applicationNumber].push(app);
+                          return acc;
+                        }, {});
+
+                        const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
+
+                        if (appNumbers.length === 0) {
+                          return (
+                            <p className="text-muted-foreground text-sm text-center py-4">
+                              Nenhuma aplicação de inseticida configurada
+                            </p>
+                          );
+                        }
+
+                        return appNumbers.map((appNum) => {
+                          const apps = groupedApps[appNum];
+                          const totalCost = apps.reduce(
+                            (sum: number, app: any) => sum + Number(app.pricePerHa || 0),
+                            0,
+                          );
+
+                          return (
+                            <div key={appNum} className="border rounded p-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
+                                <div className="flex-1 space-y-1">
+                                  {apps.map((app: any) => {
+                                    const product = priceTableProducts?.find((p: any) => p.id === app.productId);
+                                    return (
+                                      <div key={app.id} className="flex items-center gap-2 text-sm">
+                                        <span className="flex-1">{product?.mercaderia || "Produto"}</span>
+                                        <span
+                                          className={`px-2 py-0.5 rounded text-xs font-medium ${app.priceTier === "verde"
+                                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+                                            : app.priceTier === "amarela"
+                                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100"
+                                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                                            }`}
+                                        >
+                                          {app.priceTier === "verde"
+                                            ? "Verde"
+                                            : app.priceTier === "amarela"
+                                              ? "Amarela"
+                                              : "Vermelha"}
+                                        </span>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6"
+                                          onClick={() => deleteApplicationMutation.mutate(app.id)}
+                                          data-testid={`button-delete-app-${app.id}`}
+                                        >
+                                          <Trash className="h-3 w-3 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
+                              </div>
                             </div>
-                            <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </CardContent>
-            </Card>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Dessecação */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Dessecação</h3>
+                      <Button
+                        size="sm"
+                        disabled={!viewSeasonId}
+                        onClick={() => {
+                          if (!viewSeasonId) {
+                            toast({
+                              title: "Safra não selecionada",
+                              description: "Selecione uma safra antes de adicionar aplicações.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          if (desseccaoProducts.length === 0) {
+                            toast({
+                              title: "Sem produtos",
+                              description: "Cadastre produtos de dessecação primeiro na tabela de preços.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setApplicationCategory("DESSECAÇÃO");
+                          const existingApps =
+                            globalManagementApplications?.filter((a: any) => a.categoria === "DESSECAÇÃO") || [];
+                          const maxNumber =
+                            existingApps.length > 0
+                              ? Math.max(...existingApps.map((a: any) => a.applicationNumber))
+                              : 0;
+                          setApplicationNumber(maxNumber + 1);
+                          setSelectedProductId(desseccaoProducts[0]?.id || "");
+                          setSelectedPriceTier("verde");
+                          setProductsInApplication([]);
+                          setShowAddApplicationDialog(true);
+                        }}
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Adicionar Aplicação
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(() => {
+                        const desApps =
+                          globalManagementApplications?.filter((a: any) => a.categoria === "DESSECAÇÃO") || [];
+
+                        const groupedApps = desApps.reduce((acc: any, app: any) => {
+                          if (!acc[app.applicationNumber]) {
+                            acc[app.applicationNumber] = [];
+                          }
+                          acc[app.applicationNumber].push(app);
+                          return acc;
+                        }, {});
+
+                        const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
+
+                        if (appNumbers.length === 0) {
+                          return (
+                            <p className="text-muted-foreground text-sm text-center py-4">
+                              Nenhuma aplicação de dessecação configurada
+                            </p>
+                          );
+                        }
+
+                        return appNumbers.map((appNum) => {
+                          const apps = groupedApps[appNum];
+                          const totalCost = apps.reduce(
+                            (sum: number, app: any) => sum + Number(app.pricePerHa || 0),
+                            0,
+                          );
+
+                          return (
+                            <div key={appNum} className="border rounded p-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
+                                <div className="flex-1 space-y-1">
+                                  {apps.map((app: any) => {
+                                    const product = priceTableProducts?.find((p: any) => p.id === app.productId);
+                                    return (
+                                      <div key={app.id} className="flex items-center gap-2 text-sm">
+                                        <span className="flex-1">{product?.mercaderia || "Produto"}</span>
+                                        <span
+                                          className={`px-2 py-0.5 rounded text-xs font-medium ${app.priceTier === "verde"
+                                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+                                            : app.priceTier === "amarela"
+                                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100"
+                                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                                            }`}
+                                        >
+                                          {app.priceTier === "verde"
+                                            ? "Verde"
+                                            : app.priceTier === "amarela"
+                                              ? "Amarela"
+                                              : "Vermelha"}
+                                        </span>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6"
+                                          onClick={() => deleteApplicationMutation.mutate(app.id)}
+                                        >
+                                          <Trash className="h-3 w-3 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Tratamento de Semente */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Tratamento de semente</h3>
+                      <Button
+                        size="sm"
+                        disabled={!viewSeasonId}
+                        onClick={() => {
+                          if (!viewSeasonId) {
+                            toast({
+                              title: "Safra não selecionada",
+                              description: "Selecione uma safra antes de adicionar aplicações.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          if (tratamentoSementeProducts.length === 0) {
+                            toast({
+                              title: "Sem produtos",
+                              description: "Cadastre produtos de tratamento de semente primeiro na tabela de preços.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setApplicationCategory("TRATAMENTO DE SEMENTE");
+                          const existingApps =
+                            globalManagementApplications?.filter(
+                              (a: any) => a.categoria === "TRATAMENTO DE SEMENTE",
+                            ) || [];
+                          const maxNumber =
+                            existingApps.length > 0
+                              ? Math.max(...existingApps.map((a: any) => a.applicationNumber))
+                              : 0;
+                          setApplicationNumber(maxNumber + 1);
+                          setSelectedProductId(tratamentoSementeProducts[0]?.id || "");
+                          setSelectedPriceTier("verde");
+                          setProductsInApplication([]);
+                          setShowAddApplicationDialog(true);
+                        }}
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Adicionar Aplicação
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(() => {
+                        const tsApps =
+                          globalManagementApplications?.filter(
+                            (a: any) => a.categoria === "TRATAMENTO DE SEMENTE",
+                          ) || [];
+
+                        const groupedApps = tsApps.reduce((acc: any, app: any) => {
+                          if (!acc[app.applicationNumber]) {
+                            acc[app.applicationNumber] = [];
+                          }
+                          acc[app.applicationNumber].push(app);
+                          return acc;
+                        }, {});
+
+                        const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
+
+                        if (appNumbers.length === 0) {
+                          return (
+                            <p className="text-muted-foreground text-sm text-center py-4">
+                              Nenhuma aplicação de tratamento de semente configurada
+                            </p>
+                          );
+                        }
+
+                        return appNumbers.map((appNum) => {
+                          const apps = groupedApps[appNum];
+                          const totalCost = apps.reduce(
+                            (sum: number, app: any) => sum + Number(app.pricePerHa || 0),
+                            0,
+                          );
+
+                          return (
+                            <div key={appNum} className="border rounded p-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
+                                <div className="flex-1 space-y-1">
+                                  {apps.map((app: any) => {
+                                    const product = priceTableProducts?.find((p: any) => p.id === app.productId);
+                                    return (
+                                      <div key={app.id} className="flex items-center gap-2 text-sm">
+                                        <span className="flex-1">{product?.mercaderia || "Produto"}</span>
+                                        <span
+                                          className={`px-2 py-0.5 rounded text-xs font-medium ${app.priceTier === "verde"
+                                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+                                            : app.priceTier === "amarela"
+                                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100"
+                                              : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                                            }`}
+                                        >
+                                          {app.priceTier === "verde"
+                                            ? "Verde"
+                                            : app.priceTier === "amarela"
+                                              ? "Amarela"
+                                              : "Vermelha"}
+                                        </span>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6"
+                                          onClick={() => deleteApplicationMutation.mutate(app.id)}
+                                        >
+                                          <Trash className="h-3 w-3 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Fertilizantes */}
+              <TabsContent value="FERTILIZANTES">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Fertilizantes</h3>
+                      <Button
+                        size="sm"
+                        disabled={!viewSeasonId}
+                        onClick={() => {
+                          if (!viewSeasonId) {
+                            toast({
+                              title: "Safra não selecionada",
+                              description: "Selecione uma safra antes de adicionar aplicações.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setApplicationCategory("FERTILIZANTES");
+                          const existingApps =
+                            globalManagementApplications?.filter((a: any) => a.categoria === "FERTILIZANTES") || [];
+                          const maxNumber =
+                            existingApps.length > 0 ? Math.max(...existingApps.map((a: any) => a.applicationNumber)) : 0;
+                          setApplicationNumber(maxNumber + 1);
+                          setProductsInApplication([]);
+                          setCustomProductName("");
+                          setCustomPricePerHa("");
+                          setShowAddApplicationDialog(true);
+                        }}
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Adicionar Aplicação
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(() => {
+                        const fertApps =
+                          globalManagementApplications?.filter((a: any) => a.categoria === "FERTILIZANTES") || [];
+
+                        const groupedApps = fertApps.reduce((acc: any, app: any) => {
+                          if (!acc[app.applicationNumber]) {
+                            acc[app.applicationNumber] = [];
+                          }
+                          acc[app.applicationNumber].push(app);
+                          return acc;
+                        }, {});
+
+                        const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
+
+                        if (appNumbers.length === 0) {
+                          return (
+                            <p className="text-muted-foreground text-sm text-center py-4">
+                              Nenhuma aplicação de fertilizante configurada
+                            </p>
+                          );
+                        }
+
+                        return appNumbers.map((appNum) => {
+                          const apps = groupedApps[appNum];
+                          const totalCost = apps.reduce((sum: number, app: any) => sum + Number(app.pricePerHa || 0), 0);
+
+                          return (
+                            <div key={appNum} className="border rounded p-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
+                                <div className="flex-1 space-y-1">
+                                  {apps.map((app: any) => (
+                                    <div key={app.id} className="flex items-center gap-2 text-sm">
+                                      <span className="flex-1">{app.product?.mercaderia || "Produto"}</span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6"
+                                        onClick={() => deleteApplicationMutation.mutate(app.id)}
+                                      >
+                                        <Trash className="h-3 w-3 text-red-600" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Sementes */}
+              <TabsContent value="SEMENTES">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Sementes</h3>
+                      <Button
+                        size="sm"
+                        disabled={!viewSeasonId}
+                        onClick={() => {
+                          if (!viewSeasonId) {
+                            toast({
+                              title: "Safra não selecionada",
+                              description: "Selecione uma safra antes de adicionar aplicações.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setApplicationCategory("SEMENTES");
+                          const existingApps =
+                            globalManagementApplications?.filter((a: any) => a.categoria === "SEMENTES") || [];
+                          const maxNumber =
+                            existingApps.length > 0 ? Math.max(...existingApps.map((a: any) => a.applicationNumber)) : 0;
+                          setApplicationNumber(maxNumber + 1);
+                          setProductsInApplication([]);
+                          setCustomProductName("");
+                          setCustomPricePerHa("");
+                          setShowAddApplicationDialog(true);
+                        }}
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Adicionar Aplicação
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(() => {
+                        const semApps =
+                          globalManagementApplications?.filter((a: any) => a.categoria === "SEMENTES") || [];
+
+                        const groupedApps = semApps.reduce((acc: any, app: any) => {
+                          if (!acc[app.applicationNumber]) {
+                            acc[app.applicationNumber] = [];
+                          }
+                          acc[app.applicationNumber].push(app);
+                          return acc;
+                        }, {});
+
+                        const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
+
+                        if (appNumbers.length === 0) {
+                          return (
+                            <p className="text-muted-foreground text-sm text-center py-4">
+                              Nenhuma aplicação de sementes configurada
+                            </p>
+                          );
+                        }
+
+                        return appNumbers.map((appNum) => {
+                          const apps = groupedApps[appNum];
+                          const totalCost = apps.reduce((sum: number, app: any) => sum + Number(app.pricePerHa || 0), 0);
+
+                          return (
+                            <div key={appNum} className="border rounded p-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
+                                <div className="flex-1 space-y-1">
+                                  {apps.map((app: any) => (
+                                    <div key={app.id} className="flex items-center gap-2 text-sm">
+                                      <span className="flex-1">{app.product?.mercaderia || "Produto"}</span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6"
+                                        onClick={() => deleteApplicationMutation.mutate(app.id)}
+                                      >
+                                        <Trash className="h-3 w-3 text-red-600" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Especialidades */}
+              <TabsContent value="ESPECIALIDADES">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Especialidades</h3>
+                      <Button
+                        size="sm"
+                        disabled={!viewSeasonId}
+                        onClick={() => {
+                          if (!viewSeasonId) {
+                            toast({
+                              title: "Safra não selecionada",
+                              description: "Selecione uma safra antes de adicionar aplicações.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setApplicationCategory("ESPECIALIDADES");
+                          const existingApps =
+                            globalManagementApplications?.filter((a: any) => a.categoria === "ESPECIALIDADES") || [];
+                          const maxNumber =
+                            existingApps.length > 0 ? Math.max(...existingApps.map((a: any) => a.applicationNumber)) : 0;
+                          setApplicationNumber(maxNumber + 1);
+                          setProductsInApplication([]);
+                          setCustomProductName("");
+                          setCustomPricePerHa("");
+                          setShowAddApplicationDialog(true);
+                        }}
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Adicionar Aplicação
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(() => {
+                        const espApps =
+                          globalManagementApplications?.filter((a: any) => a.categoria === "ESPECIALIDADES") || [];
+
+                        const groupedApps = espApps.reduce((acc: any, app: any) => {
+                          if (!acc[app.applicationNumber]) {
+                            acc[app.applicationNumber] = [];
+                          }
+                          acc[app.applicationNumber].push(app);
+                          return acc;
+                        }, {});
+
+                        const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
+
+                        if (appNumbers.length === 0) {
+                          return (
+                            <p className="text-muted-foreground text-sm text-center py-4">
+                              Nenhuma aplicação de especialidades configurada
+                            </p>
+                          );
+                        }
+
+                        return appNumbers.map((appNum) => {
+                          const apps = groupedApps[appNum];
+                          const totalCost = apps.reduce((sum: number, app: any) => sum + Number(app.pricePerHa || 0), 0);
+
+                          return (
+                            <div key={appNum} className="border rounded p-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
+                                <div className="flex-1 space-y-1">
+                                  {apps.map((app: any) => (
+                                    <div key={app.id} className="flex items-center gap-2 text-sm">
+                                      <span className="flex-1">{app.product?.mercaderia || "Produto"}</span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6"
+                                        onClick={() => deleteApplicationMutation.mutate(app.id)}
+                                      >
+                                        <Trash className="h-3 w-3 text-red-600" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Corretivos */}
+              <TabsContent value="CORRETIVOS">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Corretivos</h3>
+                      <Button
+                        size="sm"
+                        disabled={!viewSeasonId}
+                        onClick={() => {
+                          if (!viewSeasonId) {
+                            toast({
+                              title: "Safra não selecionada",
+                              description: "Selecione uma safra antes de adicionar aplicações.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          setApplicationCategory("CORRETIVOS");
+                          const existingApps =
+                            globalManagementApplications?.filter((a: any) => a.categoria === "CORRETIVOS") || [];
+                          const maxNumber =
+                            existingApps.length > 0 ? Math.max(...existingApps.map((a: any) => a.applicationNumber)) : 0;
+                          setApplicationNumber(maxNumber + 1);
+                          setProductsInApplication([]);
+                          setCustomProductName("");
+                          setCustomPricePerHa("");
+                          setShowAddApplicationDialog(true);
+                        }}
+                      >
+                        <Target className="h-4 w-4 mr-1" />
+                        Adicionar Aplicação
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(() => {
+                        const corApps =
+                          globalManagementApplications?.filter((a: any) => a.categoria === "CORRETIVOS") || [];
+
+                        const groupedApps = corApps.reduce((acc: any, app: any) => {
+                          if (!acc[app.applicationNumber]) {
+                            acc[app.applicationNumber] = [];
+                          }
+                          acc[app.applicationNumber].push(app);
+                          return acc;
+                        }, {});
+
+                        const appNumbers = Object.keys(groupedApps).sort((a, b) => Number(a) - Number(b));
+
+                        if (appNumbers.length === 0) {
+                          return (
+                            <p className="text-muted-foreground text-sm text-center py-4">
+                              Nenhuma aplicação de corretivos configurada
+                            </p>
+                          );
+                        }
+
+                        return appNumbers.map((appNum) => {
+                          const apps = groupedApps[appNum];
+                          const totalCost = apps.reduce((sum: number, app: any) => sum + Number(app.pricePerHa || 0), 0);
+
+                          return (
+                            <div key={appNum} className="border rounded p-2">
+                              <div className="flex items-start gap-2">
+                                <span className="font-medium min-w-[100px] mt-1">Aplicação {appNum}</span>
+                                <div className="flex-1 space-y-1">
+                                  {apps.map((app: any) => (
+                                    <div key={app.id} className="flex items-center gap-2 text-sm">
+                                      <span className="flex-1">{app.product?.mercaderia || "Produto"}</span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6"
+                                        onClick={() => deleteApplicationMutation.mutate(app.id)}
+                                      >
+                                        <Trash className="h-3 w-3 text-red-600" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <span className="font-mono font-bold text-lg">${totalCost.toFixed(2)}/ha</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
 
           <DialogFooter>
@@ -2544,7 +3224,17 @@ function ManagerGoalsTab() {
       <Dialog open={showAddApplicationDialog} onOpenChange={setShowAddApplicationDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Adicionar Aplicação de {applicationCategory === "FUNGICIDAS" ? "Fungicida" : "Inseticida"}</DialogTitle>
+            <DialogTitle>
+              Adicionar Aplicação de{" "}
+              {applicationCategory === "FUNGICIDAS" && "Fungicida"}
+              {applicationCategory === "INSETICIDAS" && "Inseticida"}
+              {applicationCategory === "DESSECAÇÃO" && "Dessecação"}
+              {applicationCategory === "TRATAMENTO DE SEMENTE" && "Tratamento de semente"}
+              {applicationCategory === "FERTILIZANTES" && "Fertilizantes"}
+              {applicationCategory === "SEMENTES" && "Sementes"}
+              {applicationCategory === "ESPECIALIDADES" && "Especialidades"}
+              {applicationCategory === "CORRETIVOS" && "Corretivos"}
+            </DialogTitle>
             <DialogDescription>
               Escolha o número da aplicação e adicione um ou mais produtos.
             </DialogDescription>
@@ -2553,8 +3243,8 @@ function ManagerGoalsTab() {
           <div className="space-y-4">
             <div>
               <Label htmlFor="application-number">Número da Aplicação</Label>
-              <Select 
-                value={applicationNumber.toString()} 
+              <Select
+                value={applicationNumber.toString()}
                 onValueChange={(val) => setApplicationNumber(Number(val))}
               >
                 <SelectTrigger id="application-number" data-testid="select-application-number">
@@ -2576,17 +3266,30 @@ function ManagerGoalsTab() {
                   <h4 className="font-semibold mb-2 text-sm">Produtos adicionados:</h4>
                   <div className="space-y-2">
                     {productsInApplication.map((item, idx) => {
-                      const product = priceTableProducts?.find((p: any) => p.id === item.productId);
+                      const product = item.productId
+                        ? priceTableProducts?.find((p: any) => p.id === item.productId)
+                        : undefined;
                       return (
                         <div key={idx} className="flex items-center gap-2 p-2 border rounded text-sm">
-                          <span className="flex-1">{product?.mercaderia || "Produto"}</span>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            item.priceTier === "verde" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : 
-                            item.priceTier === "amarela" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" : 
-                            "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
-                          }`}>
-                            {item.priceTier === "verde" ? "Verde" : item.priceTier === "amarela" ? "Amarela" : "Vermelha"}
+                          <span className="flex-1">
+                            {product?.mercaderia || item.customName || "Produto"}
                           </span>
+                          {item.priceTier && (
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium ${item.priceTier === "verde"
+                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+                                : item.priceTier === "amarela"
+                                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100"
+                                  : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                                }`}
+                            >
+                              {item.priceTier === "verde"
+                                ? "Verde"
+                                : item.priceTier === "amarela"
+                                  ? "Amarela"
+                                  : "Vermelha"}
+                            </span>
+                          )}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -2609,103 +3312,185 @@ function ManagerGoalsTab() {
             <div className="border-t pt-4">
               <h4 className="font-semibold mb-3">Adicionar produto:</h4>
               <div className="space-y-3">
-                <div>
-                  <Label htmlFor="product-select">Produto</Label>
-                  <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                    <SelectTrigger id="product-select" data-testid="select-product">
-                      <SelectValue placeholder="Selecione um produto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(applicationCategory === "FUNGICIDAS" ? fungicidasProducts : inseticidasProducts).map((product: any) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.mercaderia}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {(applicationCategory === "FUNGICIDAS" ||
+                  applicationCategory === "INSETICIDAS" ||
+                  applicationCategory === "DESSECAÇÃO" ||
+                  applicationCategory === "TRATAMENTO DE SEMENTE" ||
+                  applicationCategory === "ESPECIALIDADES") && (
+                    <>
+                      <div>
+                        <Label htmlFor="product-select">Produto</Label>
+                        <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                          <SelectTrigger id="product-select" data-testid="select-product">
+                            <SelectValue placeholder="Selecione um produto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(applicationCategory === "FUNGICIDAS"
+                              ? fungicidasProducts
+                              : applicationCategory === "INSETICIDAS"
+                                ? inseticidasProducts
+                                : applicationCategory === "DESSECAÇÃO"
+                                  ? desseccaoProducts
+                                  : applicationCategory === "TRATAMENTO DE SEMENTE"
+                                    ? tratamentoSementeProducts
+                                    : especialidadesProducts
+                            ).map((product: any) => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.mercaderia}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                <div>
-                  <Label htmlFor="price-tier-select">Tier de Preço</Label>
-                  <Select value={selectedPriceTier} onValueChange={setSelectedPriceTier}>
-                    <SelectTrigger id="price-tier-select" data-testid="select-price-tier">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="verde">Verde</SelectItem>
-                      <SelectItem value="amarela">Amarela</SelectItem>
-                      <SelectItem value="vermelha">Vermelha</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                      <div>
+                        <Label htmlFor="price-tier-select">Tier de Preço</Label>
+                        <Select value={selectedPriceTier} onValueChange={setSelectedPriceTier}>
+                          <SelectTrigger id="price-tier-select" data-testid="select-price-tier">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="verde">Verde</SelectItem>
+                            <SelectItem value="amarela">Amarela</SelectItem>
+                            <SelectItem value="vermelha">Vermelha</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
 
-                {selectedProductId && (
-                  <div className="p-3 bg-muted rounded-lg">
-                    <div className="text-sm text-muted-foreground">Custo por hectare (preço × dose):</div>
-                    <div className="text-xl font-bold">
-                      ${(() => {
-                        const product = priceTableProducts?.find((p: any) => p.id === selectedProductId);
-                        if (!product) return "0.00";
-                        
-                        let basePrice = 0;
-                        if (selectedPriceTier === "verde") basePrice = Number(product.preco_verde || product.precoVerde || 0);
-                        else if (selectedPriceTier === "amarela") basePrice = Number(product.preco_amarela || product.precoAmarela || 0);
-                        else basePrice = Number(product.preco_vermelha || product.precoVermelha || 0);
-                        
-                        let dose = 1;
-                        if (product.dose) {
-                          const doseStr = product.dose.toString().replace(',', '.');
-                          const doseMatch = doseStr.match(/[\d.]+/);
-                          if (doseMatch) {
-                            dose = parseFloat(doseMatch[0]);
+                {(applicationCategory === "FERTILIZANTES" ||
+                  applicationCategory === "SEMENTES" ||
+                  applicationCategory === "CORRETIVOS") && (
+                    <>
+                      <div>
+                        <Label htmlFor="custom-name">Nome do produto / formulação</Label>
+                        <Input
+                          id="custom-name"
+                          value={customProductName}
+                          onChange={(e) => setCustomProductName(e.target.value)}
+                          placeholder="Ex: Formulação X"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="custom-price">Investimento por ha (USD/ha)</Label>
+                        <Input
+                          id="custom-price"
+                          type="number"
+                          step="0.01"
+                          value={customPricePerHa}
+                          onChange={(e) => setCustomPricePerHa(e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                {selectedProductId &&
+                  (applicationCategory === "FUNGICIDAS" ||
+                    applicationCategory === "INSETICIDAS" ||
+                    applicationCategory === "DESSECAÇÃO" ||
+                    applicationCategory === "TRATAMENTO DE SEMENTE" ||
+                    applicationCategory === "ESPECIALIDADES") && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <div className="text-sm text-muted-foreground">Custo por hectare (preço × dose):</div>
+                      <div className="text-xl font-bold">
+                        ${(() => {
+                          const product = priceTableProducts?.find((p: any) => p.id === selectedProductId);
+                          if (!product) return "0.00";
+
+                          let basePrice = 0;
+                          if (selectedPriceTier === "verde") basePrice = Number(product.preco_verde || product.precoVerde || 0);
+                          else if (selectedPriceTier === "amarela") basePrice = Number(product.preco_amarela || product.precoAmarela || 0);
+                          else basePrice = Number(product.preco_vermelha || product.precoVermelha || 0);
+
+                          let dose = 1;
+                          if (product.dose) {
+                            const doseStr = product.dose.toString().replace(',', '.');
+                            const doseMatch = doseStr.match(/[\d.]+/);
+                            if (doseMatch) {
+                              dose = parseFloat(doseMatch[0]);
+                            }
                           }
-                        }
-                        
-                        const costPerHa = basePrice * dose;
-                        return costPerHa.toFixed(2);
-                      })()}/ha
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {(() => {
-                        const product = priceTableProducts?.find((p: any) => p.id === selectedProductId);
-                        if (!product) return "";
-                        
-                        let basePrice = 0;
-                        if (selectedPriceTier === "verde") basePrice = Number(product.preco_verde || product.precoVerde || 0);
-                        else if (selectedPriceTier === "amarela") basePrice = Number(product.preco_amarela || product.precoAmarela || 0);
-                        else basePrice = Number(product.preco_vermelha || product.precoVermelha || 0);
-                        
-                        let doseNumeric = 1;
-                        if (product.dose) {
-                          const doseStr = product.dose.toString().replace(',', '.');
-                          const doseMatch = doseStr.match(/[\d.]+/);
-                          if (doseMatch) {
-                            doseNumeric = parseFloat(doseMatch[0]);
-                          }
-                        }
-                        
-                        const doseDisplay = product.dose || "1";
-                        return `$${basePrice.toFixed(2)} × ${doseDisplay} = $${(basePrice * doseNumeric).toFixed(2)}/ha`;
-                      })()}
-                    </div>
-                  </div>
-                )}
 
-                <Button 
+                          const costPerHa = basePrice * dose;
+                          return costPerHa.toFixed(2);
+                        })()}/ha
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {(() => {
+                          const product = priceTableProducts?.find((p: any) => p.id === selectedProductId);
+                          if (!product) return "";
+
+                          let basePrice = 0;
+                          if (selectedPriceTier === "verde") basePrice = Number(product.preco_verde || product.precoVerde || 0);
+                          else if (selectedPriceTier === "amarela") basePrice = Number(product.preco_amarela || product.precoAmarela || 0);
+                          else basePrice = Number(product.preco_vermelha || product.precoVermelha || 0);
+
+                          let doseNumeric = 1;
+                          if (product.dose) {
+                            const doseStr = product.dose.toString().replace(',', '.');
+                            const doseMatch = doseStr.match(/[\d.]+/);
+                            if (doseMatch) {
+                              doseNumeric = parseFloat(doseMatch[0]);
+                            }
+                          }
+
+                          const doseDisplay = product.dose || "1";
+                          return `$${basePrice.toFixed(2)} × ${doseDisplay} = $${(basePrice * doseNumeric).toFixed(2)}/ha`;
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                <Button
                   onClick={() => {
-                    if (!selectedProductId) {
-                      toast({
-                        title: "Erro",
-                        description: "Selecione um produto primeiro.",
-                        variant: "destructive"
-                      });
-                      return;
+                    if (
+                      applicationCategory === "FUNGICIDAS" ||
+                      applicationCategory === "INSETICIDAS" ||
+                      applicationCategory === "DESSECAÇÃO" ||
+                      applicationCategory === "TRATAMENTO DE SEMENTE" ||
+                      applicationCategory === "ESPECIALIDADES"
+                    ) {
+                      if (!selectedProductId) {
+                        toast({
+                          title: "Erro",
+                          description: "Selecione um produto primeiro.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      setProductsInApplication((prev) => [
+                        ...prev,
+                        { productId: selectedProductId, priceTier: selectedPriceTier },
+                      ]);
+                      setSelectedProductId("");
+                      setSelectedPriceTier("verde");
+                    } else {
+                      if (!customProductName || !customPricePerHa) {
+                        toast({
+                          title: "Erro",
+                          description: "Informe o nome e o valor por hectare.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      setProductsInApplication((prev) => [
+                        ...prev,
+                        { customName: customProductName, customPricePerHa: customPricePerHa },
+                      ]);
+                      setCustomProductName("");
+                      setCustomPricePerHa("");
                     }
-                    setProductsInApplication(prev => [...prev, { productId: selectedProductId, priceTier: selectedPriceTier }]);
-                    setSelectedProductId("");
-                    setSelectedPriceTier("verde");
                   }}
-                  disabled={!selectedProductId}
+                  disabled={
+                    (applicationCategory === "FUNGICIDAS" ||
+                      applicationCategory === "INSETICIDAS" ||
+                      applicationCategory === "DESSECAÇÃO" ||
+                      applicationCategory === "TRATAMENTO DE SEMENTE" ||
+                      applicationCategory === "ESPECIALIDADES") &&
+                    !selectedProductId
+                  }
                   className="w-full"
                   data-testid="button-add-to-list"
                 >
@@ -2720,7 +3505,7 @@ function ManagerGoalsTab() {
             <Button variant="outline" onClick={() => setShowAddApplicationDialog(false)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={async () => {
                 if (productsInApplication.length === 0) {
                   toast({
@@ -2730,17 +3515,19 @@ function ManagerGoalsTab() {
                   });
                   return;
                 }
-                
+
                 for (const item of productsInApplication) {
                   await createApplicationMutation.mutateAsync({
                     categoria: applicationCategory,
                     applicationNumber: applicationNumber,
+                    seasonId: viewSeasonId,
                     productId: item.productId,
                     priceTier: item.priceTier,
-                    seasonId: viewSeasonId
+                    customName: item.customName,
+                    customPricePerHa: item.customPricePerHa,
                   });
                 }
-                
+
                 setShowAddApplicationDialog(false);
                 setProductsInApplication([]);
               }}
@@ -2759,7 +3546,7 @@ function ManagerGoalsTab() {
 function CapturedTargetsCard() {
   const [selectedSegmento, setSelectedSegmento] = useState<string | null>(null);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
-  
+
   const { data: capturedData, isLoading } = useQuery<any>({
     queryKey: ['/api/manager/team-captured-totals'],
   });
@@ -2862,8 +3649,8 @@ function CapturedTargetsCard() {
                       const hasSubcategories = categoryData.subcategories && Object.keys(categoryData.subcategories).length > 0;
 
                       return (
-                        <Card 
-                          key={segmento} 
+                        <Card
+                          key={segmento}
                           className="shadow-sm cursor-pointer hover:shadow-md hover:border-primary transition-all"
                           onClick={() => {
                             setSelectedSegmento(segmento);
@@ -2878,7 +3665,7 @@ function CapturedTargetsCard() {
                             <div className="space-y-1.5">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-medium text-muted-foreground">Total</span>
-                                <span 
+                                <span
                                   className="text-base font-bold text-green-600"
                                   data-testid={`captured-total-${seasonId}-${segmento}`}
                                 >
@@ -2893,7 +3680,7 @@ function CapturedTargetsCard() {
                                   {Object.entries(categoryData.subcategories).map(([subcatName, subcatValue]) => (
                                     <div key={subcatName} className="flex items-center justify-between pl-2">
                                       <span className="text-xs text-muted-foreground">{subcatName}</span>
-                                      <span 
+                                      <span
                                         className="text-xs font-semibold"
                                         data-testid={`captured-subcat-${seasonId}-${segmento}-${subcatName.toLowerCase().replace(/\s/g, '-')}`}
                                       >
@@ -2970,7 +3757,7 @@ function CapturedTargetsCard() {
                   <h4 className="text-sm font-semibold mb-3">Detalhamento por Subcategorias:</h4>
                   {clientsData?.clientTargets?.map((client: any, index: number) => {
                     if (!client.subcategories || Object.keys(client.subcategories).length === 0) return null;
-                    
+
                     return (
                       <Card key={client.clientId} className="mb-3">
                         <CardHeader className="pb-3">

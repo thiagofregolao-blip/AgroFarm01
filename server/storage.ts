@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { 
+import type {
   User, InsertUser, Category, InsertCategory, Product, InsertProduct,
   Region, InsertRegion, Client, InsertClient, Season, InsertSeason,
   SeasonGoal, InsertSeasonGoal, Sale, InsertSale, SeasonParameter,
@@ -11,10 +11,11 @@ import type {
   MasterClient, InsertMasterClient, UserClientLink, InsertUserClientLink,
   BarterProduct, InsertBarterProduct, BarterSettings, InsertBarterSettings,
   BarterSimulation, InsertBarterSimulation, BarterSimulationItem, InsertBarterSimulationItem,
-  SalesTarget, InsertSalesTarget
+  SalesTarget, InsertSalesTarget,
+  ClientCategoryPipeline, InsertClientCategoryPipeline
 } from "@shared/schema";
 import { db, pool } from './db';
-import { users, categories, products, regions, clients, seasons, seasonGoals, sales, seasonParameters, marketInvestmentRates, clientMarketRates, clientMarketValues, marketBenchmarks, externalPurchases, clientFamilyRelations, alertSettings, alerts, purchaseHistory, purchaseHistoryItems, masterClients, userClientLinks, barterProducts, barterSettings, barterSimulations, barterSimulationItems, salesTargets, systemSettings } from '@shared/schema';
+import { users, categories, products, regions, clients, seasons, seasonGoals, sales, seasonParameters, marketInvestmentRates, clientMarketRates, clientMarketValues, marketBenchmarks, externalPurchases, clientFamilyRelations, alertSettings, alerts, purchaseHistory, purchaseHistoryItems, masterClients, userClientLinks, barterProducts, barterSettings, barterSimulations, barterSimulationItems, salesTargets, systemSettings, clientCategoryPipeline } from '@shared/schema';
 import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -92,7 +93,7 @@ export interface IStorage {
   getExistingOrderCodes(userId: string): Promise<Set<string>>;
   createSale(sale: InsertSale): Promise<Sale>;
   updateSale(id: string, sale: Partial<InsertSale>): Promise<Sale | undefined>;
-  
+
   // Import Batches
   getImportBatches(): Promise<Array<{
     batchId: string;
@@ -110,7 +111,7 @@ export interface IStorage {
 
   // Market Investment Rates
   getMarketInvestmentRates(): Promise<MarketInvestmentRate[]>;
-  
+
   // Client Market Rates
   getClientMarketRates(clientId: string, userId: string, seasonId: string): Promise<ClientMarketRate[]>;
   upsertClientMarketRate(rate: InsertClientMarketRate): Promise<ClientMarketRate>;
@@ -206,6 +207,10 @@ export interface IStorage {
 
   // System Settings
   getSystemSettings(): Promise<{ allowUserRegistration: boolean } | undefined>;
+
+  // Client Category Pipeline
+  getClientCategoryPipeline(clientId: string, userId: string, seasonId: string): Promise<ClientCategoryPipeline[]>;
+  upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline>;
 }
 
 export class MemStorage implements IStorage {
@@ -411,8 +416,8 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { 
-      ...insertUser, 
+    const user: User = {
+      ...insertUser,
       id,
       role: insertUser.role ?? "vendedor"
     };
@@ -427,7 +432,7 @@ export class MemStorage implements IStorage {
   async updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined> {
     const existing = this.users.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...user };
     this.users.set(id, updated);
     return updated;
@@ -448,8 +453,8 @@ export class MemStorage implements IStorage {
 
   async createCategory(category: InsertCategory): Promise<Category> {
     const id = randomUUID();
-    const newCategory: Category = { 
-      ...category, 
+    const newCategory: Category = {
+      ...category,
       id,
       defaultIva: category.defaultIva ?? "10.00"
     };
@@ -460,7 +465,7 @@ export class MemStorage implements IStorage {
   async updateCategory(id: string, category: Partial<InsertCategory>): Promise<Category | undefined> {
     const existing = this.categories.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...category };
     this.categories.set(id, updated);
     return updated;
@@ -477,8 +482,8 @@ export class MemStorage implements IStorage {
 
   async createProduct(product: InsertProduct): Promise<Product> {
     const id = randomUUID();
-    const newProduct: Product = { 
-      ...product, 
+    const newProduct: Product = {
+      ...product,
       id,
       subcategoryId: product.subcategoryId ?? null,
       description: product.description ?? null,
@@ -494,7 +499,7 @@ export class MemStorage implements IStorage {
   async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
     const existing = this.products.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...product };
     this.products.set(id, updated);
     return updated;
@@ -507,8 +512,8 @@ export class MemStorage implements IStorage {
 
   async createRegion(region: InsertRegion): Promise<Region> {
     const id = randomUUID();
-    const newRegion: Region = { 
-      ...region, 
+    const newRegion: Region = {
+      ...region,
       id,
       country: region.country ?? "Paraguay"
     };
@@ -531,8 +536,8 @@ export class MemStorage implements IStorage {
 
   async createClient(client: InsertClient): Promise<Client> {
     const id = randomUUID();
-    const newClient: Client = { 
-      ...client, 
+    const newClient: Client = {
+      ...client,
       id,
       cultures: client.cultures ?? [],
       plantingProgress: client.plantingProgress ?? "0.00",
@@ -548,7 +553,7 @@ export class MemStorage implements IStorage {
   async updateClient(id: string, client: Partial<InsertClient>): Promise<Client | undefined> {
     const existing = this.clients.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...client };
     this.clients.set(id, updated);
     return updated;
@@ -561,8 +566,8 @@ export class MemStorage implements IStorage {
   async getClientsForUser(userId: string, top8020Only?: boolean): Promise<Client[]> {
     // Para MemStorage, retornar clientes antigos (tabela clients)
     const allClients = Array.from(this.clients.values());
-    return allClients.filter(c => 
-      c.userId === userId && 
+    return allClients.filter(c =>
+      c.userId === userId &&
       c.isActive &&
       (!top8020Only || c.isTop80_20)
     );
@@ -588,8 +593,8 @@ export class MemStorage implements IStorage {
   async createMasterClient(client: InsertMasterClient): Promise<MasterClient> {
     const id = randomUUID();
     const now = new Date();
-    const newClient: MasterClient = { 
-      ...client, 
+    const newClient: MasterClient = {
+      ...client,
       id,
       regionId: client.regionId ?? null,
       plantingArea: client.plantingArea ?? null,
@@ -605,9 +610,9 @@ export class MemStorage implements IStorage {
   async updateMasterClient(id: string, client: Partial<InsertMasterClient>): Promise<MasterClient | undefined> {
     const existing = this.masterClients.get(id);
     if (!existing) return undefined;
-    
-    const updated = { 
-      ...existing, 
+
+    const updated = {
+      ...existing,
       ...client,
       updatedAt: new Date()
     };
@@ -644,8 +649,8 @@ export class MemStorage implements IStorage {
 
   async createUserClientLink(link: InsertUserClientLink): Promise<UserClientLink> {
     const id = randomUUID();
-    const newLink: UserClientLink = { 
-      ...link, 
+    const newLink: UserClientLink = {
+      ...link,
       id,
       customName: link.customName ?? null,
       plantingArea: link.plantingArea ?? null,
@@ -662,7 +667,7 @@ export class MemStorage implements IStorage {
   async updateUserClientLink(id: string, link: Partial<InsertUserClientLink>): Promise<UserClientLink | undefined> {
     const existing = this.userClientLinks.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...link };
     this.userClientLinks.set(id, updated);
     return updated;
@@ -679,15 +684,15 @@ export class MemStorage implements IStorage {
 
   async getActiveSeason(): Promise<Season | undefined> {
     const now = new Date();
-    return Array.from(this.seasons.values()).find(s => 
+    return Array.from(this.seasons.values()).find(s =>
       s.isActive && now >= s.startDate && now <= s.endDate
     );
   }
 
   async createSeason(season: InsertSeason): Promise<Season> {
     const id = randomUUID();
-    const newSeason: Season = { 
-      ...season, 
+    const newSeason: Season = {
+      ...season,
       id,
       isActive: season.isActive ?? true
     };
@@ -701,15 +706,15 @@ export class MemStorage implements IStorage {
   }
 
   async getSeasonGoal(seasonId: string, userId: string): Promise<SeasonGoal | undefined> {
-    return Array.from(this.seasonGoals.values()).find(g => 
+    return Array.from(this.seasonGoals.values()).find(g =>
       g.seasonId === seasonId && g.userId === userId
     );
   }
 
   async createSeasonGoal(goal: InsertSeasonGoal): Promise<SeasonGoal> {
     const id = randomUUID();
-    const newGoal: SeasonGoal = { 
-      ...goal, 
+    const newGoal: SeasonGoal = {
+      ...goal,
       id,
       metaAgroquimicos: goal.metaAgroquimicos ?? "0",
       metaEspecialidades: goal.metaEspecialidades ?? "0",
@@ -727,7 +732,7 @@ export class MemStorage implements IStorage {
   async updateSeasonGoal(id: string, goal: Partial<InsertSeasonGoal>): Promise<SeasonGoal | undefined> {
     const existing = this.seasonGoals.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...goal };
     this.seasonGoals.set(id, updated);
     return updated;
@@ -767,9 +772,9 @@ export class MemStorage implements IStorage {
   async createSale(sale: InsertSale): Promise<Sale> {
     const id = randomUUID();
     const now = new Date();
-    const newSale: Sale = { 
-      ...sale, 
-      id, 
+    const newSale: Sale = {
+      ...sale,
+      id,
       createdAt: now,
       quantity: sale.quantity ?? null,
       timacPoints: sale.timacPoints ?? null,
@@ -785,7 +790,7 @@ export class MemStorage implements IStorage {
   async updateSale(id: string, sale: Partial<InsertSale>): Promise<Sale | undefined> {
     const existing = this.sales.get(id);
     if (!existing) return undefined;
-    
+
     const updated = { ...existing, ...sale };
     this.sales.set(id, updated);
     return updated;
@@ -1089,10 +1094,10 @@ export class MemStorage implements IStorage {
   async createBarterProduct(product: InsertBarterProduct): Promise<BarterProduct> {
     const id = randomUUID();
     const now = new Date();
-    const newProduct: BarterProduct = { 
-      ...product, 
-      id, 
-      createdAt: now, 
+    const newProduct: BarterProduct = {
+      ...product,
+      id,
+      createdAt: now,
       updatedAt: now,
       isActive: product.isActive ?? true
     };
@@ -1122,10 +1127,10 @@ export class MemStorage implements IStorage {
 
   async upsertBarterSetting(key: string, value: string, description?: string): Promise<BarterSettings> {
     const existing = Array.from(this.barterSettings.values()).find(s => s.key === key);
-    const setting: BarterSettings = existing 
+    const setting: BarterSettings = existing
       ? { ...existing, value, description: description || existing.description, updatedAt: new Date() }
       : { id: randomUUID(), key, value, description: description || null, updatedAt: new Date() };
-    
+
     if (existing) {
       this.barterSettings.set(existing.id, setting);
     } else {
@@ -1145,10 +1150,10 @@ export class MemStorage implements IStorage {
   async createBarterSimulation(simulation: InsertBarterSimulation, items: InsertBarterSimulationItem[]): Promise<BarterSimulation> {
     const id = randomUUID();
     const now = new Date();
-    const newSimulation: BarterSimulation = { 
-      ...simulation, 
-      id, 
-      createdAt: now, 
+    const newSimulation: BarterSimulation = {
+      ...simulation,
+      id,
+      createdAt: now,
       updatedAt: now,
       status: simulation.status || "draft"
     };
@@ -1189,9 +1194,28 @@ export class MemStorage implements IStorage {
     return true;
   }
 
+  async getBatchClientFamilyRelations(clientIds: string[], userId: string): Promise<Map<string, string[]>> {
+    return new Map();
+  }
+
   async getSystemSettings(): Promise<{ allowUserRegistration: boolean } | undefined> {
     // MemStorage doesn't persist system settings - always allow registration in memory mode
     return { allowUserRegistration: true };
+  }
+
+  async getClientCategoryPipeline(clientId: string, userId: string, seasonId: string): Promise<ClientCategoryPipeline[]> {
+    return [];
+  }
+
+  async upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline> {
+    const id = randomUUID();
+    return {
+      ...pipeline,
+      id,
+      status: pipeline.status ?? 'ABERTO',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
   }
 }
 
@@ -1199,9 +1223,9 @@ export class DBStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({ 
-      pool: pool as any, 
-      createTableIfMissing: true 
+    this.sessionStore = new PostgresSessionStore({
+      pool: pool as any,
+      createTableIfMissing: true
     });
   }
 
@@ -1336,12 +1360,12 @@ export class DBStorage implements IStorage {
       masterPlantingArea: masterClients.plantingArea,
       masterCultures: masterClients.cultures
     })
-    .from(userClientLinks)
-    .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
-    .where(eq(userClientLinks.id, id));
-    
+      .from(userClientLinks)
+      .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
+      .where(eq(userClientLinks.id, id));
+
     if (links.length === 0) return undefined;
-    
+
     const link = links[0];
     return {
       id: link.linkId,
@@ -1366,7 +1390,7 @@ export class DBStorage implements IStorage {
   async createClient(client: InsertClient): Promise<Client> {
     // 1. Buscar ou criar master_client
     let masterClient = await this.findMasterClientByName(client.name);
-    
+
     if (!masterClient) {
       // Criar novo master_client
       masterClient = await this.createMasterClient({
@@ -1377,7 +1401,7 @@ export class DBStorage implements IStorage {
         isActive: true
       });
     }
-    
+
     // 2. Criar user_client_link
     const linkId = randomUUID();
     const newLink = await db.insert(userClientLinks).values({
@@ -1392,7 +1416,7 @@ export class DBStorage implements IStorage {
       includeInMarketArea: client.includeInMarketArea ?? false,
       isActive: true
     }).returning();
-    
+
     // 3. Retornar no formato Client
     return {
       id: linkId,
@@ -1411,7 +1435,7 @@ export class DBStorage implements IStorage {
   async updateClient(id: string, client: Partial<InsertClient>): Promise<Client | undefined> {
     // Atualizar user_client_links
     const updateData: Partial<typeof userClientLinks.$inferInsert> = {};
-    
+
     if (client.name !== undefined) updateData.customName = client.name;
     if (client.plantingArea !== undefined) updateData.plantingArea = client.plantingArea;
     if (client.cultures !== undefined) updateData.cultures = client.cultures;
@@ -1419,11 +1443,11 @@ export class DBStorage implements IStorage {
     if (client.isTop80_20 !== undefined) updateData.isTop80_20 = client.isTop80_20;
     if (client.includeInMarketArea !== undefined) updateData.includeInMarketArea = client.includeInMarketArea;
     if (client.isActive !== undefined) updateData.isActive = client.isActive;
-    
+
     await db.update(userClientLinks)
       .set(updateData)
       .where(eq(userClientLinks.id, id));
-    
+
     return await this.getClient(id);
   }
 
@@ -1451,16 +1475,16 @@ export class DBStorage implements IStorage {
       masterPlantingArea: masterClients.plantingArea,
       masterCultures: masterClients.cultures
     })
-    .from(userClientLinks)
-    .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
-    .where(
-      and(
-        eq(userClientLinks.userId, userId),
-        eq(userClientLinks.isActive, true),
-        eq(masterClients.isActive, true),
-        top8020Only ? eq(userClientLinks.isTop80_20, true) : sql`true`
-      )
-    );
+      .from(userClientLinks)
+      .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
+      .where(
+        and(
+          eq(userClientLinks.userId, userId),
+          eq(userClientLinks.isActive, true),
+          eq(masterClients.isActive, true),
+          top8020Only ? eq(userClientLinks.isTop80_20, true) : sql`true`
+        )
+      );
 
     // Mapear para formato Client
     return links.map(link => ({
@@ -1490,7 +1514,7 @@ export class DBStorage implements IStorage {
   async findMasterClientByName(name: string): Promise<MasterClient | undefined> {
     const normalizedSearch = name.toUpperCase().trim().replace(/[.,\-\s]/g, '');
     const allClients = await db.select().from(masterClients).where(eq(masterClients.isActive, true));
-    
+
     return allClients.find(client => {
       const normalizedClientName = client.name.toUpperCase().trim().replace(/[.,\-\s]/g, '');
       return normalizedClientName === normalizedSearch;
@@ -1530,7 +1554,7 @@ export class DBStorage implements IStorage {
     await db.update(userClientLinks)
       .set({ masterClientId: targetId })
       .where(eq(userClientLinks.masterClientId, sourceId));
-    
+
     await db.delete(masterClients).where(eq(masterClients.id, sourceId));
     return true;
   }
@@ -1679,7 +1703,7 @@ export class DBStorage implements IStorage {
         eq(sales.userId, userId),
         sql`${sales.orderCode} IS NOT NULL`
       ));
-    
+
     return new Set(result.map(r => r.orderCode).filter((code): code is string => code !== null));
   }
 
@@ -1725,7 +1749,7 @@ export class DBStorage implements IStorage {
       .where(sql`${sales.importBatchId} IS NOT NULL`)
       .groupBy(sales.importBatchId)
       .orderBy(sql`MIN(${sales.createdAt}) DESC`);
-    
+
     return result.map(row => ({
       batchId: row.batchId!,
       importDate: row.importDate,
@@ -1764,7 +1788,7 @@ export class DBStorage implements IStorage {
   async getClientMarketRates(clientId: string, userId: string, seasonId: string): Promise<ClientMarketRate[]> {
     return await db.select().from(clientMarketRates)
       .where(and(
-        eq(clientMarketRates.clientId, clientId), 
+        eq(clientMarketRates.clientId, clientId),
         eq(clientMarketRates.userId, userId),
         eq(clientMarketRates.seasonId, seasonId)
       ));
@@ -1813,7 +1837,7 @@ export class DBStorage implements IStorage {
   async getClientMarketValues(clientId: string, userId: string, seasonId: string): Promise<ClientMarketValue[]> {
     return await db.select().from(clientMarketValues)
       .where(and(
-        eq(clientMarketValues.clientId, clientId), 
+        eq(clientMarketValues.clientId, clientId),
         eq(clientMarketValues.userId, userId),
         eq(clientMarketValues.seasonId, seasonId)
       ));
@@ -1917,11 +1941,11 @@ export class DBStorage implements IStorage {
       plantingArea: userClientLinks.plantingArea,
       includeInMarketArea: userClientLinks.includeInMarketArea,
     })
-    .from(userClientLinks)
-    .where(and(
-      eq(userClientLinks.userId, userId),
-      eq(userClientLinks.includeInMarketArea, true)
-    ));
+      .from(userClientLinks)
+      .where(and(
+        eq(userClientLinks.userId, userId),
+        eq(userClientLinks.includeInMarketArea, true)
+      ));
 
     // Calculate total market area
     const totalMarketArea = marketClients.reduce((sum, client) => {
@@ -2057,7 +2081,7 @@ export class DBStorage implements IStorage {
   async addClientFamilyRelation(relation: InsertClientFamilyRelation): Promise<ClientFamilyRelation> {
     const id = randomUUID();
     const inverseId = randomUUID();
-    
+
     // Check if relation already exists to prevent duplicates
     const existing = await db.select().from(clientFamilyRelations)
       .where(and(
@@ -2066,25 +2090,25 @@ export class DBStorage implements IStorage {
         eq(clientFamilyRelations.userId, relation.userId)
       ))
       .limit(1);
-    
+
     if (existing.length > 0) {
       return existing[0];
     }
-    
+
     // Add main relation (A → B)
     const inserted = await db.insert(clientFamilyRelations)
       .values({ id, ...relation })
       .returning();
-    
+
     // Add inverse relation (B → A)
     await db.insert(clientFamilyRelations)
-      .values({ 
+      .values({
         id: inverseId,
         clientId: relation.relatedClientId,
         relatedClientId: relation.clientId,
         userId: relation.userId
       });
-    
+
     return inserted[0];
   }
 
@@ -2096,7 +2120,7 @@ export class DBStorage implements IStorage {
         eq(clientFamilyRelations.relatedClientId, relatedClientId),
         eq(clientFamilyRelations.userId, userId)
       ));
-    
+
     // Remove inverse relation B → A
     await db.delete(clientFamilyRelations)
       .where(and(
@@ -2104,7 +2128,7 @@ export class DBStorage implements IStorage {
         eq(clientFamilyRelations.relatedClientId, clientId),
         eq(clientFamilyRelations.userId, userId)
       ));
-    
+
     return true;
   }
 
@@ -2131,7 +2155,7 @@ export class DBStorage implements IStorage {
 
     // Batch fetch only the categories needed (no N+1 queries)
     const categoryIds = [...new Set(salesData.map(s => s.categoryId))];
-    const neededCategories = categoryIds.length > 0 
+    const neededCategories = categoryIds.length > 0
       ? await db.select().from(categories).where(inArray(categories.id, categoryIds))
       : [];
     const categoryLookup = new Map(neededCategories.map(c => [c.id, c]));
@@ -2162,11 +2186,11 @@ export class DBStorage implements IStorage {
     }
 
     const clientIds = Array.from(clientMap.keys());
-    const neededClientLinks = clientIds.length > 0 
+    const neededClientLinks = clientIds.length > 0
       ? await db.select({
-          id: userClientLinks.id,
-          name: sql<string>`COALESCE(${userClientLinks.customName}, ${masterClients.name})`.as('name')
-        })
+        id: userClientLinks.id,
+        name: sql<string>`COALESCE(${userClientLinks.customName}, ${masterClients.name})`.as('name')
+      })
         .from(userClientLinks)
         .leftJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
         .where(inArray(userClientLinks.id, clientIds))
@@ -2212,7 +2236,7 @@ export class DBStorage implements IStorage {
 
   async upsertAlertSettings(settings: InsertAlertSettings): Promise<AlertSettings> {
     const existing = await this.getAlertSettings(settings.userId);
-    
+
     if (existing) {
       const updated = await db.update(alertSettings)
         .set({ ...settings, updatedAt: new Date() })
@@ -2282,7 +2306,7 @@ export class DBStorage implements IStorage {
     const conditions = [eq(purchaseHistory.userId, userId)];
     if (clientId) conditions.push(eq(purchaseHistory.clientId, clientId));
     if (seasonId) conditions.push(eq(purchaseHistory.seasonId, seasonId));
-    
+
     return await db.select().from(purchaseHistory)
       .where(and(...conditions))
       .orderBy(desc(purchaseHistory.importDate));
@@ -2365,7 +2389,7 @@ export class DBStorage implements IStorage {
 
   async upsertBarterSetting(key: string, value: string, description?: string): Promise<BarterSettings> {
     const existing = await db.select().from(barterSettings).where(eq(barterSettings.key, key)).limit(1);
-    
+
     if (existing.length > 0) {
       const updated = await db.update(barterSettings)
         .set({ value, description, updatedAt: new Date() })
@@ -2391,9 +2415,9 @@ export class DBStorage implements IStorage {
     const sim = await db.select().from(barterSimulations)
       .where(eq(barterSimulations.id, id))
       .limit(1);
-    
+
     if (sim.length === 0) return undefined;
-    
+
     return sim[0];
   }
 
@@ -2402,7 +2426,7 @@ export class DBStorage implements IStorage {
     const inserted = await db.insert(barterSimulations)
       .values({ id, ...simulation })
       .returning();
-    
+
     if (items && items.length > 0) {
       const itemsToInsert = items.map(item => ({
         id: randomUUID(),
@@ -2411,7 +2435,7 @@ export class DBStorage implements IStorage {
       }));
       await db.insert(barterSimulationItems).values(itemsToInsert);
     }
-    
+
     return inserted[0];
   }
 
@@ -2420,7 +2444,7 @@ export class DBStorage implements IStorage {
       .set({ ...simulation, updatedAt: new Date() })
       .where(eq(barterSimulations.id, id))
       .returning();
-    
+
     if (updated.length === 0) return undefined;
     return updated[0];
   }
@@ -2470,7 +2494,7 @@ export class DBStorage implements IStorage {
 
     // Batch fetch all sales for all clients at once (no N+1 queries)
     const clientIds = (clientsData.rows as any[]).map((c: any) => String(c.client_id));
-    
+
     const allSalesRaw = clientIds.length > 0 ? await db.select({
       clientId: sales.clientId,
       segmento: categories.type,
@@ -2575,11 +2599,11 @@ export class DBStorage implements IStorage {
 
   async getSalesTargets(userId: string, seasonId?: string): Promise<SalesTarget[]> {
     const conditions = [eq(salesTargets.userId, userId)];
-    
+
     if (seasonId) {
       conditions.push(eq(salesTargets.seasonId, seasonId));
     }
-    
+
     return await db.select()
       .from(salesTargets)
       .where(and(...conditions))
@@ -2611,11 +2635,11 @@ export class DBStorage implements IStorage {
       })
       .where(eq(salesTargets.id, id))
       .returning();
-    
+
     if (updated.length === 0) {
       throw new Error("Sales target not found");
     }
-    
+
     return updated[0];
   }
 
@@ -2632,10 +2656,51 @@ export class DBStorage implements IStorage {
     const [settings] = await db.select()
       .from(systemSettings)
       .limit(1);
-    
+
     return settings ? {
       allowUserRegistration: settings.allowUserRegistration
     } : undefined;
+  }
+
+  async getClientCategoryPipeline(clientId: string, userId: string, seasonId: string): Promise<ClientCategoryPipeline[]> {
+    return await db.select().from(clientCategoryPipeline)
+      .where(and(
+        eq(clientCategoryPipeline.clientId, clientId),
+        eq(clientCategoryPipeline.userId, userId),
+        eq(clientCategoryPipeline.seasonId, seasonId)
+      ));
+  }
+
+  async upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline> {
+    const existing = await db.select().from(clientCategoryPipeline)
+      .where(and(
+        eq(clientCategoryPipeline.clientId, pipeline.clientId),
+        eq(clientCategoryPipeline.categoryId, pipeline.categoryId),
+        eq(clientCategoryPipeline.seasonId, pipeline.seasonId),
+        eq(clientCategoryPipeline.userId, pipeline.userId)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const updated = await db.update(clientCategoryPipeline)
+        .set({
+          status: pipeline.status,
+          updatedAt: new Date()
+        })
+        .where(eq(clientCategoryPipeline.id, existing[0].id))
+        .returning();
+      return updated[0];
+    } else {
+      const id = randomUUID();
+      const inserted = await db.insert(clientCategoryPipeline)
+        .values({
+          id,
+          ...pipeline,
+          status: pipeline.status ?? 'ABERTO'
+        })
+        .returning();
+      return inserted[0];
+    }
   }
 }
 

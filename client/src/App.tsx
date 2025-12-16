@@ -26,6 +26,7 @@ import ManagerPage from "@/pages/manager";
 import BarterPage from "@/pages/barter";
 import FaturistaPage from "@/pages/faturista";
 import KanbanMetasPage from "@/pages/kanban-metas";
+import GestaoPotencialPage from "@/pages/gestao-potencial";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import CRMLogin from "@/pages/crm/login";
@@ -50,7 +51,7 @@ function Router() {
       <AdminRoute path="/admin" component={AdminPage} />
       <ManagerRoute path="/manager" component={ManagerPage} />
       <FaturistaRoute path="/faturista" component={FaturistaPage} />
-      
+
       {/* CRM Routes */}
       <Route path="/crm">
         {() => {
@@ -101,6 +102,7 @@ function Router() {
       <ConsultorRoute path="/historico-compras" component={HistoricoCompras} />
       <ConsultorRoute path="/barter" component={BarterPage} />
       <ConsultorRoute path="/kanban-metas" component={KanbanMetasPage} />
+      <ManagerRoute path="/gestao-potencial" component={GestaoPotencialPage} />
       <Route component={NotFound} />
     </Switch>
   );

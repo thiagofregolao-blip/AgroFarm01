@@ -841,16 +841,12 @@ export const insertFarmSchema = createInsertSchema(farms).omit({ id: true, creat
 export type InsertFarm = z.infer<typeof insertFarmSchema>;
 export type Farm = typeof farms.$inferSelect;
 
-export const insertFieldSchema = createInsertSchema(fields).omit({ 
-  id: true, 
+export const insertFieldSchema = createInsertSchema(fields).omit({
+  id: true,
   createdAt: true,
-  updatedAt: true,
-  updatedBy: true,
-  geom: true
-}).partial({ 
-  crop: true, 
-  season: true,
-  areaHa: true
+}).partial({
+  crop: true,
+  area: true
 });
 export type InsertField = z.infer<typeof insertFieldSchema>;
 export type Field = typeof fields.$inferSelect;
@@ -901,6 +897,25 @@ export type GlobalManagementApplication = typeof globalManagementApplications.$i
 export const insertClientApplicationTrackingSchema = createInsertSchema(clientApplicationTracking).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertClientApplicationTracking = z.infer<typeof insertClientApplicationTrackingSchema>;
 export type ClientApplicationTracking = typeof clientApplicationTracking.$inferSelect;
+
+
+// Client Category Pipeline - Pipeline de Oportunidades por Categoria (Fertilizantes, Sementes, etc)
+export const clientCategoryPipeline = pgTable("client_category_pipeline", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => userClientLinks.id, { onDelete: "cascade" }),
+  categoryId: varchar("category_id").notNull().references(() => categories.id),
+  seasonId: varchar("season_id").notNull().references(() => seasons.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  status: text("status"), // 'ABERTO' | 'FECHADO'
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  uniquePipeline: unique().on(table.clientId, table.seasonId, table.categoryId),
+}));
+
+export const insertClientCategoryPipelineSchema = createInsertSchema(clientCategoryPipeline).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertClientCategoryPipeline = z.infer<typeof insertClientCategoryPipelineSchema>;
+export type ClientCategoryPipeline = typeof clientCategoryPipeline.$inferSelect;
 
 // System Settings schemas
 export const insertSystemSettingsSchema = createInsertSchema(systemSettings).omit({ id: true, updatedAt: true });

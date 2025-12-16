@@ -1,9 +1,10 @@
 import { Link } from "wouter";
-import { 
+import {
   BarChart3,
   Users,
   ListChecks,
-  Target
+  Target,
+  Settings
 } from "lucide-react";
 
 interface ManagerNavbarProps {
@@ -16,6 +17,7 @@ const menuItems = [
   { id: "team", icon: Users, label: "Equipe" },
   { id: "action-plans", icon: ListChecks, label: "Planos de Ação" },
   { id: "metas", icon: Target, label: "Metas" },
+  { id: "gestao-potencial", icon: Settings, label: "Gestão de Potencial" },
 ];
 
 export default function ManagerNavbar({ activeTab, onTabChange }: ManagerNavbarProps) {
@@ -26,7 +28,7 @@ export default function ManagerNavbar({ activeTab, onTabChange }: ManagerNavbarP
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
-            
+
             return (
               <button
                 key={item.id}
@@ -34,11 +36,10 @@ export default function ManagerNavbar({ activeTab, onTabChange }: ManagerNavbarP
                   onTabChange(item.id);
                   window.location.hash = item.id;
                 }}
-                className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 ${
-                  isActive 
-                    ? 'text-green-600 border-green-600 font-medium' 
+                className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 ${isActive
+                    ? 'text-green-600 border-green-600 font-medium'
                     : 'text-muted-foreground hover:text-foreground border-transparent'
-                }`}
+                  }`}
                 data-testid={`nav-${item.id}`}
               >
                 <Icon size={18} />
