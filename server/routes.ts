@@ -4884,14 +4884,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update pipeline statuses
       if (pipelineStatuses && Array.isArray(pipelineStatuses)) {
-        for (const ps of pipelineStatuses) {
-          await storage.upsertClientCategoryPipeline({
-            clientId,
-            categoryId: ps.categoryId,
-            userId,
-            seasonId: seasonId || (await storage.getActiveSeason())?.id,
-            status: ps.status
-          });
+        try {
+          for (const ps of pipelineStatuses) {
+            await storage.upsertClientCategoryPipeline({
+              clientId,
+              categoryId: ps.categoryId,
+              userId,
+              seasonId: seasonId || (await storage.getActiveSeason())?.id,
+              status: ps.status
+            });
+          }
+        } catch (pipelineError: any) {
+          const message = pipelineError?.message || String(pipelineError);
+          if (message.includes('client_category_pipeline') || message.includes('relation \"client_category_pipeline\" does not exist')) {
+            console.warn('[CLIENT-MARKET-PANEL] client_category_pipeline table missing on PATCH, skipping pipeline update.');
+            // segue sem falhar a requisição — crédito e marketValues continuam sendo salvos
+          } else {
+            throw pipelineError;
+          }
         }
       }
 
