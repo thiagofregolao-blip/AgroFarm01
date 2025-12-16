@@ -79,6 +79,51 @@ export default function GestaoPotencialPage() {
         }
     }, [seasons, selectedSeasonId]);
 
+    // Fetch existing rates for the selected season (Template from first client)
+    const { data: existingRates } = useQuery<any[]>({
+        queryKey: ["/api/clients/manager-team/market-rates", selectedSeasonId],
+        queryFn: async () => {
+            if (!selectedSeasonId) return [];
+            const res = await fetch(`/api/clients/manager-team/market-rates/${selectedSeasonId}`);
+            if (!res.ok) throw new Error("Failed to fetch rates");
+            return res.json();
+        },
+        enabled: !!selectedSeasonId
+    });
+
+    // Populate form when existing rates are loaded
+    useEffect(() => {
+        if (existingRates && existingRates.length > 0) {
+            const newRateValues: Record<string, string> = {};
+            const newSubValues: Record<string, Record<string, string>> = {};
+
+            existingRates.forEach(rate => {
+                // Populate main value
+                if (rate.client_market_rates?.categoryId) {
+                    newRateValues[rate.client_market_rates.categoryId] = rate.client_market_rates.investmentPerHa || "";
+                } else if (rate.categoryId) { // Fallback if structure is flat
+                    newRateValues[rate.categoryId] = rate.investmentPerHa || "";
+                }
+
+                // Populate subcategories
+                const subcats = rate.client_market_rates?.subcategories || rate.subcategories;
+                if (subcats) {
+                    const catId = rate.client_market_rates?.categoryId || rate.categoryId;
+                    newSubValues[catId] = typeof subcats === 'string' ? JSON.parse(subcats) : subcats;
+                }
+            });
+
+            setRateValues(newRateValues);
+            setSubcategoryValues(newSubValues);
+        } else if (existingRates && existingRates.length === 0) {
+            // If expressly empty (loaded but no data), verify if we should clear or keep?
+            // Better to clear to avoid confusion if verifying different seasons
+            // setRateValues({});
+            // setSubcategoryValues({});
+            // Commented out to prevent clearing if user is midway typing and background validation happens
+        }
+    }, [existingRates]);
+
     // Mutation para salvar potencial geral
     const savePotencialMutation = useMutation({
         mutationFn: async () => {
