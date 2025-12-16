@@ -4584,7 +4584,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(sales.userId, userId)
         ));
 
-      const currentSeasonTotal = currentSeasonSales.reduce((sum, sale) => sum + parseFloat(sale.totalAmount || '0'), 0);
+      const currentSeasonTotal = currentSeasonSales.reduce((sum, sale) => {
+        const amount = parseFloat(sale.totalAmount || '0') || 0;
+        return sum + (isNaN(amount) ? 0 : amount);
+      }, 0);
 
       // Get sales for previous season
       // IMPORTANTE:
@@ -4637,56 +4640,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const cValeByCategoryId: Record<string, { total: number; subcategories?: Record<string, number> }> = {};
       currentSeasonSales.forEach(sale => {
-        const categoryId = productToCategory.get(sale.productId);
-        const productName = productToName.get(sale.productId);
-        const saleAmount = parseFloat(sale.totalAmount || '0');
+        try {
+          const categoryId = productToCategory.get(sale.productId);
+          const productName = productToName.get(sale.productId);
+          const saleAmount = parseFloat(sale.totalAmount || '0') || 0;
 
-        if (categoryId) {
-          if (!cValeByCategoryId[categoryId]) {
-            cValeByCategoryId[categoryId] = { total: 0, subcategories: {} };
-          }
-          cValeByCategoryId[categoryId].total += saleAmount;
+          if (categoryId && !isNaN(saleAmount)) {
+            if (!cValeByCategoryId[categoryId]) {
+              cValeByCategoryId[categoryId] = { total: 0, subcategories: {} };
+            }
+            cValeByCategoryId[categoryId].total += saleAmount;
 
-          // For Agroquímicos, also classify by subcategory
-          if (categoryId === 'cat-agroquimicos' && productName) {
-            const classification = detectSubcategory(productName);
-            if (classification) {
-              const subcategoryName = subcategoryNames[classification.subcategoryId];
-              if (subcategoryName) {
-                if (!cValeByCategoryId[categoryId].subcategories) {
-                  cValeByCategoryId[categoryId].subcategories = {};
+            // For Agroquímicos, also classify by subcategory
+            if (categoryId === 'cat-agroquimicos' && productName) {
+              try {
+                const classification = detectSubcategory(productName);
+                if (classification) {
+                  const subcategoryName = subcategoryNames[classification.subcategoryId];
+                  if (subcategoryName) {
+                    if (!cValeByCategoryId[categoryId].subcategories) {
+                      cValeByCategoryId[categoryId].subcategories = {};
+                    }
+                    cValeByCategoryId[categoryId].subcategories[subcategoryName] =
+                      (cValeByCategoryId[categoryId].subcategories[subcategoryName] || 0) + saleAmount;
+                  }
                 }
-                cValeByCategoryId[categoryId].subcategories[subcategoryName] =
-                  (cValeByCategoryId[categoryId].subcategories[subcategoryName] || 0) + saleAmount;
+              } catch (classifyError) {
+                // Ignore classification errors
               }
             }
           }
+        } catch (saleError) {
+          console.error('[CLIENT-MARKET-PANEL] Error processing sale:', sale, saleError);
         }
       });
 
       // Get applications from Global Management
       // CRITICAL: Fetch ALL global applications for the season, then LEFT JOIN with client tracking
-      const { clientApplicationTracking, globalManagementApplications, productsPriceTable } = await import("@shared/schema");
+      let applications: any[] = [];
+      try {
+        const { clientApplicationTracking, globalManagementApplications, productsPriceTable } = await import("@shared/schema");
 
-      const applications = await db.select({
-        globalAppId: globalManagementApplications.id,
-        categoria: globalManagementApplications.categoria,
-        applicationNumber: globalManagementApplications.applicationNumber,
-        productName: productsPriceTable.mercaderia,
-        pricePerHa: globalManagementApplications.pricePerHa,
-        trackingId: clientApplicationTracking.id,
-        trackingStatus: clientApplicationTracking.status,
-        trackingTotalValue: clientApplicationTracking.totalValue
-      })
-        .from(globalManagementApplications)
-        .innerJoin(productsPriceTable, eq(globalManagementApplications.productId, productsPriceTable.id))
-        .leftJoin(clientApplicationTracking, and(
-          eq(clientApplicationTracking.globalApplicationId, globalManagementApplications.id),
-          eq(clientApplicationTracking.clientId, clientId),
-          eq(clientApplicationTracking.seasonId, seasonId)
-        ))
-        .where(eq(globalManagementApplications.seasonId, seasonId))
-        .orderBy(globalManagementApplications.categoria, globalManagementApplications.applicationNumber);
+        applications = await db.select({
+          globalAppId: globalManagementApplications.id,
+          categoria: globalManagementApplications.categoria,
+          applicationNumber: globalManagementApplications.applicationNumber,
+          productName: productsPriceTable.mercaderia,
+          pricePerHa: globalManagementApplications.pricePerHa,
+          trackingId: clientApplicationTracking.id,
+          trackingStatus: clientApplicationTracking.status,
+          trackingTotalValue: clientApplicationTracking.totalValue
+        })
+          .from(globalManagementApplications)
+          .innerJoin(productsPriceTable, eq(globalManagementApplications.productId, productsPriceTable.id))
+          .leftJoin(clientApplicationTracking, and(
+            eq(clientApplicationTracking.globalApplicationId, globalManagementApplications.id),
+            eq(clientApplicationTracking.clientId, clientId),
+            eq(clientApplicationTracking.seasonId, seasonId)
+          ))
+          .where(eq(globalManagementApplications.seasonId, seasonId))
+          .orderBy(globalManagementApplications.categoria, globalManagementApplications.applicationNumber);
+      } catch (appError) {
+        console.error('[CLIENT-MARKET-PANEL] Error fetching applications:', appError);
+        applications = [];
+      }
 
       // GROUP products by categoria + applicationNumber (one application can have multiple products)
       const applicationsGrouped = new Map<string, {
@@ -4703,28 +4720,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }>();
 
       applications.forEach(app => {
-        const key = `${app.categoria} -${app.applicationNumber} `;
-        const clientArea = parseFloat(client.userClientArea || client.masterClientArea || '0');
-        const pricePerHa = parseFloat(app.pricePerHa || '0');
-        const totalValue = app.trackingTotalValue ? parseFloat(app.trackingTotalValue) : (pricePerHa * clientArea);
+        try {
+          if (!app.categoria || app.applicationNumber === undefined || app.applicationNumber === null) {
+            console.warn('[CLIENT-MARKET-PANEL] Skipping app with missing categoria or applicationNumber:', app);
+            return;
+          }
+          const key = `${app.categoria}-${app.applicationNumber}`;
+          const clientArea = parseFloat(client.userClientArea || client.masterClientArea || '0') || 0;
+          const pricePerHa = parseFloat(app.pricePerHa || '0') || 0;
+          const totalValue = app.trackingTotalValue 
+            ? (parseFloat(app.trackingTotalValue) || 0)
+            : (isNaN(pricePerHa) || isNaN(clientArea) ? 0 : pricePerHa * clientArea);
 
-        if (!applicationsGrouped.has(key)) {
-          applicationsGrouped.set(key, {
-            categoria: app.categoria,
-            applicationNumber: app.applicationNumber,
-            products: [],
-            status: app.trackingStatus || null
+          if (!applicationsGrouped.has(key)) {
+            applicationsGrouped.set(key, {
+              categoria: app.categoria || 'Unknown',
+              applicationNumber: app.applicationNumber,
+              products: [],
+              status: app.trackingStatus || null
+            });
+          }
+
+          const group = applicationsGrouped.get(key)!;
+          group.products.push({
+            globalApplicationId: app.globalAppId || '',
+            productName: app.productName || 'Unknown Product',
+            pricePerHa: isNaN(pricePerHa) ? 0 : pricePerHa,
+            totalValue: isNaN(totalValue) ? 0 : totalValue,
+            trackingId: app.trackingId || null
           });
+        } catch (appProcessError) {
+          console.error('[CLIENT-MARKET-PANEL] Error processing application:', app, appProcessError);
         }
-
-        const group = applicationsGrouped.get(key)!;
-        group.products.push({
-          globalApplicationId: app.globalAppId,
-          productName: app.productName,
-          pricePerHa,
-          totalValue,
-          trackingId: app.trackingId || null
-        });
       });
 
       const applicationsData = Array.from(applicationsGrouped.values()).map(group => ({
@@ -4777,8 +4804,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       });
     } catch (error) {
-      console.error("Error fetching client market panel data:", error);
-      res.status(500).json({ error: "Failed to fetch client market panel data" });
+      console.error("[CLIENT-MARKET-PANEL] Critical Error:", error);
+      console.error("[CLIENT-MARKET-PANEL] Error Stack:", error instanceof Error ? error.stack : 'No stack trace');
+      res.status(500).json({ 
+        error: "Failed to fetch client market panel data",
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined
+      });
     }
   });
 
