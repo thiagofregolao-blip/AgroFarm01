@@ -110,7 +110,7 @@ export default function Clientes() {
     mutationFn: async ({ id, data }: { id: string; data: Partial<InsertClient> }) => {
       return apiRequest("PATCH", `/api/clients/${id}`, data);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ 
         predicate: (query) => 
           query.queryKey[0] === "/api/clients" || 
@@ -119,6 +119,18 @@ export default function Clientes() {
       queryClient.invalidateQueries({ predicate: (query) => 
         query.queryKey[0]?.toString().startsWith('/api/market-percentage/') ?? false
       });
+      // Invalidate market opportunity queries when includeInMarketArea changes
+      if (variables.data?.includeInMarketArea !== undefined) {
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith('/api/market-opportunity/')
+        });
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith('/api/market-potential')
+        });
+        queryClient.invalidateQueries({ predicate: (query) => 
+          typeof query.queryKey[0] === "string" && query.queryKey[0].startsWith('/api/market-analysis')
+        });
+      }
       toast({
         title: "Cliente atualizado",
         description: "As informações do cliente foram atualizadas.",
