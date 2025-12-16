@@ -4053,6 +4053,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(clientApplicationTracking.seasonId, seasonId)
         ));
 
+      // Safety: filter out any apps with missing critical data
+      const validApps = allApps.filter(app => {
+        const hasCategoria = app.categoria || app.globalCategory;
+        const hasClientId = app.clientId;
+        return hasCategoria && hasClientId;
+      });
+
       console.log(`[MARKET-CARDS] Pipeline Statuses: ${pipelineStatuses.length}`, pipelineStatuses.slice(0, 3));
       console.log(`[MARKET-CARDS] All Apps: ${allApps.length}`, allApps.slice(0, 3));
 
@@ -4250,9 +4257,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 2. Process Agroquimicos via Application Tracking
       // Iterate ALL tracked applications to sum up Oportunidades and JaNegociado
-      allApps.forEach(app => {
+      validApps.forEach(app => {
         // Map application categoria to main category (Agroquimicos)
-        const normalizedName = normalizeCategoryName(app.categoria);
+        // Safety check: skip if categoria is missing
+        if (!app.categoria && !app.globalCategory) {
+          console.warn('[MARKET-CARDS] Skipping app without categoria:', app);
+          return;
+        }
+        const normalizedName = normalizeCategoryName(app.categoria || app.globalCategory || '');
         const target = normalizeString(normalizedName);
 
         const category = allCategories.find(c => {
@@ -4344,7 +4356,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // 1. Agroquimicos Breakdown (from Applications)
-      allApps.forEach(app => {
+      validApps.forEach(app => {
+        // Safety check: skip if categoria is missing
+        if (!app.categoria && !app.globalCategory) {
+          return;
+        }
         // Only count tracked apps that are Open or Partial (Oportunidades)
         let val = 0;
         const totalVal = parseFloat(app.totalValue || '0');
