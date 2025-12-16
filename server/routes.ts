@@ -4057,13 +4057,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[MARKET-CARDS] All Apps: ${allApps.length}`, allApps.slice(0, 3));
 
       // Helper to differentiate Agroquimicos
-      const isAgroquimico = (type: string) => {
+      const isAgroquimico = (type: string | null | undefined) => {
+        if (!type) return false;
         const t = type.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         return t === 'agroquimicos';
       };
 
       // Normalize category helper
-      const normalizeCategoryName = (name: string): string => {
+      const normalizeCategoryName = (name: string | null | undefined): string => {
+        if (!name) return 'Outros';
         const agroquimicoVariants = ['FUNGICIDAS', 'INSETICIDAS', 'DESSECAÇÃO', 'TRATAMENTO DE SEMENTE', 'TS'];
         if (agroquimicoVariants.includes(name.toUpperCase())) {
           return 'Agroquímicos';
@@ -4071,7 +4073,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return name;
       };
 
-      const normalizeString = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const normalizeString = (str: string | null | undefined) => {
+        if (!str) return "";
+        return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      };
 
       // Calculate data per category
       const categoryData = new Map<string, {
