@@ -4568,7 +4568,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let pipeline: any[] = [];
       try {
         pipeline = await storage.getClientCategoryPipeline(clientId, userId, seasonId);
+        console.log(`[CLIENT-MARKET-PANEL] Fetched ${pipeline.length} pipeline records for client ${clientId}, season ${seasonId}`);
+        if (pipeline.length > 0) {
+          console.log(`[CLIENT-MARKET-PANEL] Pipeline records:`, JSON.stringify(pipeline, null, 2));
+        }
       } catch (pipelineError: any) {
+        console.error('[CLIENT-MARKET-PANEL] Error fetching pipeline:', pipelineError);
         const message = pipelineError?.message || String(pipelineError);
         if (message.includes('client_category_pipeline') || message.includes('relation "client_category_pipeline" does not exist')) {
           console.warn('[CLIENT-MARKET-PANEL] client_category_pipeline table missing, continuing with empty pipeline.');
@@ -4831,7 +4836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update pipeline statuses
-      if (pipelineStatuses && Array.isArray(pipelineStatuses)) {
+      if (pipelineStatuses && Array.isArray(pipelineStatuses) && pipelineStatuses.length > 0) {
         try {
           console.log(`[CLIENT-MARKET-PANEL] Updating pipeline for client ${clientId}, season ${seasonId}, items: ${pipelineStatuses.length}`);
           console.log(`[CLIENT-MARKET-PANEL] Pipeline statuses payload:`, JSON.stringify(pipelineStatuses, null, 2));
@@ -4839,16 +4844,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const finalSeasonId = seasonId || (await storage.getActiveSeason())?.id;
           if (!finalSeasonId) {
             console.error('[CLIENT-MARKET-PANEL] No seasonId available for pipeline update');
+            return res.status(400).json({ error: "seasonId is required" });
           }
           
           for (const ps of pipelineStatuses) {
-            console.log(`[CLIENT-MARKET-PANEL] Upserting pipeline: category=${ps.categoryId}, status=${ps.status}, season=${finalSeasonId}`);
+            // Filter out null statuses - if status is null, we should delete the record or set to ABERTO
+            const finalStatus = ps.status === null ? 'ABERTO' : ps.status;
+            
+            console.log(`[CLIENT-MARKET-PANEL] Upserting pipeline: category=${ps.categoryId}, status=${finalStatus} (original: ${ps.status}), season=${finalSeasonId}`);
+            
             const result = await storage.upsertClientCategoryPipeline({
               clientId,
               categoryId: ps.categoryId,
               userId,
-              seasonId: finalSeasonId!,
-              status: ps.status
+              seasonId: finalSeasonId,
+              status: finalStatus
             });
             console.log(`[CLIENT-MARKET-PANEL] Pipeline upsert result:`, JSON.stringify(result, null, 2));
           }
@@ -4856,17 +4866,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         } catch (pipelineError: any) {
           console.error('[CLIENT-MARKET-PANEL] Pipeline update error:', pipelineError);
+          console.error('[CLIENT-MARKET-PANEL] Error message:', pipelineError?.message);
           console.error('[CLIENT-MARKET-PANEL] Error stack:', pipelineError?.stack);
           const message = pipelineError?.message || String(pipelineError);
           if (message.includes('client_category_pipeline') || message.includes('relation \"client_category_pipeline\" does not exist')) {
             console.warn('[CLIENT-MARKET-PANEL] client_category_pipeline table missing on PATCH, skipping pipeline update.');
             // segue sem falhar a requisição — crédito e marketValues continuam sendo salvos
           } else {
+            // Re-throw to fail the request so user knows something went wrong
+            console.error('[CLIENT-MARKET-PANEL] Pipeline error is not about missing table, re-throwing');
             throw pipelineError;
           }
         }
       } else {
-        console.log(`[CLIENT-MARKET-PANEL] No pipeline statuses to update (pipelineStatuses=${pipelineStatuses})`);
+        console.log(`[CLIENT-MARKET-PANEL] No pipeline statuses to update (pipelineStatuses=${pipelineStatuses}, length=${pipelineStatuses?.length || 0})`);
       }
 
       // Update application statuses

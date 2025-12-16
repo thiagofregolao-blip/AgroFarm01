@@ -113,20 +113,28 @@ export default function MarketManagementPanel({
         subcategories: data.subcategories
       }));
 
+      const pipelineStatusesArray = Object.entries(editedValues.pipelineStatuses).map(([categoryId, status]) => ({
+        categoryId,
+        status
+      }));
+      const applicationStatusesArray = Object.entries(editedValues.applicationStatuses).map(([id, status]) => ({
+        id,
+        status
+      }));
+      
       const payload = {
         seasonId,
         creditLine: editedValues.creditLine,
         marketValues: manualMarketValues,
-        applicationStatuses: Object.entries(editedValues.applicationStatuses).map(([id, status]) => ({
-          id,
-          status
-        })),
-        pipelineStatuses: Object.entries(editedValues.pipelineStatuses).map(([categoryId, status]) => ({
-          categoryId,
-          status
-        }))
+        applicationStatuses: applicationStatusesArray,
+        pipelineStatuses: pipelineStatusesArray
       };
+      
       console.log("PATCH payload:", payload);
+      console.log("PATCH pipelineStatuses details:", JSON.stringify(pipelineStatusesArray, null, 2));
+      console.log("PATCH applicationStatuses details:", JSON.stringify(applicationStatusesArray, null, 2));
+      console.log("PATCH editedValues.pipelineStatuses:", editedValues.pipelineStatuses);
+      
       return apiRequest('PATCH', `/api/client-market-panel/${clientId}`, payload);
     },
     onError: (error: any) => {
