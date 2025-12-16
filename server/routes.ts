@@ -3997,28 +3997,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientAmareloIds = clientsAmarelo.map(c => c.id);
 
       // Get client market rates for potential calculation (badge amarelo only)
-      const marketRates = clientAmareloIds.length > 0
-        ? await db.select()
-          .from(clientMarketRates)
-          .where(and(
-            eq(clientMarketRates.userId, userId),
-            eq(clientMarketRates.seasonId, seasonId),
-            inArray(clientMarketRates.clientId, clientAmareloIds)
-          ))
-        : [];
+      let marketRates: any[] = [];
+      try {
+        if (clientAmareloIds.length > 0) {
+          marketRates = await db.select()
+            .from(clientMarketRates)
+            .where(and(
+              eq(clientMarketRates.userId, userId),
+              eq(clientMarketRates.seasonId, seasonId),
+              inArray(clientMarketRates.clientId, clientAmareloIds)
+            ));
+        }
+      } catch (rateError) {
+        console.error('[MARKET-CARDS] Error fetching market rates:', rateError);
+        marketRates = [];
+      }
 
       // Get ALL sales (C.Vale) for this user, regardless of badge
-      const salesData = await db.select({
-        categoryId: sales.categoryId,
-        totalAmount: sales.totalAmount,
-        clientId: sales.clientId,
-        saleDate: sales.saleDate
-      })
-        .from(sales)
-        .where(and(
-          eq(sales.userId, userId),
-          eq(sales.seasonId, seasonId)
-        ));
+      let salesData: any[] = [];
+      try {
+        salesData = await db.select({
+          categoryId: sales.categoryId,
+          totalAmount: sales.totalAmount,
+          clientId: sales.clientId,
+          saleDate: sales.saleDate
+        })
+          .from(sales)
+          .where(and(
+            eq(sales.userId, userId),
+            eq(sales.seasonId, seasonId)
+          ));
+      } catch (salesError) {
+        console.error('[MARKET-CARDS] Error fetching sales:', salesError);
+        salesData = [];
+      }
 
       console.log(`[MARKET-CARDS] User ${userId}: Found ${salesData.length} total sales`);
 
@@ -4045,12 +4057,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }));
 
       // Get ALL pipeline statuses (General Categories)
-      const pipelineStatuses = await db.select()
-        .from(clientCategoryPipeline)
-        .where(and(
-          eq(clientCategoryPipeline.userId, userId),
-          eq(clientCategoryPipeline.seasonId, seasonId)
-        ));
+      let pipelineStatuses: any[] = [];
+      try {
+        pipelineStatuses = await db.select()
+          .from(clientCategoryPipeline)
+          .where(and(
+            eq(clientCategoryPipeline.userId, userId),
+            eq(clientCategoryPipeline.seasonId, seasonId)
+          ));
+      } catch (pipelineError) {
+        console.error('[MARKET-CARDS] Error fetching pipeline statuses:', pipelineError);
+        pipelineStatuses = [];
+      }
 
       // Get ALL application tracking (Agroquimicos)
       let allApps: any[] = [];
@@ -4226,12 +4244,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let area = parseFloat(client.userArea || client.masterArea || '0');
 
             if (rate) {
-              const investmentPerHa = parseFloat(rate.investmentPerHa || '0');
-              potentialValue = area * investmentPerHa;
-              catData.potentialUsd += potentialValue;
-              catData.potentialHa += area;
-
-              clientCatEntry.potentialUsd += potentialValue;
+              const investmentPerHa = parseFloat(rate.investmentPerHa || '0') || 0;
+              if (!isNaN(investmentPerHa) && !isNaN(area) && area > 0) {
+                potentialValue = area * investmentPerHa;
+                if (!isNaN(potentialValue)) {
+                  catData.potentialUsd += potentialValue;
+                  catData.potentialHa += area;
+                  clientCatEntry.potentialUsd += potentialValue;
+                }
+              }
             }
 
             // Sales for this specific client/category (for Residual calculation only)
@@ -4319,26 +4340,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build response
       const cards = Array.from(categoryData.values())
-        .filter(cat => cat.potentialUsd > 0 || cat.cvaleUsd > 0 || cat.oportunidadesUsd > 0 || cat.jaNegociadoUsd > 0)
+        .filter(cat => {
+          const hasData = (cat.potentialUsd > 0 || cat.cvaleUsd > 0 || cat.oportunidadesUsd > 0 || cat.jaNegociadoUsd > 0);
+          // Safety: ensure all values are valid numbers
+          return hasData && 
+            !isNaN(cat.potentialUsd) && 
+            !isNaN(cat.cvaleUsd) && 
+            !isNaN(cat.oportunidadesUsd) && 
+            !isNaN(cat.jaNegociadoUsd);
+        })
         .map(cat => {
-          const totalCapturedUsd = cat.cvaleUsd + cat.jaNegociadoUsd;
-          const penetrationPercent = cat.potentialUsd > 0
-            ? (totalCapturedUsd / cat.potentialUsd) * 100
-            : 0;
+          try {
+            const totalCapturedUsd = (cat.cvaleUsd || 0) + (cat.jaNegociadoUsd || 0);
+            const penetrationPercent = cat.potentialUsd > 0 && !isNaN(cat.potentialUsd)
+              ? Math.min((totalCapturedUsd / cat.potentialUsd) * 100, 100)
+              : 0;
 
-          return {
-            categoryId: cat.categoryId,
-            categoryName: cat.categoryName,
-            categoryType: cat.categoryType,
-            potentialUsd: cat.potentialUsd,
-            potentialHa: cat.potentialHa,
-            cvaleUsd: cat.cvaleUsd,
-            oportunidadesUsd: cat.oportunidadesUsd,
-            jaNegociadoUsd: cat.jaNegociadoUsd,
-            totalCapturedUsd,
-            penetrationPercent: Math.min(penetrationPercent, 100)
-          };
-        });
+            return {
+              categoryId: cat.categoryId,
+              categoryName: cat.categoryName || 'Unknown',
+              categoryType: cat.categoryType || 'other',
+              potentialUsd: isNaN(cat.potentialUsd) ? 0 : cat.potentialUsd,
+              potentialHa: isNaN(cat.potentialHa) ? 0 : cat.potentialHa,
+              cvaleUsd: isNaN(cat.cvaleUsd) ? 0 : cat.cvaleUsd,
+              oportunidadesUsd: isNaN(cat.oportunidadesUsd) ? 0 : cat.oportunidadesUsd,
+              jaNegociadoUsd: isNaN(cat.jaNegociadoUsd) ? 0 : cat.jaNegociadoUsd,
+              totalCapturedUsd: isNaN(totalCapturedUsd) ? 0 : totalCapturedUsd,
+              penetrationPercent: isNaN(penetrationPercent) ? 0 : penetrationPercent
+            };
+          } catch (cardError) {
+            console.error('[MARKET-CARDS] Error building card for category:', cat.categoryId, cardError);
+            return null;
+          }
+        })
+        .filter((card): card is NonNullable<typeof card> => card !== null);
 
       // Convert Client Breakdown Map to Array
       const clientBreakdown = Array.from(clientBreakdownMap.values()).map(client => ({
