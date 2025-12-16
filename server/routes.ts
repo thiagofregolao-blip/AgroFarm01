@@ -4491,13 +4491,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       const { clientId, seasonId } = req.params;
 
-      // Verify client belongs to user and get client data
+      // Verify client belongs to user and get client data INCLUDING badge status
       const clientData = await db.select({
         masterClientName: masterClients.name,
         masterClientArea: masterClients.plantingArea,
         userClientArea: userClientLinks.plantingArea,
         masterClientCreditLine: masterClients.creditLine,
-        userClientLinkId: userClientLinks.id
+        userClientLinkId: userClientLinks.id,
+        isTop80_20: userClientLinks.isTop80_20,
+        includeInMarketArea: userClientLinks.includeInMarketArea
       })
         .from(userClientLinks)
         .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
@@ -4512,6 +4514,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const client = clientData[0];
+      const clientArea = parseFloat(client.userClientArea || client.masterClientArea || '0');
+      const hasEligibleBadge = client.isTop80_20 || client.includeInMarketArea;
 
       // Get current and previous season
       const currentSeason = await db.select().from(seasons).where(eq(seasons.id, seasonId)).limit(1);
@@ -4535,7 +4539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(sales.userId, userId)
         ));
 
-      const currentSeasonTotal = currentSeasonSales.reduce((sum, sale) => {
+      const currentSeasonTotal = currentSeasonSales.reduce((sum: number, sale: any) => {
         const amount = parseFloat(sale.totalAmount || '0') || 0;
         return sum + (isNaN(amount) ? 0 : amount);
       }, 0);
@@ -4559,8 +4563,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       //   previousSeasonTotal = previousSeasonSales.reduce((sum, sale) => sum + parseFloat(sale.totalAmount || '0'), 0);
       // }
 
-      // Get potential (clientMarketRates)
-      const potentials = await storage.getClientMarketRates(clientId, userId, seasonId);
+      // IMPORTANT: Get MANAGER TEAM RATES for potential calculation (not per-client rates)
+      // This uses the global rates set by the manager in the admin panel
+      const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      const managerId = user[0]?.managerId || userId; // If consultant, use managerId. If manager, use self.
+
+      let potentials: Array<{ categoryId: string; investmentPerHa: string; subcategories: any }> = [];
+
+      // Only calculate potential if client has badge (80/20 OR Market)
+      if (hasEligibleBadge && clientArea > 0) {
+        const managerRates = await storage.getManagerTeamRates(managerId, seasonId);
+        potentials = managerRates.map(rate => ({
+          categoryId: rate.categoryId,
+          investmentPerHa: rate.investmentPerHa || '0',
+          subcategories: rate.subcategories
+        }));
+      }
+      // If no badge or no area, potentials stays empty -> $0 potential
 
       // Get market values (clientMarketValues)
       const marketValues = await storage.getClientMarketValues(clientId, userId, seasonId);
