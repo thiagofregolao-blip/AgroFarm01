@@ -943,6 +943,17 @@ export default function MarketManagementPanel({
                         toast({ title: "Dados salvos com sucesso!" });
                         queryClient.invalidateQueries({ queryKey: ['client-market-panel'] });
                         queryClient.invalidateQueries({ queryKey: ['kanban-metas'] });
+                        // Invalidate market opportunity queries to update category cards
+                        queryClient.invalidateQueries({ 
+                          predicate: (query) => 
+                            typeof query.queryKey[0] === "string" && 
+                            query.queryKey[0].startsWith('/api/market-opportunity/')
+                        });
+                        queryClient.invalidateQueries({ 
+                          predicate: (query) => 
+                            typeof query.queryKey[0] === "string" && 
+                            query.queryKey[0].startsWith('/api/market-analysis')
+                        });
                         onClose();
                       }
                     });
@@ -961,6 +972,17 @@ export default function MarketManagementPanel({
                           toast({ title: "Dados salvos! Próximo cliente carregado." });
                           queryClient.invalidateQueries({ queryKey: ['client-market-panel'] });
                           queryClient.invalidateQueries({ queryKey: ['kanban-metas'] });
+                          // Invalidate market opportunity queries to update category cards
+                          queryClient.invalidateQueries({ 
+                            predicate: (query) => 
+                              typeof query.queryKey[0] === "string" && 
+                              query.queryKey[0].startsWith('/api/market-opportunity/')
+                          });
+                          queryClient.invalidateQueries({ 
+                            predicate: (query) => 
+                              typeof query.queryKey[0] === "string" && 
+                              query.queryKey[0].startsWith('/api/market-analysis')
+                          });
                           onNextClient();
                         }
                       });
