@@ -4715,9 +4715,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const key = `${app.categoria}-${app.applicationNumber}`;
           const clientArea = parseFloat(client.userClientArea || client.masterClientArea || '0') || 0;
           const pricePerHa = parseFloat(app.pricePerHa || '0') || 0;
-          const totalValue = app.trackingTotalValue
-            ? (parseFloat(app.trackingTotalValue) || 0)
-            : (isNaN(pricePerHa) || isNaN(clientArea) ? 0 : pricePerHa * clientArea);
+          // ALWAYS calculate dynamically based on current client area
+          // This ensures potential updates when area is changed
+          const totalValue = (isNaN(pricePerHa) || isNaN(clientArea) ? 0 : pricePerHa * clientArea);
 
           if (!applicationsGrouped.has(key)) {
             applicationsGrouped.set(key, {
