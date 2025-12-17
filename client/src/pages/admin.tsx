@@ -106,7 +106,7 @@ function DashboardManagement() {
   const totalSalesCount = regionsWithSales.reduce((sum, region) => sum + region.salesCount, 0);
 
   // Find top region by sales
-  const topRegion = regionsWithSales.reduce((max, region) => 
+  const topRegion = regionsWithSales.reduce((max, region) =>
     region.totalSales > max.totalSales ? region : max, regionsWithSales[0]);
 
   // Prepare data for charts
@@ -233,6 +233,8 @@ function UsersManagement() {
   const [userDataCheck, setUserDataCheck] = useState<any>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
   const [editRole, setEditRole] = useState("");
   const [editManagerId, setEditManagerId] = useState<string>("");
   const { toast } = useToast();
@@ -308,19 +310,27 @@ function UsersManagement() {
   const startEdit = (user: any) => {
     setEditingUser(user);
     setEditName(user.name);
+    setEditUsername(user.username);
+    setEditPassword(""); // Password is optional, only update if filled
     setEditRole(user.role);
     setEditManagerId(user.managerId || "none");
   };
 
   const handleUpdate = () => {
     if (editingUser) {
+      const updateData: any = {
+        name: editName,
+        username: editUsername,
+        role: editRole,
+        managerId: editRole === 'consultor' ? (editManagerId === 'none' ? null : editManagerId) : null
+      };
+      // Only include password if user entered a new one
+      if (editPassword.trim()) {
+        updateData.password = editPassword;
+      }
       updateUserMutation.mutate({
         id: editingUser.id,
-        data: { 
-          name: editName, 
-          role: editRole,
-          managerId: editRole === 'consultor' ? (editManagerId === 'none' ? null : editManagerId) : null
-        }
+        data: updateData
       });
     }
   };
@@ -364,15 +374,14 @@ function UsersManagement() {
                       <p className="text-sm text-muted-foreground">@{user.username}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        user.role === 'administrador' 
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200' 
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${user.role === 'administrador'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'
                           : user.role === 'gerente'
-                          ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200'
-                          : user.role === 'faturista'
-                          ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                      }`}>
+                            ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200'
+                            : user.role === 'faturista'
+                              ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                        }`}>
                         {user.role === 'administrador' ? 'Administrador' : user.role === 'gerente' ? 'Gerente' : user.role === 'faturista' ? 'Faturista' : 'Consultor'}
                       </span>
                       <Button
@@ -421,6 +430,26 @@ function UsersManagement() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="edit-username">Nome de Usuário</Label>
+              <Input
+                id="edit-username"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                data-testid="input-edit-username"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-password">Nova Senha (deixe em branco para manter a atual)</Label>
+              <Input
+                id="edit-password"
+                type="password"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                placeholder="••••••••"
+                data-testid="input-edit-password"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="edit-role">Função</Label>
               <Select value={editRole} onValueChange={setEditRole}>
                 <SelectTrigger data-testid="select-edit-role">
@@ -434,7 +463,7 @@ function UsersManagement() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {editRole === 'consultor' && (
               <div className="space-y-2">
                 <Label htmlFor="edit-manager">Gerente Responsável</Label>
@@ -481,7 +510,7 @@ function UsersManagement() {
               <p>
                 O usuário <strong>{deletingUser?.name}</strong> possui os seguintes dados vinculados:
               </p>
-              
+
               {userDataCheck?.hasData && (
                 <div className="bg-muted p-4 rounded-lg space-y-1 text-sm">
                   {userDataCheck.data.clients > 0 && (
@@ -507,7 +536,7 @@ function UsersManagement() {
                   )}
                 </div>
               )}
-              
+
               <p className="font-semibold text-destructive">
                 Ao confirmar, TODOS estes dados serão PERMANENTEMENTE excluídos.
                 Esta ação não pode ser desfeita.
@@ -974,7 +1003,7 @@ function ProductsManagement() {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [showImportProductsModal, setShowImportProductsModal] = useState(false);
   const [importingProducts, setImportingProducts] = useState(false);
-  
+
   const { data: products, isLoading } = useQuery<Product[]>({
     queryKey: ['/api/products'],
   });
@@ -1141,9 +1170,9 @@ function ProductsManagement() {
         </div>
         <div className="flex gap-2">
           {agroquimicosWithoutSubcategory > 0 && (
-            <Button 
-              size="sm" 
-              variant="secondary" 
+            <Button
+              size="sm"
+              variant="secondary"
               className="gap-2"
               onClick={handleAutoClassify}
               disabled={autoClassifyMutation.isPending}
@@ -1153,9 +1182,9 @@ function ProductsManagement() {
               {autoClassifyMutation.isPending ? "Classificando..." : "Classificar Automaticamente"}
             </Button>
           )}
-          <Button 
-            size="sm" 
-            variant="outline" 
+          <Button
+            size="sm"
+            variant="outline"
             className="gap-2"
             onClick={() => {
               if (confirm("Deseja sincronizar as categorias das vendas com os produtos atuais? Isso atualizará todas as vendas para refletir a categoria atual de cada produto.")) {
@@ -1503,8 +1532,8 @@ function CommissionsManagement() {
         <div className="flex gap-2">
           {editingCategory && (
             <>
-              <Button 
-                onClick={saveChanges} 
+              <Button
+                onClick={saveChanges}
                 size="sm"
                 disabled={updateCategoryMutation.isPending}
                 data-testid="button-save-changes"
@@ -1512,9 +1541,9 @@ function CommissionsManagement() {
                 <Save className="h-4 w-4 mr-2" />
                 Salvar
               </Button>
-              <Button 
-                onClick={cancelEditing} 
-                variant="outline" 
+              <Button
+                onClick={cancelEditing}
+                variant="outline"
                 size="sm"
                 data-testid="button-cancel-edit"
               >
@@ -1545,7 +1574,7 @@ function CommissionsManagement() {
               {categories?.map((category) => (
                 <TableRow key={category.id} data-testid={`commission-row-${category.id}`}>
                   <TableCell className="font-medium">{category.name}</TableCell>
-                  
+
                   <TableCell className="text-center">
                     {editingCategory === category.id ? (
                       <input
@@ -1559,7 +1588,7 @@ function CommissionsManagement() {
                       <span className="font-mono text-sm">{parseFloat(category.greenCommission).toFixed(2)}%</span>
                     )}
                   </TableCell>
-                  
+
                   <TableCell className="text-center text-xs text-muted-foreground">
                     {editingCategory === category.id ? (
                       <input
@@ -1573,7 +1602,7 @@ function CommissionsManagement() {
                       `≥${parseFloat(category.greenMarginMin).toFixed(0)}%`
                     )}
                   </TableCell>
-                  
+
                   <TableCell className="text-center">
                     {editingCategory === category.id ? (
                       <input
@@ -1587,7 +1616,7 @@ function CommissionsManagement() {
                       <span className="font-mono text-sm">{parseFloat(category.yellowCommission).toFixed(2)}%</span>
                     )}
                   </TableCell>
-                  
+
                   <TableCell className="text-center text-xs text-muted-foreground">
                     {editingCategory === category.id ? (
                       <div className="flex gap-1 justify-center">
@@ -1611,7 +1640,7 @@ function CommissionsManagement() {
                       `${parseFloat(category.yellowMarginMin).toFixed(0)}-${parseFloat(category.yellowMarginMax).toFixed(0)}%`
                     )}
                   </TableCell>
-                  
+
                   <TableCell className="text-center">
                     {editingCategory === category.id ? (
                       <input
@@ -1625,7 +1654,7 @@ function CommissionsManagement() {
                       <span className="font-mono text-sm">{parseFloat(category.redCommission).toFixed(2)}%</span>
                     )}
                   </TableCell>
-                  
+
                   <TableCell className="text-center text-xs text-muted-foreground">
                     {editingCategory === category.id ? (
                       <div className="flex gap-1 justify-center">
@@ -1649,7 +1678,7 @@ function CommissionsManagement() {
                       `${parseFloat(category.redMarginMin).toFixed(0)}-${parseFloat(category.redMarginMax).toFixed(0)}%`
                     )}
                   </TableCell>
-                  
+
                   <TableCell className="text-center">
                     {editingCategory === category.id ? (
                       <input
@@ -1665,7 +1694,7 @@ function CommissionsManagement() {
                       </Badge>
                     )}
                   </TableCell>
-                  
+
                   <TableCell className="text-center">
                     {editingCategory === category.id ? (
                       <span className="text-muted-foreground text-xs">Editando...</span>
@@ -1815,7 +1844,7 @@ function MasterClientsManagement() {
     }
 
     setUploading(true);
-    
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('vendedorId', selectedVendedorId);
@@ -1925,72 +1954,72 @@ function MasterClientsManagement() {
                   Importar Clientes
                 </Button>
               </DialogTrigger>
-            <DialogContent className="max-w-md" data-testid="import-master-clients-modal">
-              <DialogHeader>
-                <DialogTitle>Importar Clientes do Excel</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="vendedor-select">Selecionar Vendedor *</Label>
-                  <Select value={selectedVendedorId} onValueChange={setSelectedVendedorId}>
-                    <SelectTrigger id="vendedor-select" data-testid="select-vendedor-import">
-                      <SelectValue placeholder="Selecione o vendedor para vincular os clientes" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vendedores?.map((vendedor) => (
-                        <SelectItem key={vendedor.id} value={vendedor.id} data-testid={`option-vendedor-${vendedor.id}`}>
-                          {vendedor.name} (@{vendedor.username})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Os clientes importados serão vinculados ao vendedor selecionado
-                  </p>
-                </div>
+              <DialogContent className="max-w-md" data-testid="import-master-clients-modal">
+                <DialogHeader>
+                  <DialogTitle>Importar Clientes do Excel</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="vendedor-select">Selecionar Vendedor *</Label>
+                    <Select value={selectedVendedorId} onValueChange={setSelectedVendedorId}>
+                      <SelectTrigger id="vendedor-select" data-testid="select-vendedor-import">
+                        <SelectValue placeholder="Selecione o vendedor para vincular os clientes" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vendedores?.map((vendedor) => (
+                          <SelectItem key={vendedor.id} value={vendedor.id} data-testid={`option-vendedor-${vendedor.id}`}>
+                            {vendedor.name} (@{vendedor.username})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Os clientes importados serão vinculados ao vendedor selecionado
+                    </p>
+                  </div>
 
-                <div className="bg-muted p-4 rounded-lg text-sm">
-                  <p className="font-medium mb-2">Formato esperado do Excel:</p>
-                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                    <li><strong>Coluna A:</strong> Cliente (80/20)</li>
-                    <li><strong>Coluna B:</strong> Área de plantio em hectares (ha)</li>
-                    <li><strong>Coluna C:</strong> região</li>
-                  </ul>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    * Clientes duplicados serão identificados por nome e atualizados automaticamente
-                  </p>
+                  <div className="bg-muted p-4 rounded-lg text-sm">
+                    <p className="font-medium mb-2">Formato esperado do Excel:</p>
+                    <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                      <li><strong>Coluna A:</strong> Cliente (80/20)</li>
+                      <li><strong>Coluna B:</strong> Área de plantio em hectares (ha)</li>
+                      <li><strong>Coluna C:</strong> região</li>
+                    </ul>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      * Clientes duplicados serão identificados por nome e atualizados automaticamente
+                    </p>
+                  </div>
+
+                  <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleFileUpload}
+                      disabled={uploading || !selectedVendedorId}
+                      className="hidden"
+                      id="master-client-file-upload"
+                      data-testid="input-file-upload-master-clients"
+                    />
+                    <label
+                      htmlFor="master-client-file-upload"
+                      className={`cursor-pointer flex flex-col items-center gap-3 ${(uploading || !selectedVendedorId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                        <Upload className="text-primary" size={24} />
+                      </div>
+                      <div>
+                        <p className="font-medium">
+                          {uploading ? "Importando..." : selectedVendedorId ? "Clique para selecionar arquivo" : "Selecione um vendedor primeiro"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Apenas arquivos Excel (.xlsx, .xls)
+                        </p>
+                      </div>
+                    </label>
+                  </div>
                 </div>
-                
-                <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleFileUpload}
-                    disabled={uploading || !selectedVendedorId}
-                    className="hidden"
-                    id="master-client-file-upload"
-                    data-testid="input-file-upload-master-clients"
-                  />
-                  <label 
-                    htmlFor="master-client-file-upload" 
-                    className={`cursor-pointer flex flex-col items-center gap-3 ${(uploading || !selectedVendedorId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Upload className="text-primary" size={24} />
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {uploading ? "Importando..." : selectedVendedorId ? "Clique para selecionar arquivo" : "Selecione um vendedor primeiro"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Apenas arquivos Excel (.xlsx, .xls)
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent>
@@ -2095,8 +2124,8 @@ function MasterClientsManagement() {
                               <div className="p-4 border-t bg-muted/50">
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
-                                    <Button 
-                                      variant="destructive" 
+                                    <Button
+                                      variant="destructive"
                                       size="sm"
                                       className="w-full"
                                       data-testid={`button-delete-consultor-clients-${consultor.id}`}
@@ -2147,10 +2176,10 @@ function MasterClientsManagement() {
               {(() => {
                 const linkedClientIds = new Set(allUserClientLinks?.map(link => link.masterClientId) || []);
                 const unlinkedClients = masterClients?.filter(client => !linkedClientIds.has(client.id)) || [];
-                
+
                 if (unlinkedClients.length > 0) {
                   const isExpanded = expandedConsultant === 'unassigned';
-                  
+
                   return (
                     <div className="border rounded-lg overflow-hidden border-dashed">
                       <button
@@ -2420,7 +2449,7 @@ function BarterManagement() {
 }
 
 function BarterProductsManagement() {
-  const [newProduct, setNewProduct] = useState<Partial<InsertBarterProduct & {id: string}>>({ name: "", category: "", dosePerHa: "", unit: "", priceUsd: "", seasonId: "", isActive: true });
+  const [newProduct, setNewProduct] = useState<Partial<InsertBarterProduct & { id: string }>>({ name: "", category: "", dosePerHa: "", unit: "", priceUsd: "", seasonId: "", isActive: true });
   const [editingProduct, setEditingProduct] = useState<BarterProduct | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -2520,7 +2549,7 @@ function BarterProductsManagement() {
     if (!file) return;
 
     setSelectedFile(file);
-    
+
     // Preview mode
     const formData = new FormData();
     formData.append('file', file);
@@ -2533,7 +2562,7 @@ function BarterProductsManagement() {
       });
 
       if (!response.ok) throw new Error('Failed to preview');
-      
+
       const data = await response.json();
       setPreviewProducts(data.products || []);
     } catch (error) {
@@ -2562,16 +2591,16 @@ function BarterProductsManagement() {
       });
 
       if (!response.ok) throw new Error('Failed to import');
-      
+
       const data = await response.json();
-      
+
       queryClient.invalidateQueries({ queryKey: ['/api/admin/barter/products'] });
-      
+
       toast({
         title: "Importação concluída",
         description: `${data.created} produtos importados com sucesso. ${data.errors > 0 ? `${data.errors} erros.` : ''}`,
       });
-      
+
       setShowImportDialog(false);
       setSelectedFile(null);
       setPreviewProducts([]);
@@ -2597,8 +2626,8 @@ function BarterProductsManagement() {
           <div className="flex gap-2">
             <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
               <AlertDialogTrigger asChild>
-                <Button 
-                  variant="destructive" 
+                <Button
+                  variant="destructive"
                   size="sm"
                   disabled={!products || products.length === 0}
                   data-testid="button-delete-all-barter-products"
@@ -2625,7 +2654,7 @@ function BarterProductsManagement() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            
+
             <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
               <DialogTrigger asChild>
                 <Button variant="outline" data-testid="button-import-barter-products">
@@ -2681,7 +2710,7 @@ function BarterProductsManagement() {
                       data-testid="input-import-file"
                     />
                   </div>
-                  
+
                   {previewProducts.length > 0 && (
                     <div className="space-y-2">
                       <Label>Preview - {previewProducts.length} produtos detectados</Label>
@@ -2743,7 +2772,7 @@ function BarterProductsManagement() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            
+
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-barter-product">
@@ -2751,116 +2780,116 @@ function BarterProductsManagement() {
                   Novo Produto
                 </Button>
               </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Novo Produto Barter</DialogTitle>
-                <DialogDescription>Adicione um novo produto ao catálogo barter</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Nome do Produto</Label>
-                  <Input
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                    placeholder="Ex: Soja 63I64RSF IPRO"
-                    data-testid="input-product-name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Categoria</Label>
-                  <Select value={newProduct.category} onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}>
-                    <SelectTrigger data-testid="select-product-category">
-                      <SelectValue placeholder="Selecione a categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Safra (Opcional)</Label>
-                  <div className="flex gap-2">
-                    <Select value={newProduct.seasonId || undefined} onValueChange={(value) => setNewProduct({ ...newProduct, seasonId: value || null })}>
-                      <SelectTrigger data-testid="select-product-season">
-                        <SelectValue placeholder="Sem safra específica" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {seasons?.map((season: any) => (
-                          <SelectItem key={season.id} value={season.id}>
-                            {season.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {newProduct.seasonId && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setNewProduct({ ...newProduct, seasonId: null })}
-                      >
-                        <X size={16} />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Novo Produto Barter</DialogTitle>
+                  <DialogDescription>Adicione um novo produto ao catálogo barter</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>Dose/Ha</Label>
+                    <Label>Nome do Produto</Label>
                     <Input
-                      type="text"
-                      value={newProduct.dosePerHa || ''}
-                      onChange={(e) => setNewProduct({ ...newProduct, dosePerHa: e.target.value })}
-                      placeholder="2ml/Kg ou 1Lt/Há"
-                      data-testid="input-dose-per-ha"
+                      value={newProduct.name}
+                      onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                      placeholder="Ex: Soja 63I64RSF IPRO"
+                      data-testid="input-product-name"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Unidade</Label>
-                    <Select value={newProduct.unit} onValueChange={(value) => setNewProduct({ ...newProduct, unit: value })}>
-                      <SelectTrigger data-testid="select-product-unit">
-                        <SelectValue placeholder="Unidade" />
+                    <Label>Categoria</Label>
+                    <Select value={newProduct.category} onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}>
+                      <SelectTrigger data-testid="select-product-category">
+                        <SelectValue placeholder="Selecione a categoria" />
                       </SelectTrigger>
                       <SelectContent>
-                        {units.map((unit) => (
-                          <SelectItem key={unit.value} value={unit.value}>
-                            {unit.label}
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label>Safra (Opcional)</Label>
+                    <div className="flex gap-2">
+                      <Select value={newProduct.seasonId || undefined} onValueChange={(value) => setNewProduct({ ...newProduct, seasonId: value || null })}>
+                        <SelectTrigger data-testid="select-product-season">
+                          <SelectValue placeholder="Sem safra específica" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {seasons?.map((season: any) => (
+                            <SelectItem key={season.id} value={season.id}>
+                              {season.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {newProduct.seasonId && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setNewProduct({ ...newProduct, seasonId: null })}
+                        >
+                          <X size={16} />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Dose/Ha</Label>
+                      <Input
+                        type="text"
+                        value={newProduct.dosePerHa || ''}
+                        onChange={(e) => setNewProduct({ ...newProduct, dosePerHa: e.target.value })}
+                        placeholder="2ml/Kg ou 1Lt/Há"
+                        data-testid="input-dose-per-ha"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Unidade</Label>
+                      <Select value={newProduct.unit} onValueChange={(value) => setNewProduct({ ...newProduct, unit: value })}>
+                        <SelectTrigger data-testid="select-product-unit">
+                          <SelectValue placeholder="Unidade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {units.map((unit) => (
+                            <SelectItem key={unit.value} value={unit.value}>
+                              {unit.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Preço USD</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={newProduct.priceUsd}
+                      onChange={(e) => setNewProduct({ ...newProduct, priceUsd: e.target.value })}
+                      placeholder="320.00"
+                      data-testid="input-product-price"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Preço USD</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={newProduct.priceUsd}
-                    onChange={(e) => setNewProduct({ ...newProduct, priceUsd: e.target.value })}
-                    placeholder="320.00"
-                    data-testid="input-product-price"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowDialog(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={() => createProductMutation.mutate(newProduct)}
-                  disabled={!newProduct.name || !newProduct.category || !newProduct.unit || !newProduct.priceUsd || createProductMutation.isPending}
-                  data-testid="button-save-barter-product"
-                >
-                  {createProductMutation.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowDialog(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={() => createProductMutation.mutate(newProduct)}
+                    disabled={!newProduct.name || !newProduct.category || !newProduct.unit || !newProduct.priceUsd || createProductMutation.isPending}
+                    data-testid="button-save-barter-product"
+                  >
+                    {createProductMutation.isPending ? "Salvando..." : "Salvar"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </CardHeader>
@@ -2868,9 +2897,9 @@ function BarterProductsManagement() {
         {isLoading ? (
           <p className="text-center py-8">Carregando produtos...</p>
         ) : (
-          <ProductsBySeasonView 
-            products={products || []} 
-            seasons={seasons || []} 
+          <ProductsBySeasonView
+            products={products || []}
+            seasons={seasons || []}
             categories={categories}
             onEdit={setEditingProduct}
             onDelete={(id) => deleteProductMutation.mutate(id)}
@@ -3632,8 +3661,8 @@ function TimacValuesManagement() {
             />
           </div>
 
-          <Button 
-            onClick={handleSave} 
+          <Button
+            onClick={handleSave}
             disabled={updateSettingsMutation.isPending}
             data-testid="button-save-timac-values"
           >
@@ -4009,7 +4038,7 @@ function SeasonsManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name || !formData.type || !formData.startDate || !formData.endDate) {
       toast({
         title: "Campos obrigatórios",
@@ -4055,10 +4084,10 @@ function SeasonsManagement() {
     const now = new Date();
     const start = new Date(season.startDate);
     const end = new Date(season.endDate);
-    
+
     if (now < start) return 0;
     if (now > end) return 100;
-    
+
     const total = end.getTime() - start.getTime();
     const elapsed = now.getTime() - start.getTime();
     return Math.round((elapsed / total) * 100);
@@ -4218,8 +4247,8 @@ function SeasonsManagement() {
           {seasons?.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">Nenhuma safra cadastrada</p>
-              <Button 
-                onClick={() => setShowNewSeasonModal(true)} 
+              <Button
+                onClick={() => setShowNewSeasonModal(true)}
                 className="mt-4"
                 data-testid="button-first-season"
               >
@@ -4244,7 +4273,7 @@ function SeasonsManagement() {
                   {seasons?.map((season) => {
                     const progress = getSeasonProgress(season);
                     const isActive = progress > 0 && progress < 100;
-                    
+
                     return (
                       <TableRow key={season.id} data-testid={`season-row-${season.id}`}>
                         <TableCell className="font-medium">{season.name}</TableCell>
@@ -4289,7 +4318,7 @@ function PriceTableManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
   const [importing, setImporting] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     mercaderia: "",
     principioAtivo: "",
@@ -4447,7 +4476,7 @@ function PriceTableManagement() {
       }
 
       queryClient.invalidateQueries({ queryKey: ['/api/admin/price-table'] });
-      
+
       if (result.imported === 0 && result.errors && result.errors.length > 0) {
         // Mostrar primeiro erro para diagnóstico
         const firstError = result.errors[0];

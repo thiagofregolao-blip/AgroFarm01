@@ -2291,14 +2291,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/admin/users/:id", requireSuperAdmin, async (req, res) => {
     try {
-      const { role, name, managerId } = req.body;
-      const updated = await storage.updateUser(req.params.id, { role, name, managerId });
+      const { role, name, managerId, username, password } = req.body;
+      const updateData: any = { role, name, managerId };
+
+      // Include username if provided
+      if (username) {
+        updateData.username = username;
+      }
+
+      // Hash password if provided using scryptSync (same as used in auth.ts)
+      if (password && password.trim()) {
+        const { scryptSync, randomBytes } = await import("crypto");
+        const salt = randomBytes(16).toString("hex");
+        const buf = scryptSync(password, salt, 64);
+        updateData.password = `${buf.toString("hex")}.${salt}`;
+      }
+
+      const updated = await storage.updateUser(req.params.id, updateData);
       if (!updated) {
         return res.status(404).json({ error: "User not found" });
       }
       res.json({ ...updated, password: undefined });
     } catch (error) {
-      res.status(400).json({ error: "Failed to update user" });
+      console.error("Error updating user:", error);
+      res.status(400).json({ error: "Failed to update user: " + (error as Error).message });
     }
   });
 
@@ -6568,11 +6584,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const teamMarketClientIds = teamMarketClients.map(c => c.id);
 
-        // Get team sales ONLY from market clients
+        // Get team sales - ALL clients, regardless of badge (exactly like Dashboard line 4168)
+        // Dashboard comment: "Calculate Global Sales (C.Vale) - All clients, regardless of badge"
         const teamSales = allSales.filter(s =>
           teamIds.includes(s.userId) &&
-          s.seasonId === seasonId &&
-          teamMarketClientIds.includes(s.clientId)
+          s.seasonId === seasonId
         );
 
         // Aggregate sales by category
@@ -6600,20 +6616,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(userClientLinks.includeInMarketArea, true)
           ));
 
+        // Get Manager Team Rates (Potencial Geral) for Fallback
+        const managerRatesMap = new Map<string, any>();
+        try {
+          // For Manager Panel, the logged user IS the manager
+          const managerId = req.user!.id;
+          const managerRates = await storage.getManagerTeamRates(managerId, seasonId);
+          managerRates.forEach(r => managerRatesMap.set(r.categoryId, r));
+        } catch (mgrRateError) {
+          console.error('[MARKET-PERCENTAGE] Error fetching manager rates:', mgrRateError);
+        }
+
+        // Map team market rates for easy lookup
+        const teamRatesAccessMap = new Map<string, typeof teamMarketRates[0]>();
+        teamMarketRates.forEach(rate => {
+          // Key: clientId:categoryId
+          teamRatesAccessMap.set(`${rate.user_client_links.id}:${rate.client_market_rates.categoryId}`, rate);
+        });
+
         // Calculate total potential by category
         const potentialByCategory: Record<string, number> = {};
         categories.forEach(cat => {
           potentialByCategory[cat.id] = 0;
         });
 
-        teamMarketRates.forEach(rate => {
-          const categoryId = rate.client_market_rates.categoryId;
-          const plantingArea = parseFloat(rate.master_clients.plantingArea || '0');
-          const investmentPerHa = parseFloat(rate.client_market_rates.investmentPerHa || '0');
-          const potential = plantingArea * investmentPerHa;
+        teamMarketClients.forEach(client => {
+          categories.forEach(cat => {
+            const key = `${client.id}:${cat.id}`;
+            const specificRate = teamRatesAccessMap.get(key);
 
-          if (potentialByCategory.hasOwnProperty(categoryId)) {
-            potentialByCategory[categoryId] += potential;
+            let potential = 0;
+            if (specificRate) {
+              const pArea = parseFloat(specificRate.master_clients.plantingArea || '0');
+              const invest = parseFloat(specificRate.client_market_rates.investmentPerHa || '0');
+              potential = pArea * invest;
+            } else {
+              // Fallback to Manager Rate
+              const mgrRate = managerRatesMap.get(cat.id);
+              if (mgrRate) {
+                // Need client area - fetch or cached? 
+                // We don't have area in `teamMarketClients` yet, need to join.
+                // IMPORTANT: The loop above `teamMarketRates` only had clients WITH rates.
+                // We need area for ALL clients.
+              }
+            }
+          });
+        });
+
+        // RE-STRATEGY: Fetch Client Areas separately to enable fallback for all clients
+        // IMPORTANT: Use userClientLinks.plantingArea (override) or fallback to masterClients.plantingArea (same as Dashboard)
+        const teamClientsWithArea = await db.select({
+          id: userClientLinks.id,
+          userId: userClientLinks.userId,
+          userArea: userClientLinks.plantingArea,
+          masterArea: masterClients.plantingArea
+        })
+          .from(userClientLinks)
+          .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
+          .where(and(
+            inArray(userClientLinks.userId, teamIds),
+            eq(userClientLinks.includeInMarketArea, true)
+          ));
+
+        teamClientsWithArea.forEach(client => {
+          // Use userArea override if available, otherwise fallback to masterArea (same logic as category-cards)
+          const area = parseFloat(client.userArea || client.masterArea || '0');
+          if (area > 0) {
+            categories.forEach(cat => {
+              const key = `${client.id}:${cat.id}`;
+              const specificRate = teamRatesAccessMap.get(key);
+              let investment = 0;
+
+              if (specificRate) {
+                investment = parseFloat(specificRate.client_market_rates.investmentPerHa || '0');
+              } else {
+                const mgrRate = managerRatesMap.get(cat.id);
+                if (mgrRate) {
+                  investment = parseFloat(mgrRate.investmentPerHa || '0');
+                }
+              }
+
+              const potential = area * investment;
+              if (potential > 0) {
+                potentialByCategory[cat.id] += potential;
+              }
+            });
           }
         });
 
@@ -6623,40 +6710,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const agroquimicosCategory = categories.find(c => c.type === 'agroquimicos');
         const agroquimicosCategoryId = agroquimicosCategory?.id || '';
 
+        // Query applications like Dashboard does: by userId and seasonId directly
+        // Dashboard does NOT filter by includeInMarketArea for applications
         const teamApplicationTrackingRaw = await db.select({
           clientId: clientApplicationTracking.clientId,
-          userId: userClientLinks.userId,
-          productId: globalManagementApplications.productId,
-          plantingArea: masterClients.plantingArea
+          userId: clientApplicationTracking.userId,
+          totalValue: clientApplicationTracking.totalValue,
+          status: clientApplicationTracking.status
         })
           .from(clientApplicationTracking)
-          .innerJoin(globalManagementApplications, eq(clientApplicationTracking.globalApplicationId, globalManagementApplications.id))
-          .innerJoin(userClientLinks, eq(clientApplicationTracking.clientId, userClientLinks.id))
-          .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
           .where(and(
-            inArray(userClientLinks.userId, teamIds),
-            eq(globalManagementApplications.seasonId, seasonId),
-            eq(userClientLinks.includeInMarketArea, true),
-            eq(clientApplicationTracking.status, 'FECHADO')
+            inArray(clientApplicationTracking.userId, teamIds),
+            eq(clientApplicationTracking.seasonId, seasonId),
+            inArray(clientApplicationTracking.status, ['FECHADO', 'PARCIAL'])
           ));
 
-        // Get product prices for FECHADO applications
-        const productIds = Array.from(new Set(teamApplicationTrackingRaw.map(t => t.productId)));
-        const productPrices = productIds.length > 0 ? await db.select({
-          id: productsPriceTable.id,
-          precoVerde: productsPriceTable.precoVerde
-        })
-          .from(productsPriceTable)
-          .where(inArray(productsPriceTable.id, productIds)) : [];
-
-        const productPriceMap = new Map(productPrices.map(p => [p.id, parseFloat(p.precoVerde || '0')]));
-
-        // Calculate total FECHADO value for Agroquímicos
+        // Calculate total FECHADO value for Agroquímicos exactly like Dashboard
+        // Dashboard uses app.totalValue directly (line 4296 in category-cards)
         let totalFechadoAgroquimicos = 0;
         teamApplicationTrackingRaw.forEach(tracking => {
-          const pricePerHa = productPriceMap.get(tracking.productId) || 0;
-          const area = parseFloat(tracking.plantingArea || '0');
-          totalFechadoAgroquimicos += pricePerHa * area;
+          let value = parseFloat(tracking.totalValue || '0');
+
+          if (tracking.status === 'PARCIAL') {
+            value = value / 2;
+          }
+
+          totalFechadoAgroquimicos += value;
         });
 
         // Aggregate FECHADO values by category
@@ -6715,16 +6794,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           teamMembers.forEach(member => {
             // Member Potential
             let memberPotential = 0;
-            teamMarketRates.forEach(rate => {
-              // Check if rate belongs to a client of this member AND category matches
-              // Does rate map to member? rate uses `clientMarketRates` joined with `userClientLinks`.
-              // We need to check if the link belongs to this member.
-              // Logic at 6511: `innerJoin(userClientLinks...)`.
-              // `teamMarketRates` contains rows.
-              if (rate.user_client_links.userId === member.id && rate.client_market_rates.categoryId === cat.id) {
-                const plantingArea = parseFloat(rate.master_clients.plantingArea || '0');
-                const investmentPerHa = parseFloat(rate.client_market_rates.investmentPerHa || '0');
-                memberPotential += plantingArea * investmentPerHa;
+
+            // Use the pre-fetched clients with area loop logic but filtered for this member
+            teamClientsWithArea.forEach(client => {
+              if (client.userId !== member.id) return;
+
+              const area = parseFloat(client.userArea || client.masterArea || '0');
+              if (area > 0) {
+                const key = `${client.id}:${cat.id}`;
+                const specificRate = teamRatesAccessMap.get(key);
+                let investment = 0;
+
+                if (specificRate) {
+                  investment = parseFloat(specificRate.client_market_rates.investmentPerHa || '0');
+                } else {
+                  const mgrRate = managerRatesMap.get(cat.id);
+                  if (mgrRate) {
+                    investment = parseFloat(mgrRate.investmentPerHa || '0');
+                  }
+                }
+                memberPotential += area * investment;
               }
             });
 
@@ -6739,14 +6828,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             });
 
-            // Member Fechado (Lost)
+            // Member Fechado (Lost) - use totalValue directly like Dashboard
             let memberFechado = 0;
             // Iterate tracking raw data
             teamApplicationTrackingRaw.forEach(tracking => {
               if (tracking.userId === member.id && agroquimicosCategoryId === cat.id) {
-                const pricePerHa = productPriceMap.get(tracking.productId) || 0;
-                const area = parseFloat(tracking.plantingArea || '0');
-                memberFechado += pricePerHa * area;
+                let value = parseFloat(tracking.totalValue || '0');
+
+                if (tracking.status === 'PARCIAL') {
+                  value = value / 2;
+                }
+
+                memberFechado += value;
               }
             });
 
@@ -6978,8 +7071,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Does NOT include sales_targets (old Kanban model)
   app.get("/api/manager/team-captured-totals", requireManager, async (req, res) => {
     try {
-      const { users, seasons, clientApplicationTracking, globalManagementApplications, userClientLinks, masterClients } = await import("@shared/schema");
-      const { inArray, and, sql: sqlFn } = await import("drizzle-orm");
+      const { users, seasons, clientApplicationTracking, globalManagementApplications, categories, sales, products } = await import("@shared/schema");
+      const { inArray, or, sql: sqlFn } = await import("drizzle-orm");
       const managerId = req.user!.id;
 
       // Get team member IDs
@@ -6994,28 +7087,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ totalsBySeason: {} });
       }
 
-      // Get all ABERTO applications (opportunities) for the team
-      // Only include clients marked as 80-20 (isTop80_20 = true)
-      const abertoApplications = await db
+      // Get all categories for mapping
+      const allCategories = await db.select().from(categories);
+      const categoryTypeMap = new Map(allCategories.map(c => [c.id, c.type]));
+      const categoryNameMap = new Map(allCategories.map(c => [c.id, c.name]));
+
+      // 1. Get SALES for ALL categories (Fertilizantes, Sementes, Especialidades, Corretivos, Agroquímicos)
+      const teamSales = await db
+        .select({
+          seasonId: sales.seasonId,
+          seasonName: sqlFn`COALESCE(${seasons.name}, 'Safra sem nome')`.as('season_name'),
+          categoryId: sales.categoryId,
+          categoryType: categories.type,
+          categoryName: categories.name,
+          productSegment: products.segment,
+          totalAmount: sales.totalAmount,
+        })
+        .from(sales)
+        .leftJoin(seasons, eq(sales.seasonId, seasons.id))
+        .leftJoin(categories, eq(sales.categoryId, categories.id))
+        .leftJoin(products, eq(sales.productId, products.id))
+        .where(inArray(sales.userId, teamIds));
+
+      // 2. Get ABERTO and PARCIAL applications for Agroquímicos (opportunities)
+      const teamApplications = await db
         .select({
           seasonId: clientApplicationTracking.seasonId,
           seasonName: sqlFn`COALESCE(${seasons.name}, 'Safra sem nome')`.as('season_name'),
           categoria: clientApplicationTracking.categoria,
-          subcategoria: globalManagementApplications.categoria,
-          applicationNumber: clientApplicationTracking.applicationNumber,
-          pricePerHa: globalManagementApplications.pricePerHa,
-          plantingArea: masterClients.plantingArea,
+          globalCategoria: globalManagementApplications.categoria,
+          totalValue: clientApplicationTracking.totalValue,
+          status: clientApplicationTracking.status,
         })
         .from(clientApplicationTracking)
         .leftJoin(seasons, eq(clientApplicationTracking.seasonId, seasons.id))
         .leftJoin(globalManagementApplications, eq(clientApplicationTracking.globalApplicationId, globalManagementApplications.id))
-        .leftJoin(userClientLinks, eq(clientApplicationTracking.clientId, userClientLinks.id))
-        .leftJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
-        .where(and(
-          inArray(clientApplicationTracking.userId, teamIds),
-          eq(clientApplicationTracking.status, 'ABERTO'),
-          eq(userClientLinks.isTop80_20, true)
-        ));
+        .where(
+          inArray(clientApplicationTracking.userId, teamIds)
+        );
 
       // Map segment to category name
       const segmentToCategoryName: Record<string, string> = {
@@ -7026,13 +7135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'corretivos': 'Corretivos',
       };
 
-      // Map categoria to subcategory name
-      const categoriaToSubcategoryName: Record<string, string> = {
-        'FUNGICIDAS': 'Fungicidas',
-        'INSETICIDAS': 'Inseticidas',
-        'TRATAMENTO_SEMENTE': 'Tratamento de semente',
-        'DESSECACAO': 'Dessecação',
-      };
+
 
       // Aggregate by season, then by category
       const totalsBySeason: Record<string, {
@@ -7045,27 +7148,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }>;
       }> = {};
 
-      // Process ABERTO applications (open opportunities)
-      abertoApplications.forEach(app => {
-        if (!app.pricePerHa || !app.plantingArea) return;
+      // Map product segment to subcategory display name for Agroquímicos (from sales)
+      const segmentToSubcategoryName: Record<string, string> = {
+        'fungicida': 'Fungicidas',
+        'inseticida': 'Inseticidas',
+        'herbicida': 'Herbicidas',
+        'ts': 'Tratamento de Sementes',
+        'dessecacao': 'Dessecação',
+        'outros': 'Outros',
+      };
 
-        const seasonId = app.seasonId;
-        const seasonName = String(app.seasonName || 'Safra sem nome');
+      // Map categoria to subcategory display name for Agroquímicos (from applications)
+      const categoriaToSubcategoryName: Record<string, string> = {
+        'FUNGICIDAS': 'Fungicidas',
+        'INSETICIDAS': 'Inseticidas',
+        'HERBICIDAS': 'Herbicidas',
+        'TRATAMENTO DE SEMENTE': 'Tratamento de Sementes',
+        'DESSECAÇÃO': 'Dessecação',
+        'TS': 'Tratamento de Sementes',
+        'Fungicidas': 'Fungicidas',
+        'Inseticidas': 'Inseticidas',
+        'Herbicidas': 'Herbicidas',
+      };
 
-        // Map category name to segmento (reverse lookup)
-        const categoryNameToSegment: Record<string, string> = {
-          'Fertilizantes': 'fertilizantes',
-          'Agroquímicos': 'agroquimicos',
-          'Especialidades': 'especialidades',
-          'Sementes': 'sementes',
-          'Corretivos': 'corretivos',
-        };
+      // 1. Process SALES for ALL categories (Fertilizantes, Sementes, Especialidades, Corretivos, Agroquímicos)
+      teamSales.forEach((sale: any) => {
+        if (!sale.seasonId || !sale.categoryType) return;
 
-        const segmento = categoryNameToSegment[app.categoria] || app.categoria.toLowerCase();
-        const categoryName = app.categoria;
-        const pricePerHa = parseFloat(app.pricePerHa || '0');
-        const plantingArea = parseFloat(app.plantingArea || '0');
-        const valor = pricePerHa * plantingArea;
+        const seasonId = sale.seasonId;
+        const seasonName = String(sale.seasonName || 'Safra sem nome');
+        const segmento = sale.categoryType || 'outros';
+        const categoryName = (sale.categoryName as string) || segmentToCategoryName[segmento] || segmento;
+        const valor = parseFloat(sale.totalAmount || '0');
 
         // Initialize season if not exists
         if (!totalsBySeason[seasonId]) {
@@ -7090,9 +7204,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add to category total
         totalsBySeason[seasonId].categories[segmento].total += valor;
 
-        // Add to subcategory only for agroquimicos
-        if (segmento === 'agroquimicos' && app.subcategoria) {
-          const subcatName = categoriaToSubcategoryName[app.subcategoria] || app.subcategoria;
+        // Add to subcategory only for agroquimicos (using product.segment)
+        if (segmento === 'agroquimicos' && sale.productSegment) {
+          const subcatName = segmentToSubcategoryName[sale.productSegment.toLowerCase()] || sale.productSegment;
+          if (!totalsBySeason[seasonId].categories[segmento].subcategories) {
+            totalsBySeason[seasonId].categories[segmento].subcategories = {};
+          }
+          const subcat = totalsBySeason[seasonId].categories[segmento].subcategories!;
+          if (!subcat[subcatName]) {
+            subcat[subcatName] = 0;
+          }
+          subcat[subcatName] += valor;
+        }
+      });
+
+      // 2. Process ABERTO / PARCIAL applications (opportunities) for Agroquímicos
+      // ABERTO = 100% of totalValue, PARCIAL = 50% of totalValue
+      teamApplications.forEach((app: any) => {
+        if (!app.seasonId) return;
+
+        // Only count ABERTO and PARCIAL as opportunities
+        const status = app.status;
+        if (status !== 'ABERTO' && status !== 'PARCIAL') return;
+
+        const seasonId = app.seasonId;
+        const seasonName = String(app.seasonName || 'Safra sem nome');
+
+        // Determine category from the application's categoria field
+        const appCategoria = app.categoria || app.globalCategoria || 'Agroquímicos';
+
+        // Map to main category (segmento) - for now all applications are Agroquímicos
+        const segmento = 'agroquimicos';
+        const categoryName = 'Agroquímicos';
+
+        // Calculate opportunity value: ABERTO=100%, PARCIAL=50%
+        const totalValue = parseFloat(app.totalValue || '0');
+        const valor = status === 'PARCIAL' ? totalValue / 2 : totalValue;
+
+        // Initialize season if not exists
+        if (!totalsBySeason[seasonId]) {
+          totalsBySeason[seasonId] = {
+            seasonName,
+            seasonTotal: 0,
+            categories: {},
+          };
+        }
+
+        // Add to season total
+        totalsBySeason[seasonId].seasonTotal += valor;
+
+        // Initialize category if not exists
+        if (!totalsBySeason[seasonId].categories[segmento]) {
+          totalsBySeason[seasonId].categories[segmento] = {
+            categoryName,
+            total: 0,
+          };
+        }
+
+        // Add to category total
+        totalsBySeason[seasonId].categories[segmento].total += valor;
+
+        // Add to subcategory using the categoria field
+        if (appCategoria) {
+          const subcatName = categoriaToSubcategoryName[appCategoria] || appCategoria;
           if (!totalsBySeason[seasonId].categories[segmento].subcategories) {
             totalsBySeason[seasonId].categories[segmento].subcategories = {};
           }
