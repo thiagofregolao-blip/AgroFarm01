@@ -390,12 +390,12 @@ export default function KanbanMetasPage() {
                 </section>
               )}
 
-              {/* MIDDLE: Sales Chart + Segment Breakdown (Grid) */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* MIDDLE: Sales Chart + Segment Breakdown (Flex 55/45) */}
+              <div className="flex flex-col lg:flex-row gap-6">
 
-                {/* LEFT: Sales Chart (2/3) */}
+                {/* LEFT: Sales Chart (55%) */}
                 {dashboardData?.monthlySales && (
-                  <section className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                  <section className="lg:w-[55%] bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h2 className="text-lg font-bold text-slate-800">Evolução de Vendas</h2>
@@ -444,9 +444,9 @@ export default function KanbanMetasPage() {
                   </section>
                 )}
 
-                {/* RIGHT: Opportunities by Segment (1/3) */}
+                {/* RIGHT: Opportunities by Segment (45%) */}
                 {dashboardData?.segmentBreakdown && (
-                  <section className="lg:col-span-1 bg-white rounded-2xl p-6 shadow-sm border border-slate-100 overflow-y-auto max-h-[400px]">
+                  <section className="lg:w-[45%] bg-white rounded-2xl p-6 shadow-sm border border-slate-100 overflow-y-auto max-h-[400px]">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h2 className="text-lg font-bold text-slate-800">Oportunidades</h2>
