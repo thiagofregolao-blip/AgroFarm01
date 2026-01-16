@@ -115,6 +115,7 @@ export const userClientLinks = pgTable("user_client_links", {
   isTop80_20: boolean("is_top80_20").notNull().default(false),
   includeInMarketArea: boolean("include_in_market_area").notNull().default(false), // mark client as part of market area for potential calculations
   isActive: boolean("is_active").notNull().default(true),
+  creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }), // linha de crédito do cliente
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
