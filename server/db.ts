@@ -6,9 +6,9 @@ if (!process.env.DATABASE_URL) {
 
 const databaseUrl = process.env.DATABASE_URL;
 
-// Detecta se é uma URL Neon (usa WebSocket) ou PostgreSQL local
-const isNeonUrl = databaseUrl.includes('neon.tech') || 
-  (databaseUrl.startsWith('postgresql://') && databaseUrl.includes('@') && !databaseUrl.includes('localhost'));
+// Detecta se é uma URL Neon (usa WebSocket) - APENAS para neon.tech
+// Railway e outros PostgreSQL padrão usam postgres-js
+const isNeonUrl = databaseUrl.includes('neon.tech');
 
 let db: any;
 let pool: any;
