@@ -798,6 +798,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Endpoint de Setup para Migração do Banco de Dados (Planejamento 2026)
+  // Útil quando não se tem acesso ao console do Railway
+  app.get("/api/admin/setup-planning-db", async (req, res) => {
+    try {
+      // Ler arquivo SQL
+      const fs = await import('fs');
+      const path = await import('path');
+      const migrationPath = path.join(process.cwd(), 'migration_planning_2026.sql');
+
+      if (!fs.existsSync(migrationPath)) {
+        return res.status(404).json({ error: "Arquivo de migração não encontrado: " + migrationPath });
+      }
+
+      const migrationSql = fs.readFileSync(migrationPath, 'utf-8');
+
+      // Executar SQL usando Drizzle sql
+      // Drizzle não tem método direto para executar string raw complexa com múltiplos comandos
+      // Mas podemos usar sql.raw() se supported ou tentar quebrar os comandos
+
+      // Opção mais segura se tivermos acesso ao driver postgres subjacente via db instance ou pool
+      // No arquivo db.ts exportamos { pool, db }
+
+      const { pool } = await import("./db");
+
+      if (pool && typeof pool.unsafe === 'function') {
+        // Driver postgres-js (Railway)
+        await pool.unsafe(migrationSql);
+        return res.json({ success: true, message: "Migração executada com postgres-js!", driver: 'postgres-js' });
+      }
+      else if (pool && typeof pool.query === 'function') {
+        // Driver pg ou neon (Pool)
+        await pool.query(migrationSql);
+        return res.json({ success: true, message: "Migração executada com pg/neon pool!", driver: 'pg-pool' });
+      }
+      else {
+        // Fallback genérico (pode falhar se múltiplos comandos não forem suportados em uma query)
+        // Tentar dividir por ;
+        const commands = migrationSql.split(';').filter(cmd => cmd.trim().length > 0);
+
+        for (const cmd of commands) {
+          await db.execute(sql.raw(cmd));
+        }
+
+        return res.json({ success: true, message: "Migração executada comando por comando via Drizzle!", driver: 'drizzle-raw' });
+      }
+
+    } catch (error) {
+      console.error("Erro na migração via web:", error);
+      res.status(500).json({
+        error: "Falha ao executar migração",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.post("/api/sales/recalculate-all", requireAuth, async (req, res) => {
     try {
       const userId = req.user!.id;
