@@ -940,3 +940,56 @@ export type ManagerTeamRate = typeof managerTeamRates.$inferSelect;
 export const insertSystemSettingsSchema = createInsertSchema(systemSettings).omit({ id: true, updatedAt: true });
 export type InsertSystemSettings = z.infer<typeof insertSystemSettingsSchema>;
 export type SystemSettings = typeof systemSettings.$inferSelect;
+
+
+// ==========================================
+// Módulo de Planejamento de Vendas 2026
+// ==========================================
+
+export const planningProductsBase = pgTable("planning_products_base", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // Chave de ligação
+  segment: text("segment"), // fungicida, inseticida, ts, dessecacao
+  dosePerHa: decimal("dose_per_ha", { precision: 10, scale: 3 }), // Vindo de Planilha de produtos.xlsx
+  price: decimal("price", { precision: 10, scale: 2 }), // Vindo de Planejamento de Vendas 2026.xls
+  unit: text("unit"), // L, Kg, etc
+  seasonId: varchar("season_id").references(() => seasons.id), // Referência à safra (2026)
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const salesPlanning = pgTable("sales_planning", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => userClientLinks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  seasonId: varchar("season_id").notNull().references(() => seasons.id),
+  totalPlantingArea: decimal("total_planting_area", { precision: 10, scale: 2 }), // Snapshot da área total
+  fungicidesArea: decimal("fungicides_area", { precision: 10, scale: 2 }).default("0.00"),
+  insecticidesArea: decimal("insecticides_area", { precision: 10, scale: 2 }).default("0.00"),
+  herbicidesArea: decimal("herbicides_area", { precision: 10, scale: 2 }).default("0.00"), // Dessecação
+  seedTreatmentArea: decimal("seed_treatment_area", { precision: 10, scale: 2 }).default("0.00"), // TS
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  uniquePlanning: unique().on(table.clientId, table.seasonId),
+}));
+
+export const salesPlanningItems = pgTable("sales_planning_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  planningId: varchar("planning_id").notNull().references(() => salesPlanning.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").notNull().references(() => planningProductsBase.id),
+  quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull(), // Calculado: Share Area * Dose
+  totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(), // Calculado: Qtd * Preço
+});
+
+// Exports Types & Zod Schemas
+export const insertPlanningProductSchema = createInsertSchema(planningProductsBase).omit({ id: true, createdAt: true });
+export type InsertPlanningProduct = z.infer<typeof insertPlanningProductSchema>;
+export type PlanningProduct = typeof planningProductsBase.$inferSelect;
+
+export const insertSalesPlanningSchema = createInsertSchema(salesPlanning).omit({ id: true, updatedAt: true });
+export type InsertSalesPlanning = z.infer<typeof insertSalesPlanningSchema>;
+export type SalesPlanning = typeof salesPlanning.$inferSelect;
+
+export const insertSalesPlanningItemSchema = createInsertSchema(salesPlanningItems).omit({ id: true });
+export type InsertSalesPlanningItem = z.infer<typeof insertSalesPlanningItemSchema>;
+export type SalesPlanningItem = typeof salesPlanningItems.$inferSelect;
+
