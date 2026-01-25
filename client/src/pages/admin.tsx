@@ -64,167 +64,253 @@ export default function AdminPage() {
         {activeTab === 'parameters' && <ParametersManagement />}
         {activeTab === 'barter' && <BarterManagement />}
         {activeTab === 'timac' && <TimacManagement />}
+        {activeTab === 'planning-import' && <PlanningImportManagement />}
         {activeTab === 'system' && <SystemManagement />}
       </main>
     </div>
   );
 }
 
-function DashboardManagement() {
-  const { data: regionalData, isLoading } = useQuery<any[]>({
-    queryKey: ['/api/admin/regional-sales'],
+function PlanningImportManagement() {
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const { data: activeSeason } = useQuery<{ id: string; name: string }>({
+    queryKey: ["/api/seasons/active"],
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+    }
+  };
 
-  // Filter regions with sales only
-  const regionsWithSales = regionalData?.filter(region => region.totalSales > 0) || [];
+  const handleUpload = async () => {
+    if (!file || !activeSeason) return;
 
-  if (!regionsWithSales || regionsWithSales.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Dashboard Administrativo</CardTitle>
-          <CardDescription>Análise Regional de Vendas</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Nenhum dado de vendas disponível.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("seasonId", activeSeason.id);
 
-  // Calculate totals
-  const totalSales = regionsWithSales.reduce((sum, region) => sum + region.totalSales, 0);
-  const totalVolume = regionsWithSales.reduce((sum, region) => sum + region.totalVolume, 0);
-  const totalSalesCount = regionsWithSales.reduce((sum, region) => sum + region.salesCount, 0);
-
-  // Find top region by sales
-  const topRegion = regionsWithSales.reduce((max, region) =>
-    region.totalSales > max.totalSales ? region : max, regionsWithSales[0]);
-
-  // Prepare data for charts
-  const chartData = regionsWithSales.map(region => ({
-    name: region.regionName,
-    vendas: region.totalSales,
-    volume: region.totalVolume,
-  }));
-
-  // Colors for pie chart
-  const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+    try {
+      await apiRequest("POST", "/api/admin/import-planning-final", formData);
+      toast({
+        title: "Importação Concluída",
+        description: `Produtos da safra ${activeSeason.name} foram importados com sucesso.`,
+      });
+      setFile(null);
+    } catch (error) {
+      toast({
+        title: "Erro na Importação",
+        description: "Falha ao processar o arquivo. Verifique se é o modelo correto (FINAL).",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Dashboard Administrativo</h2>
-        <p className="text-muted-foreground">Análise Regional de Vendas e Performance</p>
+        <h2 className="text-2xl font-bold">Importação de Planejamento da Safra</h2>
+        <p className="text-muted-foreground">Carregue a planilha oficial de produtos e preços para a safra atual.</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total de Vendas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${totalSales.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Todas as regiões</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Volume Total</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {totalVolume.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Unidades vendidas</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total de Transações</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalSalesCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Vendas realizadas</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Região Líder</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{topRegion.regionName}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              ${topRegion.totalSales.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Regional Details Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Top 5 Produtos por Região</CardTitle>
-          <CardDescription>Produtos mais vendidos em cada região</CardDescription>
+          <CardTitle>Planejamento de Vendas 2026 (Final)</CardTitle>
+          <CardDescription>
+            Importe o arquivo <strong>Planejamento_de_Vendas_2026_FINAL.xlsx</strong> containing:
+            <br />
+            <code>Nombre Mercaderia</code>, <code>Preco Referencia</code>, <code>Dose</code>, <code>Categoria</code>.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {regionsWithSales.map((region) => (
-              <div key={region.regionId} className="border-b pb-4 last:border-b-0">
-                <h3 className="font-semibold text-lg mb-3">{region.regionName}</h3>
-                <div className="grid grid-cols-1 gap-2">
-                  {region.topProducts.length > 0 ? (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Produto</TableHead>
-                          <TableHead>Marca</TableHead>
-                          <TableHead className="text-right">Volume</TableHead>
-                          <TableHead className="text-right">Vendas</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {region.topProducts.slice(0, 5).map((product: any, idx: number) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-medium">{product.productName}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{product.brand}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {product.volume.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              ${product.sales.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Nenhum produto vendido nesta região.</p>
-                  )}
-                </div>
-              </div>
-            ))}
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-4 max-w-md">
+            <Label>Safra Ativa: {activeSeason?.name || "Carregando..."}</Label>
+
+            <div className="grid w-full max-w-sm items-center gap-1.5">
+              <Label htmlFor="planning-file">Arquivo Excel (.xlsx)</Label>
+              <Input id="planning-file" type="file" accept=".xlsx, .xls" onChange={handleFileChange} />
+            </div>
+
+            <Button onClick={handleUpload} disabled={!file || !activeSeason || isUploading}>
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Importar Produtos
+                </>
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>
     </div>
   );
+}
+//... DashboardManagement ...
+const { data: regionalData, isLoading } = useQuery<any[]>({
+  queryKey: ['/api/admin/regional-sales'],
+});
+
+if (isLoading) {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    </div>
+  );
+}
+
+// Filter regions with sales only
+const regionsWithSales = regionalData?.filter(region => region.totalSales > 0) || [];
+
+if (!regionsWithSales || regionsWithSales.length === 0) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Dashboard Administrativo</CardTitle>
+        <CardDescription>Análise Regional de Vendas</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p className="text-muted-foreground">Nenhum dado de vendas disponível.</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Calculate totals
+const totalSales = regionsWithSales.reduce((sum, region) => sum + region.totalSales, 0);
+const totalVolume = regionsWithSales.reduce((sum, region) => sum + region.totalVolume, 0);
+const totalSalesCount = regionsWithSales.reduce((sum, region) => sum + region.salesCount, 0);
+
+// Find top region by sales
+const topRegion = regionsWithSales.reduce((max, region) =>
+  region.totalSales > max.totalSales ? region : max, regionsWithSales[0]);
+
+// Prepare data for charts
+const chartData = regionsWithSales.map(region => ({
+  name: region.regionName,
+  vendas: region.totalSales,
+  volume: region.totalVolume,
+}));
+
+// Colors for pie chart
+const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+return (
+  <div className="space-y-6">
+    <div>
+      <h2 className="text-2xl font-bold">Dashboard Administrativo</h2>
+      <p className="text-muted-foreground">Análise Regional de Vendas e Performance</p>
+    </div>
+
+    {/* Summary Cards */}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">Total de Vendas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">
+            ${totalSales.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Todas as regiões</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">Volume Total</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">
+            {totalVolume.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Unidades vendidas</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">Total de Transações</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{totalSalesCount}</div>
+          <p className="text-xs text-muted-foreground mt-1">Vendas realizadas</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">Região Líder</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{topRegion.regionName}</div>
+          <p className="text-xs text-muted-foreground mt-1">
+            ${topRegion.totalSales.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Regional Details Table */}
+    <Card>
+      <CardHeader>
+        <CardTitle>Top 5 Produtos por Região</CardTitle>
+        <CardDescription>Produtos mais vendidos em cada região</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {regionsWithSales.map((region) => (
+            <div key={region.regionId} className="border-b pb-4 last:border-b-0">
+              <h3 className="font-semibold text-lg mb-3">{region.regionName}</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {region.topProducts.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Produto</TableHead>
+                        <TableHead>Marca</TableHead>
+                        <TableHead className="text-right">Volume</TableHead>
+                        <TableHead className="text-right">Vendas</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {region.topProducts.slice(0, 5).map((product: any, idx: number) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium">{product.productName}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{product.brand}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {product.volume.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            ${product.sales.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum produto vendido nesta região.</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  </div>
+);
 }
 
 function UsersManagement() {
@@ -375,12 +461,12 @@ function UsersManagement() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${user.role === 'administrador'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'
-                          : user.role === 'gerente'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200'
-                            : user.role === 'faturista'
-                              ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'
+                        : user.role === 'gerente'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200'
+                          : user.role === 'faturista'
+                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                         }`}>
                         {user.role === 'administrador' ? 'Administrador' : user.role === 'gerente' ? 'Gerente' : user.role === 'faturista' ? 'Faturista' : 'Consultor'}
                       </span>

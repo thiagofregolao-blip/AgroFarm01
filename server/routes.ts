@@ -8426,9 +8426,11 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
   // Sales Planning Import
   app.post("/api/planning/import-products", upload.fields([{ name: 'salesPlanning' }, { name: 'productDoses' }]), async (req, res) => {
+    // ... existing codes ...
     try {
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       const { seasonId } = req.body;
+      // ... existing codes ...
 
       if (!seasonId) {
         return res.status(400).json({ error: "Season ID is required" });
@@ -8445,9 +8447,83 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       );
 
       res.json(result);
-    } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to import planning products" });
+    }
+  });
+
+  // FINAL PLANNING IMPORT (Single XLS file)
+  app.post("/api/admin/import-planning-final", upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "File is required" });
+
+      const { seasonId } = req.body;
+      let targetSeasonId = seasonId;
+
+      if (!targetSeasonId) {
+        const activeSeason = await CRMStorage.getActiveSeason();
+        if (activeSeason) targetSeasonId = activeSeason.id;
+      }
+
+      if (!targetSeasonId) return res.status(400).json({ error: "Season ID required" });
+
+      const { importPlanningFinal } = await import("./import-excel");
+      const result = await importPlanningFinal(req.file.buffer, targetSeasonId);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Import Final Error:", error);
+      res.status(500).json({ error: "Failed to import: " + (error instanceof Error ? error.message : String(error)) });
+    }
+  });
+
+  // Check purchased history
+  app.get("/api/planning/client-history/:clientId", async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      // Check purchases in previous seasons from sales table
+      // Matching by product NAME to cover re-imports with different IDs
+      const history = await db.selectDistinct({ productName: products.name })
+        .from(sales)
+        .innerJoin(products, eq(sales.productId, products.id))
+        .where(eq(sales.clientId, clientId));
+
+      const names = history.map(h => h.productName);
+      res.json({ purchasedProductNames: names });
+    } catch (error) {
+      console.error("History Error:", error);
+      res.status(500).json({ error: "Failed to fetch history" });
+    }
+  });
+
+  // New endpoint for single file import
+  app.post("/api/admin/import-planning-final", upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "File is required" });
+      }
+
+      // Default seasonId - ideally passed from client or fetched active
+      // For now, let's try to find active season or allow passing it
+      const { seasonId } = req.body;
+      let targetSeasonId = seasonId;
+
+      if (!targetSeasonId) {
+        const activeSeason = await CRMStorage.getActiveSeason();
+        if (activeSeason) targetSeasonId = activeSeason.id;
+      }
+
+      if (!targetSeasonId) {
+        return res.status(400).json({ error: "Active Season not found and seasonId not provided" });
+      }
+
+      const { importPlanningFinal } = await import("./import-excel");
+      const result = await importPlanningFinal(req.file.buffer, targetSeasonId);
+
+      res.json(result);
+    } catch (error) {
+      console.error("Import Final Error:", error);
+      res.status(500).json({ error: "Failed to import final planning file" });
     }
   });
 

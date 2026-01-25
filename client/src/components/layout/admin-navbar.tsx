@@ -1,4 +1,4 @@
-import { 
+import {
   BarChart3,
   Users,
   Package,
@@ -30,6 +30,7 @@ const menuItems = [
   { id: "parameters", icon: Settings, label: "Parâmetros" },
   { id: "barter", icon: Repeat, label: "Barter" },
   { id: "timac", icon: Target, label: "Timac" },
+  { id: "planning-import", icon: Upload, label: "Importar Planejamento" },
   { id: "system", icon: Shield, label: "Sistema" },
 ];
 
@@ -41,7 +42,7 @@ export default function AdminNavbar({ activeTab, onTabChange }: AdminNavbarProps
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
-            
+
             return (
               <button
                 key={item.id}
@@ -49,11 +50,10 @@ export default function AdminNavbar({ activeTab, onTabChange }: AdminNavbarProps
                   onTabChange(item.id);
                   window.location.hash = item.id;
                 }}
-                className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 ${
-                  isActive 
-                    ? 'text-primary border-primary font-medium' 
+                className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 ${isActive
+                    ? 'text-primary border-primary font-medium'
                     : 'text-muted-foreground hover:text-foreground border-transparent'
-                }`}
+                  }`}
                 data-testid={`nav-${item.id}`}
               >
                 <Icon size={18} />
