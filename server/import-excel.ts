@@ -808,121 +808,128 @@ export async function importPlanningProducts(
 }
 
 export interface PlanningFinalRow {
-    'Nombre Mercaderia'?: string;
-    'Preco Referencia'?: number | string;
-    'Dose'?: number | string;
-    'Categoria'?: string;
-    'Unidade'?: string;
+  'Nombre Mercaderia'?: string;
+  'Preco Referencia'?: number | string;
+  'Dose'?: number | string;
+  'Categoria'?: string;
+  'Unidade'?: string;
 }
 
 export async function importPlanningFinal(buffer: Buffer, seasonId: string) {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet) as PlanningFinalRow[];
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet) as PlanningFinalRow[];
 
-    console.log(`Processing ${rows.length} rows for planning import...`);
+  console.log(`Processing ${rows.length} rows for planning import...`);
 
-    let createdCount = 0;
-    let updatedCount = 0;
-    let errors: string[] = [];
+  let createdCount = 0;
+  let updatedCount = 0;
+  let errors: string[] = [];
 
-    // 1. Get all Categories to map ID
-    const categories = await storage.getAllCategories();
-    
-    // Helper to find category ID by name (insensitive)
-    const getCategoryId = (name: string) => {
-        if (!name) return null;
-        const norm = name.toLowerCase().trim();
-        const cat = categories.find(c => c.name.toLowerCase().trim() === norm);
-        return cat ? cat.id : null;
-    };
+  // 1. Get all Categories to map ID
+  const categories = await storage.getAllCategories();
 
-    // Helper: Create category if not exists (Optional, maybe safer to default to "Outros")
-    const getOrCreateCategory = async (name: string) => {
-        if (!name) return null;
-        let id = getCategoryId(name);
-        if (id) return id;
+  // Helper to find category ID by name (insensitive)
+  const getCategoryId = (name: string) => {
+    if (!name) return null;
+    const norm = name.toLowerCase().trim();
+    const cat = categories.find(c => c.name.toLowerCase().trim() === norm);
+    return cat ? cat.id : null;
+  };
 
-        // Create new category
-        try {
-            const newCat = await storage.createCategory({
-                name: name.trim(),
-                defaultIva: "10.00",
-                isActive: true
-            });
-            categories.push(newCat);
-            return newCat.id;
-        } catch (e) {
-            console.error(`Failed to create category ${name}`, e);
-            return null;
-        }
-    };
+  // Helper: Create category if not exists (Optional, maybe safer to default to "Outros")
+  const getOrCreateCategory = async (name: string) => {
+    if (!name) return null;
+    let id = getCategoryId(name);
+    if (id) return id;
 
-    for (const row of rows) {
-        try {
-            const productName = row['Nombre Mercaderia'];
-            if (!productName) continue;
-
-            // Normalize values
-            const priceRef = typeof row['Preco Referencia'] === 'number' ? row['Preco Referencia'].toString() : (row['Preco Referencia'] || "0");
-            const dose = typeof row['Dose'] === 'number' ? row['Dose'].toString() : (row['Dose'] || "0");
-            const categoryName = row['Categoria'] || "Outros";
-            const unit = row['Unidade'] || "L";
-
-            const categoryId = await getOrCreateCategory(categoryName);
-            if (!categoryId) {
-                errors.push(`Categoria inválida para produto: ${productName}`);
-                continue;
-            }
-
-            // 1. Master Product (Catalog)
-            const allProducts = await storage.getAllProducts();
-            let masterProduct = allProducts.find(p => p.name.toLowerCase() === productName.toLowerCase());
-            
-            if (!masterProduct) {
-                masterProduct = await storage.createProduct({
-                    name: productName,
-                    categoryId,
-                    isActive: true,
-                    unit: unit, 
-                    priceVerde: priceRef
-                });
-            }
-
-            // 2. Planning Product (Season Specific)
-            const planningProducts = await storage.getPlanningProducts(seasonId);
-            let pProd = planningProducts.find(p => p.productId === masterProduct?.id);
-
-            if (pProd) {
-                await storage.updatePlanningProduct(pProd.id, {
-                    price: priceRef,
-                    dosePerHa: dose,
-                    unit: unit
-                });
-                updatedCount++;
-            } else {
-                await storage.createPlanningProduct({
-                    seasonId,
-                    productId: masterProduct.id,
-                    price: priceRef,
-                    dosePerHa: dose,
-                    unit: unit,
-                    segment: categoryName
-                });
-                createdCount++;
-            }
-
-        } catch (err) {
-            console.error("Row Error:", err);
-            errors.push(`Erro ao importar ${row['Nombre Mercaderia']}: ${String(err)}`);
-        }
+    // Create new category
+    try {
+      const newCat = await storage.createCategory({
+        name: name.trim(),
+        type: "agroquimicos",
+        defaultIva: "10.00",
+        greenCommission: "0",
+        greenMarginMin: "0",
+        yellowCommission: "0",
+        yellowMarginMin: "0",
+        yellowMarginMax: "0",
+        redCommission: "0",
+        redMarginMin: "0",
+        redMarginMax: "0",
+        belowListCommission: "0"
+      });
+      categories.push(newCat);
+      return newCat.id;
+    } catch (e) {
+      console.error(`Failed to create category ${name}`, e);
+      return null;
     }
+  };
 
-    return {
-        success: true,
-        created: createdCount,
-        updated: updatedCount,
-        errors
-    };
+  for (const row of rows) {
+    try {
+      const productName = row['Nombre Mercaderia'];
+      if (!productName) continue;
+
+      // Normalize values
+      const priceRef = typeof row['Preco Referencia'] === 'number' ? row['Preco Referencia'].toString() : (row['Preco Referencia'] || "0");
+      const dose = typeof row['Dose'] === 'number' ? row['Dose'].toString() : (row['Dose'] || "0");
+      const categoryName = row['Categoria'] || "Outros";
+      const unit = row['Unidade'] || "L";
+
+      const categoryId = await getOrCreateCategory(categoryName);
+      if (!categoryId) {
+        errors.push(`Categoria inválida para produto: ${productName}`);
+        continue;
+      }
+
+      // 1. Master Product (Catalog)
+      const allProducts = await storage.getAllProducts();
+      let masterProduct = allProducts.find(p => p.name.toLowerCase() === productName.toLowerCase());
+
+      if (!masterProduct) {
+        masterProduct = await storage.createProduct({
+          name: productName,
+          categoryId,
+          isActive: true
+        });
+      }
+
+      // 2. Planning Product (Season Specific)
+      const planningProducts = await storage.getPlanningProducts(seasonId);
+      let pProd = planningProducts.find(p => p.name.toLowerCase() === productName.toLowerCase());
+
+      if (pProd) {
+        await storage.updatePlanningProduct(pProd.id, {
+          price: priceRef,
+          dosePerHa: dose,
+          unit: unit
+        });
+        updatedCount++;
+      } else {
+        await storage.createPlanningProduct({
+          seasonId,
+          name: productName,
+          price: priceRef,
+          dosePerHa: dose,
+          unit: unit,
+          segment: categoryName
+        });
+        createdCount++;
+      }
+
+    } catch (err) {
+      console.error("Row Error:", err);
+      errors.push(`Erro ao importar ${row['Nombre Mercaderia']}: ${String(err)}`);
+    }
+  }
+
+  return {
+    success: true,
+    created: createdCount,
+    updated: updatedCount,
+    errors
+  };
 }
