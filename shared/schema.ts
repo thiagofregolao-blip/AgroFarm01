@@ -953,6 +953,7 @@ export const planningProductsBase = pgTable("planning_products_base", {
   dosePerHa: decimal("dose_per_ha", { precision: 10, scale: 3 }), // Vindo de Planilha de produtos.xlsx
   price: decimal("price", { precision: 10, scale: 2 }), // Vindo de Planejamento de Vendas 2026.xls
   unit: text("unit"), // L, Kg, etc
+  packageSize: decimal("package_size", { precision: 10, scale: 2 }), // Extracted or imported
   seasonId: varchar("season_id").references(() => seasons.id), // Referência à safra (2026)
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
@@ -992,4 +993,17 @@ export type SalesPlanning = typeof salesPlanning.$inferSelect;
 export const insertSalesPlanningItemSchema = createInsertSchema(salesPlanningItems).omit({ id: true });
 export type InsertSalesPlanningItem = z.infer<typeof insertSalesPlanningItemSchema>;
 export type SalesPlanningItem = typeof salesPlanningItems.$inferSelect;
+export const planningGlobalConfigurations = pgTable("planning_global_configurations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  seasonId: varchar("season_id").notNull().references(() => seasons.id),
+  productIds: jsonb("product_ids").notNull().default("[]"), // Array of selected product IDs
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  uniqueConfig: unique().on(table.userId, table.seasonId),
+}));
+
+export const insertPlanningGlobalConfigurationSchema = createInsertSchema(planningGlobalConfigurations).omit({ id: true, updatedAt: true });
+export type InsertPlanningGlobalConfiguration = z.infer<typeof insertPlanningGlobalConfigurationSchema>;
+export type PlanningGlobalConfiguration = typeof planningGlobalConfigurations.$inferSelect;
 

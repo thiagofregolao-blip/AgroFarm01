@@ -16,10 +16,11 @@ import type {
   ManagerTeamRate, InsertManagerTeamRate,
   PlanningProduct, InsertPlanningProduct,
   // PlanningProductsBase removed
-  SalesPlanning, InsertSalesPlanning, SalesPlanningItem, InsertSalesPlanningItem
+  SalesPlanning, InsertSalesPlanning, SalesPlanningItem, InsertSalesPlanningItem,
+  PlanningGlobalConfiguration, InsertPlanningGlobalConfiguration
 } from "@shared/schema";
 import { db, pool } from './db';
-import { users, categories, products, regions, clients, seasons, seasonGoals, sales, seasonParameters, marketInvestmentRates, clientMarketRates, clientMarketValues, marketBenchmarks, externalPurchases, clientFamilyRelations, alertSettings, alerts, purchaseHistory, purchaseHistoryItems, masterClients, userClientLinks, barterProducts, barterSettings, barterSimulations, barterSimulationItems, salesTargets, systemSettings, clientCategoryPipeline, managerTeamRates, planningProductsBase, salesPlanning, salesPlanningItems } from '@shared/schema';
+import { users, categories, products, regions, clients, seasons, seasonGoals, sales, seasonParameters, marketInvestmentRates, clientMarketRates, clientMarketValues, marketBenchmarks, externalPurchases, clientFamilyRelations, alertSettings, alerts, purchaseHistory, purchaseHistoryItems, masterClients, userClientLinks, barterProducts, barterSettings, barterSimulations, barterSimulationItems, salesTargets, systemSettings, clientCategoryPipeline, managerTeamRates, planningProductsBase, salesPlanning, salesPlanningItems, planningGlobalConfigurations } from '@shared/schema';
 import { eq, and, desc, asc, sql, inArray, or } from 'drizzle-orm';
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -2875,6 +2876,7 @@ export class DBStorage implements IStorage {
       id,
       ...product,
       dosePerHa: product.dosePerHa ?? null,
+      packageSize: product.packageSize ?? null,
       seasonId: product.seasonId ?? null
     }).returning();
     return result[0];
@@ -2955,6 +2957,42 @@ export class DBStorage implements IStorage {
     }
 
     return finalPlanning;
+  }
+
+  // Global Config
+  async getPlanningGlobalConfiguration(userId: string, seasonId: string): Promise<PlanningGlobalConfiguration | undefined> {
+    const [config] = await db.select()
+      .from(planningGlobalConfigurations)
+      .where(and(
+        eq(planningGlobalConfigurations.userId, userId),
+        eq(planningGlobalConfigurations.seasonId, seasonId)
+      ))
+      .limit(1);
+    return config;
+  }
+
+  async upsertPlanningGlobalConfiguration(data: InsertPlanningGlobalConfiguration): Promise<PlanningGlobalConfiguration> {
+    const existing = await this.getPlanningGlobalConfiguration(data.userId, data.seasonId);
+
+    if (existing) {
+      const [updated] = await db.update(planningGlobalConfigurations)
+        .set({
+          productIds: data.productIds,
+          updatedAt: new Date()
+        })
+        .where(eq(planningGlobalConfigurations.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const id = randomUUID();
+      const [created] = await db.insert(planningGlobalConfigurations)
+        .values({
+          id,
+          ...data
+        })
+        .returning();
+      return created;
+    }
   }
 }
 

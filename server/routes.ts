@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings } from "@shared/schema";
+import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema } from "@shared/schema";
 import { visits } from "@shared/schema.crm";
 import { z } from "zod";
 import multer from "multer";
@@ -8596,6 +8596,42 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     } catch (error) {
       console.error("[SALES_PLANNING_GET]", error);
       res.status(500).json({ error: "Failed to fetch sales planning" });
+    }
+  });
+
+  // Global Planning Configuration
+  app.get("/api/planning/global", async (req, res) => {
+    try {
+      if (!req.user) return res.sendStatus(401);
+      const { seasonId } = req.query;
+      if (!seasonId) return res.status(400).json({ error: "Season ID required" });
+
+      const config = await storage.getPlanningGlobalConfiguration(req.user.id, seasonId as string);
+      res.json(config || null);
+    } catch (error) {
+      console.error("[PLANNING_GLOBAL_GET]", error);
+      res.status(500).json({ error: "Failed to fetch global configuration" });
+    }
+  });
+
+  app.post("/api/planning/global", async (req, res) => {
+    try {
+      if (!req.user) return res.sendStatus(401);
+      const { seasonId, productIds } = req.body;
+
+      if (!seasonId || !Array.isArray(productIds)) {
+        return res.status(400).json({ error: "Invalid data" });
+      }
+
+      const result = await storage.upsertPlanningGlobalConfiguration({
+        userId: req.user.id,
+        seasonId,
+        productIds
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("[PLANNING_GLOBAL_POST]", error);
+      res.status(500).json({ error: "Failed to save global configuration" });
     }
   });
 

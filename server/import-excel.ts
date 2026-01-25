@@ -771,6 +771,10 @@ export async function importPlanningProducts(
       // Buscar dose no mapa
       const dosePerHa = dosagemMap.get(normName) || null;
 
+      // Extrair Dose (packageSize) do nome ou coluna se houver
+      // Usar o helper existente
+      const packageSize = extractPackageSize(String(nameRaw));
+
       // Detectar segmento
       const segment = detectSegment(String(nameRaw));
 
@@ -780,7 +784,8 @@ export async function importPlanningProducts(
           price: price.toString(),
           dosePerHa: dosePerHa ? dosePerHa.toString() : existing.dosePerHa,
           segment,
-          unit
+          unit,
+          packageSize: packageSize ? packageSize.toString() : existing.packageSize
         });
         result.updated++;
       } else {
@@ -792,7 +797,8 @@ export async function importPlanningProducts(
             price: price.toString(),
             dosePerHa: dosePerHa ? dosePerHa.toString() : null,
             segment,
-            unit
+            unit,
+            packageSize: packageSize ? packageSize.toString() : null
           });
           result.created++;
         }
