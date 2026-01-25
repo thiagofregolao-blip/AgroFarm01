@@ -74,10 +74,21 @@ export async function ensureSchema() {
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id uuid,
         season_id uuid,
-        selected_product_ids jsonb DEFAULT '[]'::jsonb,
+        product_ids jsonb DEFAULT '[]'::jsonb,
         updated_at timestamp DEFAULT now()
       );
     `);
+
+    // 2.1 HOTFIX: Corrigir nome da coluna se foi criada errada (De selected_product_ids para product_ids)
+    try {
+      await execute(`
+            ALTER TABLE planning_global_configurations 
+            RENAME COLUMN selected_product_ids TO product_ids;
+        `);
+      console.log("✅ Coluna renomeada de selected_product_ids para product_ids");
+    } catch (e) {
+      // Ignora erro se coluna não existir ou já estiver correta
+    }
 
     console.log("✅ Schema verificado/corrigido com sucesso.");
   } catch (error) {
