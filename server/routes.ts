@@ -8447,6 +8447,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       );
 
       res.json(result);
+    } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to import planning products" });
     }
