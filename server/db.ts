@@ -42,4 +42,48 @@ dbReady.catch((err) => {
   process.exit(1);
 });
 
+// Função de auto-correção de schema para produção
+export async function ensureSchema() {
+  await dbReady;
+  console.log("Inteverificando integridade do schema (Hotfix)...");
+
+  try {
+    // 1. Garantir package_size em planning_products_base
+    // Usamos raw SQL através do objeto 'pool' (postgres-js ou neon Pool)
+    // Precisamos diferenciar como executar query
+
+    // Helper para executar raw sql
+    const execute = async (query: string) => {
+      if (isNeonUrl) {
+        return pool.query(query);
+      } else {
+        return pool.unsafe(query);
+      }
+    };
+
+    console.log("Verificando coluna package_size...");
+    await execute(`
+      ALTER TABLE planning_products_base 
+      ADD COLUMN IF NOT EXISTS package_size TEXT;
+    `);
+
+    // 2. Garantir tabela planning_global_configurations
+    console.log("Verificando tabela planning_global_configurations...");
+    await execute(`
+      CREATE TABLE IF NOT EXISTS planning_global_configurations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid,
+        season_id uuid,
+        selected_product_ids jsonb DEFAULT '[]'::jsonb,
+        updated_at timestamp DEFAULT now()
+      );
+    `);
+
+    console.log("✅ Schema verificado/corrigido com sucesso.");
+  } catch (error) {
+    console.error("❌ Erro ao verificar schema:", error);
+    // Não damos exit, tentamos seguir
+  }
+}
+
 export { pool, db, dbReady };

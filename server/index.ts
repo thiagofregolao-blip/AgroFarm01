@@ -53,7 +53,12 @@ app.use((req, res, next) => {
   next();
 });
 
+
 (async () => {
+  // HOTFIX: Ensure schema integrity before starting (Fix missing columns in prod)
+  const { ensureSchema } = await import("./db");
+  await ensureSchema();
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

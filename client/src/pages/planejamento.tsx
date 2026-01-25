@@ -40,7 +40,7 @@ interface SharePlanningProps {
 // --- Main Page Component ---
 export default function PlanejamentoPage() {
     const { toast } = useToast();
-    const [viewMode, setViewMode] = useState<ViewMode>("SETUP");
+    const [viewMode, setViewMode] = useState<ViewMode>("PLANNING"); // Default to PLANNING
     const [selectedClientId, setSelectedClientId] = useState<string>("");
     const [isConfigLoaded, setIsConfigLoaded] = useState(false);
 
@@ -69,8 +69,13 @@ export default function PlanejamentoPage() {
     const { data: globalConfig, isLoading: isLoadingConfig } = useQuery<{ productIds: string[] }>({
         queryKey: ["/api/planning/global", activeSeason?.id],
         queryFn: async () => {
-            const res = await apiRequest("GET", `/api/planning/global?seasonId=${activeSeason?.id}`);
-            return res.json();
+            try {
+                const res = await apiRequest("GET", `/api/planning/global?seasonId=${activeSeason?.id}`);
+                if (!res.ok) return null; // Handle 404 or errors gracefully
+                return res.json();
+            } catch (e) {
+                return null;
+            }
         },
         enabled: !!activeSeason?.id,
     });
@@ -79,12 +84,9 @@ export default function PlanejamentoPage() {
     useEffect(() => {
         if (globalConfig?.productIds && !isConfigLoaded) {
             setGlobalSelectedIds(new Set(globalConfig.productIds));
-            if (globalConfig.productIds.length > 0) {
-                setViewMode("PLANNING");
-            }
             setIsConfigLoaded(true);
         } else if (globalConfig === null && !isConfigLoaded && !isLoadingConfig) {
-            // No config found, stay in SETUP
+            // Config loaded but empty/error -> Just mark loaded, don't force SETUP
             setIsConfigLoaded(true);
         }
     }, [globalConfig, isConfigLoaded, isLoadingConfig]);
