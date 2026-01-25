@@ -183,8 +183,14 @@ export default function PlanejamentoPage() {
         let addedCount = 0;
 
         products.forEach(p => {
-            // Check if product name is in history list
-            if (purchaseHistory.purchasedProductNames.includes(p.name)) {
+            // Check if product name is in history list (fuzzy match)
+            const pName = p.name.toLowerCase();
+            const found = purchaseHistory.purchasedProductNames.some(hName => {
+                const histName = hName.toLowerCase();
+                return histName.includes(pName) || pName.includes(histName);
+            });
+
+            if (found) {
                 newSet.add(p.id);
                 addedCount++;
             }
