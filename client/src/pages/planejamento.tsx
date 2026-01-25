@@ -285,6 +285,60 @@ function GlobalSetup({ products, selectedIds, onToggle, onFinish, isSaving }: Gl
     );
 }
 
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Trash2, Plus, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+// ... (Existing types remain)
+
+// New Component for Adding Products
+function ProductSelector({ allProducts, currentIds, onSelect }: { allProducts: PlanningProduct[], currentIds: Set<string>, onSelect: (p: PlanningProduct) => void }) {
+    const [open, setOpen] = useState(false);
+
+    // Filter out products already in the list
+    const availableProducts = useMemo(() => {
+        return allProducts.filter(p => !currentIds.has(p.id));
+    }, [allProducts, currentIds]);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={open} className="w-[250px] justify-between">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Adicionar Produto...
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[400px] p-0">
+                <Command>
+                    <CommandInput placeholder="Buscar produto..." />
+                    <CommandList>
+                        <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                        <CommandGroup>
+                            {availableProducts.slice(0, 50).map((product) => (
+                                <CommandItem
+                                    key={product.id}
+                                    value={product.name}
+                                    onSelect={() => {
+                                        onSelect(product);
+                                        setOpen(false);
+                                    }}
+                                >
+                                    <div className="flex flex-col">
+                                        <span>{product.name}</span>
+                                        <span className="text-xs text-muted-foreground">{product.segment} | ${product.price}</span>
+                                    </div>
+                                    <Check className={cn("ml-auto h-4 w-4", currentIds.has(product.id) ? "opacity-100" : "opacity-0")} />
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 function SharePlanning({ client, activeSeason, globalSelectedIds, products, purchaseHistory, onBack }: SharePlanningProps) {
     const { toast } = useToast();
 
@@ -300,20 +354,95 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
     // Per-product customizations (Dose adjustments)
     const [customDoses, setCustomDoses] = useState<Record<string, string>>({});
 
-    // EFFECT: Initialize areas from client or existing planning (if we fetch it later)
+    // Local State for Active Products (Initialize with Global + History)
+    const [localProducts, setLocalProducts] = useState<PlanningProduct[]>([]);
+    const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+    // Query Saved Planning
+    const { data: savedPlanning, isLoading: isLoadingPlanning } = useQuery<{ planning: SalesPlanning, items: SalesPlanningItem[] }>({
+        queryKey: ["/api/planning", client.id, activeSeason.id],
+        queryFn: async () => {
+            const res = await apiRequest("GET", `/api/planning/${client.id}?seasonId=${activeSeason.id}`);
+            if (res.status === 404) return null;
+            if (!res.ok) throw new Error("Failed to fetch planning");
+            return res.json();
+        }
+    });
+
+    // EFFECT: Initialize areas from client or existing planning
     useEffect(() => {
-        setAreas(prev => ({ ...prev, total: client.plantingArea?.toString() || "0" }));
-    }, [client]);
+        if (savedPlanning?.planning) {
+            setAreas({
+                fungicides: savedPlanning.planning.fungicidesArea?.toString() || "0",
+                insecticides: savedPlanning.planning.insecticidesArea?.toString() || "0",
+                ts: savedPlanning.planning.seedTreatmentArea?.toString() || "0",
+                herbicides: savedPlanning.planning.herbicidesArea?.toString() || "0",
+                total: savedPlanning.planning.totalPlantingArea?.toString() || client.plantingArea?.toString() || "0"
+            });
+        } else {
+            setAreas(prev => ({ ...prev, total: client.plantingArea?.toString() || "0" }));
+        }
+    }, [client, savedPlanning]);
 
-    // Derived: Active Product List (Global + History)
-    const activeProducts = useMemo(() => {
-        // Start with global selection
-        const selected = products.filter(p => globalSelectedIds.has(p.id));
+    // EFFECT: Initialize local products list when client changes OR saved data loads
+    useEffect(() => {
+        if (isLoadingPlanning) return;
 
-        // Add History Items (Fuzzy Match / Injection)
+        const initialList: PlanningProduct[] = [];
+        const addedIds = new Set<string>();
+        const initialDoses: Record<string, string> = {};
+
+        // A. If we have saved planning, use it as the base
+        if (savedPlanning?.items && savedPlanning.items.length > 0) {
+            savedPlanning.items.forEach(item => {
+                const product = products.find(p => p.id === item.productId);
+                if (product) {
+                    initialList.push(product);
+                    addedIds.add(product.id);
+
+                    // Restore calculated dose (Quantity / Area) backing out dose is hard if area changed?
+                    // actually we store quantity and amount. We should implicitly check if we can restore dose?
+                    // better yet, we can't easily restore "dose" because it wasn't saved explicitly in items (only quantity).
+                    // BUT we can re-calculate: Dose = Quantity / Area.
+
+                    // Which area? 
+                    const seg = product.segment?.toLowerCase() || "";
+                    let areaVal = 0;
+                    if (seg.includes("fungicida")) areaVal = parseFloat(savedPlanning.planning.fungicidesArea?.toString() || "0");
+                    else if (seg.includes("inseticida")) areaVal = parseFloat(savedPlanning.planning.insecticidesArea?.toString() || "0");
+                    else if (seg.includes("ts")) areaVal = parseFloat(savedPlanning.planning.seedTreatmentArea?.toString() || "0");
+                    else if (seg.includes("herbicida") || seg.includes("desseca")) areaVal = parseFloat(savedPlanning.planning.herbicidesArea?.toString() || "0");
+
+                    if (areaVal > 0) {
+                        const q = parseFloat(item.quantity);
+                        const restoredDose = (q / areaVal).toFixed(3); // aprox
+                        // Only set if different from standard
+                        if (restoredDose !== product.dosePerHa) {
+                            initialDoses[product.id] = restoredDose;
+                        }
+                    }
+                }
+            });
+            setCustomDoses(initialDoses);
+            setLocalProducts(initialList);
+            setIsDataLoaded(true);
+            return;
+        }
+
+        // B. If NO saved planning, use Global + History (Default Logic)
+
+        // 1. Add Global Products
+        products.forEach(p => {
+            if (globalSelectedIds.has(p.id)) {
+                initialList.push(p);
+                addedIds.add(p.id);
+            }
+        });
+
+        // 2. Add History Products
         if (purchaseHistory?.purchasedProductNames) {
             products.forEach(p => {
-                if (globalSelectedIds.has(p.id)) return; // Already included
+                if (addedIds.has(p.id)) return;
 
                 const pName = p.name.toLowerCase();
                 const foundInHistory = purchaseHistory.purchasedProductNames.some(hName => {
@@ -322,21 +451,33 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
                 });
 
                 if (foundInHistory) {
-                    // Mark as history-added? We just push to array for now.
-                    // Ideally we want to tag it for UI highlight
-                    selected.push(p);
+                    initialList.push(p);
+                    addedIds.add(p.id);
                 }
             });
         }
-        return selected;
-    }, [globalSelectedIds, products, purchaseHistory]);
+        setLocalProducts(initialList);
+        setIsDataLoaded(true);
+
+    }, [globalSelectedIds, products, purchaseHistory, client.id, savedPlanning, isLoadingPlanning]);
+
+    // Handlers
+    const handleRemoveProduct = (id: string) => {
+        setLocalProducts(prev => prev.filter(p => p.id !== id));
+    };
+
+    const handleAddProduct = (product: PlanningProduct) => {
+        setLocalProducts(prev => [...prev, product]);
+        toast({ title: "Produto Adicionado", description: `${product.name} incluído no planejamento.` });
+    };
 
     // Grouping for Display
     const layoutGroups = useMemo(() => {
         const groups: Record<string, PlanningProduct[]> = {
             "Fungicidas": [], "Inseticidas": [], "TS": [], "Dessecação": []
         };
-        activeProducts.forEach(p => {
+        // Use localProducts instead of memoized activeProducts
+        localProducts.forEach(p => {
             const seg = p.segment?.toLowerCase() || "";
             if (seg.includes("fungicida")) groups["Fungicidas"].push(p);
             else if (seg.includes("inseticida")) groups["Inseticidas"].push(p);
@@ -344,7 +485,7 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
             else if (seg.includes("herbicida") || seg.includes("desseca")) groups["Dessecação"].push(p);
         });
         return groups;
-    }, [activeProducts]);
+    }, [localProducts]);
 
     // Calculation Helper
     const calculateRow = (product: PlanningProduct, segmentArea: number) => {
@@ -382,7 +523,7 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
 
     const saveMutation = useMutation({
         mutationFn: async () => {
-            const itemsToSave = activeProducts.map(p => {
+            const itemsToSave = localProducts.map(p => {
                 const seg = p.segment?.toLowerCase() || "";
                 let area = 0;
                 if (seg.includes("fungicida")) area = parseFloat(areas.fungicides);
@@ -474,10 +615,17 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
                     <CardHeader>
                         <div className="flex justify-between items-center">
                             <CardTitle>Produtos & Cálculo</CardTitle>
-                            <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="bg-green-600 hover:bg-green-700">
-                                {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                                Salvar Planejamento
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <ProductSelector
+                                    allProducts={products}
+                                    currentIds={new Set(localProducts.map(p => p.id))}
+                                    onSelect={handleAddProduct}
+                                />
+                                <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="bg-green-600 hover:bg-green-700">
+                                    {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                                    Salvar
+                                </Button>
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -506,8 +654,9 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
                                                         <TableHead className="w-[40%]">Produto</TableHead>
                                                         <TableHead className="text-right w-[15%]">Dose/ha</TableHead>
                                                         <TableHead className="text-right w-[15%]">Preço</TableHead>
-                                                        <TableHead className="text-right w-[15%]">Qtd (Emb)</TableHead>
+                                                        <TableHead className="text-right w-[10%]">Qtd</TableHead>
                                                         <TableHead className="text-right w-[15%]">Total</TableHead>
+                                                        <TableHead className="w-[5%]"></TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
@@ -528,7 +677,7 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
                                                                     <Input
                                                                         type="number"
                                                                         className="h-8 text-right"
-                                                                        placeholder={p.dosePerHa}
+                                                                        placeholder={p.dosePerHa || ""}
                                                                         value={customDoses[p.id] ?? p.dosePerHa ?? ""}
                                                                         onChange={(e) => setCustomDoses(prev => ({ ...prev, [p.id]: e.target.value }))}
                                                                     />
@@ -540,13 +689,23 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
                                                                 <TableCell className="text-right font-bold text-green-700">
                                                                     ${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                                                 </TableCell>
+                                                                <TableCell>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                                        onClick={() => handleRemoveProduct(p.id)}
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </TableCell>
                                                             </TableRow>
                                                         );
                                                     })}
                                                     {groupProducts.length === 0 && (
                                                         <TableRow>
-                                                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                                                Nenhum produto selecionado para este segmento.
+                                                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                                                Nenhum produto neste segmento. Adicione novos produtos com o botão acima.
                                                             </TableCell>
                                                         </TableRow>
                                                     )}
