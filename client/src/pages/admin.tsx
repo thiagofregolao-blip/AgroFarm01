@@ -91,8 +91,8 @@ function PlanningImportManagement() {
 
     setIsUploading(true);
     const formData = new FormData();
-    formData.append("file", file);
     formData.append("seasonId", activeSeason.id);
+    formData.append("file", file);
 
     try {
       await apiRequest("POST", "/api/admin/import-planning-final", formData);

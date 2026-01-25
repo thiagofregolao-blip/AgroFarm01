@@ -8469,11 +8469,15 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       }
 
       if (!seasonId) {
-        console.error("Import Error: Season ID missing and no active season found");
-        return res.status(400).json({ error: "Season ID required" });
+        console.error("Import Error: Season ID missing. Params received:", req.body);
+        console.error("Active Season Lookup Failed");
+        return res.status(400).json({ error: "Season ID required. Please verify active season is set." });
       }
 
       console.log(`Starting import for season: ${seasonId}`);
+      if (req.file) {
+        console.log(`File details: ${req.file.originalname} (${req.file.size} bytes)`);
+      }
 
       const { importPlanningFinal } = await import("./import-excel");
 
