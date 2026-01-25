@@ -8604,9 +8604,13 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     try {
       if (!req.user) return res.sendStatus(401);
       const { seasonId } = req.query;
+      console.log(`[GLOBAL_GET] User: ${req.user.id}, Season: ${seasonId}`);
+
       if (!seasonId) return res.status(400).json({ error: "Season ID required" });
 
       const config = await storage.getPlanningGlobalConfiguration(req.user.id, seasonId as string);
+      console.log(`[GLOBAL_GET] Result:`, config);
+
       res.json(config || null);
     } catch (error) {
       console.error("[PLANNING_GLOBAL_GET]", error);
@@ -8618,6 +8622,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     try {
       if (!req.user) return res.sendStatus(401);
       const { seasonId, productIds } = req.body;
+      console.log(`[GLOBAL_POST] User: ${req.user.id}, Season: ${seasonId}, IDs count: ${productIds?.length}`);
 
       if (!seasonId || !Array.isArray(productIds)) {
         return res.status(400).json({ error: "Invalid data" });
@@ -8628,6 +8633,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         seasonId,
         productIds
       });
+      console.log(`[GLOBAL_POST] Saved result ID:`, result.id);
+
       res.json(result);
     } catch (error) {
       console.error("[PLANNING_GLOBAL_POST]", error);

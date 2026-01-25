@@ -2961,20 +2961,31 @@ export class DBStorage implements IStorage {
 
   // Global Config
   async getPlanningGlobalConfiguration(userId: string, seasonId: string): Promise<PlanningGlobalConfiguration | undefined> {
-    const [config] = await db.select()
-      .from(planningGlobalConfigurations)
-      .where(and(
-        eq(planningGlobalConfigurations.userId, userId),
-        eq(planningGlobalConfigurations.seasonId, seasonId)
-      ))
-      .limit(1);
-    return config;
+    console.log(`[STORAGE_GET_GLOBAL] UserId: ${userId}, SeasonId: ${seasonId}`);
+    try {
+      const [config] = await db.select()
+        .from(planningGlobalConfigurations)
+        .where(and(
+          eq(planningGlobalConfigurations.userId, userId),
+          eq(planningGlobalConfigurations.seasonId, seasonId)
+        ))
+        .limit(1);
+      console.log(`[STORAGE_GET_GLOBAL] Found config:`, config ? !!config : "NOT FOUND", config?.productIds ? `IDs: ${config.productIds.length}` : "");
+      return config;
+    } catch (e) {
+      console.error("[STORAGE_GET_GLOBAL] Error:", e);
+      throw e;
+    }
   }
 
   async upsertPlanningGlobalConfiguration(data: InsertPlanningGlobalConfiguration): Promise<PlanningGlobalConfiguration> {
+    console.log(`[STORAGE_UPSERT_GLOBAL] Upserting for user ${data.userId}, season ${data.seasonId}. ProductIDs len: ${Array.isArray(data.productIds) ? data.productIds.length : 'NOT_ARRAY'}`);
+
+    // Force refresh check
     const existing = await this.getPlanningGlobalConfiguration(data.userId, data.seasonId);
 
     if (existing) {
+      console.log(`[STORAGE_UPSERT_GLOBAL] Updating existing config ${existing.id}`);
       const [updated] = await db.update(planningGlobalConfigurations)
         .set({
           productIds: data.productIds,
@@ -2984,11 +2995,14 @@ export class DBStorage implements IStorage {
         .returning();
       return updated;
     } else {
+      console.log(`[STORAGE_UPSERT_GLOBAL] Creating new config`);
       const id = randomUUID();
       const [created] = await db.insert(planningGlobalConfigurations)
         .values({
           id,
-          ...data
+          userId: data.userId,
+          seasonId: data.seasonId,
+          productIds: data.productIds
         })
         .returning();
       return created;
