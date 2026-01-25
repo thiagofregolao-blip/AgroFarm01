@@ -800,48 +800,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Endpoint de Setup para Migração do Banco de Dados (Planejamento 2026)
   // Útil quando não se tem acesso ao console do Railway
+  // Endpoint de Setup para Migração do Banco de Dados (Planejamento 2026)
+  // Útil quando não se tem acesso ao console do Railway
+  // Modificado para usar SQL inline e evitar erro de leitura de arquivo em produção
   app.get("/api/admin/setup-planning-db", async (req, res) => {
     try {
-      // Ler arquivo SQL
-      const fs = await import('fs');
-      const path = await import('path');
-      const migrationPath = path.join(process.cwd(), 'migration_planning_2026.sql');
+      const migrationSql = `
+CREATE TABLE IF NOT EXISTS "planning_products_base" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"segment" text,
+	"dose_per_ha" numeric(10, 3),
+	"price" numeric(10, 2),
+	"unit" text,
+	"season_id" varchar REFERENCES "seasons"("id"),
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
 
-      if (!fs.existsSync(migrationPath)) {
-        return res.status(404).json({ error: "Arquivo de migração não encontrado: " + migrationPath });
-      }
+CREATE TABLE IF NOT EXISTS "sales_planning" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"client_id" varchar NOT NULL REFERENCES "user_client_links"("id") ON DELETE cascade,
+	"user_id" varchar NOT NULL REFERENCES "users"("id"),
+	"season_id" varchar NOT NULL REFERENCES "seasons"("id"),
+	"total_planting_area" numeric(10, 2),
+	"fungicides_area" numeric(10, 2) DEFAULT '0.00',
+	"insecticides_area" numeric(10, 2) DEFAULT '0.00',
+	"herbicides_area" numeric(10, 2) DEFAULT '0.00',
+	"seed_treatment_area" numeric(10, 2) DEFAULT '0.00',
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "sales_planning_unique" UNIQUE("client_id","season_id")
+);
 
-      const migrationSql = fs.readFileSync(migrationPath, 'utf-8');
-
-      // Executar SQL usando Drizzle sql
-      // Drizzle não tem método direto para executar string raw complexa com múltiplos comandos
-      // Mas podemos usar sql.raw() se supported ou tentar quebrar os comandos
-
-      // Opção mais segura se tivermos acesso ao driver postgres subjacente via db instance ou pool
-      // No arquivo db.ts exportamos { pool, db }
+CREATE TABLE IF NOT EXISTS "sales_planning_items" (
+	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"planning_id" varchar NOT NULL REFERENCES "sales_planning"("id") ON DELETE cascade,
+	"product_id" varchar NOT NULL REFERENCES "planning_products_base"("id"),
+	"quantity" numeric(15, 2) NOT NULL,
+	"total_amount" numeric(15, 2) NOT NULL
+);
+`;
 
       const { pool } = await import("./db");
 
       if (pool && typeof pool.unsafe === 'function') {
         // Driver postgres-js (Railway)
         await pool.unsafe(migrationSql);
-        return res.json({ success: true, message: "Migração executada com postgres-js!", driver: 'postgres-js' });
+        return res.json({ success: true, message: "Migração executada com postgres-js (SQL Inline)!" });
       }
       else if (pool && typeof pool.query === 'function') {
         // Driver pg ou neon (Pool)
         await pool.query(migrationSql);
-        return res.json({ success: true, message: "Migração executada com pg/neon pool!", driver: 'pg-pool' });
+        return res.json({ success: true, message: "Migração executada com pg/neon pool (SQL Inline)!" });
       }
       else {
-        // Fallback genérico (pode falhar se múltiplos comandos não forem suportados em uma query)
-        // Tentar dividir por ;
-        const commands = migrationSql.split(';').filter(cmd => cmd.trim().length > 0);
-
-        for (const cmd of commands) {
-          await db.execute(sql.raw(cmd));
-        }
-
-        return res.json({ success: true, message: "Migração executada comando por comando via Drizzle!", driver: 'drizzle-raw' });
+        return res.status(500).json({ error: "Driver de banco de dados não suportado para migração remota." });
       }
 
     } catch (error) {
