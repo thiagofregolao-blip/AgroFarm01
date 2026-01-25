@@ -59,8 +59,10 @@ export default function PlanejamentoPage() {
             });
         } else {
             // Reset defaults if no planning exists for this client
+            // Try to set totalPlantingArea from client's default plantingArea
+            const client = clients?.find(c => c.id === selectedClientId);
             setAreas({
-                totalPlantingArea: "0",
+                totalPlantingArea: client?.plantingArea?.toString() || "0",
                 fungicidesArea: "0",
                 insecticidesArea: "0",
                 herbicidesArea: "0",
