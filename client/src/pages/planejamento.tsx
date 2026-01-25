@@ -199,7 +199,7 @@ export default function PlanejamentoPage() {
 // --- Sub-Components (Defined outside to prevent re-renders) ---
 
 function GlobalSetup({ products, selectedIds, onToggle, onFinish, isSaving }: GlobalSetupProps) {
-    const categories: Segment[] = ["Fungicidas", "Inseticidas", "TS", "Dessecação"];
+    const categories: Segment[] = ["Fungicidas", "Inseticidas", "TS", "Dessecação", "Outros"];
 
     // Group products specifically for the tabs
     const groupedProducts = useMemo(() => {
@@ -228,7 +228,7 @@ function GlobalSetup({ products, selectedIds, onToggle, onFinish, isSaving }: Gl
             </CardHeader>
             <CardContent>
                 <Tabs defaultValue="Fungicidas" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4 mb-4">
+                    <TabsList className="grid w-full grid-cols-5 mb-4">
                         {categories.map(cat => (
                             <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
                         ))}

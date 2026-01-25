@@ -719,9 +719,9 @@ export async function importPlanningProducts(
     // Helper para detectar segmento pelo nome do produto
     const detectSegment = (name: string): string => {
       const n = name.toLowerCase();
-      if (n.includes('inseticida') || n.includes('perito') || n.includes('abamec') || n.includes('lambda')) return 'inseticida';
-      if (n.includes('fungicida') || n.includes('vessarya') || n.includes('azoxistrobina') || n.includes('tebuconazol') || n.includes('mancozeb')) return 'fungicida';
-      if (n.includes('herbicida') || n.includes('glifosato') || n.includes('paraquat') || n.includes('2,4-d') || n.includes('cletodim')) return 'herbicida';
+      if (n.includes('inseticida') || n.includes('perito') || n.includes('abamec') || n.includes('lambda') || n.includes('fipronil') || n.includes('acefato') || n.includes('acetamiprid') || n.includes('alsystin') || n.includes('triflumuron') || n.includes('bifentrina') || n.includes('imida') || n.includes('clorpirifos') || n.includes('metomil') || n.includes('kriez')) return 'inseticida';
+      if (n.includes('fungicida') || n.includes('vessarya') || n.includes('azoxistrobina') || n.includes('tebuconazol') || n.includes('mancozeb') || n.includes('aproach') || n.includes('picox') || n.includes('cipro') || n.includes('bixafen') || n.includes('trifloxistrobina') || n.includes('protioconazol')) return 'fungicida';
+      if (n.includes('herbicida') || n.includes('glifosato') || n.includes('paraquat') || n.includes('2,4-d') || n.includes('2,4d') || n.includes('cletodim') || n.includes('2,4 d') || n.includes('diquat') || n.includes('saflufenacil') || n.includes('trup')) return 'herbicida';
       if (n.includes('tratamento') || n.includes(' ts ') || n.endsWith(' ts') || n.includes('rizospirilum') || n.includes('dermacor')) return 'ts';
 
       // Fallback baseado em palavras-chave genéricas se não encontrou específico
@@ -734,7 +734,7 @@ export async function importPlanningProducts(
     for (const row of dosesRows) {
       // Ajuste conform a estrutura real da planilha de doses (assumindo colunas "Produto" e "Dose")
       // O usuário pode precisar ajustar isso ou enviar o cabeçalho correto
-      const name = row['Produto'] || row['Mercadoria'] || row['Nome'] || Object.values(row)[0];
+      const name = row['Produto'] || row['Mercadoria'] || row['Nome'] || row['Mercadería'] || Object.values(row)[0];
       // Tentar encontrar coluna de dose
       const doseVal = row['Dose'] || row['Doses'] || row['Dose/ha'] || row['L/ha'] || row['Kg/ha'];
 
@@ -755,14 +755,14 @@ export async function importPlanningProducts(
     for (const row of productsRows) {
       // Ajuste conforme a estrutura da planilha de PREÇOS "Planejamento de Vendas 2026.xls"
       // Provavelmente colunas: "Produto", "Preço", "Unidade"
-      const nameRaw = row['Produto'] || row['Mercadoria'] || row['Descrição'] || row['Material'];
+      const nameRaw = row['Produto'] || row['Mercadoria'] || row['Descrição'] || row['Material'] || row['Nombre Mercaderia'];
       if (!nameRaw) continue;
 
       const normName = normalizeName(String(nameRaw));
       const existing = existingMap.get(normName);
 
       // Extrair Preço
-      let price = normalizeNumeric(row['Preço'] || row['Valor'] || row['Unitario'] || row['Precio']);
+      let price = normalizeNumeric(row['Preço'] || row['Valor'] || row['Unitario'] || row['Precio'] || row['Preco Referencia']);
       if (price === null) price = 0;
 
       // Extrair Unidade
