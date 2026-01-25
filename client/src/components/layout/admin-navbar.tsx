@@ -9,7 +9,8 @@ import {
   Target,
   Calendar,
   DollarSign,
-  Shield
+  Shield,
+  Upload
 } from "lucide-react";
 
 interface AdminNavbarProps {
@@ -51,8 +52,8 @@ export default function AdminNavbar({ activeTab, onTabChange }: AdminNavbarProps
                   window.location.hash = item.id;
                 }}
                 className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 ${isActive
-                    ? 'text-primary border-primary font-medium'
-                    : 'text-muted-foreground hover:text-foreground border-transparent'
+                  ? 'text-primary border-primary font-medium'
+                  : 'text-muted-foreground hover:text-foreground border-transparent'
                   }`}
                 data-testid={`nav-${item.id}`}
               >
