@@ -12,6 +12,8 @@ import {
   TrendingUp,
   History,
   Repeat,
+  Kanban,
+  Menu,
   X,
   ClipboardList
 } from "lucide-react";
