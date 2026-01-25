@@ -166,7 +166,11 @@ function PlanningProductList({ seasonId }: { seasonId: string }) {
   const [editForm, setEditForm] = useState({ price: "", dose: "" });
 
   const { data: products, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/planning/products", { seasonId }],
+    queryKey: ["/api/planning/products", seasonId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/planning/products?seasonId=${seasonId}`);
+      return res.json();
+    },
     enabled: !!seasonId,
   });
 

@@ -873,9 +873,46 @@ export async function importPlanningFinal(buffer: Buffer, seasonId: string) {
       const productName = row['Nombre Mercaderia'];
       if (!productName) continue;
 
+
+      // Helper to parse complex numeric strings from Excel
+      const parseNumericValue = (val: any): string => {
+        if (typeof val === 'number') return val.toString();
+        if (!val) return "0";
+
+        let str = val.toString().trim();
+
+        // Handle "Não recomendado" or other pure text
+        if (!/\d/.test(str)) return "0";
+
+        // Replace comma with dot
+        str = str.replace(',', '.');
+
+        // Extract numbers. Handle ranges like "0.4-1.0" by taking the average, 
+        // or simple "1.5 Lt/Ha" by extracting "1.5"
+
+        // Regex to find numbers (including decimals)
+        const matches = str.match(/(\d+\.?\d*)/g);
+
+        if (!matches || matches.length === 0) return "0";
+
+        // If it looks like a range (2 numbers), take average? 
+        // Or just take the first number (min dose) to be safe? 
+        // User logs show "1 - 2Lt/Ha". Let's take the AVERAGE for planning accuracy.
+        if (matches.length >= 2 && str.includes('-')) {
+          const v1 = parseFloat(matches[0]);
+          const v2 = parseFloat(matches[1]);
+          if (!isNaN(v1) && !isNaN(v2)) {
+            return ((v1 + v2) / 2).toFixed(3);
+          }
+        }
+
+        // Default: take the first valid number found
+        return matches[0];
+      };
+
       // Normalize values
-      const priceRef = typeof row['Preco Referencia'] === 'number' ? row['Preco Referencia'].toString() : (row['Preco Referencia'] || "0");
-      const dose = typeof row['Dose'] === 'number' ? row['Dose'].toString() : (row['Dose'] || "0");
+      const priceRef = parseNumericValue(row['Preco Referencia']);
+      const dose = parseNumericValue(row['Dose']);
       const categoryName = row['Categoria'] || "Outros";
       const unit = row['Unidade'] || "L";
 
