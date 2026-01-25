@@ -685,3 +685,124 @@ export async function importClientsFromExcel(buffer: Buffer, userId: string): Pr
     return result;
   }
 }
+
+export async function importPlanningProducts(
+  productsBuffer: Buffer,       // "Planejamento de Vendas 2026.xls" (Preço + Nome)
+  dosesBuffer: Buffer,          // "Planilha de produtos.xlsx" (Dose + Nome)
+  seasonId: string
+): Promise<{ success: boolean; created: number; updated: number; errors: string[] }> {
+  const result = { success: false, created: 0, updated: 0, errors: [] as string[] };
+
+  try {
+    // 1. Ler planilha de PREÇOS (Base principal)
+    const productsWorkbook = XLSX.read(productsBuffer, { type: 'buffer' });
+    const productsSheet = productsWorkbook.Sheets[productsWorkbook.SheetNames[0]];
+    const productsRows = XLSX.utils.sheet_to_json<any>(productsSheet);
+
+    // 2. Ler planilha de DOSES
+    const dosesWorkbook = XLSX.read(dosesBuffer, { type: 'buffer' });
+    const dosesSheet = dosesWorkbook.Sheets[dosesWorkbook.SheetNames[0]];
+    const dosesRows = XLSX.utils.sheet_to_json<any>(dosesSheet);
+
+    // Mapa de Doses: Nome Normalizado -> Dose
+    const dosagemMap = new Map<string, number>();
+
+    // Helper para normalizar nome (remover acentos, espaços, caixa alta)
+    const normalizeName = (name: string) => {
+      if (!name) return '';
+      return name.toUpperCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9]/g, '') // Mantém apenas letras e números
+        .trim();
+    };
+
+    // Helper para detectar segmento pelo nome do produto
+    const detectSegment = (name: string): string => {
+      const n = name.toLowerCase();
+      if (n.includes('inseticida') || n.includes('perito') || n.includes('abamec') || n.includes('lambda')) return 'inseticida';
+      if (n.includes('fungicida') || n.includes('vessarya') || n.includes('azoxistrobina') || n.includes('tebuconazol') || n.includes('mancozeb')) return 'fungicida';
+      if (n.includes('herbicida') || n.includes('glifosato') || n.includes('paraquat') || n.includes('2,4-d') || n.includes('cletodim')) return 'herbicida';
+      if (n.includes('tratamento') || n.includes(' ts ') || n.endsWith(' ts') || n.includes('rizospirilum') || n.includes('dermacor')) return 'ts';
+
+      // Fallback baseado em palavras-chave genéricas se não encontrou específico
+      if (n.includes('dessec')) return 'herbicida';
+
+      return 'outros';
+    };
+
+    // Processar planilha de DOSES para popular o mapa
+    for (const row of dosesRows) {
+      // Ajuste conform a estrutura real da planilha de doses (assumindo colunas "Produto" e "Dose")
+      // O usuário pode precisar ajustar isso ou enviar o cabeçalho correto
+      const name = row['Produto'] || row['Mercadoria'] || row['Nome'] || Object.values(row)[0];
+      // Tentar encontrar coluna de dose
+      const doseVal = row['Dose'] || row['Doses'] || row['Dose/ha'] || row['L/ha'] || row['Kg/ha'];
+
+      if (name && doseVal) {
+        const normName = normalizeName(String(name));
+        const cleanDose = typeof doseVal === 'number' ? doseVal : parseFloat(String(doseVal).replace(',', '.'));
+
+        if (normName && !isNaN(cleanDose)) {
+          dosagemMap.set(normName, cleanDose);
+        }
+      }
+    }
+
+    // Buscar produtos de planejamento já existentes para atualizar ou criar
+    const existingPlanningProducts = await storage.getPlanningProducts(seasonId);
+    const existingMap = new Map(existingPlanningProducts.map(p => [normalizeName(p.name), p]));
+
+    for (const row of productsRows) {
+      // Ajuste conforme a estrutura da planilha de PREÇOS "Planejamento de Vendas 2026.xls"
+      // Provavelmente colunas: "Produto", "Preço", "Unidade"
+      const nameRaw = row['Produto'] || row['Mercadoria'] || row['Descrição'] || row['Material'];
+      if (!nameRaw) continue;
+
+      const normName = normalizeName(String(nameRaw));
+      const existing = existingMap.get(normName);
+
+      // Extrair Preço
+      let price = normalizeNumeric(row['Preço'] || row['Valor'] || row['Unitario'] || row['Precio']);
+      if (price === null) price = 0;
+
+      // Extrair Unidade
+      const unit = row['Unidade'] || row['UN'] || row['Emb'] || 'L';
+
+      // Buscar dose no mapa
+      const dosePerHa = dosagemMap.get(normName) || null;
+
+      // Detectar segmento
+      const segment = detectSegment(String(nameRaw));
+
+      if (existing) {
+        // Update
+        await storage.updatePlanningProduct(existing.id, {
+          price: price.toString(),
+          dosePerHa: dosePerHa ? dosePerHa.toString() : existing.dosePerHa,
+          segment,
+          unit
+        });
+        result.updated++;
+      } else {
+        // Create
+        if (dosePerHa !== null || price > 0) { // Só cria se tiver info relevante
+          await storage.createPlanningProduct({
+            name: String(nameRaw),
+            seasonId,
+            price: price.toString(),
+            dosePerHa: dosePerHa ? dosePerHa.toString() : null,
+            segment,
+            unit
+          });
+          result.created++;
+        }
+      }
+    }
+
+    result.success = true;
+  } catch (error) {
+    result.errors.push(`Erro na importação: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
+}

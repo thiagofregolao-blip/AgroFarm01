@@ -13,11 +13,14 @@ import type {
   BarterSimulation, InsertBarterSimulation, BarterSimulationItem, InsertBarterSimulationItem,
   SalesTarget, InsertSalesTarget,
   ClientCategoryPipeline, InsertClientCategoryPipeline,
-  ManagerTeamRate, InsertManagerTeamRate
+  ManagerTeamRate, InsertManagerTeamRate,
+  PlanningProduct, InsertPlanningProduct,
+  // PlanningProductsBase removed
+  SalesPlanning, InsertSalesPlanning, SalesPlanningItem, InsertSalesPlanningItem
 } from "@shared/schema";
 import { db, pool } from './db';
-import { users, categories, products, regions, clients, seasons, seasonGoals, sales, seasonParameters, marketInvestmentRates, clientMarketRates, clientMarketValues, marketBenchmarks, externalPurchases, clientFamilyRelations, alertSettings, alerts, purchaseHistory, purchaseHistoryItems, masterClients, userClientLinks, barterProducts, barterSettings, barterSimulations, barterSimulationItems, salesTargets, systemSettings, clientCategoryPipeline, managerTeamRates } from '@shared/schema';
-import { eq, and, desc, asc, sql, inArray } from 'drizzle-orm';
+import { users, categories, products, regions, clients, seasons, seasonGoals, sales, seasonParameters, marketInvestmentRates, clientMarketRates, clientMarketValues, marketBenchmarks, externalPurchases, clientFamilyRelations, alertSettings, alerts, purchaseHistory, purchaseHistoryItems, masterClients, userClientLinks, barterProducts, barterSettings, barterSimulations, barterSimulationItems, salesTargets, systemSettings, clientCategoryPipeline, managerTeamRates, planningProductsBase, salesPlanning, salesPlanningItems } from '@shared/schema';
+import { eq, and, desc, asc, sql, inArray, or } from 'drizzle-orm';
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -127,9 +130,6 @@ export interface IStorage {
   upsertClientMarketValue(value: InsertClientMarketValue): Promise<ClientMarketValue>;
   deleteClientMarketValue(clientId: string, categoryId: string, userId: string, seasonId: string): Promise<boolean>;
 
-  // Client Category Pipeline (Status de negociação por categoria)
-  getClientCategoryPipeline(clientId: string, userId: string, seasonId: string): Promise<ClientCategoryPipeline[]>;
-  upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline>;
 
   // Market Benchmarks
   getMarketBenchmarks(userId: string, seasonId: string): Promise<MarketBenchmark[]>;
@@ -220,6 +220,16 @@ export interface IStorage {
   // Client Category Pipeline
   getClientCategoryPipeline(clientId: string, userId: string, seasonId: string): Promise<ClientCategoryPipeline[]>;
   upsertClientCategoryPipeline(pipeline: InsertClientCategoryPipeline): Promise<ClientCategoryPipeline>;
+
+  // Planning Products
+  // Planning Products
+  getPlanningProducts(seasonId: string): Promise<PlanningProduct[]>;
+  createPlanningProduct(product: InsertPlanningProduct): Promise<PlanningProduct>;
+  updatePlanningProduct(id: string, product: Partial<InsertPlanningProduct>): Promise<PlanningProduct | undefined>;
+
+  // Sales Planning
+  getSalesPlanning(clientId: string, seasonId: string): Promise<{ planning: SalesPlanning, items: SalesPlanningItem[] } | undefined>;
+  upsertSalesPlanning(planning: InsertSalesPlanning, items: InsertSalesPlanningItem[]): Promise<SalesPlanning>;
 }
 
 export class MemStorage implements IStorage {
@@ -235,9 +245,12 @@ export class MemStorage implements IStorage {
   private seasonGoals: Map<string, SeasonGoal> = new Map();
   private sales: Map<string, Sale> = new Map();
   private seasonParameters: Map<string, SeasonParameter> = new Map();
-  private barterProducts: Map<string, any> = new Map();
   private barterSettings: Map<string, any> = new Map();
+  private barterProducts: Map<string, BarterProduct> = new Map();
   private barterSimulations: Map<string, any> = new Map();
+  private planningProducts: Map<string, PlanningProduct> = new Map();
+  private salesPlannings: Map<string, SalesPlanning> = new Map();
+  private salesPlanningItems: Map<string, SalesPlanningItem> = new Map();
 
   constructor() {
     this.sessionStore = new session.MemoryStore();
@@ -1207,6 +1220,15 @@ export class MemStorage implements IStorage {
     return new Map();
   }
 
+  async getManagerTeamRates(managerId: string, seasonId: string): Promise<ManagerTeamRate[]> {
+    return [];
+  }
+
+  async upsertManagerTeamRate(rate: InsertManagerTeamRate): Promise<ManagerTeamRate> {
+    const id = randomUUID();
+    return { ...rate, id, createdAt: new Date(), updatedAt: new Date() } as ManagerTeamRate;
+  }
+
   async getSystemSettings(): Promise<{ allowUserRegistration: boolean } | undefined> {
     // MemStorage doesn't persist system settings - always allow registration in memory mode
     return { allowUserRegistration: true };
@@ -1225,6 +1247,73 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     };
+  }
+
+  // Planning Products
+  async getPlanningProducts(seasonId: string): Promise<PlanningProduct[]> {
+    return Array.from(this.planningProducts.values()).filter(p => p.seasonId === seasonId);
+  }
+
+  async createPlanningProduct(product: InsertPlanningProduct): Promise<PlanningProduct> {
+    const id = randomUUID();
+    const newProduct: PlanningProduct = {
+      ...product,
+      id,
+      createdAt: new Date(),
+      segment: product.segment ?? null,
+      unit: product.unit ?? null,
+      price: product.price ?? null,
+      dosePerHa: product.dosePerHa ?? null,
+      seasonId: product.seasonId ?? null
+    };
+    this.planningProducts.set(id, newProduct);
+    return newProduct;
+  }
+
+  async updatePlanningProduct(id: string, product: Partial<InsertPlanningProduct>): Promise<PlanningProduct | undefined> {
+    const existing = this.planningProducts.get(id);
+    if (!existing) return undefined;
+    const updated: PlanningProduct = { ...existing, ...product };
+    this.planningProducts.set(id, updated);
+    return updated;
+  }
+
+  // Sales Planning (MemStorage)
+  async getSalesPlanning(clientId: string, seasonId: string): Promise<{ planning: SalesPlanning, items: SalesPlanningItem[] } | undefined> {
+    const planning = Array.from(this.salesPlannings.values()).find(p => p.clientId === clientId && p.seasonId === seasonId);
+    if (!planning) return undefined;
+    const items = Array.from(this.salesPlanningItems.values()).filter(i => i.planningId === planning.id);
+    return { planning, items };
+  }
+
+  async upsertSalesPlanning(planning: InsertSalesPlanning, items: InsertSalesPlanningItem[]): Promise<SalesPlanning> {
+    let existingPlanning = Array.from(this.salesPlannings.values())
+      .find(p => p.clientId === planning.clientId && p.seasonId === planning.seasonId);
+
+    if (existingPlanning) {
+      existingPlanning = { ...existingPlanning, ...planning, updatedAt: new Date() };
+      this.salesPlannings.set(existingPlanning.id, existingPlanning);
+
+      // Remove old items
+      for (const [key, val] of this.salesPlanningItems.entries()) {
+        if (val.planningId === existingPlanning.id) {
+          this.salesPlanningItems.delete(key);
+        }
+      }
+    } else {
+      const id = randomUUID();
+      existingPlanning = { ...planning, id, createdAt: new Date(), updatedAt: new Date() } as SalesPlanning;
+      this.salesPlannings.set(id, existingPlanning);
+    }
+
+    // Insert new items
+    for (const item of items) {
+      const id = randomUUID();
+      const newItem = { ...item, id, planningId: existingPlanning.id };
+      this.salesPlanningItems.set(id, newItem as SalesPlanningItem);
+    }
+
+    return existingPlanning;
   }
 }
 
@@ -1879,10 +1968,9 @@ export class DBStorage implements IStorage {
     }
   }
 
-  async getClientMarketValues(clientId: string, userId: string, seasonId: string): Promise<ClientMarketValue[]> {
+  async getClientMarketValues(userId: string, seasonId: string): Promise<ClientMarketValue[]> {
     return await db.select().from(clientMarketValues)
       .where(and(
-        eq(clientMarketValues.clientId, clientId),
         eq(clientMarketValues.userId, userId),
         eq(clientMarketValues.seasonId, seasonId)
       ));
@@ -1891,8 +1979,6 @@ export class DBStorage implements IStorage {
   async upsertClientMarketValue(value: InsertClientMarketValue): Promise<ClientMarketValue> {
     const existing = await db.select().from(clientMarketValues)
       .where(and(
-        eq(clientMarketValues.clientId, value.clientId),
-        eq(clientMarketValues.categoryId, value.categoryId),
         eq(clientMarketValues.userId, value.userId),
         eq(clientMarketValues.seasonId, value.seasonId)
       ))
@@ -1901,9 +1987,8 @@ export class DBStorage implements IStorage {
     if (existing.length > 0) {
       const updated = await db.update(clientMarketValues)
         .set({
-          marketValue: value.marketValue,
-          subcategories: value.subcategories,
-          updatedAt: sql`now()`
+          ...value,
+          updatedAt: new Date()
         })
         .where(eq(clientMarketValues.id, existing[0].id))
         .returning();
@@ -1917,11 +2002,9 @@ export class DBStorage implements IStorage {
     }
   }
 
-  async deleteClientMarketValue(clientId: string, categoryId: string, userId: string, seasonId: string): Promise<boolean> {
+  async deleteClientMarketValue(userId: string, seasonId: string): Promise<boolean> {
     await db.delete(clientMarketValues)
       .where(and(
-        eq(clientMarketValues.clientId, clientId),
-        eq(clientMarketValues.categoryId, categoryId),
         eq(clientMarketValues.userId, userId),
         eq(clientMarketValues.seasonId, seasonId)
       ));
@@ -2054,18 +2137,19 @@ export class DBStorage implements IStorage {
       ));
 
     // 4. Calculate total market area (sum of planting area of eligible clients)
-    const totalMarketArea = eligibleClients.reduce((sum, client) => {
+    // 4. Calculate total market area (sum of planting area of eligible clients)
+    const totalMarketArea = eligibleClients.reduce((sum: number, client) => {
       const area = parseFloat(client.plantingArea || '0');
       return sum + (isNaN(area) ? 0 : area);
     }, 0);
 
     // 5. Get all categories to map names
     const allCategories = await db.select().from(categories);
-    const categoryMap = new Map(allCategories.map(c => [c.id, c.name]));
+    const categoryMap = new Map(allCategories.map((c: Category) => [c.id, c.name]));
 
     // 6. Build Result
     const result = managerRates.map(rate => {
-      const categoryName = categoryMap.get(rate.categoryId) || 'Desconhecida';
+      const categoryName = (categoryMap.get(rate.categoryId) as string) || 'Desconhecida';
       const investment = parseFloat(rate.investmentPerHa as string) || 0;
 
       return {
@@ -2239,24 +2323,24 @@ export class DBStorage implements IStorage {
       salesData = await db.select().from(sales);
     }
 
-    const totalSales = salesData.reduce((sum, s) => sum + parseFloat(s.totalAmount), 0);
-    const totalCommissions = salesData.reduce((sum, s) => sum + parseFloat(s.commissionAmount), 0);
+    const totalSales = salesData.reduce((sum: number, s: Sale) => sum + parseFloat(s.totalAmount), 0);
+    const totalCommissions = salesData.reduce((sum: number, s: Sale) => sum + parseFloat(s.commissionAmount), 0);
 
-    // Batch fetch only the categories needed (no N+1 queries)
-    const categoryIds = [...new Set(salesData.map(s => s.categoryId))];
+    const categoryIds = Array.from(new Set(salesData.map(s => s.categoryId)));
     const neededCategories = categoryIds.length > 0
       ? await db.select().from(categories).where(inArray(categories.id, categoryIds))
       : [];
-    const categoryLookup = new Map(neededCategories.map(c => [c.id, c]));
+
+    const categoriesMap = new Map(neededCategories.map((c: Category) => [c.id, c]));
 
     const categoryMap = new Map<string, { total: number; commissions: number; name: string }>();
     for (const sale of salesData) {
       const existing = categoryMap.get(sale.categoryId) || { total: 0, commissions: 0, name: "" };
-      const category = categoryLookup.get(sale.categoryId);
+      const category = categoriesMap.get(sale.categoryId);
       categoryMap.set(sale.categoryId, {
         total: existing.total + parseFloat(sale.totalAmount),
         commissions: existing.commissions + parseFloat(sale.commissionAmount),
-        name: category?.name || "Unknown",
+        name: (category?.name as string) || "Unknown",
       });
     }
 
@@ -2288,7 +2372,7 @@ export class DBStorage implements IStorage {
 
     const topClients = Array.from(clientMap.entries())
       .map(([clientId, total]) => {
-        const clientName = clientLookup.get(clientId) || "Unknown";
+        const clientName = (clientLookup.get(clientId) as string) || 'Desconhecido';
         return {
           clientId,
           clientName,
@@ -2518,9 +2602,9 @@ export class DBStorage implements IStorage {
 
     if (items && items.length > 0) {
       const itemsToInsert = items.map(item => ({
+        ...item,
         id: randomUUID(),
-        simulationId: id,
-        ...item
+        simulationId: id
       }));
       await db.insert(barterSimulationItems).values(itemsToInsert);
     }
@@ -2749,6 +2833,100 @@ export class DBStorage implements IStorage {
     return settings ? {
       allowUserRegistration: settings.allowUserRegistration
     } : undefined;
+  }
+
+
+  // Planning Products (DBStorage)
+  async getPlanningProducts(seasonId: string): Promise<PlanningProduct[]> {
+    return await db.select().from(planningProductsBase).where(eq(planningProductsBase.seasonId, seasonId));
+  }
+
+  async createPlanningProduct(product: InsertPlanningProduct): Promise<PlanningProduct> {
+    const id = randomUUID();
+    const result = await db.insert(planningProductsBase).values({
+      id,
+      ...product,
+      dosePerHa: product.dosePerHa ?? null,
+      seasonId: product.seasonId ?? null
+    }).returning();
+    return result[0];
+  }
+
+  async updatePlanningProduct(id: string, product: Partial<InsertPlanningProduct>): Promise<PlanningProduct | undefined> {
+    const result = await db.update(planningProductsBase)
+      .set(product)
+      .where(eq(planningProductsBase.id, id))
+      .returning();
+    return result[0];
+  }
+  // Sales Planning (DBStorage)
+  async getSalesPlanning(clientId: string, seasonId: string): Promise<{ planning: SalesPlanning, items: SalesPlanningItem[] } | undefined> {
+    const planning = await db.select()
+      .from(salesPlanning)
+      .where(and(
+        eq(salesPlanning.clientId, clientId),
+        eq(salesPlanning.seasonId, seasonId)
+      ))
+      .limit(1);
+
+    if (planning.length === 0) return undefined;
+
+    const items = await db.select()
+      .from(salesPlanningItems)
+      .where(eq(salesPlanningItems.planningId, planning[0].id));
+
+    return { planning: planning[0], items };
+  }
+
+  async upsertSalesPlanning(planning: InsertSalesPlanning, items: InsertSalesPlanningItem[]): Promise<SalesPlanning> {
+    // Check existing
+    const existing = await db.select()
+      .from(salesPlanning)
+      .where(and(
+        eq(salesPlanning.clientId, planning.clientId),
+        eq(salesPlanning.seasonId, planning.seasonId)
+      ))
+      .limit(1);
+
+    let planningId: string;
+    let finalPlanning: SalesPlanning;
+
+    if (existing.length > 0) {
+      planningId = existing[0].id;
+      const [updated] = await db.update(salesPlanning)
+        .set({
+          ...planning,
+          updatedAt: new Date()
+        })
+        .where(eq(salesPlanning.id, planningId))
+        .returning();
+      finalPlanning = updated;
+
+      // Delete existing items
+      await db.delete(salesPlanningItems)
+        .where(eq(salesPlanningItems.planningId, planningId));
+    } else {
+      const id = randomUUID();
+      planningId = id;
+      const [created] = await db.insert(salesPlanning)
+        .values({
+          id,
+          ...planning
+        })
+        .returning();
+      finalPlanning = created;
+    }
+
+    // Insert new items
+    if (items.length > 0) {
+      await db.insert(salesPlanningItems)
+        .values(items.map(item => ({
+          ...item,
+          planningId
+        })));
+    }
+
+    return finalPlanning;
   }
 }
 

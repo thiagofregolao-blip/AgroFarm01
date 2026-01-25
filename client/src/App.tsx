@@ -27,6 +27,7 @@ import BarterPage from "@/pages/barter";
 import FaturistaPage from "@/pages/faturista";
 import KanbanMetasPage from "@/pages/kanban-metas";
 import GestaoPotencialPage from "@/pages/gestao-potencial";
+import PlanejamentoPage from "@/pages/planejamento";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import CRMLogin from "@/pages/crm/login";
@@ -96,6 +97,7 @@ function Router() {
       <ConsultorRoute path="/safras" component={Safras} />
       <ConsultorRoute path="/produtos" component={Produtos} />
       <ConsultorRoute path="/relatorios" component={Relatorios} />
+      <ConsultorRoute path="/planejamento" component={PlanejamentoPage} />
       <ConsultorRoute path="/parametros" component={Parametros} />
       <ConsultorRoute path="/metas" component={Metas} />
       <ConsultorRoute path="/mercado" component={Mercado} />

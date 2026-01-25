@@ -1,20 +1,19 @@
 import { Link, useLocation } from "wouter";
-import { 
-  BarChart3, 
-  ShoppingCart, 
-  Percent, 
-  Users, 
+import {
+  BarChart3,
+  ShoppingCart,
+  Percent,
+  Users,
   Calendar,
   Package,
-  FileText, 
-  Settings, 
+  FileText,
+  Settings,
   Target,
   TrendingUp,
   History,
   Repeat,
-  Kanban,
-  Menu,
-  X
+  X,
+  ClipboardList
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -24,6 +23,7 @@ import { useState } from "react";
 const menuItems = [
   { href: "/dashboard", icon: BarChart3, label: "Dashboard" },
   { href: "/vendas", icon: ShoppingCart, label: "Minhas Vendas" },
+  { href: "/planejamento", icon: ClipboardList, label: "Planejamento 2026" },
   { href: "/barter", icon: Repeat, label: "Barter" },
   { href: "/kanban-metas", icon: Kanban, label: "Oportunidades de Negócio" },
   { href: "/clientes", icon: Users, label: "Clientes" },
@@ -57,17 +57,16 @@ export default function Navbar() {
   const NavLink = ({ item, onClick }: { item: typeof menuItems[0]; onClick?: () => void }) => {
     const Icon = item.icon;
     const isActive = location === item.href || (item.href === '/dashboard' && location === '/');
-    
+
     return (
-      <Link 
+      <Link
         key={item.href}
         href={item.href}
         onClick={onClick}
-        className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 md:border-b-2 ${
-          isActive 
-            ? 'text-primary border-primary font-medium bg-primary/5 md:bg-transparent' 
-            : 'text-muted-foreground hover:text-foreground border-transparent hover:bg-muted/50 md:hover:bg-transparent'
-        }`}
+        className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 md:border-b-2 ${isActive
+          ? 'text-primary border-primary font-medium bg-primary/5 md:bg-transparent'
+          : 'text-muted-foreground hover:text-foreground border-transparent hover:bg-muted/50 md:hover:bg-transparent'
+          }`}
         data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
       >
         <Icon size={18} />
@@ -120,13 +119,12 @@ export default function Navbar() {
             {user?.role === 'administrador' && (
               <>
                 <div className="h-6 w-px bg-border mx-2" />
-                <Link 
+                <Link
                   href="/admin#dashboard"
-                  className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 ${
-                    location === '/admin'
-                      ? 'text-blue-600 border-blue-600 font-medium' 
-                      : 'text-muted-foreground hover:text-foreground border-transparent'
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors border-b-2 ${location === '/admin'
+                    ? 'text-blue-600 border-blue-600 font-medium'
+                    : 'text-muted-foreground hover:text-foreground border-transparent'
+                    }`}
                   data-testid="nav-super-admin"
                 >
                   <Settings size={18} />
@@ -149,7 +147,7 @@ export default function Navbar() {
               </Button>
             </SheetClose>
           </SheetHeader>
-          
+
           <div className="flex flex-col gap-1 mt-6">
             {/* Main Menu Items */}
             {menuItems.map((item) => (
@@ -178,14 +176,13 @@ export default function Navbar() {
             {user?.role === 'administrador' && (
               <>
                 <div className="my-2 border-t border-border" />
-                <Link 
+                <Link
                   href="/admin#dashboard"
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors ${
-                    location === '/admin'
-                      ? 'text-blue-600 font-medium bg-blue-50' 
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap transition-colors ${location === '/admin'
+                    ? 'text-blue-600 font-medium bg-blue-50'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }`}
                   data-testid="nav-super-admin"
                 >
                   <Settings size={18} />

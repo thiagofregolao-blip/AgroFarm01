@@ -5,7 +5,7 @@ import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProdu
 import { visits } from "@shared/schema.crm";
 import { z } from "zod";
 import multer from "multer";
-import { importExcelFile, importClientsFromExcel } from "./import-excel";
+import { importExcelFile, importClientsFromExcel, importPlanningProducts } from "./import-excel";
 import { setupAuth, requireAuth, requireSuperAdmin, requireManager } from "./auth";
 import { db } from "./db";
 import { eq, sql, and, gt, desc, inArray, or } from "drizzle-orm";
@@ -8410,6 +8410,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
       skipped: invalidItems.length,
       invalid_items: invalidItems.map(i => i.client_name || i.notes || "Item desconhecido")
     });
+  });
+
+  // Sales Planning Import
+  app.post("/api/planning/import-products", upload.fields([{ name: 'salesPlanning' }, { name: 'productDoses' }]), async (req, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const { seasonId } = req.body;
+
+      if (!seasonId) {
+        return res.status(400).json({ error: "Season ID is required" });
+      }
+
+      if (!files['salesPlanning']?.[0] || !files['productDoses']?.[0]) {
+        return res.status(400).json({ error: "Both sales planning and product doses files are required" });
+      }
+
+      const result = await importPlanningProducts(
+        files['salesPlanning'][0].buffer,
+        files['productDoses'][0].buffer,
+        seasonId
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Failed to import planning products" });
+    }
+  });
+
+  // Get all planning products for a season
+  app.get("/api/planning/products", async (req, res) => {
+    try {
+      if (!req.user) return res.sendStatus(401);
+      const { seasonId } = req.query;
+
+      if (!seasonId) {
+        return res.status(400).json({ error: "Season ID is required" });
+      }
+
+      const products = await storage.getPlanningProducts(String(seasonId));
+      res.json(products);
+    } catch (error) {
+      console.error("[PLANNING_PRODUCTS_GET]", error);
+      res.status(500).json({ error: "Failed to fetch planning products" });
+    }
+  });
+
+  // Get planning for a client
+  app.get("/api/planning/:clientId", async (req, res) => {
+    try {
+      if (!req.user) return res.sendStatus(401);
+      const { clientId } = req.params;
+      const { seasonId } = req.query;
+
+      if (!seasonId) {
+        return res.status(400).json({ error: "Season ID is required" });
+      }
+
+      const result = await storage.getSalesPlanning(clientId, String(seasonId));
+      res.json(result || null);
+    } catch (error) {
+      console.error("[SALES_PLANNING_GET]", error);
+      res.status(500).json({ error: "Failed to fetch sales planning" });
+    }
+  });
+
+  // Save/Update sales planning
+  app.post("/api/planning", async (req, res) => {
+    try {
+      if (!req.user) return res.sendStatus(401);
+      const { planning, items } = req.body;
+
+      if (!planning || !planning.clientId || !planning.seasonId) {
+        return res.status(400).json({ error: "Invalid planning data" });
+      }
+
+      // Ensure userId is from the logged-in user
+      const safePlanning = {
+        ...planning,
+        userId: req.user.id
+      };
+
+      const result = await storage.upsertSalesPlanning(safePlanning, items);
+      res.json(result);
+    } catch (error) {
+      console.error("[SALES_PLANNING_POST]", error);
+      res.status(500).json({ error: "Failed to save sales planning" });
+    }
   });
 
   const httpServer = createServer(app);
