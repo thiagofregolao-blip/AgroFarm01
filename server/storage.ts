@@ -2970,7 +2970,18 @@ export class DBStorage implements IStorage {
           eq(planningGlobalConfigurations.seasonId, seasonId)
         ))
         .limit(1);
-      console.log(`[STORAGE_GET_GLOBAL] Found config:`, config ? !!config : "NOT FOUND", config?.productIds ? `IDs: ${config.productIds.length}` : "");
+
+      if (!config) {
+        console.log(`[STORAGE_GET_GLOBAL] ⚠️ Config NOT FOUND for exact match. Dumping all configs for user ${userId}:`);
+        const allUserConfigs = await db.select().from(planningGlobalConfigurations).where(eq(planningGlobalConfigurations.userId, userId));
+        allUserConfigs.forEach(c => {
+          console.log(` - Found Config ID: ${c.id}, SeasonID: ${c.seasonId}, UpdatedAt: ${c.updatedAt}`);
+        });
+        if (allUserConfigs.length === 0) console.log(" - User has NO configs at all.");
+      } else {
+        console.log(`[STORAGE_GET_GLOBAL] Found config: true. IDs: ${config.productIds ? config.productIds.length : 0}`);
+      }
+
       return config;
     } catch (e) {
       console.error("[STORAGE_GET_GLOBAL] Error:", e);
