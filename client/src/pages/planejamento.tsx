@@ -66,14 +66,18 @@ export default function PlanejamentoPage() {
     });
 
     // Fetch Persisted Global Config
-    const { data: globalConfig, isLoading: isLoadingConfig } = useQuery<{ productIds: string[] }>({
+    const { data: globalConfig, isLoading: isLoadingConfig, isFetching: isFetchingConfig } = useQuery<{ productIds: string[] }>({
         queryKey: ["/api/planning/global", activeSeason?.id],
         queryFn: async () => {
+            console.log("[FRONTEND] Fetching Global Config...");
             try {
                 const res = await apiRequest("GET", `/api/planning/global?seasonId=${activeSeason?.id}`);
                 if (!res.ok) return null; // Handle 404 or errors gracefully
-                return res.json();
+                const data = await res.json();
+                console.log("[FRONTEND] Global Config Fetched:", data);
+                return data;
             } catch (e) {
+                console.error("[FRONTEND] Error fetching global config:", e);
                 return null;
             }
         },
@@ -82,9 +86,10 @@ export default function PlanejamentoPage() {
 
     // Initialize State from Config
     useEffect(() => {
-        // Log for debugging
-        if (globalConfig) {
-            console.log("[FRONTEND] Global Config Loaded:", globalConfig);
+        // Do not update state if we are currently fetching fresh data (avoid stale cache race)
+        if (isFetchingConfig) {
+            console.log("[FRONTEND] Waiting for global config sync (fetching)...");
+            return;
         }
 
         if (globalConfig?.productIds && Array.isArray(globalConfig.productIds) && !isConfigLoaded) {
@@ -96,7 +101,7 @@ export default function PlanejamentoPage() {
             // Config loaded but empty/error -> Just mark loaded
             setIsConfigLoaded(true);
         }
-    }, [globalConfig, isConfigLoaded, isLoadingConfig]);
+    }, [globalConfig, isConfigLoaded, isLoadingConfig, isFetchingConfig]);
 
     // Force refetch when entering SETUP mode to ensure fresh data
     useEffect(() => {
