@@ -8562,6 +8562,24 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     }
   });
 
+  // Update planning product (price/dose)
+  app.patch("/api/planning/products/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { price, dosePerHa } = req.body;
+
+      const updated = await storage.updatePlanningProduct(id, {
+        price: price ? String(price) : undefined,
+        dosePerHa: dosePerHa ? String(dosePerHa) : undefined
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("[PLANNING_PRODUCT_UPDATE]", error);
+      res.status(500).json({ error: "Failed to update planning product" });
+    }
+  });
+
   // Get planning for a client
   app.get("/api/planning/:clientId", async (req, res) => {
     try {

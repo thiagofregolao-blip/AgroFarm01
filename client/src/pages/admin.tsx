@@ -148,12 +148,141 @@ function PlanningImportManagement() {
                   <Upload className="mr-2 h-4 w-4" />
                   Importar Produtos
                 </>
-              )}
+
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {activeSeason && <PlanningProductList seasonId={activeSeason.id} />}
     </div>
+  );
+}
+
+function PlanningProductList({ seasonId }: { seasonId: string }) {
+  const { toast } = useToast();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ price: "", dose: "" });
+
+  const { data: products, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/planning/products", { seasonId }],
+    enabled: !!seasonId,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      await apiRequest("PATCH", `/api/planning/products/${data.id}`, {
+        price: data.price,
+        dosePerHa: data.dose
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Produto atualizado com sucesso" });
+      setEditingId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/planning/products"] });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar", variant: "destructive" });
+    }
+  });
+
+  const startEditing = (product: any) => {
+    setEditingId(product.id);
+    setEditForm({
+      price: product.price || "",
+      dose: product.dosePerHa || ""
+    });
+  };
+
+  const saveEdit = (id: string) => {
+    updateMutation.mutate({ id, ...editForm });
+  };
+
+  if (isLoading) {
+    return <div className="py-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></div>;
+  }
+
+  if (!products || products.length === 0) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Produtos Importados</CardTitle></CardHeader>
+        <CardContent><p className="text-muted-foreground">Nenhum produto importado para esta safra.</p></CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Produtos Importados ({products.length})</CardTitle>
+        <CardDescription>Gerencie os preços e doses de referência.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-md border max-h-[600px] overflow-y-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Produto</TableHead>
+                <TableHead>Segmento</TableHead>
+                <TableHead>Unidade</TableHead>
+                <TableHead className="w-[150px]">Preço Ref. (USD)</TableHead>
+                <TableHead className="w-[150px]">Dose (p/ ha)</TableHead>
+                <TableHead className="w-[100px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {products.map((product) => (
+                <TableRow key={product.id}>
+                  <TableCell className="font-medium">{product.name}</TableCell>
+                  <TableCell><Badge variant="outline">{product.segment}</Badge></TableCell>
+                  <TableCell>{product.unit}</TableCell>
+                  <TableCell>
+                    {editingId === product.id ? (
+                      <Input
+                        type="number"
+                        value={editForm.price}
+                        onChange={e => setEditForm(prev => ({ ...prev, price: e.target.value }))}
+                        className="h-8"
+                      />
+                    ) : (
+                      `$${product.price}`
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingId === product.id ? (
+                      <Input
+                        type="number"
+                        value={editForm.dose}
+                        onChange={e => setEditForm(prev => ({ ...prev, dose: e.target.value }))}
+                        className="h-8"
+                      />
+                    ) : (
+                      product.dosePerHa
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingId === product.id ? (
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => saveEdit(product.id)} disabled={updateMutation.isPending}>
+                          <Save className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => setEditingId(null)}>
+                          <X className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button size="icon" variant="ghost" onClick={() => startEditing(product)}>
+                        <Edit className="h-4 w-4 text-slate-500" />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
