@@ -90,6 +90,38 @@ export async function ensureSchema() {
       // Ignora erro se coluna não existir ou já estiver correta
     }
 
+    // 2.2 HOTFIX: Remover duplicatas antigas e adicionar constrain UNIQUE
+    console.log("Removendo duplicatas de planning_global_configurations...");
+    try {
+      await execute(`
+            WITH duplicates AS (
+                SELECT id, 
+                    ROW_NUMBER() OVER (
+                        PARTITION BY user_id, season_id 
+                        ORDER BY updated_at DESC
+                    ) as rn
+                FROM planning_global_configurations
+            )
+            DELETE FROM planning_global_configurations
+            WHERE id IN (
+                SELECT id FROM duplicates WHERE rn > 1
+            );
+        `);
+      console.log("✅ Duplicatas removidas.");
+
+      await execute(`
+            ALTER TABLE planning_global_configurations 
+            ADD CONSTRAINT planning_global_configurations_user_id_season_id_unique UNIQUE (user_id, season_id);
+        `);
+      console.log("✅ Constraint UNIQUE adicionada.");
+    } catch (e: any) {
+      if (e.message && e.message.includes('already exists')) {
+        console.log("ℹ️ Constraint UNIQUE já existe.");
+      } else {
+        console.log("⚠️ erro ao limpar duplicatas/add constraint:", e.message);
+      }
+    }
+
     console.log("✅ Schema verificado/corrigido com sucesso.");
   } catch (error) {
     console.error("❌ Erro ao verificar schema:", error);
