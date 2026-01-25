@@ -82,14 +82,31 @@ export default function PlanejamentoPage() {
 
     // Initialize State from Config
     useEffect(() => {
-        if (globalConfig?.productIds && !isConfigLoaded) {
+        // Log for debugging
+        if (globalConfig) {
+            console.log("[FRONTEND] Global Config Loaded:", globalConfig);
+        }
+
+        if (globalConfig?.productIds && Array.isArray(globalConfig.productIds) && !isConfigLoaded) {
+            console.log("[FRONTEND] Setting Global Selected IDs from DB:", globalConfig.productIds.length);
             setGlobalSelectedIds(new Set(globalConfig.productIds));
             setIsConfigLoaded(true);
         } else if (globalConfig === null && !isConfigLoaded && !isLoadingConfig) {
-            // Config loaded but empty/error -> Just mark loaded, don't force SETUP
+            console.log("[FRONTEND] Global Config is null/empty. Initializing empty.");
+            // Config loaded but empty/error -> Just mark loaded
             setIsConfigLoaded(true);
         }
     }, [globalConfig, isConfigLoaded, isLoadingConfig]);
+
+    // Force refetch when entering SETUP mode to ensure fresh data
+    useEffect(() => {
+        if (viewMode === "SETUP") {
+            console.log("[FRONTEND] Entering SETUP mode, invalidating query...");
+            queryClient.invalidateQueries({ queryKey: ["/api/planning/global"] });
+            // Allow reloading
+            setIsConfigLoaded(false);
+        }
+    }, [viewMode]);
 
     // Save Mutation
     const saveGlobalConfigMutation = useMutation({
