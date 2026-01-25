@@ -8456,20 +8456,32 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
   // FINAL PLANNING IMPORT (Single XLS file)
   app.post("/api/admin/import-planning-final", upload.single('file'), async (req, res) => {
     try {
-      if (!req.file) return res.status(400).json({ error: "File is required" });
-
-      const { seasonId } = req.body;
-      let targetSeasonId = seasonId;
-
-      if (!targetSeasonId) {
-        const activeSeason = await CRMStorage.getActiveSeason();
-        if (activeSeason) targetSeasonId = activeSeason.id;
+      if (!req.file) {
+        console.error("Import Error: File is missing");
+        return res.status(400).json({ error: "File is required" });
       }
 
-      if (!targetSeasonId) return res.status(400).json({ error: "Season ID required" });
+      let { seasonId } = req.body;
+
+      if (!seasonId || seasonId === 'undefined' || seasonId === 'null') {
+        const activeSeason = await storage.getActiveSeason(); // Use correct storage instance
+        if (activeSeason) seasonId = activeSeason.id;
+      }
+
+      if (!seasonId) {
+        console.error("Import Error: Season ID missing and no active season found");
+        return res.status(400).json({ error: "Season ID required" });
+      }
+
+      console.log(`Starting import for season: ${seasonId}`);
 
       const { importPlanningFinal } = await import("./import-excel");
-      const result = await importPlanningFinal(req.file.buffer, targetSeasonId);
+
+      if (!importPlanningFinal) {
+        throw new Error("importPlanningFinal function not found in import-excel module");
+      }
+
+      const result = await importPlanningFinal(req.file.buffer, seasonId);
 
       res.json(result);
     } catch (error) {
