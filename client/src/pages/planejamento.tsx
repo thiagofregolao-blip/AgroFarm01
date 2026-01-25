@@ -273,7 +273,19 @@ function GlobalSetup({ products, selectedIds, onToggle, onFinish, isSaving }: Gl
                                     </TableHeader>
                                     <TableBody>
                                         {groupedProducts[cat].map(product => {
-                                            const isSelected = selectedIds.has(product.id);
+                                            // Ensure ID comparison is safe (string vs string)
+                                            // Debug log on first cycle
+                                            const pId = String(product.id).trim();
+                                            const isSelected = selectedIds.has(pId);
+
+                                            // Debug one item to verify
+                                            if (groupedProducts[cat].indexOf(product) === 0 && cat === "Fungicidas") {
+                                                console.log(`[GLOBAL_SETUP_RENDER] Checking product ${product.name} (${pId}). Selected: ${isSelected}. Set size: ${selectedIds.size}`);
+                                                if (selectedIds.size > 0) {
+                                                    console.log(`[GLOBAL_SETUP_RENDER] Sample ID in Set:`, Array.from(selectedIds)[0]);
+                                                }
+                                            }
+
                                             return (
                                                 <TableRow key={product.id} className={isSelected ? "bg-blue-50" : ""}>
                                                     <TableCell>
