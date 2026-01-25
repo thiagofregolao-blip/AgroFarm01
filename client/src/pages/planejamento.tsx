@@ -43,7 +43,11 @@ export default function PlanejamentoPage() {
     });
 
     const { data: products, isLoading: productsLoading } = useQuery<PlanningProduct[]>({
-        queryKey: ["/api/planning/products", { seasonId: activeSeason?.id }],
+        queryKey: ["/api/planning/products", activeSeason?.id],
+        queryFn: async () => {
+            const res = await apiRequest("GET", `/api/planning/products?seasonId=${activeSeason?.id}`);
+            return res.json();
+        },
         enabled: !!activeSeason?.id,
     });
 
