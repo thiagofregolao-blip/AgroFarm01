@@ -231,6 +231,7 @@ export interface IStorage {
   // Sales Planning
   getSalesPlanning(clientId: string, seasonId: string): Promise<{ planning: SalesPlanning, items: SalesPlanningItem[] } | undefined>;
   upsertSalesPlanning(planning: InsertSalesPlanning, items: InsertSalesPlanningItem[]): Promise<SalesPlanning>;
+  getSalesPlanningSummary(userId: string, seasonId: string): Promise<Array<{ clientId: string; clientName: string; totalValue: number; updatedAt: Date }>>;
 }
 
 export class MemStorage implements IStorage {
@@ -256,6 +257,10 @@ export class MemStorage implements IStorage {
   constructor() {
     this.sessionStore = new session.MemoryStore();
     this.initializeDefaultData();
+  }
+
+  async getSalesPlanningSummary(userId: string, seasonId: string): Promise<Array<{ clientId: string; clientName: string; totalValue: number; updatedAt: Date }>> {
+    return [];
   }
 
   private initializeDefaultData() {
@@ -2957,6 +2962,47 @@ export class DBStorage implements IStorage {
     }
 
     return finalPlanning;
+  }
+
+  async getSalesPlanningSummary(userId: string, seasonId: string): Promise<Array<{ clientId: string; clientName: string; totalValue: number; updatedAt: Date }>> {
+    // 1. Get all plannings for this user/season
+    const plannings = await db.select({
+      id: salesPlanning.id,
+      clientId: salesPlanning.clientId,
+      updatedAt: salesPlanning.updatedAt,
+      // Join to get client name
+      clientName: userClientLinks.customName,
+      masterClientName: masterClients.name
+    })
+      .from(salesPlanning)
+      .innerJoin(userClientLinks, eq(salesPlanning.clientId, userClientLinks.id))
+      .innerJoin(masterClients, eq(userClientLinks.masterClientId, masterClients.id))
+      .where(and(
+        eq(salesPlanning.userId, userId),
+        eq(salesPlanning.seasonId, seasonId)
+      ));
+
+    if (plannings.length === 0) return [];
+
+    // 2. Aggregate totals from items
+    const planningIds = plannings.map(p => p.id);
+    const totals = await db.select({
+      planningId: salesPlanningItems.planningId,
+      total: sql<number>`sum(${salesPlanningItems.totalAmount})`
+    })
+      .from(salesPlanningItems)
+      .where(inArray(salesPlanningItems.planningId, planningIds))
+      .groupBy(salesPlanningItems.planningId);
+
+    const totalsMap = new Map(totals.map(t => [t.planningId, Number(t.total) || 0]));
+
+    // 3. Map result
+    return plannings.map(p => ({
+      clientId: p.clientId,
+      clientName: p.clientName || p.masterClientName,
+      totalValue: totalsMap.get(p.id) || 0,
+      updatedAt: p.updatedAt
+    }));
   }
 
   // Global Config

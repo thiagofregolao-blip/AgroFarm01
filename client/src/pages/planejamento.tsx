@@ -18,6 +18,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { Client, PlanningProduct, SalesPlanning, SalesPlanningItem } from "@shared/schema";
+import PlanningDashboard from "@/components/dashboard/planning-dashboard";
 
 // --- Types & Interfaces ---
 type ViewMode = "SETUP" | "PLANNING";
@@ -218,13 +219,10 @@ export default function PlanejamentoPage() {
                                 onBack={() => setSelectedClientId("")}
                             />
                         ) : (
-                            <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground bg-white rounded-lg border border-dashed">
-                                <div className="bg-slate-100 p-4 rounded-full mb-4">
-                                    <AlertCircle className="w-12 h-12 text-slate-400" />
-                                </div>
-                                <h3 className="text-xl font-medium mb-2">Selecione um Cliente</h3>
-                                <p>Escolha um cliente acima para iniciar a definição de share e quantidades.</p>
-                            </div>
+                            <PlanningDashboard
+                                seasonId={activeSeason.id}
+                                onSelectClient={setSelectedClientId}
+                            />
                         )}
                     </div>
                 </div>

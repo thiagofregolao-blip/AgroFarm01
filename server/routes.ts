@@ -3974,27 +3974,33 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       res.json(settings);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch barter settings" });
+      res.status(500).json({ error: "Failed to fetch kanban data" });
     }
   });
 
-  // ========== KANBAN DE METAS ROUTES ==========
+  // Summary Dashboard
+  app.get("/api/planning/summary", requireAuth, async (req, res) => {
+    const seasonId = req.query.seasonId as string;
+    if (!seasonId) return res.status(400).json({ message: "seasonId is required" });
 
-  // Get Kanban data (clients with potentials, sales, opportunities)
-  app.get("/api/kanban-metas", requireAuth, async (req, res) => {
     try {
-      const userId = req.user!.id;
-      const seasonId = req.query.seasonId as string;
-
-      if (!seasonId) {
-        return res.status(400).json({ error: "seasonId is required" });
-      }
-
-      const data = await storage.getKanbanData(userId, seasonId);
-      res.json(data);
+      const summary = await storage.getSalesPlanningSummary(req.user!.id, seasonId);
+      res.json(summary);
     } catch (error) {
-      console.error("Error fetching kanban data:", error);
-      res.status(500).json({ error: "Failed to fetch kanban data" });
+      console.error("[PLANNING_SUMMARY] Error:", error);
+      res.status(500).json({ message: "Failed to fetch planning summary" });
     }
+  });
+
+  // GET /api/planning/:clientId -> Get specific client planning
+  app.get("/api/planning/:clientId", requireAuth, async (req, res) => {
+    const { clientId } = req.params;
+    const seasonId = req.query.seasonId as string;
+    if (!seasonId) return res.status(400).json({ message: "seasonId is required" });
+
+    const result = await storage.getSalesPlanning(clientId, seasonId);
+    if (!result) return res.json(null); // Not found -> empty planning for frontend to init
+    res.json(result);
   });
 
   // Get category cards for Market Opportunity page
