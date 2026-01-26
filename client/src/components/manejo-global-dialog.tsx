@@ -60,6 +60,15 @@ export function ManejoGlobalDialog({
     if (active?.id) setViewSeasonId(active.id);
   }, [open, seasons, viewSeasonId]);
 
+  // Invalidar e recarregar dados quando o dialog é aberto
+  useEffect(() => {
+    if (open && viewSeasonId) {
+      // Invalidar e forçar recarregamento dos dados
+      queryClient.invalidateQueries({ queryKey: ["/api/global-management", viewSeasonId] });
+      queryClient.refetchQueries({ queryKey: ["/api/global-management", viewSeasonId] });
+    }
+  }, [open, viewSeasonId]);
+
   const { data: globalManagementApplications } = useQuery<any[]>({
     queryKey: ["/api/global-management", viewSeasonId],
     queryFn: viewSeasonId
@@ -69,7 +78,9 @@ export function ManejoGlobalDialog({
           return res.json();
         }
       : undefined,
-    enabled: !!viewSeasonId,
+    enabled: !!viewSeasonId && open, // Só busca quando o dialog está aberto
+    refetchOnMount: true, // Sempre recarrega quando o componente é montado
+    refetchOnWindowFocus: false, // Não recarrega ao focar na janela
   });
 
   const fungicidasProducts = useMemo(
@@ -103,8 +114,10 @@ export function ManejoGlobalDialog({
       customName?: string;
       customPricePerHa?: string;
     }) => apiRequest("POST", "/api/global-management", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/global-management", viewSeasonId] });
+    onSuccess: async () => {
+      // Invalidar e recarregar imediatamente
+      await queryClient.invalidateQueries({ queryKey: ["/api/global-management", viewSeasonId] });
+      await queryClient.refetchQueries({ queryKey: ["/api/global-management", viewSeasonId] });
       toast({ title: "Aplicação adicionada!", description: "A aplicação foi adicionada para toda a equipe." });
     },
     onError: (error: any) => {
@@ -118,8 +131,10 @@ export function ManejoGlobalDialog({
 
   const deleteApplicationMutation = useMutation({
     mutationFn: async (id: string) => apiRequest("DELETE", `/api/global-management/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/global-management", viewSeasonId] });
+    onSuccess: async () => {
+      // Invalidar e recarregar imediatamente
+      await queryClient.invalidateQueries({ queryKey: ["/api/global-management", viewSeasonId] });
+      await queryClient.refetchQueries({ queryKey: ["/api/global-management", viewSeasonId] });
       toast({ title: "Aplicação removida!", description: "A aplicação foi removida para toda a equipe." });
     },
     onError: (error: any) => {
@@ -662,20 +677,32 @@ export function ManejoGlobalDialog({
                   return;
                 }
 
-                for (const item of productsInApplication) {
-                  await createApplicationMutation.mutateAsync({
-                    categoria: applicationCategory,
-                    applicationNumber,
-                    seasonId: viewSeasonId,
-                    productId: item.productId,
-                    priceTier: item.priceTier,
-                    customName: item.customName,
-                    customPricePerHa: item.customPricePerHa,
-                  });
-                }
+                try {
+                  // Salvar todas as aplicações
+                  for (const item of productsInApplication) {
+                    await createApplicationMutation.mutateAsync({
+                      categoria: applicationCategory,
+                      applicationNumber,
+                      seasonId: viewSeasonId,
+                      productId: item.productId,
+                      priceTier: item.priceTier,
+                      customName: item.customName,
+                      customPricePerHa: item.customPricePerHa,
+                    });
+                  }
 
-                setShowAddApplicationDialog(false);
-                setProductsInApplication([]);
+                  // Aguardar um pouco para garantir que todas as mutations foram processadas
+                  await new Promise(resolve => setTimeout(resolve, 100));
+
+                  // Fechar o dialog e limpar o estado
+                  setShowAddApplicationDialog(false);
+                  setProductsInApplication([]);
+                  
+                  // Forçar atualização dos dados
+                  await queryClient.refetchQueries({ queryKey: ["/api/global-management", viewSeasonId] });
+                } catch (error) {
+                  console.error("Erro ao salvar aplicações:", error);
+                }
               }}
               disabled={productsInApplication.length === 0 || createApplicationMutation.isPending}
               data-testid="button-conclude"
