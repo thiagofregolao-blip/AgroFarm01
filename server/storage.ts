@@ -1715,19 +1715,10 @@ export class DBStorage implements IStorage {
     const now = new Date();
     // Use fallback method if date comparison fails or just return the first active season as fallback
     try {
-      const result = await db.select().from(seasons).where(
-        and(
-          eq(seasons.isActive, true),
-          // Compare dates safely. If DB has dates as strings or timestamps, Drizzle should handle it.
-          // Using gte/lte helpers is safer than raw SQL for dates usually.
-          // But here we want custom logic: startDate <= now AND endDate >= now.
-          // Let's try to remove the date filter temporarily to see if it fixes the crash, 
-          // OR rewrite it using `le` and `ge` from drizzle-orm if available, or simpler logic.
-          // Ideally:
-          // lte(seasons.startDate, now),
-          // gte(seasons.endDate, now)
-        )
-      );
+      and(
+        eq(seasons.isActive, true),
+      )
+      ).orderBy(desc(seasons.endDate));
 
       // Filter in memory to avoid SQL date issues if driver is finicky
       const active = result.find(s => {
@@ -2872,7 +2863,8 @@ export class DBStorage implements IStorage {
 
   // Planning Products (DBStorage)
   async getPlanningProducts(seasonId: string): Promise<PlanningProduct[]> {
-    return await db.select().from(planningProductsBase).where(eq(planningProductsBase.seasonId, seasonId));
+    // Return ALL products regardless of season, as per user requirement (products are global)
+    return await db.select().from(planningProductsBase).orderBy(planningProductsBase.name);
   }
 
   async createPlanningProduct(product: InsertPlanningProduct): Promise<PlanningProduct> {
