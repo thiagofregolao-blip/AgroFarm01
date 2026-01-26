@@ -2992,32 +2992,25 @@ export class DBStorage implements IStorage {
   async upsertPlanningGlobalConfiguration(data: InsertPlanningGlobalConfiguration): Promise<PlanningGlobalConfiguration> {
     console.log(`[STORAGE_UPSERT_GLOBAL] Upserting for user ${data.userId}, season ${data.seasonId}. ProductIDs len: ${Array.isArray(data.productIds) ? data.productIds.length : 'NOT_ARRAY'}`);
 
-    // Force refresh check
-    const existing = await this.getPlanningGlobalConfiguration(data.userId, data.seasonId);
-
-    if (existing) {
-      console.log(`[STORAGE_UPSERT_GLOBAL] Updating existing config ${existing.id}`);
-      const [updated] = await db.update(planningGlobalConfigurations)
-        .set({
+    // Use native UPSERT (onConflictDoUpdate) to guarantee atomicity and avoid race conditions
+    const [result] = await db.insert(planningGlobalConfigurations)
+      .values({
+        userId: data.userId,
+        seasonId: data.seasonId,
+        productIds: data.productIds,
+        updatedAt: new Date()
+      })
+      .onConflictDoUpdate({
+        target: [planningGlobalConfigurations.userId, planningGlobalConfigurations.seasonId],
+        set: {
           productIds: data.productIds,
           updatedAt: new Date()
-        })
-        .where(eq(planningGlobalConfigurations.id, existing.id))
-        .returning();
-      return updated;
-    } else {
-      console.log(`[STORAGE_UPSERT_GLOBAL] Creating new config`);
-      const id = randomUUID();
-      const [created] = await db.insert(planningGlobalConfigurations)
-        .values({
-          id,
-          userId: data.userId,
-          seasonId: data.seasonId,
-          productIds: data.productIds
-        })
-        .returning();
-      return created;
-    }
+        }
+      })
+      .returning();
+
+    console.log(`[STORAGE_UPSERT_GLOBAL] Success. Result ID: ${result.id}`);
+    return result;
   }
 }
 
