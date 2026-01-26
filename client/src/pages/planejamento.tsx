@@ -116,17 +116,27 @@ export default function PlanejamentoPage() {
     // Save Mutation
     const saveGlobalConfigMutation = useMutation({
         mutationFn: async (ids: string[]) => {
+            if (!activeSeason?.id) {
+                console.error("[FRONTEND] Save failed: No season ID");
+                throw new Error("Safra ativa não identificada. Recarregue a página.");
+            }
+            console.log("[FRONTEND] Saving Global Config:", { seasonId: activeSeason.id, count: ids.length, ids });
+
             await apiRequest("POST", "/api/planning/global", {
-                seasonId: activeSeason?.id,
+                seasonId: activeSeason.id,
                 productIds: ids
             });
         },
         onSuccess: () => {
+            console.log("[FRONTEND] Save Global Config SUCCESS");
             toast({ title: "Manejo Global Salvo", description: "Configuração atualizada com sucesso." });
             queryClient.invalidateQueries({ queryKey: ["/api/planning/global"] });
             setViewMode("PLANNING");
         },
-        onError: () => toast({ title: "Erro ao salvar", variant: "destructive" })
+        onError: (e) => {
+            console.error("[FRONTEND] Save Global Config FAILED:", e);
+            toast({ title: "Erro ao salvar", description: e.message || "Falha na comunicação com o servidor.", variant: "destructive" });
+        }
     });
 
     // Client Specific History
@@ -227,10 +237,16 @@ function GlobalSetup({ products, selectedIds, onToggle, onFinish, isSaving }: Gl
 
     // Group products specifically for the tabs
     const groupedProducts = useMemo(() => {
+        console.log(`[GLOBAL_SETUP] Grouping ${products.length} products. Active Season:`, products[0]?.seasonId);
         const groups: Record<Segment, PlanningProduct[]> = {
             "Fungicidas": [], "Inseticidas": [], "TS": [], "Dessecação": [], "Outros": []
         };
         products.forEach(p => {
+            // Debug log for the specific mismatched ID seen in screenshot or just generic
+            if (p.id.startsWith('d1e1') || p.id.startsWith('71c3')) {
+                console.log(`[GLOBAL_SETUP] Found Product: ${p.name} | ID: ${p.id} | Segment: ${p.segment}`);
+            }
+
             const seg = p.segment?.toLowerCase() || "";
             if (seg.includes("fungicida")) groups["Fungicidas"].push(p);
             else if (seg.includes("inseticida")) groups["Inseticidas"].push(p);
