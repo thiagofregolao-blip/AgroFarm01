@@ -1715,9 +1715,10 @@ export class DBStorage implements IStorage {
     const now = new Date();
     // Use fallback method if date comparison fails or just return the first active season as fallback
     try {
-      and(
-        eq(seasons.isActive, true),
-      )
+      const result = await db.select().from(seasons).where(
+        and(
+          eq(seasons.isActive, true),
+        )
       ).orderBy(desc(seasons.endDate));
 
       // Filter in memory to avoid SQL date issues if driver is finicky
