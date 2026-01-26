@@ -8648,6 +8648,38 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     }
   });
 
+  // FIX: Update products to match active season
+  app.post("/api/admin/fix-product-seasons", async (req, res) => {
+    try {
+      if (!req.user || req.user.role !== "admin") return res.sendStatus(403);
+
+      const activeSeason = await storage.getActiveSeason();
+      if (!activeSeason) return res.status(400).json({ error: "No active season found" });
+
+      console.log(`[FIX_SEASONS] Updating products to season: ${activeSeason.name} (${activeSeason.id})`);
+
+      // Update ALL products to the active season
+      const result = await db.execute(sql`
+        UPDATE planning_products_base 
+        SET season_id = ${activeSeason.id}
+        WHERE season_id != ${activeSeason.id}
+      `);
+
+      // Also update sales_planning if needed? No, user plans are likely already in active season or should be. 
+      // Actually, if sales_planning (dashboard) worked, it means plans ARE in active season (or one of them).
+      // We want products to join them.
+
+      res.json({
+        message: "Products updated to active season",
+        season: activeSeason.name,
+        result
+      });
+    } catch (error) {
+      console.error("[FIX_SEASONS] Error:", error);
+      res.status(500).json({ error: "Failed to update product seasons" });
+    }
+  });
+
   // Save/Update sales planning
   app.post("/api/planning", async (req, res) => {
     try {
