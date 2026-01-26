@@ -1,7 +1,8 @@
+
 import Header from "@/components/layout/header";
 import Navbar from "@/components/layout/navbar";
 import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,12 +12,24 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Save, AlertCircle, Settings } from "lucide-react";
-import { ManejoGlobalDialog } from "@/components/manejo-global-dialog";
+import { Loader2, Save, AlertCircle, Settings, Trash2, Plus, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import type { Client, PlanningProduct, SalesPlanning, SalesPlanningItem } from "@shared/schema";
 
 // --- Types & Interfaces ---
+type ViewMode = "SETUP" | "PLANNING";
 type Segment = "Fungicidas" | "Inseticidas" | "TS" | "Dessecação" | "Outros";
+
+interface GlobalSetupProps {
+    products: PlanningProduct[];
+    selectedIds: Set<string>;
+    onToggle: (id: string) => void;
+    onFinish: () => void;
+    isSaving?: boolean;
+}
 
 interface SharePlanningProps {
     client: Client;
@@ -30,9 +43,9 @@ interface SharePlanningProps {
 // --- Main Page Component ---
 export default function PlanejamentoPage() {
     const { toast } = useToast();
+    const [viewMode, setViewMode] = useState<ViewMode>("PLANNING");
     const [selectedClientId, setSelectedClientId] = useState<string>("");
     const [isConfigLoaded, setIsConfigLoaded] = useState(false);
-    const [showManejoDialog, setShowManejoDialog] = useState(false);
 
     // Global Selection State (The "Manejo" List)
     const [globalSelectedIds, setGlobalSelectedIds] = useState<Set<string>>(new Set());
@@ -84,15 +97,50 @@ export default function PlanejamentoPage() {
 
         if (globalConfig?.productIds && Array.isArray(globalConfig.productIds) && !isConfigLoaded) {
             console.log("[FRONTEND] Setting Global Selected IDs from DB:", globalConfig.productIds.length);
-            setGlobalSelectedIds(new Set(globalConfig.productIds));
+            const distinctIds = new Set(globalConfig.productIds.map(id => String(id).trim()));
+            setGlobalSelectedIds(distinctIds);
             setIsConfigLoaded(true);
-        } else if (globalConfig === null && !isConfigLoaded && !isLoadingConfig) {
+        } else if (globalConfig === null && !isLoadingConfig && !isConfigLoaded) {
             console.log("[FRONTEND] Global Config is null/empty. Initializing empty.");
-            // Config loaded but empty/error -> Just mark loaded
             setIsConfigLoaded(true);
         }
     }, [globalConfig, isConfigLoaded, isLoadingConfig, isFetchingConfig]);
 
+    // Force refetch when entering SETUP mode to ensure fresh data
+    useEffect(() => {
+        if (viewMode === "SETUP") {
+            console.log("[FRONTEND] Entering SETUP mode, invalidating query...");
+            queryClient.invalidateQueries({ queryKey: ["/api/planning/global"] });
+            // We do NOT reset isConfigLoaded to false here to avoid UI flickering, 
+            // but the query invalidation will trigger a refetch.
+        }
+    }, [viewMode]);
+
+    // Save Mutation
+    const saveGlobalConfigMutation = useMutation({
+        mutationFn: async (ids: string[]) => {
+            if (!activeSeason?.id) {
+                console.error("[FRONTEND] Save failed: No season ID");
+                throw new Error("Safra ativa não identificada. Recarregue a página.");
+            }
+            console.log("[FRONTEND] Saving Global Config:", { seasonId: activeSeason.id, count: ids.length, ids });
+
+            await apiRequest("POST", "/api/planning/global", {
+                seasonId: activeSeason.id,
+                productIds: ids
+            });
+        },
+        onSuccess: () => {
+            console.log("[FRONTEND] Save Global Config SUCCESS");
+            toast({ title: "Manejo Global Salvo", description: "Configuração atualizada com sucesso." });
+            queryClient.invalidateQueries({ queryKey: ["/api/planning/global"] });
+            setViewMode("PLANNING");
+        },
+        onError: (e) => {
+            console.error("[FRONTEND] Save Global Config FAILED:", e);
+            toast({ title: "Erro ao salvar", description: e.message || "Falha na comunicação com o servidor.", variant: "destructive" });
+        }
+    });
 
     // Client Specific History
     const { data: purchaseHistory } = useQuery<{ purchasedProductNames: string[] }>({
@@ -110,7 +158,7 @@ export default function PlanejamentoPage() {
         <div className="h-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
             <Header
                 title="Planejamento de Vendas 2026"
-                subtitle={`Planejamento: ${selectedClient?.name || "Selecione um Cliente"}`}
+                subtitle={viewMode === "SETUP" ? "Definição Global de Manejo" : `Planejamento: ${selectedClient?.name || "Selecione um Cliente"}`}
             />
             <Navbar />
 
@@ -118,67 +166,161 @@ export default function PlanejamentoPage() {
                 <div className="max-w-7xl mx-auto space-y-6">
 
                     {/* Navigation / Context Switcher */}
-                    <Card className="shadow-sm border-l-4 border-l-primary mb-6">
-                        <CardContent className="pt-6 flex flex-col md:flex-row gap-4 items-end justify-between">
-                            <div className="space-y-2 w-full md:w-1/2">
-                                <Label>Cliente em Planejamento</Label>
-                                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                                    <SelectTrigger className="bg-white">
-                                        <SelectValue placeholder="Selecione um cliente..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {clients?.map((client) => (
-                                            <SelectItem key={client.id} value={client.id}>
-                                                {client.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Button variant="outline" onClick={() => setShowManejoDialog(true)} className="mb-[2px]">
-                                <Settings className="w-4 h-4 mr-2" />
-                                Editar Manejo Global
-                            </Button>
-                        </CardContent>
-                    </Card>
-
-                    {selectedClientId && selectedClient && activeSeason ? (
-                        <SharePlanning
-                            client={selectedClient}
-                            activeSeason={activeSeason}
-                            globalSelectedIds={globalSelectedIds}
-                            products={products || []}
-                            purchaseHistory={purchaseHistory}
-                            onBack={() => setSelectedClientId("")}
-                        />
-                    ) : (
-                        <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground bg-white rounded-lg border border-dashed">
-                            <div className="bg-slate-100 p-4 rounded-full mb-4">
-                                <AlertCircle className="w-12 h-12 text-slate-400" />
-                            </div>
-                            <h3 className="text-xl font-medium mb-2">Selecione um Cliente</h3>
-                            <p>Escolha um cliente acima para iniciar a definição de share e quantidades.</p>
-                        </div>
+                    {viewMode === "PLANNING" && (
+                        <Card className="shadow-sm border-l-4 border-l-primary mb-6">
+                            <CardContent className="pt-6 flex flex-col md:flex-row gap-4 items-end justify-between">
+                                <div className="space-y-2 w-full md:w-1/2">
+                                    <Label>Cliente em Planejamento</Label>
+                                    <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                                        <SelectTrigger className="bg-white">
+                                            <SelectValue placeholder="Selecione um cliente..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {clients?.map((client) => (
+                                                <SelectItem key={client.id} value={client.id}>
+                                                    {client.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <Button variant="outline" onClick={() => setViewMode("SETUP")} className="mb-[2px]">
+                                    <Settings className="w-4 h-4 mr-2" />
+                                    Editar Manejo Global
+                                </Button>
+                            </CardContent>
+                        </Card>
                     )}
+
+                    <div className={viewMode === "SETUP" ? "block" : "hidden"}>
+                        <GlobalSetup
+                            products={products || []}
+                            selectedIds={globalSelectedIds}
+                            onToggle={(id) => {
+                                const newSet = new Set(globalSelectedIds);
+                                if (newSet.has(id)) newSet.delete(id);
+                                else newSet.add(id);
+                                setGlobalSelectedIds(newSet);
+                            }}
+                            onFinish={() => saveGlobalConfigMutation.mutate(Array.from(globalSelectedIds))}
+                            isSaving={saveGlobalConfigMutation.isPending}
+                        />
+                    </div>
+
+                    <div className={viewMode === "PLANNING" ? "block" : "hidden"}>
+                        {selectedClientId && selectedClient && activeSeason ? (
+                            <SharePlanning
+                                client={selectedClient}
+                                activeSeason={activeSeason}
+                                globalSelectedIds={globalSelectedIds}
+                                products={products || []}
+                                purchaseHistory={purchaseHistory}
+                                onBack={() => setSelectedClientId("")}
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground bg-white rounded-lg border border-dashed">
+                                <div className="bg-slate-100 p-4 rounded-full mb-4">
+                                    <AlertCircle className="w-12 h-12 text-slate-400" />
+                                </div>
+                                <h3 className="text-xl font-medium mb-2">Selecione um Cliente</h3>
+                                <p>Escolha um cliente acima para iniciar a definição de share e quantidades.</p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </main>
-            
-            {/* Dialog de Manejo Global */}
-            <ManejoGlobalDialog open={showManejoDialog} onOpenChange={setShowManejoDialog} />
         </div>
     );
 }
 
-// --- Sub-Components (Defined outside to prevent re-renders) ---
+// --- Sub-Components ---
 
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Trash2, Plus, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+function GlobalSetup({ products, selectedIds, onToggle, onFinish, isSaving }: GlobalSetupProps) {
+    const categories: Segment[] = ["Fungicidas", "Inseticidas", "TS", "Dessecação", "Outros"];
 
-// ... (Existing types remain)
+    // Group products specifically for the tabs
+    const groupedProducts = useMemo(() => {
+        const groups: Record<Segment, PlanningProduct[]> = {
+            "Fungicidas": [], "Inseticidas": [], "TS": [], "Dessecação": [], "Outros": []
+        };
+        products.forEach(p => {
+            const seg = p.segment?.toLowerCase() || "";
+            if (seg.includes("fungicida")) groups["Fungicidas"].push(p);
+            else if (seg.includes("inseticida")) groups["Inseticidas"].push(p);
+            else if (seg.includes("ts") || seg.includes("tratamento")) groups["TS"].push(p);
+            else if (seg.includes("herbicida") || seg.includes("desseca")) groups["Dessecação"].push(p);
+            else groups["Outros"].push(p);
+        });
+        return groups;
+    }, [products]);
 
-// New Component for Adding Products
+    return (
+        <Card className="shadow-sm border-t-4 border-t-blue-500">
+            <CardHeader>
+                <CardTitle>Passo 0: Montar Manejo Global</CardTitle>
+                <CardDescription>
+                    Selecione os produtos que farão parte da sua estratégia principal para esta safra.
+                    Esta lista servirá de base para todos os clientes.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Tabs defaultValue="Fungicidas" className="w-full">
+                    <TabsList className="grid w-full grid-cols-5 mb-4">
+                        {categories.map(cat => (
+                            <TabsTrigger key={cat} value={cat}>{cat}</TabsTrigger>
+                        ))}
+                    </TabsList>
+
+                    {categories.map(cat => (
+                        <TabsContent key={cat} value={cat} className="mt-0">
+                            <div className="rounded-md border h-[500px] overflow-y-auto">
+                                <Table>
+                                    <TableHeader className="sticky top-0 bg-white z-10 shadow-sm">
+                                        <TableRow>
+                                            <TableHead className="w-[50px]">Select</TableHead>
+                                            <TableHead>Produto</TableHead>
+                                            <TableHead>Preço Ref ($)</TableHead>
+                                            <TableHead>Dose Padrão</TableHead>
+                                            <TableHead>Embalagem</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {groupedProducts[cat].map(product => {
+                                            const pId = String(product.id).trim();
+                                            const isSelected = selectedIds.has(pId);
+                                            return (
+                                                <TableRow key={product.id} className={isSelected ? "bg-blue-50" : ""}>
+                                                    <TableCell>
+                                                        <Checkbox
+                                                            checked={isSelected}
+                                                            onCheckedChange={() => onToggle(product.id)}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">{product.name}</TableCell>
+                                                    <TableCell>${parseFloat(product.price || "0").toFixed(2)}</TableCell>
+                                                    <TableCell>{product.dosePerHa || "-"} {product.unit}</TableCell>
+                                                    <TableCell>{product.packageSize ? `${product.packageSize} ${product.unit}` : "-"}</TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </TabsContent>
+                    ))}
+                </Tabs>
+
+                <div className="mt-6 flex justify-end">
+                    <Button onClick={onFinish} className="w-[200px]" size="lg" disabled={isSaving}>
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                        Salvar Manejo
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 function ProductSelector({ allProducts, currentIds, onSelect }: { allProducts: PlanningProduct[], currentIds: Set<string>, onSelect: (p: PlanningProduct) => void }) {
     const [open, setOpen] = useState(false);
 
@@ -285,11 +427,6 @@ function SharePlanning({ client, activeSeason, globalSelectedIds, products, purc
                 if (product) {
                     initialList.push(product);
                     addedIds.add(product.id);
-
-                    // Restore calculated dose (Quantity / Area) backing out dose is hard if area changed?
-                    // actually we store quantity and amount. We should implicitly check if we can restore dose?
-                    // better yet, we can't easily restore "dose" because it wasn't saved explicitly in items (only quantity).
-                    // BUT we can re-calculate: Dose = Quantity / Area.
 
                     // Which area? 
                     const seg = product.segment?.toLowerCase() || "";
