@@ -71,9 +71,9 @@ export async function ensureSchema() {
     console.log("Verificando tabela planning_global_configurations...");
     await execute(`
       CREATE TABLE IF NOT EXISTS planning_global_configurations (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id uuid,
-        season_id uuid,
+        id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        user_id text,
+        season_id text,
         product_ids jsonb DEFAULT '[]'::jsonb,
         updated_at timestamp DEFAULT now()
       );

@@ -114,6 +114,7 @@ export const userClientLinks = pgTable("user_client_links", {
   plantingProgress: decimal("planting_progress", { precision: 5, scale: 2 }).default("0.00"),
   isTop80_20: boolean("is_top80_20").notNull().default(false),
   includeInMarketArea: boolean("include_in_market_area").notNull().default(false), // mark client as part of market area for potential calculations
+  creditLimit: decimal("credit_limit", { precision: 12, scale: 2 }), // Deprecated but existing in DB
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
@@ -665,6 +666,7 @@ export const farms = pgTable("farms", {
   clientId: varchar("client_id").notNull().references(() => masterClients.id),
   lat: decimal("lat", { precision: 10, scale: 7 }),
   lng: decimal("lng", { precision: 10, scale: 7 }),
+  centroid: text("centroid"), // Geometry column in DB, mapped as Text here to prevent deletion
   address: text("address"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
