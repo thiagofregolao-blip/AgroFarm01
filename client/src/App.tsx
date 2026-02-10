@@ -43,6 +43,20 @@ import CRMReports from "@/pages/crm/reports";
 import CRMAtendimento from "@/pages/crm/atendimento";
 import CRMLayout from "@/components/crm/layout";
 
+// Farm Stock Management
+import FarmDashboard from "@/pages/fazenda/dashboard";
+import FarmProperties from "@/pages/fazenda/properties";
+import FarmProducts from "@/pages/fazenda/products";
+import FarmInvoices from "@/pages/fazenda/invoices";
+import FarmStock from "@/pages/fazenda/stock";
+import FarmApplications from "@/pages/fazenda/applications";
+import FarmExpenses from "@/pages/fazenda/expenses";
+import FarmTerminals from "@/pages/fazenda/terminals";
+
+// PDV (Point of Sale)
+import PdvLogin from "@/pages/pdv/login";
+import PdvTerminal from "@/pages/pdv/terminal";
+
 function Router() {
   return (
     <Switch>
@@ -89,6 +103,21 @@ function Router() {
         {() => <CRMLayout><CRMReports /></CRMLayout>}
       </Route>
       <Route path="/crm/atendimento/:visitId" component={CRMAtendimento} />
+
+      {/* Farm Stock Management Routes */}
+      <Route path="/fazenda" component={FarmDashboard} />
+      <Route path="/fazenda/propriedades" component={FarmProperties} />
+      <Route path="/fazenda/produtos" component={FarmProducts} />
+      <Route path="/fazenda/faturas" component={FarmInvoices} />
+      <Route path="/fazenda/estoque" component={FarmStock} />
+      <Route path="/fazenda/aplicacoes" component={FarmApplications} />
+      <Route path="/fazenda/despesas" component={FarmExpenses} />
+      <Route path="/fazenda/terminais" component={FarmTerminals} />
+
+      {/* PDV Routes (Tablet) */}
+      <Route path="/pdv/login" component={PdvLogin} />
+      <Route path="/pdv" component={PdvTerminal} />
+
       <ConsultorRoute path="/" component={Dashboard} />
       <ConsultorRoute path="/dashboard" component={Dashboard} />
       <ConsultorRoute path="/vendas" component={Vendas} />

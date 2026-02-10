@@ -36,6 +36,8 @@ export default function AuthPage() {
         setLocation("/manager");
       } else if (user.role === 'faturista') {
         setLocation("/faturista");
+      } else if (user.role === 'agricultor') {
+        setLocation("/fazenda");
       } else {
         setLocation("/dashboard");
       }
@@ -98,7 +100,7 @@ export default function AuthPage() {
                   />
                 </div>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="username">Usuário</Label>
                 <Input
@@ -148,6 +150,7 @@ export default function AuthPage() {
                       <SelectItem value="gerente">Gerentes</SelectItem>
                       <SelectItem value="administrador">Administradores</SelectItem>
                       <SelectItem value="faturista">Faturista</SelectItem>
+                      <SelectItem value="agricultor">Agricultor</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -212,7 +215,7 @@ export default function AuthPage() {
               <Zap className="w-4 h-4" />
               <span className="text-sm font-medium">Digital para o Campo</span>
             </div>
-            
+
             <h2 className="text-5xl font-bold mb-4 leading-tight">
               Transforme suas vendas agrícolas
             </h2>

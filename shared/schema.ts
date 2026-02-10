@@ -1009,3 +1009,192 @@ export const insertPlanningGlobalConfigurationSchema = createInsertSchema(planni
 export type InsertPlanningGlobalConfiguration = z.infer<typeof insertPlanningGlobalConfigurationSchema>;
 export type PlanningGlobalConfiguration = typeof planningGlobalConfigurations.$inferSelect;
 
+// ============================================================================
+// FARM STOCK MANAGEMENT SYSTEM — Tabelas independentes do CRM
+// ============================================================================
+
+// Agricultores (login próprio, separado dos users do CRM)
+export const farmFarmers = pgTable("farm_farmers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  document: text("document"), // RUC / CPF
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Propriedades / Fazendas
+export const farmProperties = pgTable("farm_properties", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  location: text("location"),
+  totalAreaHa: decimal("total_area_ha", { precision: 12, scale: 2 }),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Talhões
+export const farmPlots = pgTable("farm_plots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  propertyId: varchar("property_id").notNull().references(() => farmProperties.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  areaHa: decimal("area_ha", { precision: 12, scale: 2 }).notNull(),
+  crop: text("crop"), // Cultura atual (soja, milho, etc.)
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Catálogo Global de Produtos (dose, unidade, categoria)
+export const farmProductsCatalog = pgTable("farm_products_catalog", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  unit: text("unit").notNull(), // LT, KG, UNI
+  dosePerHa: decimal("dose_per_ha", { precision: 12, scale: 4 }),
+  category: text("category"), // herbicida, fungicida, inseticida, fertilizante, semente, adjuvante, etc.
+  activeIngredient: text("active_ingredient"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Estoque atual (snapshot, atualizado a cada movimentação)
+export const farmStock = pgTable("farm_stock", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull().default("0"),
+  averageCost: decimal("average_cost", { precision: 15, scale: 4 }).notNull().default("0"), // Custo médio ponderado
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  uniqueStock: unique().on(table.farmerId, table.productId),
+}));
+
+// Faturas importadas
+export const farmInvoices = pgTable("farm_invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  invoiceNumber: text("invoice_number"),
+  supplier: text("supplier"),
+  issueDate: timestamp("issue_date"),
+  currency: text("currency").default("USD"),
+  totalAmount: decimal("total_amount", { precision: 15, scale: 2 }),
+  status: text("status").notNull().default("pending"), // pending, confirmed, cancelled
+  rawPdfData: text("raw_pdf_data"), // Texto extraído do PDF para debug
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Itens da fatura
+export const farmInvoiceItems = pgTable("farm_invoice_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull().references(() => farmInvoices.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").references(() => farmProductsCatalog.id),
+  productCode: text("product_code"),
+  productName: text("product_name").notNull(),
+  unit: text("unit"),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  unitPrice: decimal("unit_price", { precision: 15, scale: 4 }).notNull(),
+  discount: decimal("discount", { precision: 15, scale: 2 }).default("0"),
+  totalPrice: decimal("total_price", { precision: 15, scale: 2 }).notNull(),
+  batch: text("batch"), // Lote
+  expiryDate: timestamp("expiry_date"), // Vencimento do produto
+});
+
+// Movimentações de estoque
+export const farmStockMovements = pgTable("farm_stock_movements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
+  type: text("type").notNull(), // "entry" (entrada via fatura) ou "exit" (saída via PDV)
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(), // Positivo entrada, negativo saída
+  unitCost: decimal("unit_cost", { precision: 15, scale: 4 }),
+  referenceType: text("reference_type"), // "invoice" ou "pdv"
+  referenceId: varchar("reference_id"), // ID da fatura ou da aplicação
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Aplicações nos talhões (registradas pelo PDV)
+export const farmApplications = pgTable("farm_applications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
+  plotId: varchar("plot_id").notNull().references(() => farmPlots.id),
+  propertyId: varchar("property_id").notNull().references(() => farmProperties.id),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
+  appliedBy: text("applied_by"), // Nome do funcionário (manual)
+  notes: text("notes"),
+  syncedFromOffline: boolean("synced_from_offline").default(false),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Despesas extras (diesel, frete, mão de obra)
+export const farmExpenses = pgTable("farm_expenses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  plotId: varchar("plot_id").references(() => farmPlots.id),
+  propertyId: varchar("property_id").references(() => farmProperties.id),
+  category: text("category").notNull(), // diesel, frete, mao_de_obra, outro
+  description: text("description"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  expenseDate: timestamp("expense_date").notNull().default(sql`now()`),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Terminais PDV (login do tablet no depósito)
+export const farmPdvTerminals = pgTable("farm_pdv_terminals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), // ex: "Depósito Principal"
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  propertyId: varchar("property_id").references(() => farmProperties.id),
+  isOnline: boolean("is_online").default(false),
+  lastHeartbeat: timestamp("last_heartbeat"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// ============ Farm Zod Schemas & Types ============
+
+export const insertFarmFarmerSchema = createInsertSchema(farmFarmers).omit({ id: true, createdAt: true });
+export type InsertFarmFarmer = z.infer<typeof insertFarmFarmerSchema>;
+export type FarmFarmer = typeof farmFarmers.$inferSelect;
+
+export const insertFarmPropertySchema = createInsertSchema(farmProperties).omit({ id: true, createdAt: true });
+export type InsertFarmProperty = z.infer<typeof insertFarmPropertySchema>;
+export type FarmProperty = typeof farmProperties.$inferSelect;
+
+export const insertFarmPlotSchema = createInsertSchema(farmPlots).omit({ id: true, createdAt: true });
+export type InsertFarmPlot = z.infer<typeof insertFarmPlotSchema>;
+export type FarmPlot = typeof farmPlots.$inferSelect;
+
+export const insertFarmProductCatalogSchema = createInsertSchema(farmProductsCatalog).omit({ id: true, createdAt: true });
+export type InsertFarmProductCatalog = z.infer<typeof insertFarmProductCatalogSchema>;
+export type FarmProductCatalog = typeof farmProductsCatalog.$inferSelect;
+
+export const insertFarmStockSchema = createInsertSchema(farmStock).omit({ id: true, updatedAt: true });
+export type InsertFarmStock = z.infer<typeof insertFarmStockSchema>;
+export type FarmStock = typeof farmStock.$inferSelect;
+
+export const insertFarmInvoiceSchema = createInsertSchema(farmInvoices).omit({ id: true, createdAt: true });
+export type InsertFarmInvoice = z.infer<typeof insertFarmInvoiceSchema>;
+export type FarmInvoice = typeof farmInvoices.$inferSelect;
+
+export const insertFarmInvoiceItemSchema = createInsertSchema(farmInvoiceItems).omit({ id: true });
+export type InsertFarmInvoiceItem = z.infer<typeof insertFarmInvoiceItemSchema>;
+export type FarmInvoiceItem = typeof farmInvoiceItems.$inferSelect;
+
+export const insertFarmStockMovementSchema = createInsertSchema(farmStockMovements).omit({ id: true, createdAt: true });
+export type InsertFarmStockMovement = z.infer<typeof insertFarmStockMovementSchema>;
+export type FarmStockMovement = typeof farmStockMovements.$inferSelect;
+
+export const insertFarmApplicationSchema = createInsertSchema(farmApplications).omit({ id: true, createdAt: true });
+export type InsertFarmApplication = z.infer<typeof insertFarmApplicationSchema>;
+export type FarmApplication = typeof farmApplications.$inferSelect;
+
+export const insertFarmExpenseSchema = createInsertSchema(farmExpenses).omit({ id: true, createdAt: true });
+export type InsertFarmExpense = z.infer<typeof insertFarmExpenseSchema>;
+export type FarmExpense = typeof farmExpenses.$inferSelect;
+
+export const insertFarmPdvTerminalSchema = createInsertSchema(farmPdvTerminals).omit({ id: true, createdAt: true });
+export type InsertFarmPdvTerminal = z.infer<typeof insertFarmPdvTerminalSchema>;
+export type FarmPdvTerminal = typeof farmPdvTerminals.$inferSelect;
