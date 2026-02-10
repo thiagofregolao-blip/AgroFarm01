@@ -25,18 +25,25 @@ const runMigration = async () => {
     });
 
     try {
-        const migrationPath = path.join(process.cwd(), 'migration_planning_2026.sql');
-        const migrationSql = fs.readFileSync(migrationPath, 'utf-8');
+        // Migration 1: Planning tables
+        const planningPath = path.join(process.cwd(), 'migration_planning_2026.sql');
+        const planningSql = fs.readFileSync(planningPath, 'utf-8');
+        console.log('📄 Lendo arquivo de migração:', planningPath);
+        console.log('🚀 Executando SQL (planning)...');
+        await sql.unsafe(planningSql);
+        console.log('✅ Migração planning concluída!');
 
-        console.log('📄 Lendo arquivo de migração:', migrationPath);
-        console.log('🚀 Executando SQL...');
+        // Migration 2: Farm tables
+        const farmPath = path.join(process.cwd(), 'migration_farm_system.sql');
+        if (fs.existsSync(farmPath)) {
+            const farmSql = fs.readFileSync(farmPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', farmPath);
+            console.log('🚀 Executando SQL (farm)...');
+            await sql.unsafe(farmSql);
+            console.log('✅ Migração farm concluída!');
+        }
 
-        // Executa o SQL. O comando `simple` envia a query como string única, útil para multiplos statements se suportado ou quebra
-        // O driver postgres.js suporta executar arquivo lido como string
-        await sql.unsafe(migrationSql);
-
-        console.log('✅ Migração concluída com sucesso!');
-        console.log('Tabelas criadas: planning_products_base, sales_planning, sales_planning_items');
+        console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
         console.error('❌ Erro ao executar migração:', error);

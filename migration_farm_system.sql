@@ -1,20 +1,9 @@
 -- Farm Stock Management System - Migration
--- Creates all farm_* tables
-
-CREATE TABLE IF NOT EXISTS farm_farmers (
-  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  username TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL,
-  name TEXT NOT NULL,
-  email TEXT,
-  phone TEXT,
-  document TEXT,
-  created_at TIMESTAMP DEFAULT now()
-);
+-- Creates all farm_* tables (references users table for auth integration)
 
 CREATE TABLE IF NOT EXISTS farm_properties (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  farmer_id TEXT NOT NULL REFERENCES farm_farmers(id) ON DELETE CASCADE,
+  farmer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   location TEXT,
   total_area_ha DECIMAL(12,2),
@@ -42,7 +31,7 @@ CREATE TABLE IF NOT EXISTS farm_products_catalog (
 
 CREATE TABLE IF NOT EXISTS farm_stock (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  farmer_id TEXT NOT NULL REFERENCES farm_farmers(id) ON DELETE CASCADE,
+  farmer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   product_id TEXT NOT NULL REFERENCES farm_products_catalog(id),
   quantity DECIMAL(15,4) NOT NULL DEFAULT 0,
   average_cost DECIMAL(15,4) NOT NULL DEFAULT 0,
@@ -52,7 +41,7 @@ CREATE TABLE IF NOT EXISTS farm_stock (
 
 CREATE TABLE IF NOT EXISTS farm_invoices (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  farmer_id TEXT NOT NULL REFERENCES farm_farmers(id) ON DELETE CASCADE,
+  farmer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   invoice_number TEXT,
   supplier TEXT,
   issue_date TIMESTAMP,
@@ -80,7 +69,7 @@ CREATE TABLE IF NOT EXISTS farm_invoice_items (
 
 CREATE TABLE IF NOT EXISTS farm_stock_movements (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  farmer_id TEXT NOT NULL REFERENCES farm_farmers(id) ON DELETE CASCADE,
+  farmer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   product_id TEXT NOT NULL REFERENCES farm_products_catalog(id),
   type TEXT NOT NULL,
   quantity DECIMAL(15,4) NOT NULL,
@@ -93,7 +82,7 @@ CREATE TABLE IF NOT EXISTS farm_stock_movements (
 
 CREATE TABLE IF NOT EXISTS farm_applications (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  farmer_id TEXT NOT NULL REFERENCES farm_farmers(id) ON DELETE CASCADE,
+  farmer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   product_id TEXT NOT NULL REFERENCES farm_products_catalog(id),
   plot_id TEXT NOT NULL REFERENCES farm_plots(id),
   property_id TEXT NOT NULL REFERENCES farm_properties(id),
@@ -107,7 +96,7 @@ CREATE TABLE IF NOT EXISTS farm_applications (
 
 CREATE TABLE IF NOT EXISTS farm_expenses (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  farmer_id TEXT NOT NULL REFERENCES farm_farmers(id) ON DELETE CASCADE,
+  farmer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   plot_id TEXT REFERENCES farm_plots(id),
   property_id TEXT REFERENCES farm_properties(id),
   category TEXT NOT NULL,
@@ -119,7 +108,7 @@ CREATE TABLE IF NOT EXISTS farm_expenses (
 
 CREATE TABLE IF NOT EXISTS farm_pdv_terminals (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  farmer_id TEXT NOT NULL REFERENCES farm_farmers(id) ON DELETE CASCADE,
+  farmer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   username TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL,
