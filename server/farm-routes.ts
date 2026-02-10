@@ -311,16 +311,35 @@ export function registerFarmRoutes(app: Express) {
                 rawPdfData: parsed.rawText.substring(0, 5000), // Save first 5k chars for debug
             });
 
-            // Create invoice items (try to match with catalog products)
+            // Create invoice items (try to match with catalog products, auto-create if not found)
             const allProducts = await farmStorage.getAllProducts();
-            const invoiceItems = parsed.items.map(item => {
+            const invoiceItems = [];
+
+            for (const item of parsed.items) {
                 // Try to match product by name (fuzzy)
-                const matchedProduct = allProducts.find(p =>
+                let matchedProduct = allProducts.find(p =>
                     p.name.toUpperCase().includes(item.productName.toUpperCase().substring(0, 10)) ||
                     item.productName.toUpperCase().includes(p.name.toUpperCase().substring(0, 10))
                 );
 
-                return {
+                // Auto-create product if not found in catalog
+                if (!matchedProduct) {
+                    try {
+                        matchedProduct = await farmStorage.createProduct({
+                            name: item.productName,
+                            unit: item.unit,
+                            category: null,
+                            dosePerHa: null,
+                            activeIngredient: null,
+                        });
+                        allProducts.push(matchedProduct); // Add to list to avoid duplicates in same invoice
+                        console.log(`[FARM_INVOICE_IMPORT] Auto-created product: ${item.productName} (${matchedProduct.id})`);
+                    } catch (err) {
+                        console.error(`[FARM_INVOICE_IMPORT] Failed to auto-create product: ${item.productName}`, err);
+                    }
+                }
+
+                invoiceItems.push({
                     invoiceId: invoice.id,
                     productId: matchedProduct?.id || null,
                     productCode: item.productCode,
@@ -332,8 +351,8 @@ export function registerFarmRoutes(app: Express) {
                     totalPrice: String(item.totalPrice),
                     batch: item.batch || null,
                     expiryDate: item.expiryDate || null,
-                };
-            });
+                });
+            }
 
             if (invoiceItems.length > 0) {
                 await farmStorage.createInvoiceItems(invoiceItems);
