@@ -132,9 +132,10 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
     if (totalAmount === 0) totalAmount = subtotal;
 
     // Extract items from the product table
-    // The format has lines like:
-    // 924877 CONTACT 72 - 20LTS LT 5 110,00 550,00
-    // We look for lines starting with a product code (digits) followed by description
+    // The C.VALE PDF text comes out with fields concatenated, e.g.:
+    // "550,00110,005LTCONTACT 72 - 20LTS924877"
+    // This means: Total=550,00 | UnitPrice=110,00 | Qty=5 | Unit=LT | Name=CONTACT 72 - 20LTS | Code=924877
+    // The header line is: "Cod. Descripción UNI Cantidad Precio Unitario Descuento Exentas 5% 10%"
 
     let inProductSection = false;
 
@@ -142,77 +143,98 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         const line = lines[i];
 
         // Detect start of product table
-        if (line.includes('Descripci') && line.includes('Cantidad')) {
+        if (line.includes('Descripci') && (line.includes('Cantidad') || line.includes('Precio'))) {
             inProductSection = true;
+            // Skip the header line and possibly the next "Valor de Venta" line
+            continue;
+        }
+
+        // Skip "Valor de Venta" header sub-line
+        if (inProductSection && line.match(/^Valor\s*de\s*Venta$/i)) {
             continue;
         }
 
         // Detect end of product table
-        if (inProductSection && (line.includes('Sub Total') || line.includes('Descuento global'))) {
+        if (inProductSection && (line.includes('Sub Total') || line.includes('Descuento global') || line.includes('Total a pagar'))) {
             inProductSection = false;
             continue;
         }
 
+        // Skip non-product lines (Pedido, Registro SENAVE, Lote/batch info)
         if (!inProductSection) continue;
+        if (line.match(/^Pedido:/i)) continue;
+        if (line.match(/^Registro\s*SENAVE/i)) continue;
+        if (line.match(/^Vencimiento\s*Cantidad\s*Lote/i)) continue;
+        if (line.match(/^\d+\/\d+/)) continue; // Batch data lines like "3524/25 5 30-11-2027" or "LA40007795 2 18-07-2029"
+        if (line.match(/^[A-Z]{2}\d+\s+\d+\s+\d{2}-\d{2}-\d{4}/)) continue; // Batch line format
 
-        // Try to match a product line
-        // Pattern: CODE DESCRIPTION UNIT QUANTITY UNIT_PRICE [DISCOUNT] TOTAL
-        const productMatch = line.match(
-            /^(\d{4,10})\s+(.+?)\s+(LT|KG|UNI|UN|L|SC)\s+(\d+[\d.,]*)\s+([\d.,]+)\s+([\d.,]*)\s*$/i
-        );
+        // Try C.VALE concatenated format first
+        // Pattern: TOTAL_PRICE UNIT_PRICE QTY UNIT PRODUCT_NAME CODE
+        // Example: "550,00110,005LTCONTACT 72 - 20LTS924877"
+        // The code is always at the end (6-digit number)
+        const codeMatch = line.match(/(\d{4,10})$/);
+        if (codeMatch) {
+            const productCode = codeMatch[1];
+            const beforeCode = line.substring(0, line.length - productCode.length).trim();
 
-        if (productMatch) {
-            const productCode = productMatch[1];
-            const productName = productMatch[2].trim();
-            const unit = normalizeUnit(productMatch[3]);
-            const quantity = parseNumber(productMatch[4]);
-            const unitPrice = parseNumber(productMatch[5]);
+            // Find the unit marker (LT, KG, UNI, UN, SC, L) in the remaining text
+            const unitMatch = beforeCode.match(/([\d.,]+)(LT|KG|UNI|UN|SC|L)(.+)/i);
+            if (unitMatch) {
+                const numbersBeforeUnit = unitMatch[1]; // e.g. "550,00110,005"
+                const unit = normalizeUnit(unitMatch[2]);
+                const productName = unitMatch[3].trim();
 
-            // Check for values in tax columns (Exentas, 5%, 10%)
-            // The last number could be the total (in one of the tax columns)
-            let totalPrice = 0;
-            let discount = 0;
+                // Parse the concatenated numbers before the unit
+                // They are: TOTAL, UNIT_PRICE, QTY concatenated together
+                // We need to split them intelligently
+                const { quantity, unitPrice, totalPrice } = parsePackedNumbers(numbersBeforeUnit);
 
-            // Look at the next few lines for Lote/Vencimento info
-            let batch: string | undefined;
-            let expiryDate: Date | undefined;
+                if (productName && quantity > 0) {
+                    // Look for batch/expiry in following lines
+                    let batch: string | undefined;
+                    let expiryDate: Date | undefined;
 
-            // Check if there's a "Pedido SENAVE" line after
-            for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-                const nextLine = lines[j];
-
-                // Batch/Lot info
-                const batchMatch = nextLine.match(/Lote\s+Cantidad\s+Vencimiento/i);
-                if (batchMatch) {
-                    // The next line should have the actual values
-                    const batchDataLine = lines[j + 1];
-                    if (batchDataLine) {
-                        const batchParts = batchDataLine.match(/(\S+)\s+\d+\s+(\d{2}\/\d{2}\/\d{4})/);
-                        if (batchParts) {
-                            batch = batchParts[1];
-                            const dateParts = batchParts[2].split('/');
-                            expiryDate = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
+                    for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+                        const nextLine = lines[j];
+                        // Batch info line: "3524/25 5 30-11-2027" or "LA40007795 2 18-07-2029"
+                        const batchMatch = nextLine.match(/^(\S+)\s+\d+\s+(\d{2}-\d{2}-\d{4})$/);
+                        if (batchMatch) {
+                            batch = batchMatch[1];
+                            const dp = batchMatch[2].split('-');
+                            expiryDate = new Date(parseInt(dp[2]), parseInt(dp[1]) - 1, parseInt(dp[0]));
                         }
                     }
+
+                    items.push({
+                        productCode,
+                        productName,
+                        unit,
+                        quantity,
+                        unitPrice,
+                        discount: 0,
+                        totalPrice,
+                        batch,
+                        expiryDate,
+                    });
+                    continue;
                 }
             }
+        }
 
-            // Calculate total - look at value columns at end of line
-            // In the C.VALE format, the total appears in one of the rightmost Exentas/5%/10% columns
-            totalPrice = quantity * unitPrice;
+        // Fallback: Try normal spaced format
+        // Pattern: CODE DESCRIPTION UNIT QUANTITY UNIT_PRICE [DISCOUNT] TOTAL
+        const normalMatch = line.match(
+            /^(\d{4,10})\s+(.+?)\s+(LT|KG|UNI|UN|L|SC)\s+([\d.,]+)\s+([\d.,]+)\s*([\d.,]*)\s*$/i
+        );
 
-            // Look for the actual total in the line - it's often the last significant number
-            const allNumbers = line.match(/[\d.,]+/g);
-            if (allNumbers && allNumbers.length >= 4) {
-                const lastNum = parseNumber(allNumbers[allNumbers.length - 1]);
-                // Validate: if the last number is close to qty * unitPrice, use it
-                if (Math.abs(lastNum - totalPrice) < totalPrice * 0.5) {
-                    totalPrice = lastNum;
-                } else if (lastNum > 0) {
-                    // Maybe it's the actual total
-                    totalPrice = lastNum;
-                }
-            }
+        if (normalMatch) {
+            const productCode = normalMatch[1];
+            const productName = normalMatch[2].trim();
+            const unit = normalizeUnit(normalMatch[3]);
+            const quantity = parseNumber(normalMatch[4]);
+            const unitPrice = parseNumber(normalMatch[5]);
+            const lastNum = normalMatch[6] ? parseNumber(normalMatch[6]) : 0;
+            const totalPrice = lastNum > 0 ? lastNum : quantity * unitPrice;
 
             items.push({
                 productCode,
@@ -220,12 +242,16 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
                 unit,
                 quantity,
                 unitPrice,
-                discount,
+                discount: 0,
                 totalPrice,
-                batch,
-                expiryDate,
             });
         }
+    }
+
+    // If we still found no items, try a more aggressive scan of the full text
+    if (items.length === 0) {
+        console.log("[FARM_INVOICE_PARSER] No items found with line-by-line. Trying full text scan...");
+        console.log("[FARM_INVOICE_PARSER] Lines:", lines.slice(0, 30));
     }
 
     return {
@@ -240,6 +266,66 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         items,
         rawText: text,
     };
+}
+
+/**
+ * Parse packed/concatenated numbers from C.VALE PDF format
+ * e.g. "550,00110,005" => Total=550.00, UnitPrice=110.00, Qty=5
+ * e.g. "580,00290,002" => Total=580.00, UnitPrice=290.00, Qty=2
+ * e.g. "1.130,00110,005" => Total=1130.00, UnitPrice=110.00, Qty=5
+ */
+function parsePackedNumbers(packed: string): { quantity: number; unitPrice: number; totalPrice: number } {
+    // Strategy: split by finding number boundaries
+    // Numbers in C.VALE use European format: digits, optional thousands dots, comma, 2 decimal digits
+    // e.g. "550,00" or "1.130,00" or just "5" (integer qty)
+
+    // Find all numbers with comma-decimal format, from right to left
+    // Use regex to find all "number,DD" patterns (where DD = 2 decimal digits)
+    const decimalNumbers: string[] = [];
+    const remaining: string[] = [];
+
+    // Match numbers like: 550,00 or 1.130,00 or 110,00
+    // We split by finding all comma-delimited numbers
+    const regex = /(\d[\d.]*,\d{2})/g;
+    let match;
+    let lastIndex = 0;
+    const matches: { value: string; start: number; end: number }[] = [];
+
+    while ((match = regex.exec(packed)) !== null) {
+        matches.push({ value: match[1], start: match.index, end: match.index + match[0].length });
+    }
+
+    if (matches.length >= 2) {
+        // We have at least total and unit price
+        // The format is: TOTAL UNIT_PRICE QTY (concatenated)
+        const totalStr = matches[0].value;
+        const unitPriceStr = matches[1].value;
+
+        // Quantity is whatever comes after the last decimal number
+        const afterLastDecimal = packed.substring(matches[matches.length - 1].end);
+        // Or between the unit price number and the end
+        let qtyStr = packed.substring(matches[1].end);
+
+        const totalPrice = parseNumber(totalStr);
+        const unitPrice = parseNumber(unitPriceStr);
+        const quantity = parseInt(qtyStr) || (unitPrice > 0 ? Math.round(totalPrice / unitPrice) : 1);
+
+        return { quantity, unitPrice, totalPrice };
+    } else if (matches.length === 1) {
+        // Only one decimal number found - it's the total or unit price
+        const price = parseNumber(matches[0].value);
+        // Try to extract qty from remaining text
+        const before = packed.substring(0, matches[0].start);
+        const after = packed.substring(matches[0].end);
+        const qtyMatch = (before + after).match(/(\d+)/);
+        const quantity = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+
+        return { quantity, unitPrice: price, totalPrice: price * quantity };
+    }
+
+    // Fallback: try to parse as single number
+    const num = parseNumber(packed);
+    return { quantity: num || 1, unitPrice: 0, totalPrice: 0 };
 }
 
 function parseNumber(str: string): number {
