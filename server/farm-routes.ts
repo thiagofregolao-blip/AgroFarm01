@@ -409,6 +409,20 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // Delete invoice
+    app.delete("/api/farm/invoices/:id", requireFarmer, async (req, res) => {
+        try {
+            const invoice = await farmStorage.getInvoiceById(req.params.id);
+            if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+            await farmStorage.deleteInvoice(req.params.id);
+            res.json({ message: "Fatura excluída com sucesso." });
+        } catch (error) {
+            console.error("[FARM_INVOICE_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete invoice" });
+        }
+    });
+
     // ==================== APPLICATIONS ====================
 
     app.get("/api/farm/applications", requireFarmer, async (req, res) => {

@@ -190,6 +190,10 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
                 const { quantity, unitPrice, totalPrice } = parsePackedNumbers(numbersBeforeUnit);
 
                 if (productName && quantity > 0) {
+                    // Extract package size from product name (e.g. "CONTACT 72 - 20LTS" → 20)
+                    const pkgSize = extractPackageSize(productName, unit);
+                    const realQuantity = quantity * pkgSize;
+
                     // Look for batch/expiry in following lines
                     let batch: string | undefined;
                     let expiryDate: Date | undefined;
@@ -209,8 +213,8 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
                         productCode,
                         productName,
                         unit,
-                        quantity,
-                        unitPrice,
+                        quantity: realQuantity,
+                        unitPrice: pkgSize > 1 ? unitPrice / pkgSize : unitPrice,
                         discount: 0,
                         totalPrice,
                         batch,
@@ -362,4 +366,32 @@ function normalizeUnit(unit: string): string {
     if (u === 'UN' || u === 'UNI') return 'UNI';
     if (u === 'SC') return 'SC'; // Saco
     return u;
+}
+
+/**
+ * Extract package size from product description
+ * e.g. "CONTACT 72 - 20LTS" → 20 (20 liters per unit)
+ * e.g. "SPHERE MAX SC - 5LTS" → 5 (5 liters per unit)
+ * e.g. "HERBICIDA 10KG" → 10
+ * If no package size found, returns 1
+ */
+function extractPackageSize(productName: string, unit: string): number {
+    // Match patterns like "20LTS", "5LTS", "20L", "10KG", "20 LTS"
+    const patterns = [
+        /(\d+(?:[.,]\d+)?)\s*LTS?\b/i,
+        /(\d+(?:[.,]\d+)?)\s*KG\b/i,
+        /(\d+(?:[.,]\d+)?)\s*(?:LITROS?|KILOS?)\b/i,
+    ];
+
+    for (const pattern of patterns) {
+        const match = productName.match(pattern);
+        if (match) {
+            const size = parseFloat(match[1].replace(',', '.'));
+            if (size > 0 && size <= 1000) {
+                return size;
+            }
+        }
+    }
+
+    return 1;
 }

@@ -240,6 +240,14 @@ export class FarmStorage {
         return invoice;
     }
 
+    async deleteInvoice(id: string): Promise<void> {
+        await dbReady;
+        // Delete invoice items first (FK constraint)
+        await db.delete(farmInvoiceItems).where(eq(farmInvoiceItems.invoiceId, id));
+        // Delete the invoice
+        await db.delete(farmInvoices).where(eq(farmInvoices.id, id));
+    }
+
     async getInvoiceItems(invoiceId: string): Promise<FarmInvoiceItem[]> {
         await dbReady;
         return db.select().from(farmInvoiceItems).where(eq(farmInvoiceItems.invoiceId, invoiceId));

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function FarmInvoices() {
@@ -48,6 +48,16 @@ export default function FarmInvoices() {
             setSelectedInvoice(null);
         },
         onError: () => toast({ title: "Erro ao confirmar fatura", variant: "destructive" }),
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/invoices/${id}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
+            toast({ title: "🗑️ Fatura excluída com sucesso." });
+            setSelectedInvoice(null);
+        },
+        onError: () => toast({ title: "Erro ao excluir fatura", variant: "destructive" }),
     });
 
     const linkProductMutation = useMutation({
@@ -225,8 +235,20 @@ export default function FarmInvoices() {
                                         <Badge variant={inv.status === "confirmed" ? "default" : "secondary"}>
                                             {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
                                         </Badge>
-                                        <p className="font-semibold text-sm">${inv.totalAmount || "0"}</p>
+                                        <p className="font-semibold text-sm">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
                                         <Eye className="h-4 w-4 text-gray-400" />
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (confirm("Excluir esta fatura? Esta ação não pode ser desfeita.")) {
+                                                    deleteMutation.mutate(inv.id);
+                                                }
+                                            }}
+                                            className="p-1 rounded hover:bg-red-100 transition-colors"
+                                            title="Excluir fatura"
+                                        >
+                                            <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
+                                        </button>
                                     </div>
                                 ))}
                             </div>
