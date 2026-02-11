@@ -3,10 +3,9 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2 } from "lucide-react";
+import { Loader2, BarChart3, Target, TrendingUp } from "lucide-react";
 
 export default function PdvLogin() {
     const [, setLocation] = useLocation();
@@ -15,6 +14,17 @@ export default function PdvLogin() {
     const [loading, setLoading] = useState(false);
     const { toast } = useToast();
 
+    const enterFullscreen = () => {
+        try {
+            const el = document.documentElement;
+            if (el.requestFullscreen) {
+                el.requestFullscreen().catch(() => { });
+            } else if ((el as any).webkitRequestFullscreen) {
+                (el as any).webkitRequestFullscreen();
+            }
+        } catch { }
+    };
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -22,10 +32,13 @@ export default function PdvLogin() {
         try {
             const res = await apiRequest("POST", "/api/pdv/login", { username, password });
             const data = await res.json();
-            // Store PDV data in sessionStorage for offline use
             sessionStorage.setItem("pdvData", JSON.stringify(data));
             toast({ title: `Terminal ${data.terminal.name} conectado` });
-            setLocation("/pdv");
+            // Small delay to let the session persist before navigating
+            setTimeout(() => {
+                enterFullscreen();
+                setLocation("/pdv");
+            }, 200);
         } catch (err) {
             toast({
                 title: "Erro no login",
@@ -38,59 +51,91 @@ export default function PdvLogin() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                <div className="text-center mb-8">
-                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-4xl shadow-xl mx-auto mb-4">
-                        🏪
+        <div className="min-h-screen flex">
+            {/* Left side — Login form */}
+            <div className="flex-1 flex items-center justify-center bg-white p-8">
+                <div className="w-full max-w-sm">
+                    <div className="text-center mb-8">
+                        <div className="w-16 h-16 rounded-2xl bg-amber-400 flex items-center justify-center text-3xl mx-auto mb-4 shadow-md">
+                            🌿
+                        </div>
+                        <h1 className="text-2xl font-bold text-gray-800">PDV Depósito</h1>
+                        <p className="text-gray-400 text-sm mt-1">Controle de saída de produtos</p>
                     </div>
-                    <h1 className="text-3xl font-bold text-white">PDV Depósito</h1>
-                    <p className="text-slate-400 mt-1">AgroFarm — Saída de Produtos</p>
-                </div>
 
-                <Card className="shadow-xl border-slate-700 bg-slate-800/80">
-                    <CardHeader>
-                        <CardTitle className="text-white">Login do Terminal</CardTitle>
-                        <CardDescription className="text-slate-400">Use as credenciais cadastradas pelo agricultor</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleLogin} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label className="text-slate-300">Usuário</Label>
-                                <Input
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    placeholder="deposito1"
-                                    required
-                                    autoFocus
-                                    className="bg-slate-700 border-slate-600 text-white"
-                                />
+                    <form onSubmit={handleLogin} className="space-y-5">
+                        <div className="space-y-1.5">
+                            <Label className="text-gray-700 text-sm font-medium">Usuário</Label>
+                            <Input
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                placeholder="seu.usuario"
+                                required
+                                autoFocus
+                                className="h-11 bg-white border-gray-200 text-gray-800 placeholder:text-gray-300 rounded-lg"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-gray-700 text-sm font-medium">Senha</Label>
+                            <Input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                required
+                                className="h-11 bg-white border-gray-200 text-gray-800 placeholder:text-gray-300 rounded-lg"
+                            />
+                        </div>
+                        <Button
+                            type="submit"
+                            className="w-full h-11 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg text-base"
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Conectando...</>
+                            ) : (
+                                "Entrar"
+                            )}
+                        </Button>
+                    </form>
+                </div>
+            </div>
+
+            {/* Right side — Green gradient banner */}
+            <div className="hidden lg:flex flex-1 bg-gradient-to-br from-emerald-400 via-emerald-500 to-green-600 p-12 flex-col justify-center text-white relative overflow-hidden">
+                {/* Decorative circles */}
+                <div className="absolute top-[-80px] right-[-80px] w-64 h-64 rounded-full bg-white/10" />
+                <div className="absolute bottom-[-60px] left-[-40px] w-48 h-48 rounded-full bg-white/5" />
+
+                <div className="relative z-10 max-w-md">
+                    <span className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full mb-6">
+                        ✨ Digital para o Campo
+                    </span>
+                    <h2 className="text-4xl font-bold leading-tight mb-4">
+                        Controle total do seu depósito
+                    </h2>
+                    <p className="text-emerald-100 text-base leading-relaxed mb-8">
+                        Gerencie saída de produtos, acompanhe estoque em tempo real e distribua insumos com tecnologia de ponta.
+                    </p>
+
+                    <div className="space-y-3">
+                        {[
+                            { icon: BarChart3, title: "Estoque em Tempo Real", desc: "Acompanhe entradas e saídas automaticamente" },
+                            { icon: Target, title: "Distribuição Inteligente", desc: "Calcule dose por hectare automaticamente" },
+                            { icon: TrendingUp, title: "Rastreabilidade", desc: "Histórico completo de aplicações por talhão" },
+                        ].map(({ icon: Icon, title, desc }) => (
+                            <div key={title} className="flex items-start gap-3 bg-white/15 backdrop-blur-sm rounded-xl p-3">
+                                <div className="w-9 h-9 rounded-lg bg-amber-400 flex items-center justify-center shrink-0">
+                                    <Icon className="h-4 w-4 text-white" />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-sm">{title}</p>
+                                    <p className="text-emerald-100 text-xs">{desc}</p>
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label className="text-slate-300">Senha</Label>
-                                <Input
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    required
-                                    className="bg-slate-700 border-slate-600 text-white"
-                                />
-                            </div>
-                            <Button
-                                type="submit"
-                                className="w-full bg-orange-600 hover:bg-orange-700 text-lg py-6"
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Conectando...</>
-                                ) : (
-                                    "Entrar no PDV"
-                                )}
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
+                        ))}
+                    </div>
+                </div>
             </div>
         </div>
     );

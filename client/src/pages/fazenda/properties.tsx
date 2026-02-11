@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit2, Trash2, MapPin, Ruler, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 
 const PlotMapDraw = lazy(() => import("@/components/fazenda/plot-map-draw"));
+import PlotThumbnail from "@/components/fazenda/plot-thumbnail";
 
 export default function FarmProperties() {
     const [, setLocation] = useLocation();
@@ -86,17 +87,46 @@ export default function FarmProperties() {
                     </div>
                 )}
 
-                {/* New/Edit Plot Dialog — FULLSCREEN with map */}
-                <Dialog open={openNewPlot !== null || editPlot !== null} onOpenChange={() => { setOpenNewPlot(null); setEditPlot(null); }}>
-                    <DialogContent className="max-w-[95vw] w-[1200px] h-[85vh] p-0 overflow-hidden flex flex-row gap-0 [&>button]:z-[1001] [&>button]:bg-white/80 [&>button]:rounded-full [&>button]:p-1">
-                        <PlotForm
-                            propertyId={openNewPlot || editPlot?.propertyId}
-                            initial={editPlot}
-                            onSave={() => { setOpenNewPlot(null); setEditPlot(null); queryClient.invalidateQueries({ queryKey: ["/api/farm/properties"] }); }}
-                            onCancel={() => { setOpenNewPlot(null); setEditPlot(null); }}
+                {/* New/Edit Plot — Custom fullscreen overlay (bypasses Dialog CSS issues) */}
+                {(openNewPlot !== null || editPlot !== null) && (
+                    <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {/* Backdrop */}
+                        <div
+                            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+                            onClick={() => { setOpenNewPlot(null); setEditPlot(null); }}
                         />
-                    </DialogContent>
-                </Dialog>
+                        {/* Content */}
+                        <div style={{
+                            position: "relative",
+                            width: "1200px",
+                            maxWidth: "95vw",
+                            height: "85vh",
+                            background: "white",
+                            borderRadius: "12px",
+                            overflow: "hidden",
+                            display: "flex",
+                            flexDirection: "row",
+                            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+                        }}>
+                            {/* Close button */}
+                            <button
+                                onClick={() => { setOpenNewPlot(null); setEditPlot(null); }}
+                                style={{
+                                    position: "absolute", top: 12, right: 12, zIndex: 1001,
+                                    background: "rgba(255,255,255,0.8)", border: "none", borderRadius: "50%",
+                                    width: 32, height: 32, cursor: "pointer", display: "flex",
+                                    alignItems: "center", justifyContent: "center", fontSize: 18,
+                                }}
+                            >✕</button>
+                            <PlotForm
+                                propertyId={openNewPlot || editPlot?.propertyId}
+                                initial={editPlot}
+                                onSave={() => { setOpenNewPlot(null); setEditPlot(null); queryClient.invalidateQueries({ queryKey: ["/api/farm/properties"] }); }}
+                                onCancel={() => { setOpenNewPlot(null); setEditPlot(null); }}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
         </FarmLayout>
     );
@@ -145,9 +175,12 @@ function PropertyCard({ property, expanded, onToggle, onEdit, onAddPlot, onEditP
             </div>
 
             {expanded && (
-                <div className="border-t border-emerald-100 p-4 bg-emerald-50/30">
-                    <div className="flex items-center justify-between mb-3">
-                        <p className="text-sm font-medium text-emerald-700">{plots.length} talhões — {totalArea.toFixed(1)} ha total</p>
+                <div style={{ padding: 16, borderTop: "1px solid #d1fae5", background: "rgba(236,253,245,0.3)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: "#6b7280", whiteSpace: "nowrap" }}>
+                            {totalArea.toFixed(2)} ha
+                        </p>
+                        <div style={{ flex: 1, height: 1, background: "#d1d5db" }} />
                         <Button size="sm" variant="outline" onClick={onAddPlot}>
                             <Plus className="mr-1 h-3 w-3" /> Talhão
                         </Button>
@@ -155,21 +188,55 @@ function PropertyCard({ property, expanded, onToggle, onEdit, onAddPlot, onEditP
                     {plots.length === 0 ? (
                         <p className="text-sm text-gray-400 py-2">Nenhum talhão cadastrado</p>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
                             {plots.map((plot: any) => {
-                                const hasMap = plot.coordinates && plot.coordinates !== "[]";
+                                let coords: any[] = [];
+                                try { coords = plot.coordinates ? JSON.parse(plot.coordinates) : []; } catch { }
+                                const hasMap = coords.length >= 3;
+
+                                if (hasMap) {
+                                    return (
+                                        <PlotThumbnail
+                                            key={plot.id}
+                                            coordinates={coords}
+                                            name={plot.name}
+                                            areaHa={plot.areaHa}
+                                            onClick={() => onEditPlot(plot)}
+                                            onMenuClick={() => {
+                                                if (window.confirm(`Excluir talhão "${plot.name}"?`)) {
+                                                    deletePlot.mutate(plot.id);
+                                                }
+                                            }}
+                                        />
+                                    );
+                                }
+
+                                // Card without map
                                 return (
-                                    <div key={plot.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-emerald-100">
-                                        <div>
-                                            <div className="flex items-center gap-1.5">
-                                                <p className="font-medium text-sm">{plot.name}</p>
-                                                {hasMap && <MapPin className="h-3 w-3 text-emerald-500" />}
+                                    <div
+                                        key={plot.id}
+                                        onClick={() => onEditPlot(plot)}
+                                        style={{
+                                            position: "relative", borderRadius: 12, overflow: "hidden",
+                                            cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                                            background: "linear-gradient(135deg, #059669, #10b981)",
+                                            paddingBottom: "75%",
+                                        }}
+                                    >
+                                        <div style={{
+                                            position: "absolute", bottom: 0, left: 0, right: 0,
+                                            background: "linear-gradient(transparent, rgba(0,0,0,0.5))",
+                                            padding: "24px 12px 10px 12px",
+                                            display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+                                        }}>
+                                            <div>
+                                                <p style={{ color: "white", fontWeight: 700, fontSize: 15, margin: 0 }}>{plot.name}</p>
+                                                <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 13, margin: 0 }}>({plot.areaHa} ha)</p>
                                             </div>
-                                            <p className="text-xs text-gray-500">{plot.areaHa} ha {plot.crop ? `• ${plot.crop}` : ""}</p>
-                                        </div>
-                                        <div className="flex gap-1">
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditPlot(plot)}><Edit2 className="h-3 w-3" /></Button>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => deletePlot.mutate(plot.id)}><Trash2 className="h-3 w-3" /></Button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); if (window.confirm(`Excluir talhão "${plot.name}"?`)) deletePlot.mutate(plot.id); }}
+                                                style={{ background: "none", border: "none", color: "white", cursor: "pointer", fontSize: 20, padding: "4px 8px" }}
+                                            >⋮</button>
                                         </div>
                                     </div>
                                 );
@@ -223,7 +290,6 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
         }
         return [];
     });
-    const [showMap, setShowMap] = useState(true);
     const { toast } = useToast();
 
     const save = useMutation({
@@ -240,42 +306,35 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
     });
 
     return (
-        <div className="flex flex-col md:flex-row h-full">
+        <div style={{ display: "flex", flexDirection: "row", width: "100%", height: "100%" }}>
             {/* LEFT: Form panel */}
-            <div className="w-full md:w-[340px] flex flex-col border-r border-gray-200 bg-white shrink-0">
-                <div className="px-5 py-4 border-b border-gray-200 bg-emerald-50">
-                    <h2 className="text-lg font-bold text-emerald-800">
+            <div style={{ width: 340, minWidth: 340, display: "flex", flexDirection: "column", borderRight: "1px solid #e5e7eb", background: "white", flexShrink: 0 }}>
+                <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", background: "#ecfdf5" }}>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: "#065f46" }}>
                         {initial ? "Editar" : "Novo"} Talhão
                     </h2>
-                    <p className="text-sm text-emerald-600 mt-0.5">
+                    <p style={{ fontSize: 13, color: "#059669", marginTop: 2 }}>
                         Desenhe a área no mapa para calcular automaticamente
                     </p>
                 </div>
 
-                <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="flex-1 flex flex-col p-5">
-                    <div className="flex-1 space-y-4">
+                <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} style={{ flex: 1, display: "flex", flexDirection: "column", padding: 20 }}>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
                         <div>
                             <Label className="text-sm font-semibold text-gray-700">Nome do Talhão *</Label>
                             <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Talhão 1" required className="mt-1" />
                         </div>
 
                         <div>
-                            <div className="flex items-center justify-between">
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                 <Label className="text-sm font-semibold text-gray-700">Área (ha) *</Label>
                                 {coordinates.length >= 3 && (
-                                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
+                                    <span style={{ fontSize: 11, background: "#d1fae5", color: "#047857", padding: "2px 8px", borderRadius: 12, fontWeight: 500 }}>
                                         📐 Calculado do mapa
                                     </span>
                                 )}
                             </div>
-                            <Input
-                                type="number"
-                                step="0.01"
-                                value={areaHa}
-                                onChange={e => setAreaHa(e.target.value)}
-                                required
-                                className="mt-1 text-lg font-bold"
-                            />
+                            <Input type="number" step="0.01" value={areaHa} onChange={e => setAreaHa(e.target.value)} required className="mt-1 text-lg font-bold" />
                         </div>
 
                         <div>
@@ -283,24 +342,27 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
                             <Input value={crop} onChange={e => setCrop(e.target.value)} placeholder="Ex: Soja, Milho..." className="mt-1" />
                         </div>
 
-                        {/* Map status */}
-                        <div className={`rounded-xl p-3 text-sm ${coordinates.length >= 3 ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-gray-50 border border-gray-200 text-gray-500"}`}>
+                        <div style={{
+                            borderRadius: 12, padding: 12, fontSize: 13,
+                            background: coordinates.length >= 3 ? "#ecfdf5" : "#f9fafb",
+                            border: `1px solid ${coordinates.length >= 3 ? "#a7f3d0" : "#e5e7eb"}`,
+                            color: coordinates.length >= 3 ? "#047857" : "#6b7280",
+                        }}>
                             {coordinates.length >= 3 ? (
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="h-4 w-4 text-emerald-500" />
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <MapPin style={{ width: 16, height: 16, color: "#10b981" }} />
                                     <span><strong>{coordinates.length}</strong> pontos marcados no mapa</span>
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="h-4 w-4" />
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <MapPin style={{ width: 16, height: 16 }} />
                                     <span>Desenhe o contorno do talhão no mapa →</span>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Action buttons at bottom */}
-                    <div className="space-y-2 pt-4 border-t border-gray-200 mt-4">
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 16, borderTop: "1px solid #e5e7eb", marginTop: 16 }}>
                         <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 py-5 text-base font-bold" disabled={save.isPending}>
                             {save.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                             SALVAR
@@ -312,21 +374,19 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
                 </form>
             </div>
 
-            {/* RIGHT: Map */}
-            <div className="flex-1 relative bg-gray-100 min-h-[300px]">
-                {showMap && (
-                    <Suspense fallback={
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-                        </div>
-                    }>
-                        <PlotMapDraw
-                            initialCoordinates={coordinates.length >= 3 ? coordinates : undefined}
-                            onAreaCalculated={(area) => setAreaHa(String(area))}
-                            onCoordinatesChange={(coords) => setCoordinates(coords)}
-                        />
-                    </Suspense>
-                )}
+            {/* RIGHT: Map — takes remaining space */}
+            <div style={{ flex: 1, position: "relative", background: "#e5e7eb", minHeight: 300 }}>
+                <Suspense fallback={
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f3f4f6" }}>
+                        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+                    </div>
+                }>
+                    <PlotMapDraw
+                        initialCoordinates={coordinates.length >= 3 ? coordinates : undefined}
+                        onAreaCalculated={(area) => setAreaHa(String(area))}
+                        onCoordinatesChange={(coords) => setCoordinates(coords)}
+                    />
+                </Suspense>
             </div>
         </div>
     );

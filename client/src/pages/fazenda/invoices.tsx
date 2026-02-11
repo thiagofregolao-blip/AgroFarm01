@@ -7,8 +7,9 @@ import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2 } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function FarmInvoices() {
@@ -18,8 +19,16 @@ export default function FarmInvoices() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
+    const [selectedSeasonId, setSelectedSeasonId] = useState<string>("");
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
 
     const { user } = useAuth();
+
+    const { data: seasons = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/seasons"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/seasons"); return r.json(); },
+        enabled: !!user,
+    });
 
     const { data: invoices = [], isLoading } = useQuery({
         queryKey: ["/api/farm/invoices"],
@@ -77,6 +86,9 @@ export default function FarmInvoices() {
         try {
             const formData = new FormData();
             formData.append("file", file);
+            if (selectedSeasonId) {
+                formData.append("seasonId", selectedSeasonId);
+            }
 
             const res = await fetch("/api/farm/invoices/import", {
                 method: "POST",
@@ -88,6 +100,7 @@ export default function FarmInvoices() {
             const data = await res.json();
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
             setSelectedInvoice(data.invoice.id);
+            setImportDialogOpen(false);
             toast({ title: `📄 ${data.message}` });
         } catch (err) {
             toast({ title: "Erro ao importar fatura", variant: "destructive" });
@@ -105,18 +118,71 @@ export default function FarmInvoices() {
                         <h1 className="text-2xl font-bold text-emerald-800">Importação de Faturas</h1>
                         <p className="text-emerald-600 text-sm">Importe faturas PDF para registrar entrada no estoque</p>
                     </div>
-                    <div>
-                        <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUpload} className="hidden" />
-                        <Button
-                            className="bg-emerald-600 hover:bg-emerald-700"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={uploading}
-                        >
-                            {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                            Importar PDF
-                        </Button>
-                    </div>
+                    <Button
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => setImportDialogOpen(true)}
+                    >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Importar PDF
+                    </Button>
                 </div>
+
+                {/* Import Modal */}
+                <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Importar Fatura PDF</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-5 py-4">
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                    <Sprout className="h-4 w-4 text-emerald-500" />
+                                    Safra
+                                </label>
+                                <select
+                                    className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    value={selectedSeasonId}
+                                    onChange={(e) => setSelectedSeasonId(e.target.value)}
+                                >
+                                    <option value="">Sem safra vinculada</option>
+                                    {seasons.filter((s: any) => s.isActive).map((s: any) => (
+                                        <option key={s.id} value={s.id}>🟢 {s.name}</option>
+                                    ))}
+                                    {seasons.filter((s: any) => !s.isActive).length > 0 && (
+                                        <optgroup label="Encerradas">
+                                            {seasons.filter((s: any) => !s.isActive).map((s: any) => (
+                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 mb-2 block">Arquivo PDF</label>
+                                <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUpload} className="hidden" />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={uploading}
+                                    className="w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-emerald-400 hover:bg-emerald-50/50 transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                    {uploading ? (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+                                            <span className="text-sm text-emerald-600 font-medium">Processando fatura...</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Upload className="h-8 w-8 text-gray-400" />
+                                            <span className="text-sm text-gray-500">Clique para selecionar o arquivo PDF</span>
+                                            <span className="text-xs text-gray-400">Formatos: PDF de nota fiscal</span>
+                                        </div>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Selected invoice detail */}
                 {selectedInvoice && invoiceDetail && (

@@ -12,10 +12,7 @@ import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl });
 
-interface LatLng {
-    lat: number;
-    lng: number;
-}
+interface LatLng { lat: number; lng: number; }
 
 interface PlotMapDrawProps {
     initialCoordinates?: LatLng[];
@@ -23,7 +20,6 @@ interface PlotMapDrawProps {
     onCoordinatesChange: (coords: LatLng[]) => void;
 }
 
-// Calculate area of polygon in hectares using geodesic formula
 function calculateAreaHa(coords: LatLng[]): number {
     if (coords.length < 3) return 0;
     const latLngs = coords.map(c => L.latLng(c.lat, c.lng));
@@ -35,77 +31,58 @@ export default function PlotMapDraw({ initialCoordinates, onAreaCalculated, onCo
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
     const polygonLayerRef = useRef<L.Polygon | null>(null);
+    const timersRef = useRef<number[]>([]);
     const [isReady, setIsReady] = useState(false);
     const [hasPolygon, setHasPolygon] = useState(!!initialCoordinates?.length);
 
     const updatePolygon = useCallback((coords: LatLng[]) => {
         onCoordinatesChange(coords);
         setHasPolygon(coords.length >= 3);
-        const area = calculateAreaHa(coords);
-        onAreaCalculated(area);
+        onAreaCalculated(calculateAreaHa(coords));
     }, [onAreaCalculated, onCoordinatesChange]);
 
     useEffect(() => {
         if (!mapContainerRef.current || mapRef.current) return;
+        const container = mapContainerRef.current;
 
-        // Delay initialization to allow Dialog animation to complete
-        const initTimer = setTimeout(() => {
-            if (!mapContainerRef.current) return;
+        const initTimer = window.setTimeout(() => {
+            if (!container || !document.body.contains(container)) return;
 
-            // Default center (Paraguay/Brazil farming area)
             let center: L.LatLngExpression = [-22.35, -55.85];
             let zoom = 13;
-
             if (initialCoordinates && initialCoordinates.length > 0) {
                 const bounds = L.latLngBounds(initialCoordinates.map(c => [c.lat, c.lng] as L.LatLngTuple));
                 center = bounds.getCenter();
                 zoom = 15;
             }
 
-            const map = L.map(mapContainerRef.current!, {
-                center,
-                zoom,
-                zoomControl: true,
-            });
+            const map = L.map(container, { center, zoom, zoomControl: true });
 
-            // Esri World Imagery (satellite) — free, no API key
-            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-                attribution: "Tiles &copy; Esri",
-                maxZoom: 19,
+            // Google Maps Satellite tiles
+            L.tileLayer("https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
+                maxZoom: 20,
+                attribution: '&copy; Google Maps',
             }).addTo(map);
 
-            // Labels overlay
-            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
-                maxZoom: 19,
+            // Google Maps labels overlay
+            L.tileLayer("https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}", {
+                maxZoom: 20,
             }).addTo(map);
 
-            // Feature group for drawn items
+            // Draw tools
             const drawnItems = new L.FeatureGroup();
             map.addLayer(drawnItems);
 
-            // Draw control
             const drawControl = new (L.Control as any).Draw({
+                position: "topleft",
                 draw: {
                     polygon: {
                         allowIntersection: false,
-                        shapeOptions: {
-                            color: "#22c55e",
-                            fillColor: "#22c55e",
-                            fillOpacity: 0.3,
-                            weight: 3,
-                        },
+                        shapeOptions: { color: "#22c55e", fillColor: "#22c55e", fillOpacity: 0.3, weight: 3 },
                     },
-                    polyline: false,
-                    circle: false,
-                    circlemarker: false,
-                    marker: false,
-                    rectangle: false,
+                    polyline: false, circle: false, circlemarker: false, marker: false, rectangle: false,
                 },
-                edit: {
-                    featureGroup: drawnItems,
-                    edit: true,
-                    remove: true,
-                },
+                edit: { featureGroup: drawnItems },
             });
             map.addControl(drawControl);
 
@@ -120,27 +97,20 @@ export default function PlotMapDraw({ initialCoordinates, onAreaCalculated, onCo
                 map.fitBounds(polygon.getBounds(), { padding: [50, 50] });
             }
 
-            // On polygon created
+            // Events
             map.on((L as any).Draw.Event.CREATED, (e: any) => {
                 drawnItems.clearLayers();
-                const layer = e.layer;
-                drawnItems.addLayer(layer);
-                polygonLayerRef.current = layer;
-                const latLngs = layer.getLatLngs()[0] as L.LatLng[];
-                const coords = latLngs.map((ll: L.LatLng) => ({ lat: ll.lat, lng: ll.lng }));
-                updatePolygon(coords);
+                drawnItems.addLayer(e.layer);
+                polygonLayerRef.current = e.layer;
+                const latLngs = e.layer.getLatLngs()[0] as L.LatLng[];
+                updatePolygon(latLngs.map((ll: L.LatLng) => ({ lat: ll.lat, lng: ll.lng })));
             });
-
-            // On polygon edited
             map.on((L as any).Draw.Event.EDITED, (e: any) => {
                 e.layers.eachLayer((layer: any) => {
                     const latLngs = layer.getLatLngs()[0] as L.LatLng[];
-                    const coords = latLngs.map((ll: L.LatLng) => ({ lat: ll.lat, lng: ll.lng }));
-                    updatePolygon(coords);
+                    updatePolygon(latLngs.map((ll: L.LatLng) => ({ lat: ll.lat, lng: ll.lng })));
                 });
             });
-
-            // On polygon deleted
             map.on((L as any).Draw.Event.DELETED, () => {
                 polygonLayerRef.current = null;
                 updatePolygon([]);
@@ -149,50 +119,46 @@ export default function PlotMapDraw({ initialCoordinates, onAreaCalculated, onCo
             mapRef.current = map;
             setIsReady(true);
 
-            // Force map to recalculate its size after dialog animation
-            setTimeout(() => {
-                map.invalidateSize();
-            }, 100);
+            // Safe invalidateSize
+            [200, 500, 1000, 2000].forEach(ms => {
+                const t = window.setTimeout(() => {
+                    try { map.invalidateSize(); } catch (_) { }
+                }, ms);
+                timersRef.current.push(t);
+            });
+        }, 800);
 
-            // Additional invalidateSize calls to handle slow animations
-            setTimeout(() => map.invalidateSize(), 300);
-            setTimeout(() => map.invalidateSize(), 600);
-
-        }, 200); // Wait 200ms for dialog open animation
-
+        timersRef.current.push(initTimer);
         return () => {
-            clearTimeout(initTimer);
+            timersRef.current.forEach(t => window.clearTimeout(t));
+            timersRef.current = [];
             if (mapRef.current) {
-                mapRef.current.remove();
+                try { mapRef.current.remove(); } catch (_) { }
                 mapRef.current = null;
             }
         };
     }, []);
 
-    // Also invalidateSize on window resize
     useEffect(() => {
-        const handleResize = () => {
-            if (mapRef.current) mapRef.current.invalidateSize();
-        };
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
+        const h = () => { try { mapRef.current?.invalidateSize(); } catch (_) { } };
+        window.addEventListener("resize", h);
+        return () => window.removeEventListener("resize", h);
     }, []);
 
     return (
-        <div className="relative w-full h-full min-h-[400px]">
-            <div ref={mapContainerRef} className="absolute inset-0 z-0" style={{ height: "100%", width: "100%" }} />
+        <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 400 }}>
+            <div ref={mapContainerRef} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%", zIndex: 1, background: "#d1d5db" }} />
             {!isReady && (
-                <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center z-10">
-                    <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto mb-2"></div>
-                        <p className="text-gray-500 text-sm">Carregando mapa de satélite...</p>
+                <div style={{ position: "absolute", inset: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#e5e7eb" }}>
+                    <div style={{ textAlign: "center" }}>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto mb-2" />
+                        <p style={{ color: "#6b7280", fontSize: 14 }}>Carregando Google Maps...</p>
                     </div>
                 </div>
             )}
-            {/* Instruction overlay */}
             {isReady && !hasPolygon && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-md text-sm text-gray-700 z-[1000] pointer-events-none">
-                    🖱️ Clique no ícone de polígono <span className="font-bold text-emerald-600">(◇)</span> à esquerda para desenhar
+                <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 1000, pointerEvents: "none", background: "rgba(255,255,255,0.9)", padding: "6px 16px", borderRadius: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", fontSize: 14, color: "#374151" }}>
+                    🖱️ Clique no ícone de polígono <span style={{ color: "#16a34a", fontWeight: "bold" }}>(◇)</span> à esquerda para desenhar
                 </div>
             )}
         </div>

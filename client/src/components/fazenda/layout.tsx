@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, Package, FileText, BarChart3,
-    LogOut, Menu, X, DollarSign, Monitor, TrendingUp, ChevronDown
+    LogOut, Menu, X, DollarSign, Monitor, TrendingUp, ChevronDown, Sprout
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 const navItems = [
     { label: "Início", href: "/fazenda", icon: Home },
     { label: "Propriedades", href: "/fazenda/propriedades", icon: Map },
+    { label: "Safras", href: "/fazenda/safras", icon: Sprout },
     { label: "Produtos", href: "/fazenda/produtos", icon: Package },
     { label: "Faturas", href: "/fazenda/faturas", icon: FileText },
     { label: "Estoque", href: "/fazenda/estoque", icon: Warehouse },
@@ -78,16 +79,16 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                                         key={item.href}
                                         onClick={() => setLocation(item.href)}
                                         className={`
-                                            flex flex-col items-center gap-1 px-4 py-3 relative text-center
-                                            transition-colors duration-150 min-w-[80px]
+                                            flex flex-col items-center gap-1.5 px-5 py-4 relative text-center
+                                            transition-colors duration-150 min-w-[90px]
                                             ${isActive
                                                 ? "text-emerald-600"
                                                 : "text-gray-500 hover:text-emerald-600 hover:bg-emerald-50/50"
                                             }
                                         `}
                                     >
-                                        <Icon className={`h-5 w-5 ${isActive ? "text-emerald-600" : "text-gray-400"}`} />
-                                        <span className={`text-[11px] leading-tight font-medium ${isActive ? "text-emerald-600" : ""}`}>{item.label}</span>
+                                        <Icon className={`h-7 w-7 ${isActive ? "text-emerald-600" : "text-gray-400"}`} />
+                                        <span className={`text-xs leading-tight font-medium ${isActive ? "text-emerald-600" : ""}`}>{item.label}</span>
                                         {isActive && (
                                             <div className="absolute bottom-0 left-2 right-2 h-[3px] bg-emerald-500 rounded-t-full" />
                                         )}
@@ -146,7 +147,9 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
             {/* Main content */}
             <main className="flex-1">
-                {children}
+                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                    {children}
+                </div>
             </main>
         </div>
     );

@@ -1070,10 +1070,22 @@ export const farmStock = pgTable("farm_stock", {
   uniqueStock: unique().on(table.farmerId, table.productId),
 }));
 
+// Safras da fazenda
+export const farmSeasons = pgTable("farm_seasons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // Faturas importadas
 export const farmInvoices = pgTable("farm_invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  seasonId: varchar("season_id").references(() => farmSeasons.id),
   invoiceNumber: text("invoice_number"),
   supplier: text("supplier"),
   issueDate: timestamp("issue_date"),
@@ -1200,3 +1212,7 @@ export type FarmExpense = typeof farmExpenses.$inferSelect;
 export const insertFarmPdvTerminalSchema = createInsertSchema(farmPdvTerminals).omit({ id: true, createdAt: true });
 export type InsertFarmPdvTerminal = z.infer<typeof insertFarmPdvTerminalSchema>;
 export type FarmPdvTerminal = typeof farmPdvTerminals.$inferSelect;
+
+export const insertFarmSeasonSchema = createInsertSchema(farmSeasons).omit({ id: true, createdAt: true });
+export type InsertFarmSeason = z.infer<typeof insertFarmSeasonSchema>;
+export type FarmSeason = typeof farmSeasons.$inferSelect;

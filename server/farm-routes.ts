@@ -282,6 +282,48 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // Invoices grouped by supplier for dashboard cards
+    app.get("/api/farm/invoices/summary/by-supplier", requireFarmer, async (req, res) => {
+        try {
+            const invoices = await farmStorage.getInvoices((req.user as any).id);
+            const supplierMap: Record<string, any> = {};
+
+            for (const inv of invoices) {
+                const supplier = inv.supplier || "Fornecedor Desconhecido";
+                if (!supplierMap[supplier]) {
+                    supplierMap[supplier] = {
+                        supplier,
+                        totalAmount: 0,
+                        invoiceCount: 0,
+                        invoices: [],
+                    };
+                }
+                const items = await farmStorage.getInvoiceItems(inv.id);
+                supplierMap[supplier].totalAmount += parseFloat(inv.totalAmount || "0");
+                supplierMap[supplier].invoiceCount += 1;
+                supplierMap[supplier].invoices.push({
+                    id: inv.id,
+                    invoiceNumber: inv.invoiceNumber,
+                    issueDate: inv.issueDate,
+                    totalAmount: inv.totalAmount,
+                    currency: inv.currency,
+                    status: inv.status,
+                    items: items.map(it => ({
+                        productName: it.productName,
+                        quantity: it.quantity,
+                        unit: it.unit,
+                        totalPrice: it.totalPrice,
+                    })),
+                });
+            }
+
+            res.json(Object.values(supplierMap));
+        } catch (error) {
+            console.error("[FARM_SUPPLIER_SUMMARY]", error);
+            res.status(500).json({ error: "Failed to get supplier summary" });
+        }
+    });
+
     app.get("/api/farm/invoices/:id", requireFarmer, async (req, res) => {
         try {
             const invoice = await farmStorage.getInvoiceById(req.params.id);
@@ -304,8 +346,10 @@ export function registerFarmRoutes(app: Express) {
             const parsed = await parseFarmInvoicePDF(req.file.buffer);
 
             // Create invoice record
+            const seasonId = req.body?.seasonId || null;
             const invoice = await farmStorage.createInvoice({
                 farmerId: (req.user as any).id,
+                seasonId,
                 invoiceNumber: parsed.invoiceNumber,
                 supplier: parsed.supplier,
                 issueDate: parsed.issueDate,
@@ -792,6 +836,58 @@ export function registerFarmRoutes(app: Express) {
         } catch (error) {
             console.error("[PDV_DATA]", error);
             res.status(500).json({ error: "Failed to get data" });
+        }
+    });
+
+    // ==================== Seasons (Safras) ====================
+    app.get("/api/farm/seasons", requireFarmer, async (req, res) => {
+        try {
+            const seasons = await farmStorage.getSeasons((req.user as any).id);
+            res.json(seasons);
+        } catch (error) {
+            console.error("[FARM_SEASONS]", error);
+            res.status(500).json({ error: "Failed to get seasons" });
+        }
+    });
+
+    app.post("/api/farm/seasons", requireFarmer, async (req, res) => {
+        try {
+            const season = await farmStorage.createSeason({
+                farmerId: (req.user as any).id,
+                name: req.body.name,
+                startDate: req.body.startDate ? new Date(req.body.startDate) : null,
+                endDate: req.body.endDate ? new Date(req.body.endDate) : null,
+                isActive: req.body.isActive ?? true,
+            });
+            res.json(season);
+        } catch (error) {
+            console.error("[FARM_SEASONS]", error);
+            res.status(500).json({ error: "Failed to create season" });
+        }
+    });
+
+    app.patch("/api/farm/seasons/:id", requireFarmer, async (req, res) => {
+        try {
+            const data: any = {};
+            if (req.body.name !== undefined) data.name = req.body.name;
+            if (req.body.startDate !== undefined) data.startDate = req.body.startDate ? new Date(req.body.startDate) : null;
+            if (req.body.endDate !== undefined) data.endDate = req.body.endDate ? new Date(req.body.endDate) : null;
+            if (req.body.isActive !== undefined) data.isActive = req.body.isActive;
+            const season = await farmStorage.updateSeason(req.params.id, data);
+            res.json(season);
+        } catch (error) {
+            console.error("[FARM_SEASONS]", error);
+            res.status(500).json({ error: "Failed to update season" });
+        }
+    });
+
+    app.delete("/api/farm/seasons/:id", requireFarmer, async (req, res) => {
+        try {
+            await farmStorage.deleteSeason(req.params.id);
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[FARM_SEASONS]", error);
+            res.status(500).json({ error: "Failed to delete season" });
         }
     });
 

@@ -258,6 +258,12 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         console.log("[FARM_INVOICE_PARSER] Lines:", lines.slice(0, 30));
     }
 
+    // Fallback: calculate total from items if parser couldn't find it in the PDF text
+    if (totalAmount === 0 && items.length > 0) {
+        totalAmount = items.reduce((sum, item) => sum + item.totalPrice, 0);
+        console.log(`[FARM_INVOICE_PARSER] Total calculated from items sum: ${totalAmount}`);
+    }
+
     return {
         invoiceNumber,
         supplier,
@@ -265,7 +271,7 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         clientDocument,
         issueDate,
         currency,
-        subtotal,
+        subtotal: subtotal || totalAmount,
         totalAmount: totalAmount || subtotal,
         items,
         rawText: text,

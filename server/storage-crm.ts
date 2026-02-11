@@ -27,8 +27,8 @@ export const CRMStorage = {
 
     return db.execute(sql`
       SELECT v.id, v.client_id, v.status, v.window_start, v.window_end,
-             COALESCE(ST_Y(ST_Centroid(f.geom)), ST_Y(fa.centroid)) AS lat,
-             COALESCE(ST_X(ST_Centroid(f.geom)), ST_X(fa.centroid)) AS lng
+             COALESCE(ST_Y(ST_Centroid(f.geom)), fa.lat::float) AS lat,
+             COALESCE(ST_X(ST_Centroid(f.geom)), fa.lng::float) AS lng
         FROM visits v
    LEFT JOIN fields f ON f.id = v.field_id
    LEFT JOIN farms  fa ON fa.id = v.farm_id
@@ -43,7 +43,7 @@ export const CRMStorage = {
 
   async createVisitsBulk(payload: any[]) {
     if (!payload?.length) return [];
-    
+
     // Mapear snake_case para camelCase (schema do Drizzle) e converter strings para Date
     const normalized = payload.map(v => ({
       id: v.id,
@@ -57,7 +57,7 @@ export const CRMStorage = {
       assignee: v.assignee || null,
       notes: v.notes || null,
     }));
-    
+
     const inserted = await db.insert(visits).values(normalized).returning();
     return inserted;
   },
@@ -121,7 +121,7 @@ export const CRMStorage = {
     // Aceita tanto trip_id quanto visit_id
     // Primeiro tenta como trip_id
     let tripResult = await db.select().from(trips).where(eq(trips.id, id)).limit(1);
-    
+
     // Se não encontrou, tenta buscar por visit_id (trip mais recente da visita)
     if (!tripResult || tripResult.length === 0) {
       tripResult = await db.select().from(trips)
@@ -129,14 +129,14 @@ export const CRMStorage = {
         .orderBy(sql`${trips.startedAt} DESC`)
         .limit(1);
     }
-    
+
     if (!tripResult || tripResult.length === 0) {
       throw new Error(`Trip não encontrado para ID: ${id}`);
     }
-    
+
     const tripId = tripResult[0].id;
     const visitId = tripResult[0].visitId;
-    
+
     const [t] = await db.update(trips).set({
       endedAt: new Date(),
       endOdometer: odometer ?? null,

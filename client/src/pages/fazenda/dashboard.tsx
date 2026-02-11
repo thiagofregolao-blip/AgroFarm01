@@ -1,14 +1,19 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import FarmLayout from "@/components/fazenda/layout";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Warehouse, Map, Package, FileText, ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
+import {
+    Warehouse, Map, Package, FileText, ArrowUpRight, ArrowDownRight,
+    Loader2, Building2, ChevronDown, ChevronUp, Calendar
+} from "lucide-react";
 
 export default function FarmDashboard() {
     const [, setLocation] = useLocation();
     const { user, isLoading } = useAuth();
+    const [expandedSupplier, setExpandedSupplier] = useState<string | null>(null);
 
     const { data: stock = [] } = useQuery({
         queryKey: ["/api/farm/stock"],
@@ -46,6 +51,15 @@ export default function FarmDashboard() {
         enabled: !!user,
     });
 
+    const { data: supplierSummary = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/invoices/summary/by-supplier"],
+        queryFn: async () => {
+            const res = await apiRequest("GET", "/api/farm/invoices/summary/by-supplier");
+            return res.json();
+        },
+        enabled: !!user,
+    });
+
     if (isLoading) {
         return (
             <FarmLayout>
@@ -56,12 +70,22 @@ export default function FarmDashboard() {
         );
     }
 
-
     const totalStockValue = stock.reduce((sum: number, s: any) =>
         sum + (parseFloat(s.quantity) * parseFloat(s.averageCost)), 0
     );
 
     const pendingInvoices = invoices.filter((i: any) => i.status === "pending").length;
+
+    function formatDate(d: string | null) {
+        if (!d) return "—";
+        try { return new Date(d).toLocaleDateString("pt-BR"); } catch { return "—"; }
+    }
+
+    function formatCurrency(val: number | string, currency?: string) {
+        const num = typeof val === "string" ? parseFloat(val) : val;
+        const symbol = currency === "PYG" ? "₲" : "$";
+        return `${symbol}${num.toLocaleString("en", { minimumFractionDigits: 2 })}`;
+    }
 
     return (
         <FarmLayout>
@@ -141,6 +165,119 @@ export default function FarmDashboard() {
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Supplier Summary Cards */}
+                {supplierSummary.length > 0 && (
+                    <div>
+                        <h2 className="text-lg font-bold text-emerald-800 mb-4 flex items-center gap-2">
+                            <Building2 className="h-5 w-5" />
+                            Contas por Fornecedor
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {supplierSummary.map((s: any) => {
+                                const isExpanded = expandedSupplier === s.supplier;
+                                return (
+                                    <Card key={s.supplier} className="border-gray-200 hover:shadow-md transition-shadow overflow-hidden">
+                                        {/* Card Header */}
+                                        <div
+                                            className="p-5 cursor-pointer"
+                                            onClick={() => setExpandedSupplier(isExpanded ? null : s.supplier)}
+                                        >
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                                        <Building2 className="h-5 w-5 text-indigo-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-gray-800 text-sm">{s.supplier}</h3>
+                                                        <p className="text-xs text-gray-400">{s.invoiceCount} fatura{s.invoiceCount > 1 ? "s" : ""}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-lg font-bold text-emerald-700">
+                                                        {formatCurrency(s.totalAmount, s.invoices[0]?.currency)}
+                                                    </p>
+                                                    {isExpanded ? (
+                                                        <ChevronUp className="h-4 w-4 text-gray-400 ml-auto" />
+                                                    ) : (
+                                                        <ChevronDown className="h-4 w-4 text-gray-400 ml-auto" />
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Quick product list (always visible) */}
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {(() => {
+                                                    const allProducts = s.invoices.flatMap((inv: any) =>
+                                                        inv.items.map((it: any) => it.productName)
+                                                    );
+                                                    const unique = [...new Set(allProducts)] as string[];
+                                                    const show = unique.slice(0, 4);
+                                                    const rest = unique.length - show.length;
+                                                    return (
+                                                        <>
+                                                            {show.map((name: string) => (
+                                                                <span key={name} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full truncate max-w-[160px]">
+                                                                    {name}
+                                                                </span>
+                                                            ))}
+                                                            {rest > 0 && (
+                                                                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                                                                    +{rest}
+                                                                </span>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+
+                                        {/* Expanded detail */}
+                                        {isExpanded && (
+                                            <div className="border-t border-gray-100 bg-gray-50/50 p-4 space-y-3">
+                                                {s.invoices.map((inv: any) => (
+                                                    <div key={inv.id} className="bg-white rounded-lg p-3 border border-gray-100">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <FileText className="h-3.5 w-3.5 text-gray-400" />
+                                                                <span className="text-xs font-medium text-gray-700">
+                                                                    #{inv.invoiceNumber || "—"}
+                                                                </span>
+                                                                <span className={`text-xs px-1.5 py-0.5 rounded ${inv.status === "confirmed"
+                                                                        ? "bg-green-100 text-green-700"
+                                                                        : "bg-yellow-100 text-yellow-700"
+                                                                    }`}>
+                                                                    {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-sm font-semibold text-gray-700">
+                                                                {formatCurrency(inv.totalAmount, inv.currency)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+                                                            <Calendar className="h-3 w-3" />
+                                                            {formatDate(inv.issueDate)}
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            {inv.items.map((it: any, idx: number) => (
+                                                                <div key={idx} className="flex items-center justify-between text-xs">
+                                                                    <span className="text-gray-600 truncate mr-2">{it.productName}</span>
+                                                                    <span className="text-gray-500 whitespace-nowrap">
+                                                                        {parseFloat(it.quantity).toFixed(0)} {it.unit} — {formatCurrency(it.totalPrice, inv.currency)}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </Card>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* Recent Movements */}
                 <Card className="border-emerald-100">

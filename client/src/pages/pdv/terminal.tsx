@@ -32,6 +32,14 @@ const CATEGORY_EMOJI: Record<string, string> = {
     outro: "📦",
 };
 
+const exitFullscreen = () => {
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => { });
+    } else if ((document as any).webkitFullscreenElement) {
+        (document as any).webkitExitFullscreen();
+    }
+};
+
 export default function PdvTerminal() {
     const [, setLocation] = useLocation();
     const queryClient = useQueryClient();
@@ -44,7 +52,6 @@ export default function PdvTerminal() {
     const [submitting, setSubmitting] = useState(false);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [categoryFilter, setCategoryFilter] = useState<string>("");
-    // Manual overrides for distributed qtys: key = `${productId}__${plotId}`
     const [distOverrides, setDistOverrides] = useState<Record<string, number>>({});
 
     useEffect(() => {
@@ -62,7 +69,7 @@ export default function PdvTerminal() {
         return () => clearInterval(interval);
     }, [isOnline]);
 
-    const { data: pdvData } = useQuery({
+    const { data: pdvData, isLoading: pdvLoading, isError: pdvError } = useQuery({
         queryKey: ["/api/pdv/data"],
         queryFn: async () => {
             const res = await apiRequest("GET", "/api/pdv/data");
@@ -71,6 +78,14 @@ export default function PdvTerminal() {
         },
         retry: false,
         refetchInterval: 60000,
+        // Try to initialize from sessionStorage as fallback
+        initialData: () => {
+            try {
+                const cached = sessionStorage.getItem("pdvData");
+                if (cached) return JSON.parse(cached);
+            } catch { }
+            return undefined;
+        },
     });
 
     const products = pdvData?.products || [];
@@ -119,15 +134,10 @@ export default function PdvTerminal() {
         return selectedPlots.reduce((sum, p) => sum + (parseFloat(p.areaHa) || 0), 0);
     }, [selectedPlots]);
 
-    // ---- Distribution logic ----
-    // Distributes total qty across plots based on area × dose
-    // Rounds each plot's qty, and adjusts last one to match total
     const getDistribution = (product: any, totalQty: number) => {
         const dose = parseFloat(product.dosePerHa);
-        const items: { plotId: string; plotName: string; areaHa: number; idealQty: number; allocatedQty: number }[] = [];
 
         if (dose && !isNaN(dose) && selectedPlots.length > 0) {
-            // Calculate ideal qty per plot: area × dose
             let totalIdeal = 0;
             const ideals = selectedPlots.map(plot => {
                 const area = parseFloat(plot.areaHa) || 0;
@@ -136,15 +146,12 @@ export default function PdvTerminal() {
                 return { plot, area, ideal };
             });
 
-            // Distribute proportionally to match totalQty
             let allocated = 0;
-            const results = ideals.map((item, idx) => {
+            return ideals.map((item, idx) => {
                 let qty: number;
                 if (idx === ideals.length - 1) {
-                    // Last plot gets remainder
                     qty = Math.round(totalQty - allocated);
                 } else {
-                    // Proportional distribution
                     qty = totalIdeal > 0
                         ? Math.round((item.ideal / totalIdeal) * totalQty)
                         : Math.round(totalQty / selectedPlots.length);
@@ -159,9 +166,7 @@ export default function PdvTerminal() {
                     allocatedQty: qty,
                 };
             });
-            return results;
         } else {
-            // No dose: split evenly
             let allocated = 0;
             return selectedPlots.map((plot, idx) => {
                 const area = parseFloat(plot.areaHa) || 0;
@@ -184,11 +189,9 @@ export default function PdvTerminal() {
         }
     };
 
-    // Build confirmation data
     const confirmationData = useMemo(() => {
         return cart.map(item => {
             const dist = getDistribution(item.product, item.quantity);
-            // Apply overrides
             const withOverrides = dist.map(d => {
                 const key = `${item.product.id}__${d.plotId}`;
                 const overridden = distOverrides[key] !== undefined ? distOverrides[key] : d.allocatedQty;
@@ -261,7 +264,20 @@ export default function PdvTerminal() {
         setDistOverrides({});
     };
 
-    if (!pdvData) {
+    const handleLogout = () => {
+        exitFullscreen();
+        setLocation("/pdv/login");
+    };
+
+    if (pdvLoading) {
+        return (
+            <div className="h-screen bg-gray-50 flex items-center justify-center">
+                <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
+            </div>
+        );
+    }
+
+    if (pdvError || !pdvData) {
         setLocation("/pdv/login");
         return null;
     }
@@ -276,117 +292,155 @@ export default function PdvTerminal() {
         });
 
         return (
-            <div className="min-h-screen bg-slate-900 text-white flex flex-col">
-                <header className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700">
+            <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
+                {/* Header with gradient */}
+                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setStep("product")} className="text-slate-400 hover:text-white"><ArrowLeft className="h-5 w-5" /></button>
-                        <span className="text-2xl">📍</span>
-                        <span className="font-bold text-lg">Selecione os Talhões</span>
+                        <button onClick={() => setStep("product")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
+                            <ArrowLeft className="h-5 w-5 text-white" />
+                        </button>
+                        <div>
+                            <span className="font-bold text-base leading-tight block">Selecionar Talhões</span>
+                            <span className="text-[10px] text-emerald-200">Passo 2 de 3</span>
+                        </div>
                     </div>
-                    {selectedPlots.length > 0 && (
-                        <span className="bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">{selectedPlots.length}</span>
-                    )}
                 </header>
 
-                <div className="flex-1 p-4 overflow-y-auto pb-32">
-                    {/* Cart summary */}
-                    <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
-                        <p className="text-sm text-slate-400 mb-2 font-semibold">🛒 {cart.length} produto(s):</p>
-                        <div className="space-y-1">
+                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                    {/* LEFT: Cart Summary (Sidebar on desktop) */}
+                    <div className="w-full md:w-80 bg-white border-r border-gray-100 flex flex-col shadow-lg z-10 shrink-0 h-48 md:h-auto">
+                        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Resumo do Pedido</p>
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-2xl font-bold text-emerald-600">{cart.length}</span>
+                                <span className="text-sm text-gray-500">produtos selecionados</span>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-3 space-y-3">
                             {cart.map(item => (
-                                <div key={item.product.id} className="flex justify-between text-sm">
-                                    <span className="text-slate-300 truncate">{item.product.name}</span>
-                                    <span className="text-orange-400 font-bold ml-2">{item.quantity} {item.product.unit}</span>
+                                <div key={item.product.id} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100">
+                                    {item.product.imageUrl ? (
+                                        <img src={item.product.imageUrl} className="w-10 h-10 rounded-md object-contain bg-white shrink-0" alt="" />
+                                    ) : (
+                                        <div className={`w-10 h-10 rounded-md bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center shrink-0`}>
+                                            <span className="text-lg">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-sm truncate text-gray-800">{item.product.name}</p>
+                                        <p className="text-xs text-gray-500">{item.quantity} {item.product.unit}</p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* Info */}
-                    <div className="bg-blue-900/30 border border-blue-700/50 rounded-xl p-3 mb-4 text-sm text-blue-300">
-                        <p className="font-semibold">📐 Distribuição automática</p>
-                        <p className="text-xs text-blue-400/80 mt-0.5">A quantidade será distribuída entre os talhões selecionados com base na <strong>área × dose/ha</strong></p>
-                    </div>
+                    {/* RIGHT: Plot Selection Grid */}
+                    <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/50">
+                        {/* Info Banner */}
+                        <div className="bg-emerald-100/50 border border-emerald-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 text-emerald-600">
+                                <span className="text-lg">📐</span>
+                            </div>
+                            <div>
+                                <p className="font-bold text-emerald-800 text-sm">Distribuição Automática</p>
+                                <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                                    Os produtos serão distribuídos automaticamente entre os talhões selecionados com base na área (ha) e dose recomendada. Você poderá ajustar os valores na próxima etapa.
+                                </p>
+                            </div>
+                        </div>
 
-                    {properties.length === 0 && plots.length === 0 ? (
-                        <div className="text-center py-12">
-                            <p className="text-slate-400 text-lg">Nenhuma propriedade ou talhão cadastrado</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {properties.map((prop: any) => {
-                                const propPlots = plotsByProp[prop.id] || [];
-                                return (
-                                    <div key={prop.id} className="rounded-xl overflow-hidden border border-slate-700">
-                                        <div className="bg-slate-800 px-4 py-3 flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center">
-                                                <span className="text-lg">🌾</span>
+                        {properties.length === 0 && plots.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
+                                <span className="text-4xl mb-3">🌾</span>
+                                <p className="text-lg font-medium">Nenhum talhão encontrado</p>
+                                <p className="text-sm">Cadastre propriedades e talhões para continuar</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {properties.map((prop: any) => {
+                                    const propPlots = plotsByProp[prop.id] || [];
+                                    const allSelected = propPlots.every((p: any) => isPlotSelected(p.id));
+
+                                    return (
+                                        <div key={prop.id} className="space-y-3">
+                                            <div className="flex items-center justify-between px-1">
+                                                <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                                    <span className="w-1 h-4 rounded-full bg-emerald-500 block"></span>
+                                                    {prop.name}
+                                                    <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{propPlots.length} talhões</span>
+                                                </h3>
+                                                {propPlots.length > 0 && (
+                                                    <button
+                                                        onClick={() => {
+                                                            const ids = propPlots.map((p: any) => p.id);
+                                                            const newPlots = allSelected
+                                                                ? selectedPlots.filter(p => !ids.includes(p.id))
+                                                                : [...selectedPlots.filter(p => !ids.includes(p.id)), ...propPlots];
+                                                            setSelectedPlots(newPlots);
+                                                        }}
+                                                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700 hover:underline"
+                                                    >
+                                                        {allSelected ? "Desmarcar todos" : "Selecionar todos"}
+                                                    </button>
+                                                )}
                                             </div>
-                                            <div className="flex-1">
-                                                <p className="font-bold text-emerald-400">{prop.name}</p>
-                                                <p className="text-xs text-slate-400">
-                                                    {prop.location || "—"} • {prop.totalAreaHa ? `${prop.totalAreaHa} ha` : ""} • {propPlots.length} talhão(ões)
-                                                </p>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                                {propPlots.length > 0 ? (
+                                                    propPlots.map((plot: any) => {
+                                                        const sel = isPlotSelected(plot.id);
+                                                        return (
+                                                            <button
+                                                                key={plot.id}
+                                                                onClick={() => togglePlot(plot)}
+                                                                className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? "bg-emerald-50/50 border-emerald-500 shadow-md shadow-emerald-100" : "bg-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5"}`}
+                                                            >
+                                                                <div className="flex items-start justify-between mb-2">
+                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sel ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"}`}>
+                                                                        <MapPin className="h-4 w-4" />
+                                                                    </div>
+                                                                    {sel && <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm"><Check className="h-3 w-3 text-white" /></div>}
+                                                                </div>
+                                                                <h4 className={`font-bold text-sm mb-0.5 ${sel ? "text-emerald-900" : "text-gray-800"}`}>{plot.name}</h4>
+                                                                <p className="text-xs text-gray-500">{plot.areaHa} hectares</p>
+                                                                {plot.crop && <span className="absolute bottom-4 right-4 text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{plot.crop}</span>}
+                                                            </button>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="col-span-full py-4 text-center text-gray-400 text-sm italic bg-white rounded-xl border border-dashed border-gray-200">
+                                                        Nenhum talhão cadastrado nesta propriedade
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="divide-y divide-slate-700/50">
-                                            {propPlots.length > 0 ? (
-                                                propPlots.map((plot: any) => {
-                                                    const sel = isPlotSelected(plot.id);
-                                                    return (
-                                                        <button
-                                                            key={plot.id}
-                                                            onClick={() => togglePlot(plot)}
-                                                            className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${sel ? "bg-orange-900/20" : "hover:bg-slate-700/50"}`}
-                                                        >
-                                                            <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? "bg-orange-500 border-orange-500" : "border-slate-500"}`}>
-                                                                {sel && <Check className="h-4 w-4 text-white" />}
-                                                            </div>
-                                                            <MapPin className="h-4 w-4 text-orange-400 shrink-0" />
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="font-medium">{plot.name}</p>
-                                                                <p className="text-xs text-slate-400">{plot.areaHa} ha {plot.crop ? `• ${plot.crop}` : ""}</p>
-                                                            </div>
-                                                        </button>
-                                                    );
-                                                })
-                                            ) : (
-                                                <button
-                                                    onClick={() => togglePlot({ id: prop.id, name: prop.name, propertyId: prop.id, areaHa: prop.totalAreaHa })}
-                                                    className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${isPlotSelected(prop.id) ? "bg-orange-900/20" : "hover:bg-slate-700/50"}`}
-                                                >
-                                                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${isPlotSelected(prop.id) ? "bg-orange-500 border-orange-500" : "border-slate-500"}`}>
-                                                        {isPlotSelected(prop.id) && <Check className="h-4 w-4 text-white" />}
-                                                    </div>
-                                                    <MapPin className="h-4 w-4 text-orange-400 shrink-0" />
-                                                    <div className="flex-1">
-                                                        <p className="font-medium text-orange-300">Propriedade inteira</p>
-                                                        <p className="text-xs text-slate-400">{prop.totalAreaHa || "?"} ha</p>
-                                                    </div>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Bottom bar */}
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-800 border-t border-slate-700">
-                    <div className="flex items-center justify-between mb-2 text-sm">
-                        <span className="text-slate-400">{selectedPlots.length} talhão(ões)</span>
-                        <span className="text-emerald-400 font-bold">Área total: {totalAreaSelected.toFixed(1)} ha</span>
+                <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
+                    <div className="max-w-4xl mx-auto flex items-center justify-between gap-6">
+                        <div className="hidden sm:block">
+                            <p className="text-gray-500 text-sm">Próximo passo: <strong>Confirmar Distribuição</strong></p>
+                            <p className="text-xs text-gray-400">Total de área selecionada: {totalAreaSelected.toFixed(1)} ha</p>
+                        </div>
+                        <div className="flex items-center gap-4 flex-1 sm:flex-none justify-end">
+                            <span className="font-bold text-emerald-600 text-lg mr-2 sm:hidden">{selectedPlots.length} talhões</span>
+                            <Button
+                                className="w-full sm:w-auto px-8 py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98]"
+                                onClick={handleGoToConfirm}
+                                disabled={selectedPlots.length === 0}
+                            >
+                                Avançar
+                                <ArrowRight className="ml-2 h-5 w-5" />
+                            </Button>
+                        </div>
                     </div>
-                    <Button
-                        className="w-full py-5 text-base bg-orange-600 hover:bg-orange-700 font-bold"
-                        onClick={handleGoToConfirm}
-                        disabled={selectedPlots.length === 0}
-                    >
-                        <ArrowRight className="mr-2 h-5 w-5" />
-                        Ver distribuição
-                    </Button>
                 </div>
             </div>
         );
@@ -395,118 +449,154 @@ export default function PdvTerminal() {
     // ==================== STEP: CONFIRM (Distribution) ====================
     if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
         return (
-            <div className="min-h-screen bg-slate-900 text-white flex flex-col">
-                <header className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700">
+            <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
+                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setStep("plot")} className="text-slate-400 hover:text-white"><ArrowLeft className="h-5 w-5" /></button>
-                        <span className="text-2xl">📋</span>
-                        <span className="font-bold text-lg">Distribuição por Talhão</span>
+                        <button onClick={() => setStep("plot")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
+                            <ArrowLeft className="h-5 w-5 text-white" />
+                        </button>
+                        <div>
+                            <span className="font-bold text-base leading-tight block">Confirmar Saída</span>
+                            <span className="text-[10px] text-emerald-200">Passo 3 de 3</span>
+                        </div>
                     </div>
                 </header>
 
-                <div className="flex-1 p-4 overflow-y-auto pb-28">
-                    <div className="max-w-2xl mx-auto space-y-4">
-                        {/* Summary */}
-                        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 grid grid-cols-3 gap-3 text-center text-sm">
-                            <div><p className="text-slate-400">Produtos</p><p className="font-bold text-lg text-orange-400">{cart.length}</p></div>
-                            <div><p className="text-slate-400">Talhões</p><p className="font-bold text-lg text-emerald-400">{selectedPlots.length}</p></div>
-                            <div><p className="text-slate-400">Área total</p><p className="font-bold text-lg">{totalAreaSelected.toFixed(1)} ha</p></div>
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32">
+                    <div className="max-w-4xl mx-auto space-y-6">
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                                <span className="text-2xl mb-1">📦</span>
+                                <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Produtos</p>
+                                <p className="text-xl font-bold text-gray-800">{cart.length}</p>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                                <span className="text-2xl mb-1">📍</span>
+                                <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Talhões</p>
+                                <p className="text-xl font-bold text-gray-800">{selectedPlots.length}</p>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                                <span className="text-2xl mb-1">📏</span>
+                                <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Área Total</p>
+                                <p className="text-xl font-bold text-gray-800">{totalAreaSelected.toFixed(1)} <span className="text-sm font-normal text-gray-400">ha</span></p>
+                            </div>
                         </div>
 
                         {/* Per product distribution */}
-                        {confirmationData.map((item) => {
-                            const p = item.product;
-                            const dose = parseFloat(p.dosePerHa);
-                            const hasDose = dose && !isNaN(dose);
-                            const diff = item.totalQty - item.totalAllocated;
+                        <div className="space-y-4">
+                            {confirmationData.map((item) => {
+                                const p = item.product;
+                                const dose = parseFloat(p.dosePerHa);
+                                const hasDose = dose && !isNaN(dose);
+                                const diff = item.totalQty - item.totalAllocated;
 
-                            return (
-                                <div key={p.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-                                    {/* Product header */}
-                                    <div className="flex items-center gap-3 p-4 border-b border-slate-700">
-                                        {p.imageUrl ? (
-                                            <img src={p.imageUrl} className="w-12 h-12 rounded-lg object-contain bg-white" alt="" />
-                                        ) : (
-                                            <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${CATEGORY_COLORS[p.category] || CATEGORY_COLORS.outro} flex items-center justify-center`}>
-                                                <span className="text-2xl">{CATEGORY_EMOJI[p.category] || "📦"}</span>
-                                            </div>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-bold truncate">{p.name}</p>
-                                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                                                <span>{p.category || "—"}</span>
-                                                {hasDose && (
-                                                    <span className="text-blue-400 flex items-center gap-0.5">
-                                                        <Droplets className="h-3 w-3" />
-                                                        {dose.toFixed(1)} {p.unit}/ha
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <p className="font-bold text-orange-400 text-lg">{item.totalQty}</p>
-                                            <p className="text-xs text-slate-400">{p.unit} saída</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Per-plot distribution */}
-                                    <div className="divide-y divide-slate-700/50">
-                                        {item.distribution.map((d) => (
-                                            <div key={d.plotId} className="flex items-center gap-3 px-4 py-3">
-                                                <MapPin className="h-4 w-4 text-emerald-400 shrink-0" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium truncate">{d.plotName}</p>
-                                                    <p className="text-[11px] text-slate-500">
-                                                        {d.areaHa.toFixed(1)} ha
-                                                        {hasDose && <span className="text-blue-400"> × {dose.toFixed(1)} = {(d.areaHa * dose).toFixed(1)} ideal</span>}
-                                                    </p>
+                                return (
+                                    <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden transition-all hover:shadow-lg">
+                                        {/* Product header */}
+                                        <div className="flex items-center gap-4 p-4 border-b border-gray-100 bg-gray-50/30">
+                                            {p.imageUrl ? (
+                                                <img src={p.imageUrl} className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-100 shadow-sm" alt="" />
+                                            ) : (
+                                                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${CATEGORY_COLORS[p.category] || CATEGORY_COLORS.outro} flex items-center justify-center shadow-sm`}>
+                                                    <span className="text-2xl">{CATEGORY_EMOJI[p.category] || "📦"}</span>
                                                 </div>
-                                                <div className="flex items-center gap-1 shrink-0">
-                                                    <button
-                                                        className="w-7 h-7 rounded bg-orange-600 hover:bg-orange-500 flex items-center justify-center"
-                                                        onClick={() => setOverride(p.id, d.plotId, d.allocatedQty - 1)}
-                                                    >
-                                                        <Minus className="h-3 w-3 text-white" />
-                                                    </button>
-                                                    <Input
-                                                        type="number"
-                                                        step="1"
-                                                        value={d.allocatedQty}
-                                                        onChange={(e) => setOverride(p.id, d.plotId, parseFloat(e.target.value) || 0)}
-                                                        className="text-center text-sm font-bold w-20 h-7 bg-slate-700 border-slate-600 text-white px-1"
-                                                    />
-                                                    <button
-                                                        className="w-7 h-7 rounded bg-orange-600 hover:bg-orange-500 flex items-center justify-center"
-                                                        onClick={() => setOverride(p.id, d.plotId, d.allocatedQty + 1)}
-                                                    >
-                                                        <Plus className="h-3 w-3 text-white" />
-                                                    </button>
-                                                    <span className="text-xs text-slate-400 w-8 ml-1">{p.unit}</span>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-lg text-gray-800 leading-tight">{p.name}</p>
+                                                <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                                                    <span className="px-2 py-0.5 bg-gray-100 rounded-full font-medium">{p.category || "Geral"}</span>
+                                                    {hasDose && (
+                                                        <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                                                            <Droplets className="h-3 w-3" />
+                                                            {dose.toFixed(1)} {p.unit}/ha
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
+                                            <div className="text-right">
+                                                <div className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-0.5">Total Saída</div>
+                                                <p className="font-bold text-emerald-600 text-2xl leading-none">{item.totalQty}</p>
+                                                <p className="text-xs text-gray-400">{p.unit}</p>
+                                            </div>
+                                        </div>
 
-                                    {/* Total check */}
-                                    <div className={`flex items-center justify-between px-4 py-2 text-sm font-bold ${Math.abs(diff) < 0.01 ? "bg-green-900/30 text-green-400" : "bg-yellow-900/30 text-yellow-400"}`}>
-                                        <span>Distribuído: {item.totalAllocated} {p.unit}</span>
-                                        {Math.abs(diff) < 0.01 ? (
-                                            <span className="flex items-center gap-1"><Check className="h-4 w-4" /> Bate com saída</span>
-                                        ) : (
-                                            <span>{diff > 0 ? `Faltam ${diff.toFixed(0)} ${p.unit}` : `Excede ${Math.abs(diff).toFixed(0)} ${p.unit}`}</span>
-                                        )}
+                                        {/* Per-plot distribution */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:gap-px bg-gray-100">
+                                            {item.distribution.map((d) => (
+                                                <div key={d.plotId} className="flex items-center gap-3 p-4 bg-white">
+                                                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                                                        <span className="text-xs font-bold">PT</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-bold text-gray-700 truncate">{d.plotName}</p>
+                                                        <p className="text-[10px] text-gray-400">
+                                                            {d.areaHa.toFixed(1)} ha
+                                                            {hasDose && <span className="text-blue-400 ml-1">• Ideal: {(d.areaHa * dose).toFixed(0)}</span>}
+                                                        </p>
+                                                    </div>
+                                                    {/* Quantity Input */}
+                                                    <div className="flex items-center gap-1 shrink-0 bg-gray-50 p-1 rounded-lg border border-gray-200">
+                                                        <button
+                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-emerald-600 border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                                                            onClick={() => setOverride(p.id, d.plotId, d.allocatedQty - 1)}
+                                                        >
+                                                            <Minus className="h-3 w-3" />
+                                                        </button>
+                                                        <Input
+                                                            type="number"
+                                                            step="1"
+                                                            value={d.allocatedQty}
+                                                            onChange={(e) => setOverride(p.id, d.plotId, parseFloat(e.target.value) || 0)}
+                                                            className="text-center text-sm font-bold w-16 h-7 bg-transparent border-none p-0 focus-visible:ring-0 text-gray-800"
+                                                        />
+                                                        <button
+                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-emerald-600 border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                                                            onClick={() => setOverride(p.id, d.plotId, d.allocatedQty + 1)}
+                                                        >
+                                                            <Plus className="h-3 w-3" />
+                                                        </button>
+                                                    </div>
+                                                    <span className="text-xs text-gray-400 font-medium w-6 text-center">{p.unit}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Total check footer */}
+                                        <div className={`flex items-center justify-between px-5 py-3 text-sm font-bold border-t ${Math.abs(diff) < 0.01 ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-amber-50 border-amber-100 text-amber-700"}`}>
+                                            <div className="flex items-center gap-2">
+                                                <span className="uppercase text-[10px] tracking-wide opacity-70">Status da Distribuição:</span>
+                                                <span>{item.totalAllocated} {p.unit} alocados</span>
+                                            </div>
+                                            {Math.abs(diff) < 0.01 ? (
+                                                <span className="flex items-center gap-1.5 bg-white/50 px-2 py-0.5 rounded-full text-xs border border-emerald-200/50">
+                                                    <Check className="h-3.5 w-3.5" />
+                                                    Perfeito
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center gap-1.5 bg-white/50 px-2 py-0.5 rounded-full text-xs border border-amber-200/50">
+                                                    {diff > 0 ? `Faltam ${diff.toFixed(0)} ${p.unit}` : `Excede ${Math.abs(diff).toFixed(0)} ${p.unit}`}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
                 {/* Bottom bar */}
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-800 border-t border-slate-700">
-                    <div className="max-w-2xl mx-auto flex gap-3">
-                        <Button variant="outline" className="flex-1 py-5 text-base border-slate-700" onClick={reset}>Cancelar</Button>
-                        <Button className="flex-1 py-5 text-base bg-green-600 hover:bg-green-700 font-bold" onClick={handleSubmit} disabled={submitting}>
+                <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
+                    <div className="max-w-4xl mx-auto flex gap-4">
+                        <Button variant="outline" className="flex-1 py-6 text-base border-gray-200 hover:bg-gray-50 text-gray-600 font-medium rounded-xl" onClick={reset}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            className="flex-[2] py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98]"
+                            onClick={handleSubmit}
+                            disabled={submitting}
+                        >
                             {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />}
                             Confirmar Saída
                         </Button>
@@ -517,30 +607,54 @@ export default function PdvTerminal() {
     }
 
     // ==================== STEP: PRODUCT SELECTION ====================
+    const totalCartQty = cart.reduce((sum, c) => sum + c.quantity, 0);
+
     return (
-        <div className="h-screen bg-slate-900 text-white flex flex-col">
-            <header className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700 shrink-0">
+        <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
+            {/* Header with gradient */}
+            <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shrink-0 shadow-md">
                 <div className="flex items-center gap-3">
-                    <span className="text-2xl">🏪</span>
-                    <span className="font-bold text-lg">PDV Depósito</span>
+                    <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                        <span className="text-lg">🏪</span>
+                    </div>
+                    <div>
+                        <span className="font-bold text-base leading-tight block">PDV Depósito</span>
+                        <span className="text-[10px] text-emerald-200">AgroFarm Digital</span>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    {isOnline ? <Wifi className="h-5 w-5 text-green-400" /> : <WifiOff className="h-5 w-5 text-red-400" />}
-                    <Button variant="ghost" size="icon" className="text-slate-400" onClick={() => setLocation("/pdv/login")}>
-                        <LogOut className="h-5 w-5" />
-                    </Button>
+                <div className="flex items-center gap-2">
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isOnline ? "bg-emerald-500/30 text-emerald-100" : "bg-red-500/30 text-red-200"}`}>
+                        {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+                        {isOnline ? "Online" : "Offline"}
+                    </div>
+                    <button onClick={handleLogout} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-sm font-medium transition-colors">
+                        <LogOut className="h-4 w-4" />
+                        Sair
+                    </button>
                 </div>
             </header>
 
-            {/* Steps */}
-            <div className="flex items-center gap-1 px-4 py-2 bg-slate-800/50 border-b border-slate-700/30 shrink-0">
-                {["📦 Produtos", "📍 Talhões", "✅ Confirmar"].map((label, i) => {
+            {/* Stepper */}
+            <div className="flex items-center px-5 py-2.5 bg-white border-b border-gray-100 shrink-0">
+                {[
+                    { label: "Produtos", emoji: "📦", key: "product" },
+                    { label: "Talhões", emoji: "📍", key: "plot" },
+                    { label: "Confirmar", emoji: "✅", key: "confirm" },
+                ].map((s, i) => {
                     const steps = ["product", "plot", "confirm"];
                     const isActive = steps.indexOf(step) >= i;
+                    const isCurrent = step === s.key;
                     return (
-                        <div key={label} className="flex items-center gap-1 flex-1">
-                            <span className={`text-[10px] ${isActive ? "text-white font-bold" : "text-slate-500"}`}>{label}</span>
-                            {i < 2 && <div className={`flex-1 h-0.5 mx-1 ${isActive ? "bg-orange-500" : "bg-slate-700"}`} />}
+                        <div key={s.key} className="flex items-center flex-1">
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${isCurrent ? "bg-emerald-100 text-emerald-700" : isActive ? "text-emerald-600" : "text-gray-300"}`}>
+                                <span>{s.emoji}</span>
+                                <span className="hidden sm:inline">{s.label}</span>
+                            </div>
+                            {i < 2 && (
+                                <div className="flex-1 mx-2">
+                                    <div className={`h-0.5 rounded-full transition-colors ${isActive ? "bg-emerald-400" : "bg-gray-200"}`} />
+                                </div>
+                            )}
                         </div>
                     );
                 })}
@@ -549,146 +663,210 @@ export default function PdvTerminal() {
             <div className="flex-1 flex overflow-hidden">
                 {/* LEFT: Product catalog */}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="p-3 space-y-2 bg-slate-800/30 border-b border-slate-700/50 shrink-0">
+                    {/* Search & filters */}
+                    <div className="p-3 space-y-2.5 bg-white border-b border-gray-100 shrink-0 shadow-sm">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                             <Input
-                                className="pl-10 py-2 bg-slate-800 border-slate-700 text-white text-sm"
+                                className="pl-10 h-10 bg-gray-50 border-gray-200 text-gray-800 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                                 placeholder="Buscar produto..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 autoFocus
                             />
                         </div>
-                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide">
                             <button
                                 onClick={() => setCategoryFilter("")}
-                                className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${!categoryFilter ? "bg-orange-500 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
-                            >Todos</button>
-                            {categories.map(cat => (
-                                <button
-                                    key={cat}
-                                    onClick={() => setCategoryFilter(categoryFilter === cat ? "" : cat)}
-                                    className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${categoryFilter === cat ? "bg-orange-500 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
-                                >
-                                    <span>{CATEGORY_EMOJI[cat] || "📦"}</span>
-                                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                                </button>
-                            ))}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${!categoryFilter ? "bg-emerald-600 text-white shadow-sm shadow-emerald-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                            >Todos ({products.length})</button>
+                            {categories.map(cat => {
+                                const count = products.filter((p: any) => p.category === cat).length;
+                                return (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setCategoryFilter(categoryFilter === cat ? "" : cat)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1 ${categoryFilter === cat ? "bg-emerald-600 text-white shadow-sm shadow-emerald-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                                    >
+                                        <span>{CATEGORY_EMOJI[cat] || "📦"}</span>
+                                        {cat.charAt(0).toUpperCase() + cat.slice(1)} ({count})
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    {/* Product grid — 4 per row */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {filtered.map((p: any) => {
                                 const stockQty = getStockForProduct(p.id);
                                 const inCart = isInCart(p.id);
                                 const gradient = CATEGORY_COLORS[p.category] || CATEGORY_COLORS.outro;
+                                const lowStock = stockQty <= 0;
                                 return (
                                     <button
                                         key={p.id}
                                         onClick={() => addToCart(p)}
-                                        className={`relative rounded-xl overflow-hidden border-2 transition-all hover:scale-[1.02] ${inCart ? "border-orange-500 ring-2 ring-orange-500/30" : "border-slate-700 hover:border-slate-500"}`}
+                                        className={`group relative rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-xl hover:-translate-y-1 bg-white text-left ${inCart ? "ring-2 ring-emerald-500 shadow-lg shadow-emerald-100" : "shadow-md hover:shadow-lg border border-gray-100/80"}`}
                                     >
-                                        <div className={`aspect-square bg-gradient-to-br ${gradient} flex items-center justify-center relative`}>
+                                        {/* Product image / icon */}
+                                        <div className={`h-36 bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden`}>
+                                            {/* Decorative shimmer */}
+                                            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 group-hover:via-white/20 transition-all" />
                                             {p.imageUrl ? (
-                                                <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2 bg-white"
+                                                <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-3 bg-white/95 relative z-10"
                                                     onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} />
                                             ) : null}
-                                            <div className={`flex flex-col items-center justify-center ${p.imageUrl ? "hidden" : ""}`}>
-                                                <span className="text-4xl">{CATEGORY_EMOJI[p.category] || "📦"}</span>
+                                            <div className={`flex flex-col items-center justify-center relative z-10 ${p.imageUrl ? "hidden" : ""}`}>
+                                                <span className="text-5xl drop-shadow-lg group-hover:scale-110 transition-transform duration-300">{CATEGORY_EMOJI[p.category] || "📦"}</span>
                                             </div>
-                                            <div className={`absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${stockQty <= 0 ? "bg-red-500" : "bg-black/60"}`}>
+                                            {/* Stock badge */}
+                                            <div className={`absolute top-2 right-2 px-2 py-1 rounded-lg text-[10px] font-bold text-white z-20 ${lowStock ? "bg-red-500" : "bg-black/40 backdrop-blur-sm"}`}>
                                                 {stockQty.toFixed(0)} {p.unit}
                                             </div>
+                                            {/* Cart selected indicator */}
                                             {inCart && (
-                                                <div className="absolute top-1.5 left-1.5 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+                                                <div className="absolute top-2 left-2 w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg z-20">
                                                     <Check className="h-4 w-4 text-white" />
                                                 </div>
                                             )}
+                                            {/* Category pill */}
+                                            <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-white/25 backdrop-blur-sm text-[10px] font-semibold text-white z-20">
+                                                {p.category ? p.category.charAt(0).toUpperCase() + p.category.slice(1) : "Outro"}
+                                            </div>
                                         </div>
-                                        <div className="p-2 bg-slate-800 text-left">
-                                            <p className="font-medium text-xs leading-tight truncate" title={p.name}>{p.name}</p>
-                                            <p className="text-[10px] text-slate-400 mt-0.5 truncate">{p.category || "—"}</p>
-                                            {p.dosePerHa && (
-                                                <div className="flex items-center gap-1 mt-1">
-                                                    <Droplets className="h-3 w-3 text-blue-400" />
-                                                    <span className="text-[10px] text-blue-400">{parseFloat(p.dosePerHa).toFixed(1)} {p.unit}/ha</span>
+                                        {/* Product info */}
+                                        <div className="p-3">
+                                            <p className="font-bold text-sm leading-snug line-clamp-2 text-gray-800 group-hover:text-emerald-700 transition-colors min-h-[2.5rem]" title={p.name}>
+                                                {p.name}
+                                            </p>
+                                            <div className="flex items-center justify-between mt-2">
+                                                {p.dosePerHa ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <Droplets className="h-3.5 w-3.5 text-blue-500" />
+                                                        <span className="text-xs text-blue-500 font-semibold">{parseFloat(p.dosePerHa).toFixed(1)} {p.unit}/ha</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-300">{p.unit || "—"}</span>
+                                                )}
+                                                {/* Mini stock bar */}
+                                                <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${lowStock ? "bg-red-100 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
+                                                    {lowStock ? "Sem estoque" : `${stockQty.toFixed(0)} disp.`}
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
                                     </button>
                                 );
                             })}
                         </div>
-                        {filtered.length === 0 && <p className="text-slate-500 text-center py-12">Nenhum produto encontrado</p>}
+                        {filtered.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-300">
+                                <Search className="h-12 w-12 mb-4" />
+                                <p className="text-base font-medium text-gray-400">Nenhum produto encontrado</p>
+                                <p className="text-sm text-gray-300">Tente outro termo ou filtro</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* RIGHT: Cart panel */}
-                <div className="w-80 lg:w-96 bg-slate-800 border-l border-slate-700 flex flex-col shrink-0 hidden md:flex">
-                    <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <ShoppingCart className="h-5 w-5 text-orange-400" />
-                            <h3 className="font-bold">Carrinho</h3>
+                {/* RIGHT: Cart panel — wider & improved */}
+                <div className="w-[480px] lg:w-[560px] bg-white border-l border-gray-100 flex flex-col shrink-0 hidden md:flex shadow-lg">
+                    {/* Cart header with gradient */}
+                    <div className="px-5 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                            <ShoppingCart className="h-5 w-5" />
+                            <h3 className="font-bold text-base">Carrinho</h3>
                         </div>
-                        {cart.length > 0 && <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{cart.length}</span>}
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto">
-                        {cart.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                                <ShoppingCart className="h-12 w-12 mb-3 opacity-30" />
-                                <p className="text-sm">Carrinho vazio</p>
-                                <p className="text-xs mt-1">Clique nos produtos para adicionar</p>
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-slate-700/50">
-                                {cart.map((item) => (
-                                    <div key={item.product.id} className="p-3 space-y-2">
-                                        <div className="flex items-start gap-2">
-                                            {item.product.imageUrl ? (
-                                                <img src={item.product.imageUrl} className="w-10 h-10 rounded-lg object-contain bg-white shrink-0" alt="" />
-                                            ) : (
-                                                <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center shrink-0`}>
-                                                    <span className="text-lg">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
-                                                </div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium text-sm leading-tight truncate">{item.product.name}</p>
-                                                <p className="text-xs text-slate-400">{item.product.category || "—"} • Est: {getStockForProduct(item.product.id).toFixed(0)}</p>
-                                            </div>
-                                            <button onClick={() => removeFromCart(item.product.id)} className="text-red-400 hover:text-red-300 shrink-0 p-1">
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                        {/* Quantity input */}
-                                        <div className="flex items-center gap-2">
-                                            <button className="w-8 h-8 rounded-md bg-orange-600 hover:bg-orange-500 flex items-center justify-center"
-                                                onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
-                                                <Minus className="h-3 w-3 text-white" />
-                                            </button>
-                                            <Input type="number" step="1" value={item.quantity}
-                                                onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
-                                                className="text-center text-sm font-bold flex-1 h-8 bg-slate-700 border-slate-600 text-white" />
-                                            <button className="w-8 h-8 rounded-md bg-orange-600 hover:bg-orange-500 flex items-center justify-center"
-                                                onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
-                                                <Plus className="h-3 w-3 text-white" />
-                                            </button>
-                                            <span className="text-xs text-slate-400 w-8">{item.product.unit}</span>
-                                        </div>
-                                    </div>
-                                ))}
+                        {cart.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className="bg-white/25 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                                    {cart.length} {cart.length === 1 ? "item" : "itens"}
+                                </span>
                             </div>
                         )}
                     </div>
 
-                    <div className="p-4 border-t border-slate-700 space-y-2">
-                        <div className="flex justify-between text-sm">
-                            <span className="text-slate-400">{cart.length} itens</span>
-                        </div>
-                        <Button className="w-full py-5 text-base bg-orange-600 hover:bg-orange-700 font-bold"
-                            onClick={handleGoToPlot} disabled={cart.length === 0}>
+                    <div className="flex-1 overflow-y-auto">
+                        {cart.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full px-6">
+                                <div className="w-20 h-20 rounded-2xl bg-gray-50 flex items-center justify-center mb-4">
+                                    <ShoppingCart className="h-10 w-10 text-gray-200" />
+                                </div>
+                                <p className="text-gray-500 font-medium text-sm">Carrinho vazio</p>
+                                <p className="text-gray-300 text-xs text-center mt-1.5 leading-relaxed">
+                                    Clique nos produtos ao lado para adicioná-los ao carrinho de saída
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="p-3 space-y-2">
+                                {cart.map((item) => {
+                                    const stk = getStockForProduct(item.product.id);
+                                    const overStock = item.quantity > stk;
+                                    return (
+                                        <div key={item.product.id} className={`rounded-xl border p-3 transition-all ${overStock ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-gray-50/50 hover:bg-gray-50"}`}>
+                                            <div className="flex items-start gap-2.5 mb-2.5">
+                                                {item.product.imageUrl ? (
+                                                    <img src={item.product.imageUrl} className="w-11 h-11 rounded-lg object-contain bg-white border border-gray-100 shrink-0" alt="" />
+                                                ) : (
+                                                    <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center shrink-0`}>
+                                                        <span className="text-lg">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-sm leading-tight truncate text-gray-800">{item.product.name}</p>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <span className="text-[10px] text-gray-400">{item.product.category || "—"}</span>
+                                                        <span className="text-[10px] text-gray-300">•</span>
+                                                        <span className={`text-[10px] font-medium ${stk <= 0 ? "text-red-500" : "text-emerald-500"}`}>
+                                                            Estoque: {stk.toFixed(0)} {item.product.unit}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => removeFromCart(item.product.id)} className="text-gray-300 hover:text-red-500 shrink-0 p-0.5 transition-colors">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                            {/* Quantity controls */}
+                                            <div className="flex items-center gap-1.5">
+                                                <button className="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-sm transition-colors active:scale-95"
+                                                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                                                    <Minus className="h-3.5 w-3.5 text-white" />
+                                                </button>
+                                                <Input type="number" step="1" value={item.quantity}
+                                                    onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                                                    className="text-center text-base font-bold flex-1 h-9 bg-white border-gray-200 text-gray-800 rounded-lg" />
+                                                <button className="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-sm transition-colors active:scale-95"
+                                                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                                                    <Plus className="h-3.5 w-3.5 text-white" />
+                                                </button>
+                                                <span className="text-xs text-gray-400 w-10 text-center font-medium">{item.product.unit}</span>
+                                            </div>
+                                            {overStock && (
+                                                <p className="text-[10px] text-red-500 font-medium mt-1.5 flex items-center gap-1">
+                                                    ⚠️ Excede estoque disponível
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Cart footer */}
+                    <div className="p-4 border-t border-gray-100 bg-gray-50/80 space-y-3">
+                        {cart.length > 0 && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-400">{cart.length} produto(s)</span>
+                                <span className="text-emerald-600 font-bold">{totalCartQty} unidades total</span>
+                            </div>
+                        )}
+                        <Button
+                            className="w-full py-5 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-[0.98]"
+                            onClick={handleGoToPlot}
+                            disabled={cart.length === 0}
+                        >
                             <ArrowRight className="mr-2 h-5 w-5" />
                             Selecionar Talhões
                         </Button>
@@ -698,8 +876,8 @@ export default function PdvTerminal() {
 
             {/* MOBILE bottom bar */}
             {cart.length > 0 && (
-                <div className="md:hidden fixed bottom-0 left-0 right-0 p-3 bg-slate-800 border-t border-slate-700 z-50">
-                    <Button className="w-full py-5 text-base bg-orange-600 hover:bg-orange-700 font-bold rounded-xl" onClick={handleGoToPlot}>
+                <div className="md:hidden fixed bottom-0 left-0 right-0 p-3 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg z-50">
+                    <Button className="w-full py-5 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-md" onClick={handleGoToPlot}>
                         <ShoppingCart className="mr-2 h-5 w-5" />
                         {cart.length} produto(s) → Talhões
                         <ArrowRight className="ml-2 h-5 w-5" />

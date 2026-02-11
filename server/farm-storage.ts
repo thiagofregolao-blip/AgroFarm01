@@ -3,7 +3,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
     farmFarmers, farmProperties, farmPlots, farmProductsCatalog,
     farmStock, farmInvoices, farmInvoiceItems, farmStockMovements,
-    farmApplications, farmExpenses, farmPdvTerminals,
+    farmApplications, farmExpenses, farmPdvTerminals, farmSeasons,
     type InsertFarmFarmer, type FarmFarmer,
     type InsertFarmProperty, type FarmProperty,
     type InsertFarmPlot, type FarmPlot,
@@ -15,6 +15,7 @@ import {
     type InsertFarmApplication, type FarmApplication,
     type InsertFarmExpense, type FarmExpense,
     type InsertFarmPdvTerminal, type FarmPdvTerminal,
+    type InsertFarmSeason, type FarmSeason,
 } from "../shared/schema";
 
 // ============================================================================
@@ -151,6 +152,11 @@ export class FarmStorage {
 
     async deleteProduct(id: string): Promise<void> {
         await dbReady;
+        // Clear FK references before deleting
+        await db.delete(farmStock).where(eq(farmStock.productId, id));
+        await db.delete(farmStockMovements).where(eq(farmStockMovements.productId, id));
+        await db.update(farmInvoiceItems).set({ productId: null }).where(eq(farmInvoiceItems.productId, id));
+        await db.update(farmApplications).set({ productId: null }).where(eq(farmApplications.productId, id));
         await db.delete(farmProductsCatalog).where(eq(farmProductsCatalog.id, id));
     }
 
@@ -414,6 +420,33 @@ export class FarmStorage {
     async setPdvOffline(id: string): Promise<void> {
         await dbReady;
         await db.update(farmPdvTerminals).set({ isOnline: false }).where(eq(farmPdvTerminals.id, id));
+    }
+
+    // ==================== Seasons (Safras) ====================
+    async getSeasons(farmerId: string): Promise<FarmSeason[]> {
+        await dbReady;
+        return db.select().from(farmSeasons)
+            .where(eq(farmSeasons.farmerId, farmerId))
+            .orderBy(desc(farmSeasons.createdAt));
+    }
+
+    async createSeason(data: InsertFarmSeason): Promise<FarmSeason> {
+        await dbReady;
+        const [season] = await db.insert(farmSeasons).values(data).returning();
+        return season;
+    }
+
+    async updateSeason(id: string, data: Partial<InsertFarmSeason>): Promise<FarmSeason> {
+        await dbReady;
+        const [season] = await db.update(farmSeasons).set(data).where(eq(farmSeasons.id, id)).returning();
+        return season;
+    }
+
+    async deleteSeason(id: string): Promise<void> {
+        await dbReady;
+        // Unlink invoices from this season first
+        await db.update(farmInvoices).set({ seasonId: null }).where(eq(farmInvoices.seasonId, id));
+        await db.delete(farmSeasons).where(eq(farmSeasons.id, id));
     }
 }
 

@@ -4,6 +4,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Leaflet overrides — Tailwind resets break tile rendering */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+.leaflet-container img {
+  max-width: none !important;
+  max-height: none !important;
+}
+.leaflet-tile-pane {
+  z-index: 1;
+}
+.leaflet-control-container {
+  z-index: 800;
+}
+.leaflet-tile {
+  visibility: visible !important;
+}
+
 :root {
   --background: hsl(120, 20%, 98%);
   --foreground: hsl(142, 10%, 15%);
