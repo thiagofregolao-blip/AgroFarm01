@@ -426,7 +426,7 @@ export default function PdvTerminal() {
                                             {p.dosePerHa && (
                                                 <div className="flex items-center gap-1 mt-1">
                                                     <Droplets className="h-3 w-3 text-blue-400" />
-                                                    <span className="text-[10px] text-blue-400">{p.dosePerHa} {p.unit}/ha</span>
+                                                    <span className="text-[10px] text-blue-400">{parseFloat(p.dosePerHa).toFixed(1)} {p.unit}/ha</span>
                                                 </div>
                                             )}
                                         </div>
