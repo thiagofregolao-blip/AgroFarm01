@@ -131,6 +131,15 @@ export async function ensureSchema() {
       console.log("✅ Coluna image_url verificada.");
     } catch (e) { /* ignora se já existe */ }
 
+    // 4. Garantir coordinates em farm_plots
+    try {
+      await execute(`
+        ALTER TABLE farm_plots 
+        ADD COLUMN IF NOT EXISTS coordinates TEXT;
+      `);
+      console.log("✅ Coluna coordinates verificada.");
+    } catch (e) { /* ignora se já existe */ }
+
     console.log("✅ Schema verificado/corrigido com sucesso.");
   } catch (error) {
     console.error("❌ Erro ao verificar schema:", error);

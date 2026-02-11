@@ -144,7 +144,7 @@ export function registerFarmRoutes(app: Express) {
 
     app.post("/api/farm/properties/:propertyId/plots", requireFarmer, async (req, res) => {
         try {
-            const { name, areaHa, crop } = req.body;
+            const { name, areaHa, crop, coordinates } = req.body;
             if (!name || !areaHa) return res.status(400).json({ error: "Plot name and area required" });
 
             const plot = await farmStorage.createPlot({
@@ -152,6 +152,7 @@ export function registerFarmRoutes(app: Express) {
                 name,
                 areaHa: String(areaHa),
                 crop,
+                coordinates: coordinates ? JSON.stringify(coordinates) : null,
             });
             res.status(201).json(plot);
         } catch (error) {
@@ -162,11 +163,12 @@ export function registerFarmRoutes(app: Express) {
 
     app.put("/api/farm/plots/:id", requireFarmer, async (req, res) => {
         try {
-            const { name, areaHa, crop } = req.body;
+            const { name, areaHa, crop, coordinates } = req.body;
             const plot = await farmStorage.updatePlot(req.params.id, {
                 name,
                 areaHa: areaHa ? String(areaHa) : undefined,
                 crop,
+                coordinates: coordinates !== undefined ? (coordinates ? JSON.stringify(coordinates) : null) : undefined,
             });
             res.json(plot);
         } catch (error) {

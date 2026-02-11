@@ -1042,6 +1042,7 @@ export const farmPlots = pgTable("farm_plots", {
   name: text("name").notNull(),
   areaHa: decimal("area_ha", { precision: 12, scale: 2 }).notNull(),
   crop: text("crop"), // Cultura atual (soja, milho, etc.)
+  coordinates: text("coordinates"), // JSON array of {lat, lng} polygon vertices
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
