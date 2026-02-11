@@ -438,6 +438,135 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // ==================== PLOT COSTS ====================
+
+    app.get("/api/farm/plot-costs", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            const { db } = await import("./db");
+            const { farmApplications, farmProductsCatalog, farmPlots, farmProperties, farmStock } = await import("../shared/schema");
+            const { eq, and, sql } = await import("drizzle-orm");
+
+            // Get all applications with product and plot info
+            const apps = await db.select({
+                appId: farmApplications.id,
+                productId: farmApplications.productId,
+                plotId: farmApplications.plotId,
+                propertyId: farmApplications.propertyId,
+                quantity: farmApplications.quantity,
+                appliedAt: farmApplications.appliedAt,
+                productName: farmProductsCatalog.name,
+                productUnit: farmProductsCatalog.unit,
+                productCategory: farmProductsCatalog.category,
+                productDosePerHa: farmProductsCatalog.dosePerHa,
+                productImageUrl: farmProductsCatalog.imageUrl,
+                plotName: farmPlots.name,
+                plotAreaHa: farmPlots.areaHa,
+                plotCrop: farmPlots.crop,
+                propertyName: farmProperties.name,
+            })
+                .from(farmApplications)
+                .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
+                .innerJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))
+                .innerJoin(farmProperties, eq(farmApplications.propertyId, farmProperties.id))
+                .where(eq(farmApplications.farmerId, farmerId))
+                .orderBy(farmApplications.appliedAt);
+
+            // Get stock with averageCost for each product
+            const stockData = await db.select({
+                productId: farmStock.productId,
+                averageCost: farmStock.averageCost,
+                currentQty: farmStock.quantity,
+            })
+                .from(farmStock)
+                .where(eq(farmStock.farmerId, farmerId));
+
+            const costMap: Record<string, number> = {};
+            for (const s of stockData) {
+                costMap[s.productId] = parseFloat(s.averageCost || "0");
+            }
+
+            // Build aggregated data
+            const plotData: Record<string, {
+                plotId: string;
+                plotName: string;
+                plotAreaHa: number;
+                plotCrop: string | null;
+                propertyId: string;
+                propertyName: string;
+                totalCost: number;
+                totalQtyByProduct: Record<string, { productId: string; productName: string; productUnit: string; category: string | null; imageUrl: string | null; quantity: number; unitCost: number; totalCost: number; dosePerHa: number | null }>;
+                applications: typeof apps;
+            }> = {};
+
+            for (const app of apps) {
+                if (!plotData[app.plotId]) {
+                    plotData[app.plotId] = {
+                        plotId: app.plotId,
+                        plotName: app.plotName,
+                        plotAreaHa: parseFloat(app.plotAreaHa || "0"),
+                        plotCrop: app.plotCrop,
+                        propertyId: app.propertyId,
+                        propertyName: app.propertyName,
+                        totalCost: 0,
+                        totalQtyByProduct: {},
+                        applications: [],
+                    };
+                }
+
+                const qty = parseFloat(app.quantity || "0");
+                const unitCost = costMap[app.productId] || 0;
+                const appCost = qty * unitCost;
+
+                plotData[app.plotId].totalCost += appCost;
+                plotData[app.plotId].applications.push(app);
+
+                if (!plotData[app.plotId].totalQtyByProduct[app.productId]) {
+                    plotData[app.plotId].totalQtyByProduct[app.productId] = {
+                        productId: app.productId,
+                        productName: app.productName,
+                        productUnit: app.productUnit,
+                        category: app.productCategory,
+                        imageUrl: app.productImageUrl,
+                        quantity: 0,
+                        unitCost,
+                        totalCost: 0,
+                        dosePerHa: app.productDosePerHa ? parseFloat(app.productDosePerHa) : null,
+                    };
+                }
+                plotData[app.plotId].totalQtyByProduct[app.productId].quantity += qty;
+                plotData[app.plotId].totalQtyByProduct[app.productId].totalCost += appCost;
+            }
+
+            // Convert to array and compute per-hectare for each plot
+            const result = Object.values(plotData).map(p => ({
+                ...p,
+                costPerHa: p.plotAreaHa > 0 ? p.totalCost / p.plotAreaHa : 0,
+                products: Object.values(p.totalQtyByProduct),
+                applications: undefined, // Don't send raw apps to reduce payload
+            }));
+
+            // Category totals
+            const categoryTotals: Record<string, number> = {};
+            for (const p of result) {
+                for (const prod of p.products) {
+                    const cat = prod.category || "outro";
+                    categoryTotals[cat] = (categoryTotals[cat] || 0) + prod.totalCost;
+                }
+            }
+
+            res.json({
+                plots: result,
+                categoryTotals,
+                totalCost: result.reduce((s, p) => s + p.totalCost, 0),
+                totalArea: result.reduce((s, p) => s + p.plotAreaHa, 0),
+            });
+        } catch (error) {
+            console.error("[FARM_PLOT_COSTS]", error);
+            res.status(500).json({ error: "Failed to get plot costs" });
+        }
+    });
+
     // ==================== EXPENSES ====================
 
     app.get("/api/farm/expenses", requireFarmer, async (req, res) => {
