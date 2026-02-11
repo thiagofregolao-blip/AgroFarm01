@@ -485,14 +485,12 @@ export default function PdvTerminal() {
 
                                         {/* Quantity controls */}
                                         <div className="flex items-center gap-2">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="w-8 h-8 border-slate-600 p-0"
+                                            <button
+                                                className="w-8 h-8 rounded-md bg-orange-600 hover:bg-orange-500 flex items-center justify-center transition-colors"
                                                 onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
                                             >
-                                                <Minus className="h-3 w-3" />
-                                            </Button>
+                                                <Minus className="h-3 w-3 text-white" />
+                                            </button>
                                             <Input
                                                 type="number"
                                                 step="0.1"
@@ -500,14 +498,12 @@ export default function PdvTerminal() {
                                                 onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
                                                 className="text-center text-sm font-bold flex-1 h-8 bg-slate-700 border-slate-600 text-white"
                                             />
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="w-8 h-8 border-slate-600 p-0"
+                                            <button
+                                                className="w-8 h-8 rounded-md bg-orange-600 hover:bg-orange-500 flex items-center justify-center transition-colors"
                                                 onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
                                             >
-                                                <Plus className="h-3 w-3" />
-                                            </Button>
+                                                <Plus className="h-3 w-3 text-white" />
+                                            </button>
                                             <span className="text-xs text-slate-400 w-8">{item.product.unit}</span>
                                         </div>
                                     </div>
