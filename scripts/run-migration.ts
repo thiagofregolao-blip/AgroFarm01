@@ -43,6 +43,16 @@ const runMigration = async () => {
             console.log('✅ Migração farm concluída!');
         }
 
+        // Migration 3: DB Fixes (Season ID & Cascade Delete)
+        const fixesPath = path.join(process.cwd(), 'migration_fix_db_issues.sql');
+        if (fs.existsSync(fixesPath)) {
+            const fixesSql = fs.readFileSync(fixesPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', fixesPath);
+            console.log('🚀 Executando SQL (fixes)...');
+            await sql.unsafe(fixesSql);
+            console.log('✅ Migração de correções concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
