@@ -88,7 +88,7 @@ export default function FarmProperties() {
 
                 {/* New/Edit Plot Dialog — FULLSCREEN with map */}
                 <Dialog open={openNewPlot !== null || editPlot !== null} onOpenChange={() => { setOpenNewPlot(null); setEditPlot(null); }}>
-                    <DialogContent className="max-w-[95vw] w-[1200px] h-[85vh] p-0 overflow-hidden">
+                    <DialogContent className="max-w-[95vw] w-[1200px] h-[85vh] p-0 overflow-hidden flex flex-row gap-0 [&>button]:z-[1001] [&>button]:bg-white/80 [&>button]:rounded-full [&>button]:p-1">
                         <PlotForm
                             propertyId={openNewPlot || editPlot?.propertyId}
                             initial={editPlot}
