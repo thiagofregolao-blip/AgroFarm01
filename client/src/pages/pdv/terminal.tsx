@@ -250,19 +250,85 @@ export default function PdvTerminal() {
                             <ArrowLeft className="h-4 w-4" /> Voltar
                         </button>
                         <h2 className="text-xl font-bold text-center">Selecione o Talhão</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {plots.map((plot: any) => (
-                                <button
-                                    key={plot.id}
-                                    onClick={() => handleSelectPlot(plot)}
-                                    className="p-4 rounded-xl bg-slate-800 border border-slate-700 hover:border-orange-500 transition-colors text-left"
-                                >
-                                    <p className="font-bold text-lg">{plot.name}</p>
-                                    <p className="text-sm text-slate-400">{plot.propertyName} • {plot.areaHa} ha</p>
-                                    {plot.crop && <p className="text-xs text-slate-500 mt-1">{plot.crop}</p>}
-                                </button>
-                            ))}
-                        </div>
+
+                        {(() => {
+                            const properties = pdvData?.properties || [];
+                            // Group plots by property
+                            const plotsByProperty: Record<string, any[]> = {};
+                            plots.forEach((plot: any) => {
+                                if (!plotsByProperty[plot.propertyId]) plotsByProperty[plot.propertyId] = [];
+                                plotsByProperty[plot.propertyId].push(plot);
+                            });
+
+                            if (properties.length === 0 && plots.length === 0) {
+                                return (
+                                    <div className="text-center py-12">
+                                        <p className="text-slate-400 text-lg">Nenhuma propriedade ou talhão cadastrado</p>
+                                        <p className="text-slate-500 text-sm mt-2">Cadastre propriedades e talhões no painel da fazenda</p>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div className="space-y-4">
+                                    {properties.map((prop: any) => {
+                                        const propPlots = plotsByProperty[prop.id] || [];
+                                        return (
+                                            <div key={prop.id} className="rounded-xl overflow-hidden border border-slate-700">
+                                                {/* Property header */}
+                                                <div className="bg-slate-800 px-4 py-3 flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center">
+                                                        <span className="text-lg">🌾</span>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-bold text-emerald-400">{prop.name}</p>
+                                                        <p className="text-xs text-slate-400">
+                                                            {prop.location || "Sem localização"} • {prop.totalAreaHa ? `${prop.totalAreaHa} ha` : ""} • {propPlots.length} talhão(ões)
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Plots inside property */}
+                                                <div className="bg-slate-850 divide-y divide-slate-700/50">
+                                                    {propPlots.length > 0 ? (
+                                                        propPlots.map((plot: any) => (
+                                                            <button
+                                                                key={plot.id}
+                                                                onClick={() => handleSelectPlot(plot)}
+                                                                className="w-full flex items-center gap-3 px-6 py-3 hover:bg-slate-700/50 transition-colors text-left"
+                                                            >
+                                                                <div className="w-8 h-8 rounded-lg bg-orange-900/30 flex items-center justify-center">
+                                                                    <span className="text-sm">📍</span>
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <p className="font-medium">{plot.name}</p>
+                                                                    <p className="text-xs text-slate-400">
+                                                                        {plot.areaHa} ha {plot.crop ? `• ${plot.crop}` : ""}
+                                                                    </p>
+                                                                </div>
+                                                            </button>
+                                                        ))
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleSelectPlot({ id: prop.id, name: prop.name, propertyId: prop.id, propertyName: prop.name, areaHa: prop.totalAreaHa })}
+                                                            className="w-full flex items-center gap-3 px-6 py-3 hover:bg-slate-700/50 transition-colors text-left"
+                                                        >
+                                                            <div className="w-8 h-8 rounded-lg bg-orange-900/30 flex items-center justify-center">
+                                                                <span className="text-sm">🏠</span>
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <p className="font-medium text-orange-300">Selecionar esta propriedade</p>
+                                                                <p className="text-xs text-slate-400">Sem talhões cadastrados — usar propriedade diretamente</p>
+                                                            </div>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 

@@ -533,12 +533,14 @@ export function registerFarmRoutes(app: Express) {
             const products = await farmStorage.getAllProducts();
             const stock = await farmStorage.getStock(terminal.farmerId);
             const plots = await farmStorage.getPlotsByFarmer(terminal.farmerId);
+            const properties = await farmStorage.getProperties(terminal.farmerId);
 
             res.json({
                 terminal: { id: terminal.id, name: terminal.name, propertyId: terminal.propertyId },
                 products,
                 stock,
                 plots,
+                properties,
             });
         } catch (error) {
             console.error("[PDV_LOGIN]", error);
@@ -630,7 +632,8 @@ export function registerFarmRoutes(app: Express) {
             const products = await farmStorage.getAllProducts();
             const stock = await farmStorage.getStock(farmerId);
             const plots = await farmStorage.getPlotsByFarmer(farmerId);
-            res.json({ products, stock, plots });
+            const properties = await farmStorage.getProperties(farmerId);
+            res.json({ products, stock, plots, properties });
         } catch (error) {
             console.error("[PDV_DATA]", error);
             res.status(500).json({ error: "Failed to get data" });
