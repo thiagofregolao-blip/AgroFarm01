@@ -117,3 +117,13 @@ CREATE TABLE IF NOT EXISTS farm_pdv_terminals (
   last_heartbeat TIMESTAMP,
   created_at TIMESTAMP DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS farm_seasons (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  farmer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  start_date TIMESTAMP,
+  end_date TIMESTAMP,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP DEFAULT now()
+);
