@@ -199,7 +199,7 @@ export function registerFarmRoutes(app: Express) {
 
     app.post("/api/farm/products", requireFarmer, async (req, res) => {
         try {
-            const { name, unit, dosePerHa, category, activeIngredient } = req.body;
+            const { name, unit, dosePerHa, category, activeIngredient, imageUrl } = req.body;
             if (!name || !unit) return res.status(400).json({ error: "Product name and unit required" });
 
             const product = await farmStorage.createProduct({
@@ -208,6 +208,7 @@ export function registerFarmRoutes(app: Express) {
                 dosePerHa: dosePerHa ? String(dosePerHa) : null,
                 category,
                 activeIngredient,
+                imageUrl: imageUrl || null,
             });
             res.status(201).json(product);
         } catch (error) {
@@ -218,13 +219,14 @@ export function registerFarmRoutes(app: Express) {
 
     app.put("/api/farm/products/:id", requireFarmer, async (req, res) => {
         try {
-            const { name, unit, dosePerHa, category, activeIngredient } = req.body;
+            const { name, unit, dosePerHa, category, activeIngredient, imageUrl } = req.body;
             const product = await farmStorage.updateProduct(req.params.id, {
                 name,
                 unit,
                 dosePerHa: dosePerHa ? String(dosePerHa) : undefined,
                 category,
                 activeIngredient,
+                imageUrl: imageUrl !== undefined ? (imageUrl || null) : undefined,
             });
             res.json(product);
         } catch (error) {
