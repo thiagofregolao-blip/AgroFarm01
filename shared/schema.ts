@@ -1116,6 +1116,7 @@ export const farmInvoiceItems = pgTable("farm_invoice_items", {
 export const farmStockMovements = pgTable("farm_stock_movements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  seasonId: varchar("season_id").references(() => farmSeasons.id),
   productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
   type: text("type").notNull(), // "entry" (entrada via fatura) ou "exit" (saída via PDV)
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(), // Positivo entrada, negativo saída
@@ -1131,8 +1132,8 @@ export const farmApplications = pgTable("farm_applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
   productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
-  plotId: varchar("plot_id").notNull().references(() => farmPlots.id),
-  propertyId: varchar("property_id").notNull().references(() => farmProperties.id),
+  plotId: varchar("plot_id").notNull().references(() => farmPlots.id, { onDelete: "cascade" }),
+  propertyId: varchar("property_id").notNull().references(() => farmProperties.id, { onDelete: "cascade" }),
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
   appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
   appliedBy: text("applied_by"), // Nome do funcionário (manual)
