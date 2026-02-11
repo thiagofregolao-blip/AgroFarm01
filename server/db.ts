@@ -122,6 +122,15 @@ export async function ensureSchema() {
       }
     }
 
+    // 3. Garantir image_url em farm_products_catalog
+    try {
+      await execute(`
+        ALTER TABLE farm_products_catalog 
+        ADD COLUMN IF NOT EXISTS image_url TEXT;
+      `);
+      console.log("✅ Coluna image_url verificada.");
+    } catch (e) { /* ignora se já existe */ }
+
     console.log("✅ Schema verificado/corrigido com sucesso.");
   } catch (error) {
     console.error("❌ Erro ao verificar schema:", error);

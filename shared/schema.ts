@@ -1053,6 +1053,7 @@ export const farmProductsCatalog = pgTable("farm_products_catalog", {
   dosePerHa: decimal("dose_per_ha", { precision: 12, scale: 4 }),
   category: text("category"), // herbicida, fungicida, inseticida, fertilizante, semente, adjuvante, etc.
   activeIngredient: text("active_ingredient"),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

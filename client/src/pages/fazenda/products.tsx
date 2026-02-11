@@ -144,14 +144,16 @@ function ProductForm({ initial, onSave }: { initial?: any; onSave: () => void })
     const [dosePerHa, setDosePerHa] = useState(initial?.dosePerHa || "");
     const [category, setCategory] = useState(initial?.category || "");
     const [activeIngredient, setActiveIngredient] = useState(initial?.activeIngredient || "");
+    const [imageUrl, setImageUrl] = useState(initial?.imageUrl || "");
     const { toast } = useToast();
 
     const save = useMutation({
         mutationFn: async () => {
+            const payload = { name, unit, dosePerHa: dosePerHa || null, category, activeIngredient, imageUrl: imageUrl || null };
             if (initial?.id) {
-                return apiRequest("PUT", `/api/farm/products/${initial.id}`, { name, unit, dosePerHa: dosePerHa || null, category, activeIngredient });
+                return apiRequest("PUT", `/api/farm/products/${initial.id}`, payload);
             }
-            return apiRequest("POST", "/api/farm/products", { name, unit, dosePerHa: dosePerHa || null, category, activeIngredient });
+            return apiRequest("POST", "/api/farm/products", payload);
         },
         onSuccess: () => { toast({ title: initial ? "Produto atualizado" : "Produto criado" }); onSave(); },
     });
@@ -177,6 +179,15 @@ function ProductForm({ initial, onSave }: { initial?: any; onSave: () => void })
                 </Select>
             </div>
             <div><Label>Ingrediente Ativo</Label><Input value={activeIngredient} onChange={e => setActiveIngredient(e.target.value)} /></div>
+            <div>
+                <Label>URL da Imagem</Label>
+                <Input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://exemplo.com/imagem-produto.jpg" />
+                {imageUrl && (
+                    <div className="mt-2 w-20 h-20 rounded-lg border border-emerald-200 overflow-hidden bg-white">
+                        <img src={imageUrl} alt="Preview" className="w-full h-full object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+                    </div>
+                )}
+            </div>
             <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={save.isPending}>
                 {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar
             </Button>
