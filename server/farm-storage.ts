@@ -321,7 +321,10 @@ export class FarmStorage {
         const qty = parseFloat(data.quantity);
         await this.upsertStock(data.farmerId, data.productId, -qty, 0);
 
-        // 3. Record stock movement
+        // 3. Record stock movement (fetch plot name for notes)
+        const [plot] = await db.select().from(farmPlots).where(eq(farmPlots.id, data.plotId));
+        const plotName = plot?.name || data.plotId;
+
         await db.insert(farmStockMovements).values({
             farmerId: data.farmerId,
             productId: data.productId,
@@ -329,7 +332,7 @@ export class FarmStorage {
             quantity: String(-qty),
             referenceType: "pdv",
             referenceId: app.id,
-            notes: `Aplicação talhão: ${data.plotId}`,
+            notes: `Aplicação talhão: ${plotName}`,
         });
 
         return app;
