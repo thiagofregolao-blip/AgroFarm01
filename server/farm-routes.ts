@@ -559,11 +559,33 @@ export function registerFarmRoutes(app: Express) {
             const farmerId = (req.session as any).pdvFarmerId;
             const resolvedPropertyId = propertyId || (req.session as any).pdvPropertyId;
 
+            // Check if plotId is actually a property (when user selects property without plots)
+            let resolvedPlotId = plotId;
+            const { db } = await import("./db");
+            const { farmPlots } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+
+            const [existingPlot] = await db.select().from(farmPlots).where(eq(farmPlots.id, plotId));
+            if (!existingPlot) {
+                // plotId is probably a propertyId — auto-create a default plot
+                const property = await farmStorage.getPropertyById(plotId);
+                if (property) {
+                    const newPlot = await farmStorage.createPlot({
+                        propertyId: property.id,
+                        name: property.name,
+                        areaHa: property.totalAreaHa || "0",
+                        crop: null,
+                    });
+                    resolvedPlotId = newPlot.id;
+                    console.log(`[PDV_WITHDRAW] Auto-created plot "${newPlot.name}" for property "${property.name}"`);
+                }
+            }
+
             const application = await farmStorage.createApplication({
                 farmerId,
                 productId,
-                plotId,
-                propertyId: resolvedPropertyId,
+                plotId: resolvedPlotId,
+                propertyId: resolvedPropertyId || plotId,
                 quantity: String(quantity),
                 appliedBy: appliedBy || "PDV",
                 notes,
