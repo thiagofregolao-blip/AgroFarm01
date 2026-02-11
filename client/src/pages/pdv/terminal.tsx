@@ -5,14 +5,13 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Package, Wifi, WifiOff, X, ShoppingCart, Trash2, Droplets, MapPin, Calculator } from "lucide-react";
+import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin } from "lucide-react";
 
 interface CartItem {
     product: any;
-    quantity: number; // manual qty (used only when product has no dosePerHa)
+    quantity: number;
 }
 
-// Category colors and icons
 const CATEGORY_COLORS: Record<string, string> = {
     herbicida: "from-green-600 to-green-800",
     fungicida: "from-blue-600 to-blue-800",
@@ -45,24 +44,20 @@ export default function PdvTerminal() {
     const [submitting, setSubmitting] = useState(false);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [categoryFilter, setCategoryFilter] = useState<string>("");
-    // Override quantities per product+plot (key: `${productId}__${plotId}`)
-    const [qtyOverrides, setQtyOverrides] = useState<Record<string, number>>({});
+    // Manual overrides for distributed qtys: key = `${productId}__${plotId}`
+    const [distOverrides, setDistOverrides] = useState<Record<string, number>>({});
 
-    // Monitor connectivity
     useEffect(() => {
-        const setOnline = () => setIsOnline(true);
-        const setOffline = () => setIsOnline(false);
-        window.addEventListener("online", setOnline);
-        window.addEventListener("offline", setOffline);
-        return () => { window.removeEventListener("online", setOnline); window.removeEventListener("offline", setOffline); };
+        const setOn = () => setIsOnline(true);
+        const setOff = () => setIsOnline(false);
+        window.addEventListener("online", setOn);
+        window.addEventListener("offline", setOff);
+        return () => { window.removeEventListener("online", setOn); window.removeEventListener("offline", setOff); };
     }, []);
 
-    // Heartbeat
     useEffect(() => {
         const interval = setInterval(() => {
-            if (isOnline) {
-                apiRequest("POST", "/api/pdv/heartbeat").catch(() => { });
-            }
+            if (isOnline) apiRequest("POST", "/api/pdv/heartbeat").catch(() => { });
         }, 30000);
         return () => clearInterval(interval);
     }, [isOnline]);
@@ -98,9 +93,7 @@ export default function PdvTerminal() {
     const isInCart = (productId: string) => cart.some(c => c.product.id === productId);
 
     const addToCart = (product: any) => {
-        if (!isInCart(product.id)) {
-            setCart([...cart, { product, quantity: 1 }]);
-        }
+        if (!isInCart(product.id)) setCart([...cart, { product, quantity: 1 }]);
     };
 
     const updateQuantity = (productId: string, qty: number) => {
@@ -112,7 +105,6 @@ export default function PdvTerminal() {
         setCart(cart.filter(c => c.product.id !== productId));
     };
 
-    // Plot toggle
     const isPlotSelected = (plotId: string) => selectedPlots.some(p => p.id === plotId);
 
     const togglePlot = (plot: any) => {
@@ -123,63 +115,102 @@ export default function PdvTerminal() {
         }
     };
 
-    // Calculate quantity per product per plot
-    const getCalculatedQty = (product: any, plot: any): number => {
-        const overrideKey = `${product.id}__${plot.id}`;
-        if (qtyOverrides[overrideKey] !== undefined) return qtyOverrides[overrideKey];
-
-        const dose = parseFloat(product.dosePerHa);
-        const area = parseFloat(plot.areaHa);
-        if (dose && area && !isNaN(dose) && !isNaN(area)) {
-            return parseFloat((area * dose).toFixed(2));
-        }
-        // No dose: use cart manual quantity
-        const cartItem = cart.find(c => c.product.id === product.id);
-        return cartItem?.quantity || 1;
-    };
-
-    const setOverrideQty = (productId: string, plotId: string, qty: number) => {
-        setQtyOverrides(prev => ({ ...prev, [`${productId}__${plotId}`]: qty }));
-    };
-
-    // Generate the full breakdown for confirmation
-    const confirmationItems = useMemo(() => {
-        const items: { product: any; plot: any; quantity: number; isCalculated: boolean }[] = [];
-        for (const cartItem of cart) {
-            for (const plot of selectedPlots) {
-                const qty = getCalculatedQty(cartItem.product, plot);
-                const dose = parseFloat(cartItem.product.dosePerHa);
-                const area = parseFloat(plot.areaHa);
-                const isCalculated = !!(dose && area && !isNaN(dose) && !isNaN(area));
-                items.push({ product: cartItem.product, plot, quantity: qty, isCalculated });
-            }
-        }
-        return items;
-    }, [cart, selectedPlots, qtyOverrides]);
-
-    // Total qty per product (summed across all plots)
-    const totalPerProduct = useMemo(() => {
-        const totals: Record<string, number> = {};
-        for (const item of confirmationItems) {
-            totals[item.product.id] = (totals[item.product.id] || 0) + item.quantity;
-        }
-        return totals;
-    }, [confirmationItems]);
-
     const totalAreaSelected = useMemo(() => {
         return selectedPlots.reduce((sum, p) => sum + (parseFloat(p.areaHa) || 0), 0);
     }, [selectedPlots]);
+
+    // ---- Distribution logic ----
+    // Distributes total qty across plots based on area × dose
+    // Rounds each plot's qty, and adjusts last one to match total
+    const getDistribution = (product: any, totalQty: number) => {
+        const dose = parseFloat(product.dosePerHa);
+        const items: { plotId: string; plotName: string; areaHa: number; idealQty: number; allocatedQty: number }[] = [];
+
+        if (dose && !isNaN(dose) && selectedPlots.length > 0) {
+            // Calculate ideal qty per plot: area × dose
+            let totalIdeal = 0;
+            const ideals = selectedPlots.map(plot => {
+                const area = parseFloat(plot.areaHa) || 0;
+                const ideal = area * dose;
+                totalIdeal += ideal;
+                return { plot, area, ideal };
+            });
+
+            // Distribute proportionally to match totalQty
+            let allocated = 0;
+            const results = ideals.map((item, idx) => {
+                let qty: number;
+                if (idx === ideals.length - 1) {
+                    // Last plot gets remainder
+                    qty = Math.round(totalQty - allocated);
+                } else {
+                    // Proportional distribution
+                    qty = totalIdeal > 0
+                        ? Math.round((item.ideal / totalIdeal) * totalQty)
+                        : Math.round(totalQty / selectedPlots.length);
+                }
+                if (qty < 0) qty = 0;
+                allocated += qty;
+                return {
+                    plotId: item.plot.id,
+                    plotName: item.plot.name,
+                    areaHa: item.area,
+                    idealQty: item.ideal,
+                    allocatedQty: qty,
+                };
+            });
+            return results;
+        } else {
+            // No dose: split evenly
+            let allocated = 0;
+            return selectedPlots.map((plot, idx) => {
+                const area = parseFloat(plot.areaHa) || 0;
+                let qty: number;
+                if (idx === selectedPlots.length - 1) {
+                    qty = Math.round(totalQty - allocated);
+                } else {
+                    qty = Math.round(totalQty / selectedPlots.length);
+                }
+                if (qty < 0) qty = 0;
+                allocated += qty;
+                return {
+                    plotId: plot.id,
+                    plotName: plot.name,
+                    areaHa: area,
+                    idealQty: 0,
+                    allocatedQty: qty,
+                };
+            });
+        }
+    };
+
+    // Build confirmation data
+    const confirmationData = useMemo(() => {
+        return cart.map(item => {
+            const dist = getDistribution(item.product, item.quantity);
+            // Apply overrides
+            const withOverrides = dist.map(d => {
+                const key = `${item.product.id}__${d.plotId}`;
+                const overridden = distOverrides[key] !== undefined ? distOverrides[key] : d.allocatedQty;
+                return { ...d, allocatedQty: overridden };
+            });
+            const totalAllocated = withOverrides.reduce((s, d) => s + d.allocatedQty, 0);
+            return { product: item.product, totalQty: item.quantity, distribution: withOverrides, totalAllocated };
+        });
+    }, [cart, selectedPlots, distOverrides]);
+
+    const setOverride = (productId: string, plotId: string, qty: number) => {
+        setDistOverrides(prev => ({ ...prev, [`${productId}__${plotId}`]: Math.max(0, qty) }));
+    };
 
     const handleGoToPlot = () => {
         if (cart.length === 0) {
             toast({ title: "Selecione pelo menos um produto", variant: "destructive" });
             return;
         }
-        // For products without dose, check manual qty
-        const noDoseProducts = cart.filter(c => !c.product.dosePerHa);
-        const invalid = noDoseProducts.filter(c => c.quantity <= 0);
+        const invalid = cart.filter(c => c.quantity <= 0);
         if (invalid.length > 0) {
-            toast({ title: "Informe a quantidade para produtos sem dose", variant: "destructive" });
+            toast({ title: "Informe a quantidade para todos os produtos", variant: "destructive" });
             return;
         }
         setStep("plot");
@@ -190,25 +221,28 @@ export default function PdvTerminal() {
             toast({ title: "Selecione pelo menos um talhão", variant: "destructive" });
             return;
         }
-        setQtyOverrides({}); // Reset overrides
+        setDistOverrides({});
         setStep("confirm");
     };
 
     const handleSubmit = async () => {
         setSubmitting(true);
         try {
-            let successCount = 0;
-            for (const item of confirmationItems) {
-                if (item.quantity <= 0) continue;
-                await apiRequest("POST", "/api/pdv/withdraw", {
-                    productId: item.product.id,
-                    quantity: item.quantity,
-                    plotId: item.plot.id,
-                    propertyId: item.plot.propertyId,
-                });
-                successCount++;
+            let count = 0;
+            for (const item of confirmationData) {
+                for (const d of item.distribution) {
+                    if (d.allocatedQty <= 0) continue;
+                    const plot = selectedPlots.find(p => p.id === d.plotId);
+                    await apiRequest("POST", "/api/pdv/withdraw", {
+                        productId: item.product.id,
+                        quantity: d.allocatedQty,
+                        plotId: d.plotId,
+                        propertyId: plot?.propertyId,
+                    });
+                    count++;
+                }
             }
-            toast({ title: `✅ ${successCount} saída(s) registrada(s) com sucesso!` });
+            toast({ title: `✅ ${count} saída(s) registrada(s) com sucesso!` });
             queryClient.invalidateQueries({ queryKey: ["/api/pdv/data"] });
             reset();
         } catch (err) {
@@ -224,7 +258,7 @@ export default function PdvTerminal() {
         setSelectedPlots([]);
         setSearch("");
         setCategoryFilter("");
-        setQtyOverrides({});
+        setDistOverrides({});
     };
 
     if (!pdvData) {
@@ -232,56 +266,46 @@ export default function PdvTerminal() {
         return null;
     }
 
-    // ==================== STEP: PLOT SELECTION (MULTI) ====================
+    // ==================== STEP: PLOT SELECTION ====================
     if (step === "plot") {
         const properties = pdvData?.properties || [];
-        const plotsByProperty: Record<string, any[]> = {};
-        plots.forEach((plot: any) => {
-            if (!plotsByProperty[plot.propertyId]) plotsByProperty[plot.propertyId] = [];
-            plotsByProperty[plot.propertyId].push(plot);
+        const plotsByProp: Record<string, any[]> = {};
+        plots.forEach((p: any) => {
+            if (!plotsByProp[p.propertyId]) plotsByProp[p.propertyId] = [];
+            plotsByProp[p.propertyId].push(p);
         });
 
         return (
             <div className="min-h-screen bg-slate-900 text-white flex flex-col">
                 <header className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setStep("product")} className="flex items-center gap-2 text-slate-400 hover:text-white">
-                            <ArrowLeft className="h-5 w-5" />
-                        </button>
+                        <button onClick={() => setStep("product")} className="text-slate-400 hover:text-white"><ArrowLeft className="h-5 w-5" /></button>
                         <span className="text-2xl">📍</span>
                         <span className="font-bold text-lg">Selecione os Talhões</span>
                     </div>
                     {selectedPlots.length > 0 && (
-                        <span className="bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">{selectedPlots.length} selecionado(s)</span>
+                        <span className="bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">{selectedPlots.length}</span>
                     )}
                 </header>
 
-                <div className="flex-1 p-4 overflow-y-auto pb-28">
+                <div className="flex-1 p-4 overflow-y-auto pb-32">
                     {/* Cart summary */}
                     <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
-                        <p className="text-sm text-slate-400 mb-2 font-semibold">🛒 {cart.length} produto(s) no carrinho:</p>
+                        <p className="text-sm text-slate-400 mb-2 font-semibold">🛒 {cart.length} produto(s):</p>
                         <div className="space-y-1">
                             {cart.map(item => (
                                 <div key={item.product.id} className="flex justify-between text-sm">
                                     <span className="text-slate-300 truncate">{item.product.name}</span>
-                                    <span className="text-blue-400 font-medium ml-2">
-                                        {item.product.dosePerHa
-                                            ? `${parseFloat(item.product.dosePerHa).toFixed(1)} ${item.product.unit}/ha`
-                                            : `${item.quantity} ${item.product.unit} (manual)`
-                                        }
-                                    </span>
+                                    <span className="text-orange-400 font-bold ml-2">{item.quantity} {item.product.unit}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* Info box */}
-                    <div className="bg-blue-900/30 border border-blue-700/50 rounded-xl p-3 mb-4 flex items-start gap-3">
-                        <Calculator className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
-                        <div className="text-sm text-blue-300">
-                            <p className="font-semibold">Cálculo automático</p>
-                            <p className="text-xs text-blue-400/80 mt-0.5">A quantidade de cada produto será calculada automaticamente: <strong>Área (ha) × Dose/ha</strong></p>
-                        </div>
+                    {/* Info */}
+                    <div className="bg-blue-900/30 border border-blue-700/50 rounded-xl p-3 mb-4 text-sm text-blue-300">
+                        <p className="font-semibold">📐 Distribuição automática</p>
+                        <p className="text-xs text-blue-400/80 mt-0.5">A quantidade será distribuída entre os talhões selecionados com base na <strong>área × dose/ha</strong></p>
                     </div>
 
                     {properties.length === 0 && plots.length === 0 ? (
@@ -291,7 +315,7 @@ export default function PdvTerminal() {
                     ) : (
                         <div className="space-y-4">
                             {properties.map((prop: any) => {
-                                const propPlots = plotsByProperty[prop.id] || [];
+                                const propPlots = plotsByProp[prop.id] || [];
                                 return (
                                     <div key={prop.id} className="rounded-xl overflow-hidden border border-slate-700">
                                         <div className="bg-slate-800 px-4 py-3 flex items-center gap-3">
@@ -301,48 +325,40 @@ export default function PdvTerminal() {
                                             <div className="flex-1">
                                                 <p className="font-bold text-emerald-400">{prop.name}</p>
                                                 <p className="text-xs text-slate-400">
-                                                    {prop.location || "Sem localização"} • {prop.totalAreaHa ? `${prop.totalAreaHa} ha` : ""} • {propPlots.length} talhão(ões)
+                                                    {prop.location || "—"} • {prop.totalAreaHa ? `${prop.totalAreaHa} ha` : ""} • {propPlots.length} talhão(ões)
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="divide-y divide-slate-700/50">
                                             {propPlots.length > 0 ? (
                                                 propPlots.map((plot: any) => {
-                                                    const selected = isPlotSelected(plot.id);
+                                                    const sel = isPlotSelected(plot.id);
                                                     return (
                                                         <button
                                                             key={plot.id}
                                                             onClick={() => togglePlot(plot)}
-                                                            className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${selected ? "bg-orange-900/20" : "hover:bg-slate-700/50"}`}
+                                                            className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${sel ? "bg-orange-900/20" : "hover:bg-slate-700/50"}`}
                                                         >
-                                                            {/* Checkbox */}
-                                                            <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 ${selected ? "bg-orange-500 border-orange-500" : "border-slate-500"}`}>
-                                                                {selected && <Check className="h-4 w-4 text-white" />}
+                                                            <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? "bg-orange-500 border-orange-500" : "border-slate-500"}`}>
+                                                                {sel && <Check className="h-4 w-4 text-white" />}
                                                             </div>
-                                                            <div className="w-8 h-8 rounded-lg bg-orange-900/30 flex items-center justify-center shrink-0">
-                                                                <span className="text-sm">📍</span>
-                                                            </div>
+                                                            <MapPin className="h-4 w-4 text-orange-400 shrink-0" />
                                                             <div className="flex-1 min-w-0">
                                                                 <p className="font-medium">{plot.name}</p>
                                                                 <p className="text-xs text-slate-400">{plot.areaHa} ha {plot.crop ? `• ${plot.crop}` : ""}</p>
                                                             </div>
-                                                            {selected && (
-                                                                <span className="text-xs text-orange-400 font-bold shrink-0">{plot.areaHa} ha</span>
-                                                            )}
                                                         </button>
                                                     );
                                                 })
                                             ) : (
                                                 <button
-                                                    onClick={() => togglePlot({ id: prop.id, name: prop.name, propertyId: prop.id, propertyName: prop.name, areaHa: prop.totalAreaHa })}
+                                                    onClick={() => togglePlot({ id: prop.id, name: prop.name, propertyId: prop.id, areaHa: prop.totalAreaHa })}
                                                     className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${isPlotSelected(prop.id) ? "bg-orange-900/20" : "hover:bg-slate-700/50"}`}
                                                 >
-                                                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 ${isPlotSelected(prop.id) ? "bg-orange-500 border-orange-500" : "border-slate-500"}`}>
+                                                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${isPlotSelected(prop.id) ? "bg-orange-500 border-orange-500" : "border-slate-500"}`}>
                                                         {isPlotSelected(prop.id) && <Check className="h-4 w-4 text-white" />}
                                                     </div>
-                                                    <div className="w-8 h-8 rounded-lg bg-orange-900/30 flex items-center justify-center shrink-0">
-                                                        <span className="text-sm">🏠</span>
-                                                    </div>
+                                                    <MapPin className="h-4 w-4 text-orange-400 shrink-0" />
                                                     <div className="flex-1">
                                                         <p className="font-medium text-orange-300">Propriedade inteira</p>
                                                         <p className="text-xs text-slate-400">{prop.totalAreaHa || "?"} ha</p>
@@ -369,56 +385,40 @@ export default function PdvTerminal() {
                         disabled={selectedPlots.length === 0}
                     >
                         <ArrowRight className="mr-2 h-5 w-5" />
-                        Ver Resumo e Confirmar
+                        Ver distribuição
                     </Button>
                 </div>
             </div>
         );
     }
 
-    // ==================== STEP: CONFIRM ====================
+    // ==================== STEP: CONFIRM (Distribution) ====================
     if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
         return (
             <div className="min-h-screen bg-slate-900 text-white flex flex-col">
                 <header className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setStep("plot")} className="flex items-center gap-2 text-slate-400 hover:text-white">
-                            <ArrowLeft className="h-5 w-5" />
-                        </button>
+                        <button onClick={() => setStep("plot")} className="text-slate-400 hover:text-white"><ArrowLeft className="h-5 w-5" /></button>
                         <span className="text-2xl">📋</span>
-                        <span className="font-bold text-lg">Confirmar Saída</span>
+                        <span className="font-bold text-lg">Distribuição por Talhão</span>
                     </div>
                 </header>
 
                 <div className="flex-1 p-4 overflow-y-auto pb-28">
                     <div className="max-w-2xl mx-auto space-y-4">
-                        {/* Summary header */}
-                        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <p className="text-slate-400">Produtos</p>
-                                    <p className="font-bold text-lg text-orange-400">{cart.length}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-400">Talhões</p>
-                                    <p className="font-bold text-lg text-emerald-400">{selectedPlots.length}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-400">Área total</p>
-                                    <p className="font-bold text-lg">{totalAreaSelected.toFixed(1)} ha</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-400">Total operações</p>
-                                    <p className="font-bold text-lg">{confirmationItems.length}</p>
-                                </div>
-                            </div>
+                        {/* Summary */}
+                        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 grid grid-cols-3 gap-3 text-center text-sm">
+                            <div><p className="text-slate-400">Produtos</p><p className="font-bold text-lg text-orange-400">{cart.length}</p></div>
+                            <div><p className="text-slate-400">Talhões</p><p className="font-bold text-lg text-emerald-400">{selectedPlots.length}</p></div>
+                            <div><p className="text-slate-400">Área total</p><p className="font-bold text-lg">{totalAreaSelected.toFixed(1)} ha</p></div>
                         </div>
 
-                        {/* Per-product breakdown */}
-                        {cart.map((cartItem) => {
-                            const productItems = confirmationItems.filter(ci => ci.product.id === cartItem.product.id);
-                            const totalQty = totalPerProduct[cartItem.product.id] || 0;
-                            const p = cartItem.product;
+                        {/* Per product distribution */}
+                        {confirmationData.map((item) => {
+                            const p = item.product;
+                            const dose = parseFloat(p.dosePerHa);
+                            const hasDose = dose && !isNaN(dose);
+                            const diff = item.totalQty - item.totalAllocated;
 
                             return (
                                 <div key={p.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
@@ -433,43 +433,51 @@ export default function PdvTerminal() {
                                         )}
                                         <div className="flex-1 min-w-0">
                                             <p className="font-bold truncate">{p.name}</p>
-                                            <p className="text-xs text-slate-400">{p.category || "—"} {p.dosePerHa ? ` • Dose: ${parseFloat(p.dosePerHa).toFixed(1)} ${p.unit}/ha` : ""}</p>
+                                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                                                <span>{p.category || "—"}</span>
+                                                {hasDose && (
+                                                    <span className="text-blue-400 flex items-center gap-0.5">
+                                                        <Droplets className="h-3 w-3" />
+                                                        {dose.toFixed(1)} {p.unit}/ha
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <p className="font-bold text-orange-400 text-lg">{totalQty.toFixed(1)}</p>
-                                            <p className="text-xs text-slate-400">{p.unit} total</p>
+                                            <p className="font-bold text-orange-400 text-lg">{item.totalQty}</p>
+                                            <p className="text-xs text-slate-400">{p.unit} saída</p>
                                         </div>
                                     </div>
 
-                                    {/* Per-plot rows */}
+                                    {/* Per-plot distribution */}
                                     <div className="divide-y divide-slate-700/50">
-                                        {productItems.map((item) => (
-                                            <div key={item.plot.id} className="flex items-center gap-3 px-4 py-3">
+                                        {item.distribution.map((d) => (
+                                            <div key={d.plotId} className="flex items-center gap-3 px-4 py-3">
                                                 <MapPin className="h-4 w-4 text-emerald-400 shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium truncate">{item.plot.name}</p>
-                                                    <p className="text-xs text-slate-500">{parseFloat(item.plot.areaHa || "0").toFixed(1)} ha</p>
+                                                    <p className="text-sm font-medium truncate">{d.plotName}</p>
+                                                    <p className="text-[11px] text-slate-500">
+                                                        {d.areaHa.toFixed(1)} ha
+                                                        {hasDose && <span className="text-blue-400"> × {dose.toFixed(1)} = {(d.areaHa * dose).toFixed(1)} ideal</span>}
+                                                    </p>
                                                 </div>
-                                                {item.isCalculated && (
-                                                    <span className="text-[10px] text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded shrink-0">auto</span>
-                                                )}
                                                 <div className="flex items-center gap-1 shrink-0">
                                                     <button
                                                         className="w-7 h-7 rounded bg-orange-600 hover:bg-orange-500 flex items-center justify-center"
-                                                        onClick={() => setOverrideQty(item.product.id, item.plot.id, Math.max(0, item.quantity - 1))}
+                                                        onClick={() => setOverride(p.id, d.plotId, d.allocatedQty - 1)}
                                                     >
                                                         <Minus className="h-3 w-3 text-white" />
                                                     </button>
                                                     <Input
                                                         type="number"
-                                                        step="0.1"
-                                                        value={item.quantity}
-                                                        onChange={(e) => setOverrideQty(item.product.id, item.plot.id, parseFloat(e.target.value) || 0)}
+                                                        step="1"
+                                                        value={d.allocatedQty}
+                                                        onChange={(e) => setOverride(p.id, d.plotId, parseFloat(e.target.value) || 0)}
                                                         className="text-center text-sm font-bold w-20 h-7 bg-slate-700 border-slate-600 text-white px-1"
                                                     />
                                                     <button
                                                         className="w-7 h-7 rounded bg-orange-600 hover:bg-orange-500 flex items-center justify-center"
-                                                        onClick={() => setOverrideQty(item.product.id, item.plot.id, item.quantity + 1)}
+                                                        onClick={() => setOverride(p.id, d.plotId, d.allocatedQty + 1)}
                                                     >
                                                         <Plus className="h-3 w-3 text-white" />
                                                     </button>
@@ -477,6 +485,16 @@ export default function PdvTerminal() {
                                                 </div>
                                             </div>
                                         ))}
+                                    </div>
+
+                                    {/* Total check */}
+                                    <div className={`flex items-center justify-between px-4 py-2 text-sm font-bold ${Math.abs(diff) < 0.01 ? "bg-green-900/30 text-green-400" : "bg-yellow-900/30 text-yellow-400"}`}>
+                                        <span>Distribuído: {item.totalAllocated} {p.unit}</span>
+                                        {Math.abs(diff) < 0.01 ? (
+                                            <span className="flex items-center gap-1"><Check className="h-4 w-4" /> Bate com saída</span>
+                                        ) : (
+                                            <span>{diff > 0 ? `Faltam ${diff.toFixed(0)} ${p.unit}` : `Excede ${Math.abs(diff).toFixed(0)} ${p.unit}`}</span>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -490,7 +508,7 @@ export default function PdvTerminal() {
                         <Button variant="outline" className="flex-1 py-5 text-base border-slate-700" onClick={reset}>Cancelar</Button>
                         <Button className="flex-1 py-5 text-base bg-green-600 hover:bg-green-700 font-bold" onClick={handleSubmit} disabled={submitting}>
                             {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />}
-                            Confirmar Saída ({confirmationItems.filter(i => i.quantity > 0).length})
+                            Confirmar Saída
                         </Button>
                     </div>
                 </div>
@@ -498,10 +516,9 @@ export default function PdvTerminal() {
         );
     }
 
-    // ==================== STEP: PRODUCT SELECTION (MAIN POS LAYOUT) ====================
+    // ==================== STEP: PRODUCT SELECTION ====================
     return (
         <div className="h-screen bg-slate-900 text-white flex flex-col">
-            {/* Header */}
             <header className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700 shrink-0">
                 <div className="flex items-center gap-3">
                     <span className="text-2xl">🏪</span>
@@ -515,32 +532,23 @@ export default function PdvTerminal() {
                 </div>
             </header>
 
-            {/* Steps indicator */}
+            {/* Steps */}
             <div className="flex items-center gap-1 px-4 py-2 bg-slate-800/50 border-b border-slate-700/30 shrink-0">
-                {[
-                    { label: "Produtos", icon: "📦" },
-                    { label: "Talhões", icon: "📍" },
-                    { label: "Confirmar", icon: "✅" },
-                ].map((s, i) => {
+                {["📦 Produtos", "📍 Talhões", "✅ Confirmar"].map((label, i) => {
                     const steps = ["product", "plot", "confirm"];
                     const isActive = steps.indexOf(step) >= i;
                     return (
-                        <div key={s.label} className="flex items-center gap-1 flex-1">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] ${isActive ? "bg-orange-500" : "bg-slate-700"}`}>
-                                {s.icon}
-                            </div>
-                            <span className={`text-[10px] hidden sm:inline ${isActive ? "text-white" : "text-slate-500"}`}>{s.label}</span>
+                        <div key={label} className="flex items-center gap-1 flex-1">
+                            <span className={`text-[10px] ${isActive ? "text-white font-bold" : "text-slate-500"}`}>{label}</span>
                             {i < 2 && <div className={`flex-1 h-0.5 mx-1 ${isActive ? "bg-orange-500" : "bg-slate-700"}`} />}
                         </div>
                     );
                 })}
             </div>
 
-            {/* Main split layout */}
             <div className="flex-1 flex overflow-hidden">
                 {/* LEFT: Product catalog */}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    {/* Search & Category filter */}
                     <div className="p-3 space-y-2 bg-slate-800/30 border-b border-slate-700/50 shrink-0">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -556,9 +564,7 @@ export default function PdvTerminal() {
                             <button
                                 onClick={() => setCategoryFilter("")}
                                 className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${!categoryFilter ? "bg-orange-500 text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}
-                            >
-                                Todos
-                            </button>
+                            >Todos</button>
                             {categories.map(cat => (
                                 <button
                                     key={cat}
@@ -572,7 +578,6 @@ export default function PdvTerminal() {
                         </div>
                     </div>
 
-                    {/* Product grid */}
                     <div className="flex-1 overflow-y-auto p-3">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                             {filtered.map((p: any) => {
@@ -587,15 +592,8 @@ export default function PdvTerminal() {
                                     >
                                         <div className={`aspect-square bg-gradient-to-br ${gradient} flex items-center justify-center relative`}>
                                             {p.imageUrl ? (
-                                                <img
-                                                    src={p.imageUrl}
-                                                    alt={p.name}
-                                                    className="w-full h-full object-contain p-2 bg-white"
-                                                    onError={(e) => {
-                                                        e.currentTarget.style.display = "none";
-                                                        e.currentTarget.nextElementSibling?.classList.remove("hidden");
-                                                    }}
-                                                />
+                                                <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2 bg-white"
+                                                    onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} />
                                             ) : null}
                                             <div className={`flex flex-col items-center justify-center ${p.imageUrl ? "hidden" : ""}`}>
                                                 <span className="text-4xl">{CATEGORY_EMOJI[p.category] || "📦"}</span>
@@ -623,9 +621,7 @@ export default function PdvTerminal() {
                                 );
                             })}
                         </div>
-                        {filtered.length === 0 && (
-                            <p className="text-slate-500 text-center py-12">Nenhum produto encontrado</p>
-                        )}
+                        {filtered.length === 0 && <p className="text-slate-500 text-center py-12">Nenhum produto encontrado</p>}
                     </div>
                 </div>
 
@@ -636,9 +632,7 @@ export default function PdvTerminal() {
                             <ShoppingCart className="h-5 w-5 text-orange-400" />
                             <h3 className="font-bold">Carrinho</h3>
                         </div>
-                        {cart.length > 0 && (
-                            <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{cart.length}</span>
-                        )}
+                        {cart.length > 0 && <span className="bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{cart.length}</span>}
                     </div>
 
                     <div className="flex-1 overflow-y-auto">
@@ -668,39 +662,21 @@ export default function PdvTerminal() {
                                                 <Trash2 className="h-4 w-4" />
                                             </button>
                                         </div>
-
-                                        {/* Show dose info or manual qty */}
-                                        {item.product.dosePerHa ? (
-                                            <div className="flex items-center gap-2 bg-blue-900/20 rounded-lg px-3 py-1.5">
-                                                <Droplets className="h-3 w-3 text-blue-400" />
-                                                <span className="text-xs text-blue-300">Dose: {parseFloat(item.product.dosePerHa).toFixed(1)} {item.product.unit}/ha</span>
-                                                <span className="text-[10px] text-blue-400/60 ml-auto">cálculo auto</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs text-slate-400">Qtd:</span>
-                                                <button
-                                                    className="w-8 h-8 rounded-md bg-orange-600 hover:bg-orange-500 flex items-center justify-center transition-colors"
-                                                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                                                >
-                                                    <Minus className="h-3 w-3 text-white" />
-                                                </button>
-                                                <Input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={item.quantity}
-                                                    onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
-                                                    className="text-center text-sm font-bold flex-1 h-8 bg-slate-700 border-slate-600 text-white"
-                                                />
-                                                <button
-                                                    className="w-8 h-8 rounded-md bg-orange-600 hover:bg-orange-500 flex items-center justify-center transition-colors"
-                                                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                                                >
-                                                    <Plus className="h-3 w-3 text-white" />
-                                                </button>
-                                                <span className="text-xs text-slate-400 w-8">{item.product.unit}</span>
-                                            </div>
-                                        )}
+                                        {/* Quantity input */}
+                                        <div className="flex items-center gap-2">
+                                            <button className="w-8 h-8 rounded-md bg-orange-600 hover:bg-orange-500 flex items-center justify-center"
+                                                onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                                                <Minus className="h-3 w-3 text-white" />
+                                            </button>
+                                            <Input type="number" step="1" value={item.quantity}
+                                                onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                                                className="text-center text-sm font-bold flex-1 h-8 bg-slate-700 border-slate-600 text-white" />
+                                            <button className="w-8 h-8 rounded-md bg-orange-600 hover:bg-orange-500 flex items-center justify-center"
+                                                onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                                                <Plus className="h-3 w-3 text-white" />
+                                            </button>
+                                            <span className="text-xs text-slate-400 w-8">{item.product.unit}</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -711,11 +687,8 @@ export default function PdvTerminal() {
                         <div className="flex justify-between text-sm">
                             <span className="text-slate-400">{cart.length} itens</span>
                         </div>
-                        <Button
-                            className="w-full py-5 text-base bg-orange-600 hover:bg-orange-700 font-bold"
-                            onClick={handleGoToPlot}
-                            disabled={cart.length === 0}
-                        >
+                        <Button className="w-full py-5 text-base bg-orange-600 hover:bg-orange-700 font-bold"
+                            onClick={handleGoToPlot} disabled={cart.length === 0}>
                             <ArrowRight className="mr-2 h-5 w-5" />
                             Selecionar Talhões
                         </Button>
@@ -723,15 +696,12 @@ export default function PdvTerminal() {
                 </div>
             </div>
 
-            {/* MOBILE: Bottom cart bar */}
+            {/* MOBILE bottom bar */}
             {cart.length > 0 && (
                 <div className="md:hidden fixed bottom-0 left-0 right-0 p-3 bg-slate-800 border-t border-slate-700 z-50">
-                    <Button
-                        className="w-full py-5 text-base bg-orange-600 hover:bg-orange-700 font-bold rounded-xl"
-                        onClick={handleGoToPlot}
-                    >
+                    <Button className="w-full py-5 text-base bg-orange-600 hover:bg-orange-700 font-bold rounded-xl" onClick={handleGoToPlot}>
                         <ShoppingCart className="mr-2 h-5 w-5" />
-                        {cart.length} produto(s) → Selecionar Talhões
+                        {cart.length} produto(s) → Talhões
                         <ArrowRight className="ml-2 h-5 w-5" />
                     </Button>
                 </div>
