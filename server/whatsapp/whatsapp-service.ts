@@ -37,10 +37,29 @@ export class WhatsAppService {
   /**
    * Processa mensagem recebida via webhook
    */
-  async processIncomingMessage(phone: string, message: string): Promise<void> {
+  /**
+   * Processa mensagem recebida via webhook
+   */
+  async processIncomingMessage(phone: string, message: string, audioUrl?: string): Promise<void> {
     try {
       // 1. Identificar usuário pelo número de WhatsApp
       const user = await this.findUserByPhone(phone);
+
+      // Se for áudio, transcrever primeiro
+      if (audioUrl) {
+        await this.sendMessage(phone, "🎧 Ouvindo seu áudio...");
+        const transcription = await this.gemini.transcribeAudio(audioUrl);
+
+        if (!transcription) {
+          await this.sendMessage(phone, "❌ Não consegui entender o áudio. Pode tentar escrever?");
+          return;
+        }
+
+        message = transcription;
+        await this.sendMessage(phone, `📝 *Entendi:* "${message}"`);
+      }
+
+      const userFound = !!user; // apenas para checagem abaixo
 
       if (!user) {
         await this.sendMessage(

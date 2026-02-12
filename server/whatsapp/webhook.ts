@@ -22,7 +22,7 @@ export function registerWhatsAppRoutes(app: Express, whatsappService: WhatsAppSe
       }
 
       // Processar mensagem de forma assíncrona (não bloquear resposta)
-      whatsappService.processIncomingMessage(message.phone, message.message).catch((error) => {
+      whatsappService.processIncomingMessage(message.phone, message.message, message.audioUrl).catch((error) => {
         console.error("[WhatsApp] Erro ao processar mensagem:", error);
       });
 
@@ -59,7 +59,7 @@ export function registerWhatsAppRoutes(app: Express, whatsappService: WhatsAppSe
       }
 
       const success = await whatsappService.sendMessage(phone, message);
-      
+
       if (success) {
         res.json({ success: true, message: "Message sent" });
       } else {

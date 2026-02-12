@@ -35,6 +35,61 @@ export class GeminiClient {
   }
 
   /**
+   * Transcreve áudio usando a capacidade multimodal do Gemini
+   */
+  async transcribeAudio(audioUrl: string): Promise<string> {
+    try {
+      console.log(`[Gemini] Baixando áudio: ${audioUrl}`);
+      // 1. Baixar o áudio
+      const audioResponse = await fetch(audioUrl);
+      if (!audioResponse.ok) throw new Error("Falha ao baixar áudio");
+
+      const contentType = audioResponse.headers.get("content-type") || "audio/ogg";
+      const arrayBuffer = await audioResponse.arrayBuffer();
+      const base64Audio = Buffer.from(arrayBuffer).toString("base64");
+
+      // 2. Enviar para Gemini
+      const response = await fetch(
+        `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: "Por favor, transcreva este áudio fielmente. Retorne APENAS o texto falado, sem comentários adicionais." },
+                  {
+                    inline_data: {
+                      mime_type: contentType,
+                      data: base64Audio
+                    }
+                  }
+                ],
+              },
+            ],
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("[Gemini] Erro na API de Transcrição:", data);
+        return "";
+      }
+
+      const transcription = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      console.log(`[Gemini] Transcrição: "${transcription}"`);
+      return transcription.trim();
+
+    } catch (error) {
+      console.error("[Gemini] Erro ao transcrever áudio:", error);
+      return "";
+    }
+  }
+
+  /**
    * Interpreta pergunta do usuário e retorna intenção estruturada
    */
   async interpretQuestion(question: string, userId: string, context?: any): Promise<QueryIntent> {

@@ -19,6 +19,8 @@ interface SendMessageParams {
 interface ZApiWebhookMessage {
   phone: string;
   message: string;
+  audioUrl?: string;
+  isAudio?: boolean;
   messageId?: string;
   timestamp?: number;
   instanceId?: string;
@@ -135,13 +137,22 @@ export class ZApiClient {
       const phone = body.phone;
       const message = body.message || body.text?.message;
 
-      if (!phone || !message) {
+      // Suporte a áudio
+      const isAudio = body.type === "audio" || body.type === "voice";
+      const audioUrl = body.audio?.audioUrl || body.voice?.audioUrl || body.audioUrl;
+
+      // Se for áudio, define uma mensagem padrão se vier vazia
+      const finalMessage = message || (isAudio ? "[Áudio recebido]" : "");
+
+      if (!phone || !finalMessage) {
         return null;
       }
 
       return {
         phone: phone,
-        message: message,
+        message: finalMessage,
+        audioUrl: isAudio ? audioUrl : undefined,
+        isAudio: isAudio,
         messageId: body.messageId,
         timestamp: body.momment || body.timestamp, // Z-API usa 'momment' (typo) ou timestamp
         instanceId: body.instanceId,
