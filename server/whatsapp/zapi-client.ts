@@ -115,6 +115,9 @@ export class ZApiClient {
    */
   static parseWebhookMessage(body: any): ZApiWebhookMessage | null {
     try {
+      // Debug: Logar o corpo do webhook para entender a estrutura
+      console.log("[Z-API] Webhook body received:", JSON.stringify(body, null, 2));
+
       // Z-API envia mensagens recebidas com a mensagem dentro de 'text'
       // Ex: { phone: "5511...", text: { message: "texto" }, ... }
 
