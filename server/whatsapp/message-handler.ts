@@ -51,7 +51,9 @@ export class MessageHandler {
             ilike(farmProductsCatalog.name, `%${cleanTerm}%`), // Buscando pelo termo limpo no nome
             ilike(farmProductsCatalog.name, `%${filters.product}%`), // Buscando pelo termo original no nome
             ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
-            ilike(farmProductsCatalog.category, `%${filters.product}%`)
+            ilike(farmProductsCatalog.category, `%${filters.product}%`),
+            // Busca normalizada para ignorar símbolos (ex: "2,4-D" vs "24d")
+            sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
           )
         )
       );

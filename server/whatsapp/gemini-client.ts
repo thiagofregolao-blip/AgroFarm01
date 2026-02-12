@@ -152,6 +152,7 @@ INSTRUÇÕES:
      - "period": "month" (mês atual), "last_month" (mês passado)
      - "category": categoria de despesa (diesel, mão de obra)
      - ATENÇÃO: Perguntas sobre "preço", "quanto paguei", "valor", "custo", "dívida", "quanto devo" ou "fatura" DEVEM ser "invoices" ou "expenses", NUNCA "stock".
+     - CORREÇÃO: Corrija erros de digitação comuns em nomes de produtos (ex: "sphare" -> "Sphere", "gliphosato" -> "Glifosato").
 
 3. Se for CONVERSA GERAL, SAUDAÇÃO OU DÚVIDA AGRÍCOLA (ex: "bom dia", "quem é você?", "como combater ferrugem"):
    - Defina "type": "conversation"
