@@ -236,8 +236,19 @@ RESPOSTA (apenas JSON, sem markdown):`;
         return "Desculpe, não encontrei nenhuma informação sobre isso no momento. 😕";
       }
 
+      // Pre-process data to ensure numbers are numbers, avoiding "2.750" -> 2750 confusion
+      const processedData = Array.isArray(data) ? data.map(item => {
+        return {
+          ...item,
+          quantity: item.quantity ? parseFloat(item.quantity) : 0,
+          averageCost: item.averageCost ? parseFloat(item.averageCost) : 0,
+          lastPrice: item.lastPrice ? parseFloat(item.lastPrice) : null,
+          currency: item.currency || "USD"
+        };
+      }) : data;
+
       // Limita dados para não estourar tokens
-      const contextData = Array.isArray(data) ? data.slice(0, 15) : data;
+      const contextData = Array.isArray(processedData) ? processedData.slice(0, 15) : processedData;
 
       const prompt = `
 Você é o AgroBot, assistente da AgroFarm.
@@ -255,6 +266,7 @@ INSTRUÇÕES:
 6. Se for uma lista, organize com bullet points ou quebras de linha claras.
 7. Se a lista for grande, resuma ou destaque os principais itens.
 8. Mantenha a resposta curta e direta para leitura no WhatsApp.
+9. PREÇOS E MOEDA: Respeite a moeda indicada nos dados (ex: "USD", "BRL"). Se o valor for "2.75", é "2,75", NÃO "2.750,00".
 
 RESPOSTA (apenas o texto final):`;
 
@@ -311,7 +323,8 @@ RESPOSTA (apenas o texto final):`;
       if (item.lastPrice) {
         const price = parseFloat(item.lastPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
         const date = item.lastPriceDate ? new Date(item.lastPriceDate).toLocaleDateString("pt-BR") : "";
-        message += `     💲 Última compra: R$ ${price} (${date})\n`;
+        const currency = item.currency === "USD" ? "USD" : "R$";
+        message += `     💲 Última compra: ${currency} ${price} (${date})\n`;
       } else if (item.averageCost > 0) {
         const cost = parseFloat(item.averageCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
         message += `     💲 Custo Médio: R$ ${cost}\n`;

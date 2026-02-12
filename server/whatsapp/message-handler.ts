@@ -73,7 +73,8 @@ export class MessageHandler {
       const lastPurchase = await db
         .select({
           unitPrice: farmInvoiceItems.unitPrice,
-          issueDate: farmInvoices.issueDate
+          issueDate: farmInvoices.issueDate,
+          currency: farmInvoices.currency
         })
         .from(farmInvoiceItems)
         .innerJoin(farmInvoices, eq(farmInvoices.id, farmInvoiceItems.invoiceId))
@@ -93,7 +94,8 @@ export class MessageHandler {
         unit: item.unit,
         averageCost: item.averageCost, // Added average cost
         lastPrice: lastPurchase[0]?.unitPrice || null,
-        lastPriceDate: lastPurchase[0]?.issueDate || null
+        lastPriceDate: lastPurchase[0]?.issueDate || null,
+        currency: lastPurchase[0]?.currency || "USD"
       };
     }));
 
