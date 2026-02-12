@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2 } from "lucide-react";
 import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
@@ -799,6 +800,65 @@ export default function PdvTerminal() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Mobile History Trigger */}
+                    <div className="md:hidden">
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-sm font-medium transition-colors text-white">
+                                    <FileText className="h-4 w-4" />
+                                    <span className="hidden xs:inline">Histórico</span>
+                                </button>
+                            </SheetTrigger>
+                            <SheetContent side="left" className="w-[300px] sm:w-[400px] bg-slate-50 p-0">
+                                <SheetHeader className="p-4 border-b border-gray-200 bg-white">
+                                    <SheetTitle className="flex items-center gap-2 text-emerald-700">
+                                        <FileText className="h-5 w-5" />
+                                        Saídas Recentes
+                                    </SheetTitle>
+                                </SheetHeader>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3 h-[calc(100vh-70px)]">
+                                    {withdrawalsHistory && withdrawalsHistory.length > 0 ? (
+                                        withdrawalsHistory.slice(0, 10).map((batch: any) => (
+                                            <div key={batch.batchId} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-all">
+                                                <div className="mb-3">
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <span className="text-[10px] text-gray-400 font-medium bg-gray-50 px-1.5 py-0.5 rounded">
+                                                            {new Date(batch.appliedAt).toLocaleString("pt-BR", {
+                                                                day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+                                                            })}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs font-bold text-gray-800 line-clamp-1" title={batch.propertyName}>
+                                                        {batch.propertyName || "Propriedade sem nome"}
+                                                    </p>
+                                                    <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
+                                                        {batch.applications.length} itens aplicados
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="w-full text-xs h-7 border-dashed border-gray-300 text-gray-500 hover:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 transition-colors"
+                                                    onClick={() => {
+                                                        handleRegenerateReceituario(batch);
+                                                        // Close sheet logic if needed, usually clicking outside or built-in close works
+                                                    }}
+                                                >
+                                                    <FileText className="h-3 w-3 mr-1" />
+                                                    Ver Receituário
+                                                </Button>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-10 text-gray-400">
+                                            <p className="text-sm">Nenhuma saída recente</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </SheetContent>
+                        </Sheet>
+                    </div>
+
                     <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${isOnline ? "bg-emerald-500/30 text-emerald-100" : "bg-red-500/30 text-red-200"}`}>
                         {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
                         {isOnline ? "Online" : "Offline"}
