@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2 } from "lucide-react";
-import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, type ReceituarioData } from "@/lib/pdf-receituario";
+import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
 
 interface CartItem {
     product: any;
@@ -324,13 +324,12 @@ export default function PdvTerminal() {
                 const pdfBlob = generateReceituarioPDF(pdfData);
 
                 if (generatePDF) {
-                    // Se foi solicitado explicitamente, mostrar opções
-                    const shouldShare = window.confirm("Receituário gerado! Deseja compartilhar via WhatsApp?");
-                    if (shouldShare) {
-                        shareViaWhatsApp(pdfBlob, `Receituário Agronômico - ${firstProperty?.name || "Propriedade"}\nData: ${new Date().toLocaleString("pt-BR")}`);
-                    } else {
-                        downloadPDF(pdfBlob);
-                    }
+                    // Abrir PDF diretamente em nova aba
+                    openPDF(pdfBlob);
+                    toast({
+                        title: "Receituário gerado",
+                        description: "O arquivo foi aberto em uma nova aba."
+                    });
                 } else {
                     // Geração automática após confirmar: apenas fazer download silencioso
                     downloadPDF(pdfBlob);
@@ -410,12 +409,8 @@ export default function PdvTerminal() {
             };
 
             const pdfBlob = generateReceituarioPDF(pdfData);
-            const shouldShare = window.confirm("Receituário gerado! Deseja compartilhar via WhatsApp?");
-            if (shouldShare) {
-                shareViaWhatsApp(pdfBlob, `Receituário Agronômico - ${pdfData.propertyName}\nData: ${new Date(batch.appliedAt).toLocaleString("pt-BR")}`);
-            } else {
-                downloadPDF(pdfBlob);
-            }
+            openPDF(pdfBlob);
+            toast({ title: "Receituário aberto em nova aba" });
         } catch (error) {
             toast({ title: "Erro ao gerar receituário", variant: "destructive" });
         }
