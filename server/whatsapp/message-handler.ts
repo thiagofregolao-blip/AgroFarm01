@@ -32,6 +32,8 @@ export class MessageHandler {
         productId: farmStock.productId,
         quantity: farmStock.quantity,
         productName: farmProductsCatalog.name,
+        activeIngredient: farmProductsCatalog.activeIngredient,
+        category: farmProductsCatalog.category,
         unit: farmProductsCatalog.unit,
       })
       .from(farmStock)
@@ -43,15 +45,24 @@ export class MessageHandler {
       query = query.where(
         and(
           eq(farmStock.farmerId, userId),
-          sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
+          or(
+            sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`,
+            ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
+            ilike(farmProductsCatalog.category, `%${filters.product}%`)
+          )
         )
       );
+    }
+
+    if (filters?.category) {
+      query = query.where(ilike(farmProductsCatalog.category, `%${filters.category}%`));
     }
 
     const stock = await query.orderBy(desc(farmStock.updatedAt));
 
     return stock.map((item) => ({
       productName: item.productName,
+      activeIngredient: item.activeIngredient,
       quantity: item.quantity,
       unit: item.unit,
     }));
