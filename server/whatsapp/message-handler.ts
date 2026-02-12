@@ -41,12 +41,15 @@ export class MessageHandler {
       .where(eq(farmStock.farmerId, userId));
 
     if (filters?.product) {
+      console.log(`[MessageHandler] Searching stock for product: '${filters.product}'`);
       const cleanTerm = filters.product.replace(/[^a-zA-Z0-9]/g, "");
+      console.log(`[MessageHandler] Clean term: '${cleanTerm}'`);
       query = query.where(
         and(
           eq(farmStock.farmerId, userId),
           or(
-            sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`,
+            ilike(farmProductsCatalog.name, `%${cleanTerm}%`), // Buscando pelo termo limpo no nome
+            ilike(farmProductsCatalog.name, `%${filters.product}%`), // Buscando pelo termo original no nome
             ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
             ilike(farmProductsCatalog.category, `%${filters.product}%`)
           )
@@ -59,6 +62,7 @@ export class MessageHandler {
     }
 
     const stock = await query.orderBy(desc(farmStock.updatedAt));
+    console.log(`[MessageHandler] Clean term: '${filters?.product || 'N/A'}' - Stock found: ${stock.length}`);
 
     return stock.map((item) => ({
       productName: item.productName,
