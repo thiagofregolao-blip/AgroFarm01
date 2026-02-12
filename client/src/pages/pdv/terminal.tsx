@@ -92,6 +92,18 @@ export default function PdvTerminal() {
         },
     });
 
+    // Query para histórico de saídas (Moved to top level to avoid Hook rules violation)
+    const { data: withdrawalsHistory } = useQuery({
+        queryKey: ["/api/pdv/withdrawals"],
+        queryFn: async () => {
+            const res = await apiRequest("GET", "/api/pdv/withdrawals");
+            if (!res.ok) throw new Error("Failed to fetch withdrawals");
+            return res.json();
+        },
+        enabled: step === "product",
+        refetchInterval: 30000, // Atualizar a cada 30 segundos
+    });
+
     const products = pdvData?.products || [];
     const stock = pdvData?.stock || [];
     const plots = pdvData?.plots || [];
@@ -237,7 +249,7 @@ export default function PdvTerminal() {
         try {
             let count = 0;
             const applications: Array<{ productId: string; plotId: string; quantity: number; propertyId?: string; plotName: string; productName: string; dosePerHa?: number; unit: string }> = [];
-            
+
             for (const item of confirmationData) {
                 for (const d of item.distribution) {
                     if (d.allocatedQty <= 0) continue;
@@ -249,7 +261,7 @@ export default function PdvTerminal() {
                         propertyId: plot?.propertyId,
                         notes: count === 0 ? instructions : undefined, // Salvar instruções apenas na primeira aplicação
                     });
-                    
+
                     applications.push({
                         productId: item.product.id,
                         plotId: d.plotId,
@@ -263,22 +275,22 @@ export default function PdvTerminal() {
                     count++;
                 }
             }
-            
+
             toast({ title: `✅ ${count} saída(s) registrada(s) com sucesso!` });
             queryClient.invalidateQueries({ queryKey: ["/api/pdv/data"] });
             queryClient.invalidateQueries({ queryKey: ["/api/pdv/withdrawals"] });
-            
+
             // Gerar PDF se solicitado ou automaticamente após confirmar (opção b)
             if (applications.length > 0) {
                 // Organizar dados para o PDF
                 const properties = pdvData?.properties || [];
-                const firstProperty = properties.find((p: any) => 
+                const firstProperty = properties.find((p: any) =>
                     applications.some(app => app.propertyId === p.id)
                 ) || properties[0];
-                
+
                 // Reorganizar para a estrutura correta (produtos com seus talhões)
                 const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
-                
+
                 applications.forEach(app => {
                     if (!productsByProduct.has(app.productName)) {
                         productsByProduct.set(app.productName, {
@@ -299,7 +311,7 @@ export default function PdvTerminal() {
                         });
                     }
                 });
-                
+
                 // Criar estrutura de dados para PDF
                 const pdfData: ReceituarioData = {
                     propertyName: firstProperty?.name || "Propriedade",
@@ -307,10 +319,10 @@ export default function PdvTerminal() {
                     instructions: instructions || undefined,
                     products: Array.from(productsByProduct.values()),
                 };
-                
+
                 // Gerar PDF
                 const pdfBlob = generateReceituarioPDF(pdfData);
-                
+
                 if (generatePDF) {
                     // Se foi solicitado explicitamente, mostrar opções
                     const shouldShare = window.confirm("Receituário gerado! Deseja compartilhar via WhatsApp?");
@@ -322,13 +334,13 @@ export default function PdvTerminal() {
                 } else {
                     // Geração automática após confirmar: apenas fazer download silencioso
                     downloadPDF(pdfBlob);
-                    toast({ 
-                        title: "Receituário gerado automaticamente", 
-                        description: "O PDF foi baixado automaticamente. Você pode consultá-lo no histórico de saídas." 
+                    toast({
+                        title: "Receituário gerado automaticamente",
+                        description: "O PDF foi baixado automaticamente. Você pode consultá-lo no histórico de saídas."
                     });
                 }
             }
-            
+
             reset();
         } catch (err) {
             toast({ title: "Erro ao registrar saída", variant: "destructive" });
@@ -346,6 +358,70 @@ export default function PdvTerminal() {
         setDistOverrides({});
         setInstructions("");
     };
+
+    const handleRegenerateReceituario = async (batch: any) => {
+        try {
+            const properties = pdvData?.properties || [];
+            const firstProperty = properties.find((p: any) =>
+                batch.applications.some((app: any) => app.propertyId === p.id)
+            ) || properties[0];
+
+            // Reorganizar aplicações para estrutura do PDF
+            const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
+
+            batch.applications.forEach((app: any) => {
+                const dosePerHa = app.productName ? undefined : undefined; // Precisa buscar do produto
+                if (!productsByProduct.has(app.productName)) {
+                    productsByProduct.set(app.productName, {
+                        productName: app.productName,
+                        dosePerHa: dosePerHa,
+                        unit: "L", // Precisa buscar do produto
+                        plots: [],
+                    });
+                }
+                const product = productsByProduct.get(app.productName)!;
+                const existingPlot = product.plots.find(p => p.plotName === app.plotName);
+                if (existingPlot) {
+                    existingPlot.quantity += parseFloat(app.quantity);
+                } else {
+                    product.plots.push({
+                        plotName: app.plotName,
+                        quantity: parseFloat(app.quantity),
+                    });
+                }
+            });
+
+            // Buscar informações completas dos produtos
+            const products = pdvData?.products || [];
+            const productsWithDetails = Array.from(productsByProduct.values()).map(product => {
+                const productInfo = products.find((p: any) => p.name === product.productName);
+                return {
+                    ...product,
+                    dosePerHa: productInfo?.dosePerHa ? parseFloat(productInfo.dosePerHa) : undefined,
+                    unit: productInfo?.unit || product.unit,
+                };
+            });
+
+            const pdfData: ReceituarioData = {
+                propertyName: firstProperty?.name || batch.propertyName || "Propriedade",
+                appliedAt: new Date(batch.appliedAt),
+                instructions: batch.notes || undefined,
+                products: productsWithDetails,
+            };
+
+            const pdfBlob = generateReceituarioPDF(pdfData);
+            const shouldShare = window.confirm("Receituário gerado! Deseja compartilhar via WhatsApp?");
+            if (shouldShare) {
+                shareViaWhatsApp(pdfBlob, `Receituário Agronômico - ${pdfData.propertyName}\nData: ${new Date(batch.appliedAt).toLocaleString("pt-BR")}`);
+            } else {
+                downloadPDF(pdfBlob);
+            }
+        } catch (error) {
+            toast({ title: "Erro ao gerar receituário", variant: "destructive" });
+        }
+    };
+
+    const totalCartQty = cart.reduce((sum, c) => sum + c.quantity, 0);
 
     const handleLogout = () => {
         exitFullscreen();
@@ -712,82 +788,7 @@ export default function PdvTerminal() {
         );
     }
 
-    // ==================== STEP: PRODUCT SELECTION ====================
-    const totalCartQty = cart.reduce((sum, c) => sum + c.quantity, 0);
 
-    // Query para histórico de saídas
-    const { data: withdrawalsHistory } = useQuery({
-        queryKey: ["/api/pdv/withdrawals"],
-        queryFn: async () => {
-            const res = await apiRequest("GET", "/api/pdv/withdrawals");
-            if (!res.ok) throw new Error("Failed to fetch withdrawals");
-            return res.json();
-        },
-        enabled: step === "product",
-        refetchInterval: 30000, // Atualizar a cada 30 segundos
-    });
-
-    const handleRegenerateReceituario = async (batch: any) => {
-        try {
-            const properties = pdvData?.properties || [];
-            const firstProperty = properties.find((p: any) => 
-                batch.applications.some((app: any) => app.propertyId === p.id)
-            ) || properties[0];
-            
-            // Reorganizar aplicações para estrutura do PDF
-            const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
-            
-            batch.applications.forEach((app: any) => {
-                const dosePerHa = app.productName ? undefined : undefined; // Precisa buscar do produto
-                if (!productsByProduct.has(app.productName)) {
-                    productsByProduct.set(app.productName, {
-                        productName: app.productName,
-                        dosePerHa: dosePerHa,
-                        unit: "L", // Precisa buscar do produto
-                        plots: [],
-                    });
-                }
-                const product = productsByProduct.get(app.productName)!;
-                const existingPlot = product.plots.find(p => p.plotName === app.plotName);
-                if (existingPlot) {
-                    existingPlot.quantity += parseFloat(app.quantity);
-                } else {
-                    product.plots.push({
-                        plotName: app.plotName,
-                        quantity: parseFloat(app.quantity),
-                    });
-                }
-            });
-            
-            // Buscar informações completas dos produtos
-            const products = pdvData?.products || [];
-            const productsWithDetails = Array.from(productsByProduct.values()).map(product => {
-                const productInfo = products.find((p: any) => p.name === product.productName);
-                return {
-                    ...product,
-                    dosePerHa: productInfo?.dosePerHa ? parseFloat(productInfo.dosePerHa) : undefined,
-                    unit: productInfo?.unit || product.unit,
-                };
-            });
-            
-            const pdfData: ReceituarioData = {
-                propertyName: firstProperty?.name || batch.propertyName || "Propriedade",
-                appliedAt: new Date(batch.appliedAt),
-                instructions: batch.notes || undefined,
-                products: productsWithDetails,
-            };
-            
-            const pdfBlob = generateReceituarioPDF(pdfData);
-            const shouldShare = window.confirm("Receituário gerado! Deseja compartilhar via WhatsApp?");
-            if (shouldShare) {
-                shareViaWhatsApp(pdfBlob, `Receituário Agronômico - ${pdfData.propertyName}\nData: ${new Date(batch.appliedAt).toLocaleString("pt-BR")}`);
-            } else {
-                downloadPDF(pdfBlob);
-            }
-        } catch (error) {
-            toast({ title: "Erro ao gerar receituário", variant: "destructive" });
-        }
-    };
 
     return (
         <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
