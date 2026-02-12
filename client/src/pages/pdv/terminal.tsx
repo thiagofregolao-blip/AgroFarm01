@@ -493,17 +493,7 @@ export default function PdvTerminal() {
                     {/* RIGHT: Plot Selection Grid */}
                     <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/50">
                         {/* Info Banner */}
-                        <div className="bg-emerald-100/50 border border-emerald-200 rounded-xl p-4 mb-6 flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 text-emerald-600">
-                                <span className="text-lg">📐</span>
-                            </div>
-                            <div>
-                                <p className="font-bold text-emerald-800 text-sm">Distribuição Automática</p>
-                                <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
-                                    Os produtos serão distribuídos automaticamente entre os talhões selecionados com base na área (ha) e dose recomendada. Você poderá ajustar os valores na próxima etapa.
-                                </p>
-                            </div>
-                        </div>
+
 
                         {properties.length === 0 && plots.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
