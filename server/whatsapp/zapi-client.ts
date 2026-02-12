@@ -6,6 +6,7 @@
 interface ZApiConfig {
   instanceId: string;
   token: string;
+  clientToken?: string; // Token de segurança da conta (Security Token)
   baseUrl?: string;
 }
 
@@ -26,11 +27,13 @@ interface ZApiWebhookMessage {
 export class ZApiClient {
   private instanceId: string;
   private token: string;
+  private clientToken?: string;
   private baseUrl: string;
 
   constructor(config: ZApiConfig) {
     this.instanceId = config.instanceId;
     this.token = config.token;
+    this.clientToken = config.clientToken;
     this.baseUrl = config.baseUrl || "https://api.z-api.io";
   }
 
@@ -41,12 +44,19 @@ export class ZApiClient {
     try {
       const url = `${this.baseUrl}/instances/${this.instanceId}/token/${this.token}/send-text`;
 
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      // Se houver clientToken configurado nos envs, envia o header
+      // Se não, não envia (ou envia o token da instância como fallback se o usuário não configurou nada novo, mas isso pode dar erro)
+      if (this.clientToken) {
+        headers["Client-Token"] = this.clientToken;
+      }
+
       const response = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Client-Token": this.token,
-        },
+        headers: headers,
         body: JSON.stringify({
           phone: params.phone,
           message: params.message,

@@ -10,6 +10,7 @@ import { db, pool } from "../db";
 interface WhatsAppServiceConfig {
   zapiInstanceId: string;
   zapiToken: string;
+  zapiClientToken?: string; // security token
   geminiApiKey: string;
   zapiBaseUrl?: string;
 }
@@ -23,6 +24,7 @@ export class WhatsAppService {
     this.zapi = new ZApiClient({
       instanceId: config.zapiInstanceId,
       token: config.zapiToken,
+      clientToken: config.zapiClientToken,
       baseUrl: config.zapiBaseUrl,
     });
     this.gemini = new GeminiClient({

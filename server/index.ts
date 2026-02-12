@@ -69,14 +69,15 @@ app.use((req, res, next) => {
   if (process.env.ZAPI_INSTANCE_ID && process.env.ZAPI_TOKEN && process.env.GEMINI_API_KEY) {
     const { WhatsAppService } = await import("./whatsapp/whatsapp-service");
     const { registerWhatsAppRoutes } = await import("./whatsapp/webhook");
-    
+
     const whatsappService = new WhatsAppService({
       zapiInstanceId: process.env.ZAPI_INSTANCE_ID,
       zapiToken: process.env.ZAPI_TOKEN,
+      zapiClientToken: process.env.ZAPI_CLIENT_TOKEN,
       geminiApiKey: process.env.GEMINI_API_KEY,
       zapiBaseUrl: process.env.ZAPI_BASE_URL,
     });
-    
+
     registerWhatsAppRoutes(app, whatsappService);
     log("✅ WhatsApp routes registered (/api/whatsapp/*)");
   } else {
