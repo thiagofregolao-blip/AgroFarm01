@@ -841,16 +841,16 @@ export default function PdvTerminal() {
             <div className="flex-1 flex overflow-hidden">
                 {/* LEFT SIDEBAR: Recent Withdrawals */}
                 {withdrawalsHistory && withdrawalsHistory.length > 0 && (
-                    <div className="hidden md:flex flex-col w-72 bg-slate-50 border-r border-gray-200 shrink-0 shadow-lg z-10">
-                        <div className="p-4 bg-white border-b border-gray-100">
-                            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-slate-500" />
+                    <div className="hidden md:flex flex-col w-72 bg-emerald-50/40 border-r border-emerald-100/50 shrink-0 shadow-lg z-10">
+                        <div className="p-4 bg-emerald-100/40 border-b border-emerald-200/50 backdrop-blur-sm">
+                            <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-emerald-600" />
                                 Saídas Recentes
                             </h3>
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-3">
                             {withdrawalsHistory.slice(0, 10).map((batch: any) => (
-                                <div key={batch.batchId} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-all group">
+                                <div key={batch.batchId} className="bg-white/90 backdrop-blur-sm rounded-xl border border-emerald-100 p-3 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group">
                                     <div className="mb-3">
                                         <div className="flex justify-between items-start mb-1">
                                             <span className="text-[10px] text-gray-400 font-medium bg-gray-50 px-1.5 py-0.5 rounded">
@@ -869,7 +869,7 @@ export default function PdvTerminal() {
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="w-full text-xs h-7 border-dashed border-gray-300 text-gray-500 hover:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 transition-colors"
+                                        className="w-full text-xs h-7 border-dashed border-emerald-200 text-emerald-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition-colors bg-transparent"
                                         onClick={() => handleRegenerateReceituario(batch)}
                                     >
                                         <FileText className="h-3 w-3 mr-1" />
