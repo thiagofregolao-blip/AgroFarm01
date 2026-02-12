@@ -97,9 +97,9 @@ export class MessageHandler {
         and(
           eq(farmExpenses.farmerId, userId),
           or(
+            ilike(farmExpenses.description, `%${cleanTerm}%`),
             ilike(farmExpenses.description, `%${filters.product}%`),
-            ilike(farmExpenses.category, `%${filters.product}%`),
-            sql`regexp_replace(${farmExpenses.description}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
+            ilike(farmExpenses.category, `%${filters.product}%`)
           )
         )
       );
@@ -137,10 +137,17 @@ export class MessageHandler {
         })
         .from(farmInvoices)
         .innerJoin(farmInvoiceItems, eq(farmInvoices.id, farmInvoiceItems.invoiceId))
+        .leftJoin(farmProductsCatalog, eq(farmInvoiceItems.productId, farmProductsCatalog.id))
         .where(
           and(
             eq(farmInvoices.farmerId, userId),
-            sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`
+            or(
+              ilike(farmInvoiceItems.productName, `%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`),
+              ilike(farmInvoiceItems.productName, `%${filters.product}%`),
+              ilike(farmProductsCatalog.name, `%${filters.product}%`),
+              ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
+              ilike(farmProductsCatalog.category, `%${filters.product}%`)
+            )
           )
         )
         .orderBy(desc(farmInvoices.issueDate))
@@ -189,7 +196,12 @@ export class MessageHandler {
       query = query.where(
         and(
           eq(farmApplications.farmerId, userId),
-          sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
+          or(
+            ilike(farmProductsCatalog.name, `%${cleanTerm}%`),
+            ilike(farmProductsCatalog.name, `%${filters.product}%`),
+            ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
+            ilike(farmProductsCatalog.category, `%${filters.product}%`)
+          )
         )
       );
     }
