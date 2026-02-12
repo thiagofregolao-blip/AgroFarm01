@@ -1,10 +1,6 @@
-/**
- * Handler para processar intenções e executar queries no banco de dados
- */
-
 import { db } from "../db";
-import { farmStock, farmExpenses, farmInvoices, farmApplications, farmProperties, farmPlots, farmProductsCatalog } from "../../shared/schema";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { farmStock, farmExpenses, farmInvoices, farmInvoiceItems, farmApplications, farmProperties, farmPlots, farmProductsCatalog } from "../../shared/schema";
+import { eq, and, gte, lte, desc, ilike, or } from "drizzle-orm";
 import type { QueryIntent } from "./gemini-client";
 
 export class MessageHandler {
@@ -14,7 +10,7 @@ export class MessageHandler {
   async executeQuery(intent: QueryIntent, userId: string): Promise<any> {
     switch (intent.entity) {
       case "stock":
-        return this.getStock(userId);
+        return this.getStock(userId, intent.filters);
       case "expenses":
         return this.getExpenses(userId, intent.filters);
       case "invoices":
@@ -30,8 +26,8 @@ export class MessageHandler {
     }
   }
 
-  private async getStock(userId: string) {
-    const stock = await db
+  private async getStock(userId: string, filters?: Record<string, any>) {
+    let query = db
       .select({
         productId: farmStock.productId,
         quantity: farmStock.quantity,
@@ -40,8 +36,13 @@ export class MessageHandler {
       })
       .from(farmStock)
       .innerJoin(farmProductsCatalog, eq(farmStock.productId, farmProductsCatalog.id))
-      .where(eq(farmStock.farmerId, userId))
-      .orderBy(desc(farmStock.updatedAt));
+      .where(eq(farmStock.farmerId, userId));
+
+    if (filters?.product) {
+      query = query.where(and(eq(farmStock.farmerId, userId), ilike(farmProductsCatalog.name, `%${filters.product}%`)));
+    }
+
+    const stock = await query.orderBy(desc(farmStock.updatedAt));
 
     return stock.map((item) => ({
       productName: item.productName,
@@ -64,12 +65,49 @@ export class MessageHandler {
       query = query.where(and(eq(farmExpenses.farmerId, userId), gte(farmExpenses.expenseDate, startOfMonth)));
     }
 
+    if (filters?.category) {
+      query = query.where(and(eq(farmExpenses.farmerId, userId), ilike(farmExpenses.category, `%${filters.category}%`)));
+    }
+
+    // Fallback: se pediu "gastos com X" mas não é categoria, tenta descrição
+    if (filters?.product && !filters?.category) {
+      query = query.where(and(eq(farmExpenses.farmerId, userId), or(ilike(farmExpenses.description, `%${filters.product}%`), ilike(farmExpenses.category, `%${filters.product}%`))));
+    }
+
     const expenses = await query.orderBy(desc(farmExpenses.expenseDate)).limit(20);
 
     return expenses;
   }
 
   private async getInvoices(userId: string, filters?: Record<string, any>) {
+    // Se tem filtro de produto, faz join com items
+    if (filters?.product) {
+      const invoicesWithItems = await db
+        .select({
+          invoiceNumber: farmInvoices.invoiceNumber,
+          issueDate: farmInvoices.issueDate,
+          supplier: farmInvoices.supplier,
+          productName: farmInvoiceItems.productName,
+          quantity: farmInvoiceItems.quantity,
+          unitPrice: farmInvoiceItems.unitPrice,
+          totalPrice: farmInvoiceItems.totalPrice,
+          unit: farmInvoiceItems.unit
+        })
+        .from(farmInvoices)
+        .innerJoin(farmInvoiceItems, eq(farmInvoices.id, farmInvoiceItems.invoiceId))
+        .where(
+          and(
+            eq(farmInvoices.farmerId, userId),
+            ilike(farmInvoiceItems.productName, `%${filters.product}%`)
+          )
+        )
+        .orderBy(desc(farmInvoices.issueDate))
+        .limit(10);
+
+      return invoicesWithItems;
+    }
+
+    // Consulta normal de faturas
     const invoices = await db
       .select()
       .from(farmInvoices)
@@ -81,7 +119,7 @@ export class MessageHandler {
   }
 
   private async getApplications(userId: string, filters?: Record<string, any>) {
-    const applications = await db
+    let query = db
       .select({
         id: farmApplications.id,
         productId: farmApplications.productId,
@@ -94,9 +132,13 @@ export class MessageHandler {
       .from(farmApplications)
       .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
       .innerJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))
-      .where(eq(farmApplications.farmerId, userId))
-      .orderBy(desc(farmApplications.appliedAt))
-      .limit(20);
+      .where(eq(farmApplications.farmerId, userId));
+
+    if (filters?.product) {
+      query = query.where(and(eq(farmApplications.farmerId, userId), ilike(farmProductsCatalog.name, `%${filters.product}%`)));
+    }
+
+    const applications = await query.orderBy(desc(farmApplications.appliedAt)).limit(20);
 
     return applications;
   }

@@ -8,7 +8,7 @@ interface GeminiConfig {
   model?: string;
 }
 
-interface QueryIntent {
+export interface QueryIntent {
   type: "query" | "action" | "conversation" | "unknown";
   entity: "stock" | "expenses" | "invoices" | "applications" | "properties" | "plots" | "general" | "unknown";
   filters?: Record<string, any>;
@@ -80,29 +80,34 @@ PERGUNTA DO USUÁRIO:
 
 INSTRUÇÕES:
 1. Analise se o usuário quer consultar dados do sistema OU se é apenas uma conversa/pergunta geral.
-2. Se for CONSULTA DE DADOS (ex: "quanto tenho de estoque?", "minhas faturas", "aplicações de ontem"):
+2. Se for CONSULTA DE DADOS (ex: "quanto tenho de estoque?", "minhas faturas", "aplicações de ontem", "preço do glifosato"):
    - Defina "type": "query"
-   - Defina "entity" com a tabela correta
-   - Extraia "filters"
+   - Defina "entity" com a tabela correta (stock, expenses, invoices, etc)
+   - Extraia "filters" com chaves padronizadas:
+     - "product": nome do produto (ex: "glifosato", "24d", "soja")
+     - "period": "month" (mês atual), "last_month" (mês passado)
+     - "category": categoria de despesa (diesel, mão de obra)
 
-3. Se for CONVERSA GERAL, SAUDAÇÃO OU DÚVIDA AGRÍCOLA (ex: "bom dia", "quem é você?", "preço do glifosato", "como combater ferrugem"):
+3. Se for CONVERSA GERAL, SAUDAÇÃO OU DÚVIDA AGRÍCOLA (ex: "bom dia", "quem é você?", "como combater ferrugem"):
    - Defina "type": "conversation"
    - Defina "entity": "general"
-   - Gere uma resposta útil, curta e amigável no campo "response". Se for dúvida técnica, dê uma resposta resumida.
+   - Gere uma resposta útil, curta e amigável no campo "response".
 
 4. Retorne APENAS um JSON válido no formato:
 {
   "type": "query|action|conversation|unknown",
   "entity": "stock|expenses|invoices|applications|properties|plots|general|unknown",
-  "filters": { "key": "value" },
+  "filters": { "product": "nome", "period": "mes", "category": "nome" },
   "confidence": 0.0-1.0,
   "response": "Texto da resposta (apenas se type=conversation)"
 }
 
 EXEMPLOS:
 - "qual meu estoque?" → {"type":"query","entity":"stock","filters":{},"confidence":0.9}
+- "quanto paguei no glifosato?" → {"type":"query","entity":"invoices","filters":{"product":"glifosato"},"confidence":0.9}
+- "preço do 24d" → {"type":"query","entity":"invoices","filters":{"product":"24d"},"confidence":0.9}
+- "gastos com diesel" → {"type":"query","entity":"expenses","filters":{"category":"diesel"},"confidence":0.9}
 - "bom dia" → {"type":"conversation","entity":"general","response":"Bom dia! Como posso ajudar na fazenda hoje?","confidence":1.0}
-- "quanto custa o glifosato?" → {"type":"conversation","entity":"general","response":"O preço do glifosato varia por região e marca, mas a média atual está entre R$ 40 a R$ 60 o litro. Quer que eu verifique se você tem algum em estoque ou notas fiscais antigas?","confidence":0.9}
 
 RESPOSTA (apenas JSON, sem markdown):`;
   }
