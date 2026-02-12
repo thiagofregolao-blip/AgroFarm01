@@ -146,7 +146,10 @@ export class MessageHandler {
               ilike(farmInvoiceItems.productName, `%${filters.product}%`),
               ilike(farmProductsCatalog.name, `%${filters.product}%`),
               ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
-              ilike(farmProductsCatalog.category, `%${filters.product}%`)
+              ilike(farmProductsCatalog.category, `%${filters.product}%`),
+              // Busca normalizada por fornecedor (remove caracteres especiais) para encontrar "C.Vale" com "cvale"
+              ilike(farmInvoices.supplier, `%${filters.product}%`),
+              sql`regexp_replace(${farmInvoices.supplier}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`
             )
           )
         )

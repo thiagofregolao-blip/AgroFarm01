@@ -96,7 +96,7 @@ INSTRUÇÕES:
      - "product": nome do produto (ex: "glifosato", "24d", "soja")
      - "period": "month" (mês atual), "last_month" (mês passado)
      - "category": categoria de despesa (diesel, mão de obra)
-     - ATENÇÃO: Perguntas sobre "preço", "quanto paguei", "valor" ou "custo de produto" DEVEM ser "invoices" ou "expenses", NUNCA "stock".
+     - ATENÇÃO: Perguntas sobre "preço", "quanto paguei", "valor", "custo", "dívida", "quanto devo" ou "fatura" DEVEM ser "invoices" ou "expenses", NUNCA "stock".
 
 3. Se for CONVERSA GERAL, SAUDAÇÃO OU DÚVIDA AGRÍCOLA (ex: "bom dia", "quem é você?", "como combater ferrugem"):
    - Defina "type": "conversation"
@@ -152,7 +152,7 @@ RESPOSTA (apenas JSON, sem markdown):`;
     if (lower.includes("despesa") || lower.includes("gastei") || lower.includes("custo")) {
       return { type: "query", entity: "expenses", filters: {}, confidence: 0.6, question };
     }
-    if (lower.includes("fatura") || lower.includes("nota") || lower.includes("preço") || lower.includes("valor") || lower.includes("paguei")) {
+    if (lower.includes("fatura") || lower.includes("nota") || lower.includes("preço") || lower.includes("valor") || lower.includes("paguei") || lower.includes("devo") || lower.includes("debito") || lower.includes("dívida")) {
       return { type: "query", entity: "invoices", filters: {}, confidence: 0.6, question };
     }
     if (lower.includes("aplicação") || lower.includes("aplicado")) {
