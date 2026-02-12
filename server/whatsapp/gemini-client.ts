@@ -81,6 +81,9 @@ CONTEXTO DO SISTEMA:
 - O sistema gerencia propriedades rurais, talhões, estoque de produtos, despesas, faturas e aplicações
 - Entidades de dados: stock (estoque), expenses (despesas), invoices (faturas), applications (aplicações), properties (propriedades), plots (talhões)
 
+CONTEXTO DA CONVERSA ANTERIOR:
+${context ? JSON.stringify(context) : "Nenhum contexto anterior."}
+
 PERGUNTA DO USUÁRIO:
 "${question}"
 

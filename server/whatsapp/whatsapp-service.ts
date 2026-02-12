@@ -19,6 +19,7 @@ export class WhatsAppService {
   private zapi: ZApiClient;
   private gemini: GeminiClient;
   private handler: MessageHandler;
+  private userContexts: Map<string, any> = new Map();
 
   constructor(config: WhatsAppServiceConfig) {
     this.zapi = new ZApiClient({
@@ -49,8 +50,17 @@ export class WhatsAppService {
         return;
       }
 
-      // 2. Interpretar pergunta com Gemini AI
-      const intent = await this.gemini.interpretQuestion(message, user.id);
+      // 2. Interpretar pergunta com Gemini AI (com contexto)
+      const lastContext = this.userContexts.get(phone);
+      const intent = await this.gemini.interpretQuestion(message, user.id, lastContext);
+
+      // Salvar contexto atual para próxima interação
+      if (intent.type !== "unknown" && intent.type !== "conversation") {
+        this.userContexts.set(phone, {
+          lastIntent: intent,
+          timestamp: Date.now()
+        });
+      }
 
       // Se for apenas papo furado ou dúvida geral, responde direto
       if (intent.type === "conversation" && intent.response) {

@@ -136,7 +136,15 @@ export class MessageHandler {
 
     // Consulta normal de faturas
     const invoices = await db
-      .select()
+      .select({
+        id: farmInvoices.id,
+        invoiceNumber: farmInvoices.invoiceNumber,
+        supplier: farmInvoices.supplier,
+        issueDate: farmInvoices.issueDate,
+        totalAmount: farmInvoices.totalAmount,
+        status: farmInvoices.status,
+        currency: farmInvoices.currency,
+      })
       .from(farmInvoices)
       .where(eq(farmInvoices.farmerId, userId))
       .orderBy(desc(farmInvoices.issueDate))
