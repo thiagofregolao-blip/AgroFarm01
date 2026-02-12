@@ -129,7 +129,8 @@ export class MessageHandler {
           or(
             ilike(farmExpenses.description, `%${cleanTerm}%`),
             ilike(farmExpenses.description, `%${filters.product}%`),
-            ilike(farmExpenses.category, `%${filters.product}%`)
+            ilike(farmExpenses.category, `%${filters.product}%`),
+            sql`regexp_replace(${farmExpenses.description}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
           )
         )
       );
@@ -177,6 +178,9 @@ export class MessageHandler {
               ilike(farmProductsCatalog.name, `%${filters.product}%`),
               ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
               ilike(farmProductsCatalog.category, `%${filters.product}%`),
+              // Busca normalizada por nome do produto
+              sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`,
+              sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`,
               // Busca normalizada por fornecedor (remove caracteres especiais) para encontrar "C.Vale" com "cvale"
               ilike(farmInvoices.supplier, `%${filters.product}%`),
               sql`regexp_replace(${farmInvoices.supplier}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`
@@ -233,7 +237,8 @@ export class MessageHandler {
             ilike(farmProductsCatalog.name, `%${cleanTerm}%`),
             ilike(farmProductsCatalog.name, `%${filters.product}%`),
             ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
-            ilike(farmProductsCatalog.category, `%${filters.product}%`)
+            ilike(farmProductsCatalog.category, `%${filters.product}%`),
+            sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
           )
         )
       );
