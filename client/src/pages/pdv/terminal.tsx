@@ -790,8 +790,8 @@ export default function PdvTerminal() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {/* Mobile History Trigger */}
-                    <div className="md:hidden">
+                    {/* History Trigger (Visible on all screens) */}
+                    <div>
                         <Sheet>
                             <SheetTrigger asChild>
                                 <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-sm font-medium transition-colors text-white">
@@ -889,50 +889,9 @@ export default function PdvTerminal() {
 
 
             <div className="flex-1 flex overflow-hidden">
-                {/* LEFT SIDEBAR: Recent Withdrawals */}
-                {withdrawalsHistory && withdrawalsHistory.length > 0 && (
-                    <div className="hidden md:flex flex-col w-72 bg-emerald-50/40 border-r border-emerald-100/50 shrink-0 shadow-lg z-10">
-                        <div className="p-4 bg-emerald-100/40 border-b border-emerald-200/50 backdrop-blur-sm">
-                            <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-emerald-600" />
-                                Saídas Recentes
-                            </h3>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                            {withdrawalsHistory.slice(0, 10).map((batch: any) => (
-                                <div key={batch.batchId} className="bg-white/90 backdrop-blur-sm rounded-xl border border-emerald-100 p-3 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group">
-                                    <div className="mb-3">
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className="text-[10px] text-gray-400 font-medium bg-gray-50 px-1.5 py-0.5 rounded">
-                                                {new Date(batch.appliedAt).toLocaleString("pt-BR", {
-                                                    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
-                                                })}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs font-bold text-gray-800 line-clamp-1" title={batch.propertyName}>
-                                            {batch.propertyName || "Propriedade sem nome"}
-                                        </p>
-                                        <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
-                                            {batch.applications.length} itens aplicados
-                                        </p>
-                                    </div>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="w-full text-xs h-7 border-dashed border-emerald-200 text-emerald-600 hover:text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 transition-colors bg-transparent"
-                                        onClick={() => handleRegenerateReceituario(batch)}
-                                    >
-                                        <FileText className="h-3 w-3 mr-1" />
-                                        Ver Receituário
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* MIDDLE: Product catalog */}
+                {/* MIDDLE: Product catalog (Expanded to full width) */}
                 <div className="flex-1 flex flex-col overflow-hidden">
+
                     {/* Search & filters */}
                     <div className="p-3 space-y-2.5 bg-white border-b border-gray-100 shrink-0 shadow-sm">
                         <div className="relative">
