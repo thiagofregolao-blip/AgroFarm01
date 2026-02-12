@@ -35,6 +35,7 @@ export class MessageHandler {
         activeIngredient: farmProductsCatalog.activeIngredient,
         category: farmProductsCatalog.category,
         unit: farmProductsCatalog.unit,
+        averageCost: farmStock.averageCost,
       })
       .from(farmStock)
       .innerJoin(farmProductsCatalog, eq(farmStock.productId, farmProductsCatalog.id))
@@ -66,12 +67,37 @@ export class MessageHandler {
     const stock = await query.orderBy(desc(farmStock.updatedAt));
     console.log(`[MessageHandler] Clean term: '${filters?.product || 'N/A'}' - Stock found: ${stock.length}`);
 
-    return stock.map((item) => ({
-      productName: item.productName,
-      activeIngredient: item.activeIngredient,
-      quantity: item.quantity,
-      unit: item.unit,
+    // Enrich stock with last purchase price
+    const stockWithPrice = await Promise.all(stock.map(async (item) => {
+      // Buscar última compra deste produto
+      const lastPurchase = await db
+        .select({
+          unitPrice: farmInvoiceItems.unitPrice,
+          issueDate: farmInvoices.issueDate
+        })
+        .from(farmInvoiceItems)
+        .innerJoin(farmInvoices, eq(farmInvoices.id, farmInvoiceItems.invoiceId))
+        .where(
+          and(
+            eq(farmInvoices.farmerId, userId),
+            eq(farmInvoiceItems.productId, item.productId)
+          )
+        )
+        .orderBy(desc(farmInvoices.issueDate))
+        .limit(1);
+
+      return {
+        productName: item.productName,
+        activeIngredient: item.activeIngredient,
+        quantity: item.quantity,
+        unit: item.unit,
+        averageCost: item.averageCost, // Added average cost
+        lastPrice: lastPurchase[0]?.unitPrice || null,
+        lastPriceDate: lastPurchase[0]?.issueDate || null
+      };
     }));
+
+    return stockWithPrice;
   }
 
   private async getExpenses(userId: string, filters?: Record<string, any>) {

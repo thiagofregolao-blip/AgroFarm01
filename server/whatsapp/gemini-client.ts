@@ -153,7 +153,7 @@ INSTRUÇÕES:
      - "category": categoria de despesa (diesel, mão de obra)
      - ATENÇÃO: Perguntas sobre "preço", "quanto paguei", "valor", "custo", "dívida", "quanto devo" ou "fatura" DEVEM ser "invoices" ou "expenses", NUNCA "stock".
      - CORREÇÃO: Corrija erros de digitação comuns em nomes de produtos (ex: "sphare" -> "Sphere", "gliphosato" -> "Glifosato").
-
+     - CONTEXTO: Se o usuário usar pronomes como "nele", "disso", "do último" ou referir-se a um produto da pergunta anterior sem nomeá-lo, USE O FILTRO "product" DO CONTEXTO DA CONVERSA ANTERIOR. Ex: Se contexto tem product="24d" e pergunta é "quanto paguei nele?", gere filters={"product": "24d"}.
 3. Se for CONVERSA GERAL, SAUDAÇÃO OU DÚVIDA AGRÍCOLA (ex: "bom dia", "quem é você?", "como combater ferrugem"):
    - Defina "type": "conversation"
    - Defina "entity": "general"
@@ -306,7 +306,17 @@ RESPOSTA (apenas o texto final):`;
       const qty = parseFloat(item.quantity || 0);
       const unit = item.unit || "un";
       // Bolding the name and formatting number separately
-      message += `🔹 *${item.productName || item.name}*\n     ${qty.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ${unit}\n`;
+      message += `🔹 *${item.productName || item.name}*\n     📦 ${qty.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ${unit}\n`;
+
+      if (item.lastPrice) {
+        const price = parseFloat(item.lastPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const date = item.lastPriceDate ? new Date(item.lastPriceDate).toLocaleDateString("pt-BR") : "";
+        message += `     💲 Última compra: R$ ${price} (${date})\n`;
+      } else if (item.averageCost > 0) {
+        const cost = parseFloat(item.averageCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        message += `     💲 Custo Médio: R$ ${cost}\n`;
+      }
+      message += "\n";
     });
 
     if (data.length > 15) {
