@@ -23,7 +23,7 @@ async function main() {
   const role = process.env.ADMIN_ROLE || "administrador";
 
   const sql = postgres(DATABASE_URL, {
-    ssl: "require",
+    // ssl: "require", // Disabled for local dev
     max: 1,
   });
 
@@ -73,7 +73,7 @@ async function main() {
       if (!createIfMissing) {
         throw new Error(
           `Usuário '${username}' não existe neste banco. Verifique se o DATABASE_URL aponta para o Neon correto. ` +
-            `Se você realmente quiser criar, rode com ADMIN_CREATE_IF_MISSING=true.`
+          `Se você realmente quiser criar, rode com ADMIN_CREATE_IF_MISSING=true.`
         );
       }
 

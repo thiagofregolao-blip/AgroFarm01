@@ -57,10 +57,47 @@ export function registerFarmRoutes(app: Express) {
                 name: user.name,
                 username: user.username,
                 role: user.role,
+                whatsapp_number: user.whatsapp_number,
             });
         } catch (error) {
             console.error("[FARM_ME]", error);
             res.status(500).json({ error: "Failed to get user" });
+        }
+    });
+
+    // Update user profile (name and whatsapp)
+    app.put("/api/farm/me", requireFarmer, async (req, res) => {
+        try {
+            const { name, whatsapp_number } = req.body;
+            const userId = (req.user as any).id;
+
+            // Dynamically import db to avoid circular dependency issues
+            const { db } = await import("./db");
+            const { users } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+
+            const [updatedUser] = await db.update(users)
+                .set({
+                    name,
+                    whatsapp_number: whatsapp_number || null
+                })
+                .where(eq(users.id, userId))
+                .returning();
+
+            if (!updatedUser) {
+                return res.status(404).json({ error: "User not found" });
+            }
+
+            res.json({
+                id: updatedUser.id,
+                name: updatedUser.name,
+                username: updatedUser.username,
+                role: updatedUser.role,
+                whatsapp_number: updatedUser.whatsapp_number || undefined,
+            });
+        } catch (error) {
+            console.error("[FARM_ME_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update profile" });
         }
     });
 
@@ -844,7 +881,7 @@ export function registerFarmRoutes(app: Express) {
         try {
             const farmerId = (req.session as any).pdvFarmerId;
             const applications = await farmStorage.getApplications(farmerId);
-            
+
             // Agrupar aplicações por batch (aplicações criadas dentro de 5 minutos são do mesmo batch)
             const batches: Array<{
                 batchId: string;
@@ -853,21 +890,21 @@ export function registerFarmRoutes(app: Express) {
                 propertyName?: string;
                 notes?: string;
             }> = [];
-            
+
             // Ordenar por data (mais recente primeiro)
-            const sortedApps = [...applications].sort((a, b) => 
+            const sortedApps = [...applications].sort((a, b) =>
                 new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()
             );
-            
+
             for (const app of sortedApps) {
                 // Procurar batch existente (dentro de 5 minutos)
                 const appTime = new Date(app.appliedAt).getTime();
                 let foundBatch = false;
-                
+
                 for (const batch of batches) {
                     const batchTime = new Date(batch.appliedAt).getTime();
                     const timeDiff = Math.abs(appTime - batchTime) / 1000 / 60; // diferença em minutos
-                    
+
                     if (timeDiff <= 5) {
                         // Mesmo batch
                         batch.applications.push(app);
@@ -875,7 +912,7 @@ export function registerFarmRoutes(app: Express) {
                         break;
                     }
                 }
-                
+
                 if (!foundBatch) {
                     // Novo batch
                     batches.push({
@@ -887,12 +924,12 @@ export function registerFarmRoutes(app: Express) {
                     });
                 }
             }
-            
+
             // Ordenar batches por data (mais recente primeiro)
-            batches.sort((a, b) => 
+            batches.sort((a, b) =>
                 new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()
             );
-            
+
             res.json(batches);
         } catch (error) {
             console.error("[PDV_WITHDRAWALS]", error);

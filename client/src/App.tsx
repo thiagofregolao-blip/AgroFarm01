@@ -54,6 +54,7 @@ import FarmExpenses from "@/pages/fazenda/expenses";
 import FarmTerminals from "@/pages/fazenda/terminals";
 import FarmPlotCosts from "@/pages/fazenda/plot-costs";
 import FarmSeasons from "@/pages/fazenda/seasons";
+import FarmProfile from "@/pages/fazenda/profile";
 
 // PDV (Point of Sale)
 import PdvLogin from "@/pages/pdv/login";
@@ -117,6 +118,7 @@ function Router() {
       <Route path="/fazenda/custos" component={FarmPlotCosts} />
       <Route path="/fazenda/terminais" component={FarmTerminals} />
       <Route path="/fazenda/safras" component={FarmSeasons} />
+      <Route path="/fazenda/perfil" component={FarmProfile} />
 
       {/* PDV Routes (Tablet) */}
       <Route path="/pdv/login" component={PdvLogin} />

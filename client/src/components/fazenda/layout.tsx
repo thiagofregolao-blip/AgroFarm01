@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, Package, FileText, BarChart3,
-    LogOut, Menu, X, DollarSign, Monitor, TrendingUp, ChevronDown, Sprout
+    LogOut, Menu, X, DollarSign, Monitor, TrendingUp, ChevronDown, Sprout, User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -18,6 +18,7 @@ const navItems = [
     { label: "Custo/Talhão", href: "/fazenda/custos", icon: TrendingUp },
     { label: "Despesas", href: "/fazenda/despesas", icon: DollarSign },
     { label: "Terminais PDV", href: "/fazenda/terminais", icon: Monitor },
+    { label: "Perfil", href: "/fazenda/perfil", icon: User },
 ];
 
 export default function FarmLayout({ children }: { children: ReactNode }) {
@@ -50,7 +51,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <span className="text-sm text-white/80 hidden sm:block">{user.username || user.fullName}</span>
+                            <span className="text-sm text-white/80 hidden sm:block">{user.username || user.name}</span>
                             <button
                                 onClick={handleLogout}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/80 hover:text-white hover:bg-white/10 transition-colors"

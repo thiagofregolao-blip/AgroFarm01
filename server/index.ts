@@ -65,6 +65,24 @@ app.use((req, res, next) => {
   const { registerFarmRoutes } = await import("./farm-routes");
   registerFarmRoutes(app);
 
+  // Register WhatsApp routes (if configured)
+  if (process.env.ZAPI_INSTANCE_ID && process.env.ZAPI_TOKEN && process.env.GEMINI_API_KEY) {
+    const { WhatsAppService } = await import("./whatsapp/whatsapp-service");
+    const { registerWhatsAppRoutes } = await import("./whatsapp/webhook");
+    
+    const whatsappService = new WhatsAppService({
+      zapiInstanceId: process.env.ZAPI_INSTANCE_ID,
+      zapiToken: process.env.ZAPI_TOKEN,
+      geminiApiKey: process.env.GEMINI_API_KEY,
+      zapiBaseUrl: process.env.ZAPI_BASE_URL,
+    });
+    
+    registerWhatsAppRoutes(app, whatsappService);
+    log("✅ WhatsApp routes registered (/api/whatsapp/*)");
+  } else {
+    log("⚠️  WhatsApp not configured (missing ZAPI_INSTANCE_ID, ZAPI_TOKEN, or GEMINI_API_KEY)");
+  }
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

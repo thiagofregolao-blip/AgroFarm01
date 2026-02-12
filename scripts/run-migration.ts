@@ -53,6 +53,16 @@ const runMigration = async () => {
             console.log('✅ Migração de correções concluída!');
         }
 
+        // Migration 4: WhatsApp Number Field
+        const whatsappPath = path.join(process.cwd(), 'migration_add_whatsapp_number.sql');
+        if (fs.existsSync(whatsappPath)) {
+            const whatsappSql = fs.readFileSync(whatsappPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', whatsappPath);
+            console.log('🚀 Executando SQL (whatsapp)...');
+            await sql.unsafe(whatsappSql);
+            console.log('✅ Migração WhatsApp concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

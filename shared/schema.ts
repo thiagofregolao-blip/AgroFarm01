@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   role: text("role").notNull().default("consultor"), // consultor, gerente, administrador, faturista
   managerId: varchar("manager_id").references((): any => users.id), // gerente responsável (apenas para consultores)
+  whatsapp_number: text("whatsapp_number"), // Número de WhatsApp para integração
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
