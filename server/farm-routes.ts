@@ -839,6 +839,67 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // PDV withdrawals history (agrupar aplicações por batch)
+    app.get("/api/pdv/withdrawals", requirePdv, async (req, res) => {
+        try {
+            const farmerId = (req.session as any).pdvFarmerId;
+            const applications = await farmStorage.getApplications(farmerId);
+            
+            // Agrupar aplicações por batch (aplicações criadas dentro de 5 minutos são do mesmo batch)
+            const batches: Array<{
+                batchId: string;
+                appliedAt: Date;
+                applications: typeof applications;
+                propertyName?: string;
+                notes?: string;
+            }> = [];
+            
+            // Ordenar por data (mais recente primeiro)
+            const sortedApps = [...applications].sort((a, b) => 
+                new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()
+            );
+            
+            for (const app of sortedApps) {
+                // Procurar batch existente (dentro de 5 minutos)
+                const appTime = new Date(app.appliedAt).getTime();
+                let foundBatch = false;
+                
+                for (const batch of batches) {
+                    const batchTime = new Date(batch.appliedAt).getTime();
+                    const timeDiff = Math.abs(appTime - batchTime) / 1000 / 60; // diferença em minutos
+                    
+                    if (timeDiff <= 5) {
+                        // Mesmo batch
+                        batch.applications.push(app);
+                        foundBatch = true;
+                        break;
+                    }
+                }
+                
+                if (!foundBatch) {
+                    // Novo batch
+                    batches.push({
+                        batchId: app.id, // Usar ID da primeira aplicação como batchId
+                        appliedAt: app.appliedAt,
+                        applications: [app],
+                        propertyName: app.propertyName,
+                        notes: app.notes,
+                    });
+                }
+            }
+            
+            // Ordenar batches por data (mais recente primeiro)
+            batches.sort((a, b) => 
+                new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime()
+            );
+            
+            res.json(batches);
+        } catch (error) {
+            console.error("[PDV_WITHDRAWALS]", error);
+            res.status(500).json({ error: "Failed to get withdrawals" });
+        }
+    });
+
     // ==================== Seasons (Safras) ====================
     app.get("/api/farm/seasons", requireFarmer, async (req, res) => {
         try {

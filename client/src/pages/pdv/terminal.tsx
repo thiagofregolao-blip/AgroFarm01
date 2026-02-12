@@ -4,8 +4,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin } from "lucide-react";
+import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2 } from "lucide-react";
+import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, type ReceituarioData } from "@/lib/pdf-receituario";
 
 interface CartItem {
     product: any;
@@ -53,6 +56,7 @@ export default function PdvTerminal() {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [categoryFilter, setCategoryFilter] = useState<string>("");
     const [distOverrides, setDistOverrides] = useState<Record<string, number>>({});
+    const [instructions, setInstructions] = useState<string>("");
 
     useEffect(() => {
         const setOn = () => setIsOnline(true);
@@ -228,10 +232,12 @@ export default function PdvTerminal() {
         setStep("confirm");
     };
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (generatePDF = false) => {
         setSubmitting(true);
         try {
             let count = 0;
+            const applications: Array<{ productId: string; plotId: string; quantity: number; propertyId?: string; plotName: string; productName: string; dosePerHa?: number; unit: string }> = [];
+            
             for (const item of confirmationData) {
                 for (const d of item.distribution) {
                     if (d.allocatedQty <= 0) continue;
@@ -241,12 +247,88 @@ export default function PdvTerminal() {
                         quantity: d.allocatedQty,
                         plotId: d.plotId,
                         propertyId: plot?.propertyId,
+                        notes: count === 0 ? instructions : undefined, // Salvar instruções apenas na primeira aplicação
+                    });
+                    
+                    applications.push({
+                        productId: item.product.id,
+                        plotId: d.plotId,
+                        quantity: d.allocatedQty,
+                        propertyId: plot?.propertyId,
+                        plotName: d.plotName,
+                        productName: item.product.name,
+                        dosePerHa: item.product.dosePerHa ? parseFloat(item.product.dosePerHa) : undefined,
+                        unit: item.product.unit,
                     });
                     count++;
                 }
             }
+            
             toast({ title: `✅ ${count} saída(s) registrada(s) com sucesso!` });
             queryClient.invalidateQueries({ queryKey: ["/api/pdv/data"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/pdv/withdrawals"] });
+            
+            // Gerar PDF se solicitado ou automaticamente após confirmar (opção b)
+            if (applications.length > 0) {
+                // Organizar dados para o PDF
+                const properties = pdvData?.properties || [];
+                const firstProperty = properties.find((p: any) => 
+                    applications.some(app => app.propertyId === p.id)
+                ) || properties[0];
+                
+                // Reorganizar para a estrutura correta (produtos com seus talhões)
+                const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
+                
+                applications.forEach(app => {
+                    if (!productsByProduct.has(app.productName)) {
+                        productsByProduct.set(app.productName, {
+                            productName: app.productName,
+                            dosePerHa: app.dosePerHa,
+                            unit: app.unit,
+                            plots: [],
+                        });
+                    }
+                    const product = productsByProduct.get(app.productName)!;
+                    const existingPlot = product.plots.find(p => p.plotName === app.plotName);
+                    if (existingPlot) {
+                        existingPlot.quantity += app.quantity;
+                    } else {
+                        product.plots.push({
+                            plotName: app.plotName,
+                            quantity: app.quantity,
+                        });
+                    }
+                });
+                
+                // Criar estrutura de dados para PDF
+                const pdfData: ReceituarioData = {
+                    propertyName: firstProperty?.name || "Propriedade",
+                    appliedAt: new Date(),
+                    instructions: instructions || undefined,
+                    products: Array.from(productsByProduct.values()),
+                };
+                
+                // Gerar PDF
+                const pdfBlob = generateReceituarioPDF(pdfData);
+                
+                if (generatePDF) {
+                    // Se foi solicitado explicitamente, mostrar opções
+                    const shouldShare = window.confirm("Receituário gerado! Deseja compartilhar via WhatsApp?");
+                    if (shouldShare) {
+                        shareViaWhatsApp(pdfBlob, `Receituário Agronômico - ${firstProperty?.name || "Propriedade"}\nData: ${new Date().toLocaleString("pt-BR")}`);
+                    } else {
+                        downloadPDF(pdfBlob);
+                    }
+                } else {
+                    // Geração automática após confirmar: apenas fazer download silencioso
+                    downloadPDF(pdfBlob);
+                    toast({ 
+                        title: "Receituário gerado automaticamente", 
+                        description: "O PDF foi baixado automaticamente. Você pode consultá-lo no histórico de saídas." 
+                    });
+                }
+            }
+            
             reset();
         } catch (err) {
             toast({ title: "Erro ao registrar saída", variant: "destructive" });
@@ -262,6 +344,7 @@ export default function PdvTerminal() {
         setSearch("");
         setCategoryFilter("");
         setDistOverrides({});
+        setInstructions("");
     };
 
     const handleLogout = () => {
@@ -483,6 +566,21 @@ export default function PdvTerminal() {
                             </div>
                         </div>
 
+                        {/* Campo de Instruções */}
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                            <Label htmlFor="instructions" className="text-sm font-semibold text-gray-700 mb-2 block">
+                                Instruções para Aplicação (Opcional)
+                            </Label>
+                            <Textarea
+                                id="instructions"
+                                placeholder="Ex: Aplicar em condições de baixa umidade. Evitar aplicação em dias de vento forte..."
+                                value={instructions}
+                                onChange={(e) => setInstructions(e.target.value)}
+                                className="min-h-[80px] resize-none"
+                                rows={3}
+                            />
+                        </div>
+
                         {/* Per product distribution */}
                         <div className="space-y-4">
                             {confirmationData.map((item) => {
@@ -593,12 +691,20 @@ export default function PdvTerminal() {
                             Cancelar
                         </Button>
                         <Button
-                            className="flex-[2] py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98]"
-                            onClick={handleSubmit}
+                            className="flex-1 py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98]"
+                            onClick={() => handleSubmit(false)}
                             disabled={submitting}
                         >
                             {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />}
                             Confirmar Saída
+                        </Button>
+                        <Button
+                            className="flex-1 py-6 text-base bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98]"
+                            onClick={() => handleSubmit(true)}
+                            disabled={submitting}
+                        >
+                            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileText className="mr-2 h-5 w-5" />}
+                            Confirmar e Gerar Receituário
                         </Button>
                     </div>
                 </div>
@@ -608,6 +714,80 @@ export default function PdvTerminal() {
 
     // ==================== STEP: PRODUCT SELECTION ====================
     const totalCartQty = cart.reduce((sum, c) => sum + c.quantity, 0);
+
+    // Query para histórico de saídas
+    const { data: withdrawalsHistory } = useQuery({
+        queryKey: ["/api/pdv/withdrawals"],
+        queryFn: async () => {
+            const res = await apiRequest("GET", "/api/pdv/withdrawals");
+            if (!res.ok) throw new Error("Failed to fetch withdrawals");
+            return res.json();
+        },
+        enabled: step === "product",
+        refetchInterval: 30000, // Atualizar a cada 30 segundos
+    });
+
+    const handleRegenerateReceituario = async (batch: any) => {
+        try {
+            const properties = pdvData?.properties || [];
+            const firstProperty = properties.find((p: any) => 
+                batch.applications.some((app: any) => app.propertyId === p.id)
+            ) || properties[0];
+            
+            // Reorganizar aplicações para estrutura do PDF
+            const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
+            
+            batch.applications.forEach((app: any) => {
+                const dosePerHa = app.productName ? undefined : undefined; // Precisa buscar do produto
+                if (!productsByProduct.has(app.productName)) {
+                    productsByProduct.set(app.productName, {
+                        productName: app.productName,
+                        dosePerHa: dosePerHa,
+                        unit: "L", // Precisa buscar do produto
+                        plots: [],
+                    });
+                }
+                const product = productsByProduct.get(app.productName)!;
+                const existingPlot = product.plots.find(p => p.plotName === app.plotName);
+                if (existingPlot) {
+                    existingPlot.quantity += parseFloat(app.quantity);
+                } else {
+                    product.plots.push({
+                        plotName: app.plotName,
+                        quantity: parseFloat(app.quantity),
+                    });
+                }
+            });
+            
+            // Buscar informações completas dos produtos
+            const products = pdvData?.products || [];
+            const productsWithDetails = Array.from(productsByProduct.values()).map(product => {
+                const productInfo = products.find((p: any) => p.name === product.productName);
+                return {
+                    ...product,
+                    dosePerHa: productInfo?.dosePerHa ? parseFloat(productInfo.dosePerHa) : undefined,
+                    unit: productInfo?.unit || product.unit,
+                };
+            });
+            
+            const pdfData: ReceituarioData = {
+                propertyName: firstProperty?.name || batch.propertyName || "Propriedade",
+                appliedAt: new Date(batch.appliedAt),
+                instructions: batch.notes || undefined,
+                products: productsWithDetails,
+            };
+            
+            const pdfBlob = generateReceituarioPDF(pdfData);
+            const shouldShare = window.confirm("Receituário gerado! Deseja compartilhar via WhatsApp?");
+            if (shouldShare) {
+                shareViaWhatsApp(pdfBlob, `Receituário Agronômico - ${pdfData.propertyName}\nData: ${new Date(batch.appliedAt).toLocaleString("pt-BR")}`);
+            } else {
+                downloadPDF(pdfBlob);
+            }
+        } catch (error) {
+            toast({ title: "Erro ao gerar receituário", variant: "destructive" });
+        }
+    };
 
     return (
         <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
@@ -659,6 +839,56 @@ export default function PdvTerminal() {
                     );
                 })}
             </div>
+
+            {/* Histórico de Saídas */}
+            {withdrawalsHistory && withdrawalsHistory.length > 0 && (
+                <div className="px-4 py-3 bg-blue-50/50 border-b border-blue-100 shrink-0">
+                    <div className="max-w-7xl mx-auto">
+                        <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-blue-600" />
+                            Saídas Recentes
+                        </h3>
+                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                            {withdrawalsHistory.slice(0, 5).map((batch: any) => (
+                                <div
+                                    key={batch.batchId}
+                                    className="flex-shrink-0 bg-white rounded-lg border border-gray-200 p-3 min-w-[200px] shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                    <div className="flex items-start justify-between mb-2">
+                                        <div className="flex-1">
+                                            <p className="text-xs text-gray-500 mb-1">
+                                                {new Date(batch.appliedAt).toLocaleString("pt-BR", {
+                                                    day: "2-digit",
+                                                    month: "2-digit",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                })}
+                                            </p>
+                                            <p className="text-xs font-semibold text-gray-700">
+                                                {batch.applications.length} aplicação(ões)
+                                            </p>
+                                            {batch.propertyName && (
+                                                <p className="text-[10px] text-gray-400 mt-1">
+                                                    {batch.propertyName}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="w-full text-xs h-7"
+                                        onClick={() => handleRegenerateReceituario(batch)}
+                                    >
+                                        <FileText className="h-3 w-3 mr-1" />
+                                        Ver Receituário
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="flex-1 flex overflow-hidden">
                 {/* LEFT: Product catalog */}
