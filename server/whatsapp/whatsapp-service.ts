@@ -52,15 +52,17 @@ export class WhatsAppService {
       // 2. Interpretar pergunta com Gemini AI
       const intent = await this.gemini.interpretQuestion(message, user.id);
 
+      // Se for apenas papo furado ou dúvida geral, responde direto
+      if (intent.type === "conversation" && intent.response) {
+        await this.sendMessage(phone, intent.response);
+        return;
+      }
+
       if (intent.type === "unknown" || intent.confidence < 0.5) {
         await this.sendMessage(
           phone,
-          "🤔 Não entendi sua pergunta. Tente perguntar sobre:\n\n" +
-          "• Estoque de produtos\n" +
-          "• Despesas\n" +
-          "• Faturas\n" +
-          "• Aplicações realizadas\n" +
-          "• Propriedades e talhões"
+          "🤔 Não entendi sua pergunta. Pode reformular?\n\n" +
+          "Eu sei consultar: Estoque, Despesas, Faturas e Aplicações."
         );
         return;
       }

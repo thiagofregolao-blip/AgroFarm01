@@ -9,11 +9,12 @@ interface GeminiConfig {
 }
 
 interface QueryIntent {
-  type: "query" | "action" | "unknown";
-  entity: "stock" | "expenses" | "invoices" | "applications" | "properties" | "plots" | "unknown";
+  type: "query" | "action" | "conversation" | "unknown";
+  entity: "stock" | "expenses" | "invoices" | "applications" | "properties" | "plots" | "general" | "unknown";
   filters?: Record<string, any>;
   question?: string;
   confidence: number;
+  response?: string; // Resposta direta da IA para conversas gerais
 }
 
 export class GeminiClient {
@@ -33,7 +34,7 @@ export class GeminiClient {
   async interpretQuestion(question: string, userId: string, context?: any): Promise<QueryIntent> {
     try {
       const prompt = this.buildPrompt(question, userId, context);
-      
+
       const response = await fetch(
         `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
         {
@@ -67,35 +68,43 @@ export class GeminiClient {
   }
 
   private buildPrompt(question: string, userId: string, context?: any): string {
-    return `Você é um assistente especializado em interpretar perguntas sobre um sistema de gestão agrícola.
+    return `Você é o AgroBot, um assistente inteligente do sistema AgroFarm.
+Sua missão é ajudar o agricultor a gerenciar sua fazenda, mas você também deve ser educado, prestativo e capaz de manter uma conversa natural.
 
 CONTEXTO DO SISTEMA:
 - O sistema gerencia propriedades rurais, talhões, estoque de produtos, despesas, faturas e aplicações
-- O usuário tem ID: ${userId}
-- Entidades disponíveis: stock (estoque), expenses (despesas), invoices (faturas), applications (aplicações), properties (propriedades), plots (talhões)
+- Entidades de dados: stock (estoque), expenses (despesas), invoices (faturas), applications (aplicações), properties (propriedades), plots (talhões)
 
 PERGUNTA DO USUÁRIO:
 "${question}"
 
 INSTRUÇÕES:
-1. Identifique a intenção: "query" (consulta), "action" (ação) ou "unknown"
-2. Identifique a entidade principal mencionada
-3. Extraia filtros relevantes (datas, nomes, valores, etc.)
+1. Analise se o usuário quer consultar dados do sistema OU se é apenas uma conversa/pergunta geral.
+2. Se for CONSULTA DE DADOS (ex: "quanto tenho de estoque?", "minhas faturas", "aplicações de ontem"):
+   - Defina "type": "query"
+   - Defina "entity" com a tabela correta
+   - Extraia "filters"
+
+3. Se for CONVERSA GERAL, SAUDAÇÃO OU DÚVIDA AGRÍCOLA (ex: "bom dia", "quem é você?", "preço do glifosato", "como combater ferrugem"):
+   - Defina "type": "conversation"
+   - Defina "entity": "general"
+   - Gere uma resposta útil, curta e amigável no campo "response". Se for dúvida técnica, dê uma resposta resumida.
+
 4. Retorne APENAS um JSON válido no formato:
 {
-  "type": "query|action|unknown",
-  "entity": "stock|expenses|invoices|applications|properties|plots|unknown",
+  "type": "query|action|conversation|unknown",
+  "entity": "stock|expenses|invoices|applications|properties|plots|general|unknown",
   "filters": { "key": "value" },
-  "confidence": 0.0-1.0
+  "confidence": 0.0-1.0,
+  "response": "Texto da resposta (apenas se type=conversation)"
 }
 
 EXEMPLOS:
 - "qual meu estoque?" → {"type":"query","entity":"stock","filters":{},"confidence":0.9}
-- "quanto gastei este mês?" → {"type":"query","entity":"expenses","filters":{"period":"month"},"confidence":0.9}
-- "mostre minhas faturas" → {"type":"query","entity":"invoices","filters":{},"confidence":0.9}
-- "quais produtos tenho em estoque?" → {"type":"query","entity":"stock","filters":{},"confidence":0.9}
+- "bom dia" → {"type":"conversation","entity":"general","response":"Bom dia! Como posso ajudar na fazenda hoje?","confidence":1.0}
+- "quanto custa o glifosato?" → {"type":"conversation","entity":"general","response":"O preço do glifosato varia por região e marca, mas a média atual está entre R$ 40 a R$ 60 o litro. Quer que eu verifique se você tem algum em estoque ou notas fiscais antigas?","confidence":0.9}
 
-RESPOSTA (apenas JSON, sem markdown, sem explicações):`;
+RESPOSTA (apenas JSON, sem markdown):`;
   }
 
   private parseResponse(text: string, originalQuestion: string): QueryIntent {
@@ -103,13 +112,14 @@ RESPOSTA (apenas JSON, sem markdown, sem explicações):`;
       // Remove markdown code blocks se existirem
       const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       const parsed = JSON.parse(cleaned);
-      
+
       return {
         type: parsed.type || "unknown",
         entity: parsed.entity || "unknown",
         filters: parsed.filters || {},
         question: originalQuestion,
         confidence: parsed.confidence || 0.5,
+        response: parsed.response,
       };
     } catch (error) {
       console.error("[Gemini] Erro ao parsear resposta:", error);
@@ -120,7 +130,7 @@ RESPOSTA (apenas JSON, sem markdown, sem explicações):`;
   private getDefaultIntent(question: string): QueryIntent {
     // Fallback: tenta identificar por palavras-chave
     const lower = question.toLowerCase();
-    
+
     if (lower.includes("estoque") || lower.includes("stock")) {
       return { type: "query", entity: "stock", filters: {}, confidence: 0.6, question };
     }
@@ -133,8 +143,16 @@ RESPOSTA (apenas JSON, sem markdown, sem explicações):`;
     if (lower.includes("aplicação") || lower.includes("aplicado")) {
       return { type: "query", entity: "applications", filters: {}, confidence: 0.6, question };
     }
-    
-    return { type: "unknown", entity: "unknown", filters: {}, confidence: 0.3, question };
+
+    // Fallback genérico melhorado
+    return {
+      type: "conversation",
+      entity: "general",
+      filters: {},
+      confidence: 0.5,
+      question,
+      response: "Desculpe, tive um problema técnico momentâneo. Pode repetir?"
+    };
   }
 
   /**
@@ -179,7 +197,7 @@ RESPOSTA (apenas JSON, sem markdown, sem explicações):`;
 
     const total = data.reduce((sum: number, item: any) => sum + parseFloat(item.amount || 0), 0);
     let message = `💰 *Suas Despesas:*\n\nTotal: R$ ${total.toFixed(2)}\n\n`;
-    
+
     data.slice(0, 5).forEach((item: any) => {
       const date = item.expenseDate ? new Date(item.expenseDate).toLocaleDateString("pt-BR") : "N/A";
       message += `• ${item.category || "Outro"}: R$ ${parseFloat(item.amount || 0).toFixed(2)} (${date})\n`;
