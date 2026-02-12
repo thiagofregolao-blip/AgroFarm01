@@ -412,7 +412,7 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
     }
 
     const base64Image = buffer.toString("base64");
-    const model = "gemini-1.5-flash"; // Cost-effective and fast for vision
+    const model = "gemini-2.0-flash"; // Align with what works in GeminiClient
 
     const prompt = `
     VOCÊ É UM EXTRATOR DE DADOS DE NOTAS FISCAIS AGRÍCOLAS.
