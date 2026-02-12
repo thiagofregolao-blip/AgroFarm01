@@ -836,44 +836,40 @@ export default function PdvTerminal() {
                 })}
             </div>
 
-            {/* Histórico de Saídas */}
-            {withdrawalsHistory && withdrawalsHistory.length > 0 && (
-                <div className="px-4 py-3 bg-blue-50/50 border-b border-blue-100 shrink-0">
-                    <div className="max-w-7xl mx-auto">
-                        <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-600" />
-                            Saídas Recentes
-                        </h3>
-                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                            {withdrawalsHistory.slice(0, 5).map((batch: any) => (
-                                <div
-                                    key={batch.batchId}
-                                    className="flex-shrink-0 bg-white rounded-lg border border-gray-200 p-3 min-w-[200px] shadow-sm hover:shadow-md transition-shadow"
-                                >
-                                    <div className="flex items-start justify-between mb-2">
-                                        <div className="flex-1">
-                                            <p className="text-xs text-gray-500 mb-1">
+
+
+            <div className="flex-1 flex overflow-hidden">
+                {/* LEFT SIDEBAR: Recent Withdrawals */}
+                {withdrawalsHistory && withdrawalsHistory.length > 0 && (
+                    <div className="hidden md:flex flex-col w-72 bg-slate-50 border-r border-gray-200 shrink-0 shadow-lg z-10">
+                        <div className="p-4 bg-white border-b border-gray-100">
+                            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-slate-500" />
+                                Saídas Recentes
+                            </h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                            {withdrawalsHistory.slice(0, 10).map((batch: any) => (
+                                <div key={batch.batchId} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-all group">
+                                    <div className="mb-3">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-[10px] text-gray-400 font-medium bg-gray-50 px-1.5 py-0.5 rounded">
                                                 {new Date(batch.appliedAt).toLocaleString("pt-BR", {
-                                                    day: "2-digit",
-                                                    month: "2-digit",
-                                                    hour: "2-digit",
-                                                    minute: "2-digit",
+                                                    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
                                                 })}
-                                            </p>
-                                            <p className="text-xs font-semibold text-gray-700">
-                                                {batch.applications.length} aplicação(ões)
-                                            </p>
-                                            {batch.propertyName && (
-                                                <p className="text-[10px] text-gray-400 mt-1">
-                                                    {batch.propertyName}
-                                                </p>
-                                            )}
+                                            </span>
                                         </div>
+                                        <p className="text-xs font-bold text-gray-800 line-clamp-1" title={batch.propertyName}>
+                                            {batch.propertyName || "Propriedade sem nome"}
+                                        </p>
+                                        <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
+                                            {batch.applications.length} itens aplicados
+                                        </p>
                                     </div>
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="w-full text-xs h-7"
+                                        className="w-full text-xs h-7 border-dashed border-gray-300 text-gray-500 hover:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 transition-colors"
                                         onClick={() => handleRegenerateReceituario(batch)}
                                     >
                                         <FileText className="h-3 w-3 mr-1" />
@@ -883,11 +879,9 @@ export default function PdvTerminal() {
                             ))}
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            <div className="flex-1 flex overflow-hidden">
-                {/* LEFT: Product catalog */}
+                {/* MIDDLE: Product catalog */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                     {/* Search & filters */}
                     <div className="p-3 space-y-2.5 bg-white border-b border-gray-100 shrink-0 shadow-sm">
