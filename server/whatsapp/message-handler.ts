@@ -90,7 +90,18 @@ export class MessageHandler {
       );
     }
 
+
+
     const expenses = await query.orderBy(desc(farmExpenses.expenseDate)).limit(20);
+
+    // Fallback Inteligente:
+    // Se não achou despesas, mas tem filtro de produto, pode ser que o usuário
+    // esteja perguntando "quanto paguei no X" (que é uma fatura/invoice),
+    // mas o Gemini classificou como "expense".
+    if (expenses.length === 0 && filters?.product) {
+      console.log(`[MessageHandler] Sem despesas para '${filters.product}'. Tentando buscar em Invoices...`);
+      return this.getInvoices(userId, filters);
+    }
 
     return expenses;
   }
