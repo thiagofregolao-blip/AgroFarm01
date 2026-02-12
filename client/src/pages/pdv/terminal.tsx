@@ -748,12 +748,12 @@ export default function PdvTerminal() {
 
                 {/* Bottom bar */}
                 <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
-                    <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-4">
-                        <Button variant="outline" className="flex-1 py-6 text-base border-gray-200 hover:bg-gray-50 text-gray-600 font-medium rounded-xl order-3 sm:order-1" onClick={reset}>
+                    <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-4 mb-safe">
+                        <Button variant="outline" className="flex-1 py-4 text-sm border-gray-200 hover:bg-gray-50 text-gray-600 font-medium rounded-xl order-3 sm:order-1" onClick={reset}>
                             Cancelar
                         </Button>
                         <Button
-                            className="flex-1 py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98] order-2 sm:order-2"
+                            className="flex-1 py-4 text-sm bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98] order-2 sm:order-2"
                             onClick={() => handleSubmit(false)}
                             disabled={submitting}
                         >
@@ -761,7 +761,7 @@ export default function PdvTerminal() {
                             Confirmar Saída
                         </Button>
                         <Button
-                            className="flex-1 py-6 text-base bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] order-1 sm:order-3"
+                            className="flex-1 py-4 text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] order-1 sm:order-3"
                             onClick={() => handleSubmit(true)}
                             disabled={submitting}
                         >
