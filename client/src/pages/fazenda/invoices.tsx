@@ -131,7 +131,7 @@ export default function FarmInvoices() {
                 <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                            <DialogTitle>Importar Fatura PDF</DialogTitle>
+                            <DialogTitle>Importar Fatura (PDF ou Foto)</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-5 py-4">
                             <div>
@@ -159,7 +159,7 @@ export default function FarmInvoices() {
                             </div>
                             <div>
                                 <label className="text-sm font-medium text-gray-700 mb-2 block">Arquivo PDF</label>
-                                <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleUpload} className="hidden" />
+                                <input ref={fileInputRef} type="file" accept=".pdf, .jpg, .jpeg, .png, .webp" onChange={handleUpload} className="hidden" />
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
@@ -174,8 +174,8 @@ export default function FarmInvoices() {
                                     ) : (
                                         <div className="flex flex-col items-center gap-2">
                                             <Upload className="h-8 w-8 text-gray-400" />
-                                            <span className="text-sm text-gray-500">Clique para selecionar o arquivo PDF</span>
-                                            <span className="text-xs text-gray-400">Formatos: PDF de nota fiscal</span>
+                                            <span className="text-sm text-gray-500">Clique para selecionar o arquivo (PDF ou Foto)</span>
+                                            <span className="text-xs text-gray-400">Formatos: PDF, JPG, PNG</span>
                                         </div>
                                     )}
                                 </button>

@@ -401,3 +401,116 @@ function extractPackageSize(productName: string, unit: string): number {
 
     return 1;
 }
+
+/**
+ * Parse a fake/photo invoice using Gemini Vision (Multimodal)
+ */
+export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): Promise<ParsedInvoice> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error("GEMINI_API_KEY not configured");
+    }
+
+    const base64Image = buffer.toString("base64");
+    const model = "gemini-1.5-flash"; // Cost-effective and fast for vision
+
+    const prompt = `
+    VOCÊ É UM EXTRATOR DE DADOS DE NOTAS FISCAIS AGRÍCOLAS.
+    Analise esta imagem de nota fiscal/fatura e extraia os dados estruturados.
+    
+    RETORNE APENAS UM JSON VÁLIDO. SEM MARKDOWN (\`\`\`). SEM COMENTÁRIOS.
+    
+    ESTRUTURA JSON DESEJADA:
+    {
+      "invoiceNumber": "string (número da nota)",
+      "supplier": "string (nome do fornecedor)",
+      "clientName": "string (nome do cliente/comprador)",
+      "clientDocument": "string (CPF/CNPJ/RUC do cliente)",
+      "issueDate": "YYYY-MM-DD (data de emissão)",
+      "currency": "USD" ou "BRL" ou "PYG",
+      "totalAmount": number (valor total da nota, numérico),
+      "items": [
+        {
+          "productCode": "string (código do produto se houver)",
+          "productName": "string (descrição do produto)",
+          "unit": "LT" | "KG" | "UNI" | "SC" (unidade padronizada),
+          "quantity": number (quantidade),
+          "unitPrice": number (preço unitário),
+          "totalPrice": number (preço total do item)
+        }
+      ]
+    }
+
+    REGRAS DE EXTRAÇÃO:
+    1. Se houver tabela de produtos, extraia cada item.
+    2. Normalize unidades: "LITRO"->"LT", "L"->"LT", "KILO"->"KG", "UNIDADE"->"UNI", "SACO"->"SC".
+    3. Datas no formato ISO (YYYY-MM-DD).
+    4. Valores numéricos: use ponto para decimal (ex: 1500.50), sem separador de milhar.
+    5. Se a imagem não for legível ou não for nota fiscal, retorne JSON com campos vazios ou nulos, mas tente extrair o máximo possível.
+    `;
+
+    try {
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [
+                        {
+                            parts: [
+                                { text: prompt },
+                                {
+                                    inline_data: {
+                                        mime_type: mimeType,
+                                        data: base64Image
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API Error: ${response.status} - ${errText}`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+
+        // Clean markdown code blocks if present
+        const jsonStr = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const parsed = JSON.parse(jsonStr);
+
+        // Sanitize and validate fields
+        return {
+            invoiceNumber: parsed.invoiceNumber || "",
+            supplier: parsed.supplier || "Fornecedor Desconhecido",
+            clientName: parsed.clientName || "",
+            clientDocument: parsed.clientDocument || "",
+            issueDate: parsed.issueDate ? new Date(parsed.issueDate) : new Date(),
+            currency: parsed.currency || "USD",
+            subtotal: Number(parsed.totalAmount) || 0,
+            totalAmount: Number(parsed.totalAmount) || 0,
+            items: Array.isArray(parsed.items) ? parsed.items.map((item: any) => ({
+                productCode: item.productCode || "",
+                productName: item.productName || "Produto sem nome",
+                unit: item.unit || "UNI",
+                quantity: Number(item.quantity) || 0,
+                unitPrice: Number(item.unitPrice) || 0,
+                discount: 0,
+                totalPrice: Number(item.totalPrice) || 0,
+                batch: item.batch,
+                expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined
+            })) : [],
+            rawText: "Extracted via Gemini Vision"
+        };
+
+    } catch (error) {
+        console.error("Error parsing invoice image:", error);
+        throw error;
+    }
+}

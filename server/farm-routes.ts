@@ -7,7 +7,7 @@ import { farmStorage } from "./farm-storage";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import multer from "multer";
-import { parseFarmInvoicePDF } from "./parse-farm-invoice";
+import { parseFarmInvoicePDF, parseFarmInvoiceImage } from "./parse-farm-invoice";
 
 const scryptAsync = promisify(scrypt);
 const upload = multer({ storage: multer.memoryStorage() });
@@ -380,7 +380,17 @@ export function registerFarmRoutes(app: Express) {
                 return res.status(400).json({ error: "PDF file required" });
             }
 
-            const parsed = await parseFarmInvoicePDF(req.file.buffer);
+            let parsed;
+            const mimeType = req.file.mimetype;
+
+            if (mimeType === "application/pdf") {
+                parsed = await parseFarmInvoicePDF(req.file.buffer);
+            } else if (mimeType.startsWith("image/")) {
+                parsed = await parseFarmInvoiceImage(req.file.buffer, mimeType);
+            } else {
+                return res.status(400).json({ error: "Unsupported file type. Use PDF or Image (JPG, PNG)." });
+            }
+
 
             // Create invoice record
             const seasonId = req.body?.seasonId || null;
