@@ -45,6 +45,7 @@ export class ZApiClient {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Client-Token": this.token,
         },
         body: JSON.stringify({
           phone: params.phone,

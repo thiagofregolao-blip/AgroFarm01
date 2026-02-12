@@ -38,7 +38,7 @@ export class WhatsAppService {
     try {
       // 1. Identificar usuário pelo número de WhatsApp
       const user = await this.findUserByPhone(phone);
-      
+
       if (!user) {
         await this.sendMessage(
           phone,
@@ -112,11 +112,11 @@ export class WhatsAppService {
   private async findUserByPhone(phone: string): Promise<{ id: string; name: string } | null> {
     try {
       const formattedPhone = ZApi.formatPhoneNumber(phone);
-      
+
       // Buscar na tabela users pelo campo whatsapp_number
       // Usando SQL direto pois o campo pode não estar no schema Drizzle ainda
       const isNeon = process.env.DATABASE_URL?.includes('neon.tech');
-      
+
       let userResult: any;
       if (isNeon) {
         // Neon usa pool.query que retorna { rows: [...] }
@@ -133,6 +133,8 @@ export class WhatsAppService {
       }
 
       // Buscar na tabela farm_farmers pelo campo whatsapp_number ou phone
+      // Removido temporariamente pois a tabela farm_farmers ainda não existe na produção
+      /*
       let farmerResult: any;
       if (isNeon) {
         farmerResult = await pool.query(`SELECT id, name FROM farm_farmers WHERE whatsapp_number = $1 OR phone = $1 LIMIT 1`, [formattedPhone]);
@@ -145,6 +147,7 @@ export class WhatsAppService {
           return { id: farmerResult[0].id, name: farmerResult[0].name || "Agricultor" };
         }
       }
+      */
 
       return null;
     } catch (error) {
