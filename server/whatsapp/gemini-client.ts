@@ -24,7 +24,7 @@ export class GeminiClient {
 
   constructor(config: GeminiConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model || "gemini-1.5-flash";
+    this.model = config.model || "gemini-1.5-flash-001";
     this.baseUrl = "https://generativelanguage.googleapis.com/v1beta";
   }
 
