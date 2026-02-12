@@ -180,16 +180,20 @@ RESPOSTA (apenas JSON, sem markdown):`;
 
   private formatStockResponse(data: any): string {
     if (!data || data.length === 0) {
-      return "📦 Você não possui produtos em estoque no momento.";
+      return "📦 *Estoque AgroFarm*\n\nNão encontrei produtos em estoque com esse critério.";
     }
 
-    let message = "📦 *Seu Estoque:*\n\n";
-    data.slice(0, 10).forEach((item: any) => {
-      message += `• ${item.productName || item.name}: ${parseFloat(item.quantity || 0).toFixed(2)} ${item.unit || "un"}\n`;
+    let message = "📦 *Seu Estoque Atual:*\n\n";
+
+    data.slice(0, 15).forEach((item: any) => {
+      const qty = parseFloat(item.quantity || 0);
+      const unit = item.unit || "un";
+      // Bolding the name and formatting number separately
+      message += `🔹 *${item.productName || item.name}*\n     ${qty.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ${unit}\n`;
     });
 
-    if (data.length > 10) {
-      message += `\n... e mais ${data.length - 10} produtos`;
+    if (data.length > 15) {
+      message += `\n... e mais ${data.length - 15} produtos.`;
     }
 
     return message;
@@ -197,15 +201,22 @@ RESPOSTA (apenas JSON, sem markdown):`;
 
   private formatExpensesResponse(data: any): string {
     if (!data || data.length === 0) {
-      return "💰 Você não possui despesas registradas.";
+      return "💰 *Despesas AgroFarm*\n\nNenhuma despesa encontrada para este período/filtro.";
     }
 
     const total = data.reduce((sum: number, item: any) => sum + parseFloat(item.amount || 0), 0);
-    let message = `💰 *Suas Despesas:*\n\nTotal: R$ ${total.toFixed(2)}\n\n`;
+    let message = `💰 *Resumo de Despesas:*\n\n`;
+
+    message += `📊 *Total:* R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+    message += `──────────────────\n`;
 
     data.slice(0, 5).forEach((item: any) => {
       const date = item.expenseDate ? new Date(item.expenseDate).toLocaleDateString("pt-BR") : "N/A";
-      message += `• ${item.category || "Outro"}: R$ ${parseFloat(item.amount || 0).toFixed(2)} (${date})\n`;
+      const amount = parseFloat(item.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+      message += `💸 *${item.category || "Despesa"}* - ${date}\n`;
+      message += `     ${item.description || "Sem descrição"}\n`;
+      message += `     *R$ ${amount}*\n\n`;
     });
 
     return message;
@@ -213,14 +224,31 @@ RESPOSTA (apenas JSON, sem markdown):`;
 
   private formatInvoicesResponse(data: any): string {
     if (!data || data.length === 0) {
-      return "📄 Você não possui faturas registradas.";
+      return "📄 *Faturas AgroFarm*\n\nNenhuma fatura encontrada.";
     }
 
-    let message = "📄 *Suas Faturas:*\n\n";
+    let message = "📄 *Histórico de Compras:*\n\n";
+
     data.slice(0, 5).forEach((item: any) => {
       const date = item.issueDate ? new Date(item.issueDate).toLocaleDateString("pt-BR") : "N/A";
-      const status = item.status === "confirmed" ? "✅ Confirmada" : "⏳ Pendente";
-      message += `• ${item.invoiceNumber || "N/A"}: R$ ${parseFloat(item.totalAmount || 0).toFixed(2)} (${date}) - ${status}\n`;
+      const statusIcon = item.status === "confirmed" ? "✅" : "⏳";
+
+      if (item.productName) {
+        // Formato para busca de preço de produto específico (joined)
+        const unitPrice = parseFloat(item.unitPrice || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        message += `🛒 *${item.productName}*\n`;
+        message += `     Data: ${date}\n`;
+        message += `     Qtd: ${item.quantity} ${item.unit}\n`;
+        message += `     Preço Unit.: *R$ ${unitPrice}*\n`;
+        message += `     Fornecedor: ${item.supplier || "N/A"}\n\n`;
+      } else {
+        // Formato genérico de fatura
+        const total = parseFloat(item.totalAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        message += `${statusIcon} *Fatura ${item.invoiceNumber || "S/N"}*\n`;
+        message += `     Data: ${date}\n`;
+        message += `     Total: *R$ ${total}*\n`;
+        message += `     Fornecedor: ${item.supplier || "N/A"}\n\n`;
+      }
     });
 
     return message;

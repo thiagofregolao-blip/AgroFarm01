@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { farmStock, farmExpenses, farmInvoices, farmInvoiceItems, farmApplications, farmProperties, farmPlots, farmProductsCatalog } from "../../shared/schema";
-import { eq, and, gte, lte, desc, ilike, or } from "drizzle-orm";
+import { eq, and, gte, lte, desc, ilike, or, sql } from "drizzle-orm";
 import type { QueryIntent } from "./gemini-client";
 
 export class MessageHandler {
@@ -39,7 +39,13 @@ export class MessageHandler {
       .where(eq(farmStock.farmerId, userId));
 
     if (filters?.product) {
-      query = query.where(and(eq(farmStock.farmerId, userId), ilike(farmProductsCatalog.name, `%${filters.product}%`)));
+      const cleanTerm = filters.product.replace(/[^a-zA-Z0-9]/g, "");
+      query = query.where(
+        and(
+          eq(farmStock.farmerId, userId),
+          sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
+        )
+      );
     }
 
     const stock = await query.orderBy(desc(farmStock.updatedAt));
@@ -71,7 +77,17 @@ export class MessageHandler {
 
     // Fallback: se pediu "gastos com X" mas não é categoria, tenta descrição
     if (filters?.product && !filters?.category) {
-      query = query.where(and(eq(farmExpenses.farmerId, userId), or(ilike(farmExpenses.description, `%${filters.product}%`), ilike(farmExpenses.category, `%${filters.product}%`))));
+      const cleanTerm = filters.product.replace(/[^a-zA-Z0-9]/g, "");
+      query = query.where(
+        and(
+          eq(farmExpenses.farmerId, userId),
+          or(
+            ilike(farmExpenses.description, `%${filters.product}%`),
+            ilike(farmExpenses.category, `%${filters.product}%`),
+            sql`regexp_replace(${farmExpenses.description}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
+          )
+        )
+      );
     }
 
     const expenses = await query.orderBy(desc(farmExpenses.expenseDate)).limit(20);
@@ -98,7 +114,7 @@ export class MessageHandler {
         .where(
           and(
             eq(farmInvoices.farmerId, userId),
-            ilike(farmInvoiceItems.productName, `%${filters.product}%`)
+            sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`
           )
         )
         .orderBy(desc(farmInvoices.issueDate))
@@ -135,7 +151,13 @@ export class MessageHandler {
       .where(eq(farmApplications.farmerId, userId));
 
     if (filters?.product) {
-      query = query.where(and(eq(farmApplications.farmerId, userId), ilike(farmProductsCatalog.name, `%${filters.product}%`)));
+      const cleanTerm = filters.product.replace(/[^a-zA-Z0-9]/g, "");
+      query = query.where(
+        and(
+          eq(farmApplications.farmerId, userId),
+          sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
+        )
+      );
     }
 
     const applications = await query.orderBy(desc(farmApplications.appliedAt)).limit(20);
