@@ -495,17 +495,38 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
             currency: parsed.currency || "USD",
             subtotal: Number(parsed.totalAmount) || 0,
             totalAmount: Number(parsed.totalAmount) || 0,
-            items: Array.isArray(parsed.items) ? parsed.items.map((item: any) => ({
-                productCode: item.productCode || "",
-                productName: item.productName || "Produto sem nome",
-                unit: item.unit || "UNI",
-                quantity: Number(item.quantity) || 0,
-                unitPrice: Number(item.unitPrice) || 0,
-                discount: 0,
-                totalPrice: Number(item.totalPrice) || 0,
-                batch: item.batch,
-                expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined
-            })) : [],
+            items: Array.isArray(parsed.items) ? parsed.items.map((item: any) => {
+                const quantity = Number(item.quantity) || 0;
+                const unitPrice = Number(item.unitPrice) || 0;
+                const totalPrice = Number(item.totalPrice) || 0;
+                const productName = item.productName || "Produto sem nome";
+                const unit = normalizeUnit(item.unit || "UNI");
+
+                // Attempt to extract package size to normalize quantity (e.g. 5 cans of 20L -> 100L)
+                const pkgSize = extractPackageSize(productName, unit);
+                let realQuantity = quantity;
+                let realUnitPrice = unitPrice;
+
+                if (pkgSize > 1) {
+                    // If package size found, assume 'quantity' is number of packages
+                    // So we convert to total volume: 5 * 20 = 100
+                    realQuantity = quantity * pkgSize;
+                    // And unit price becomes price per liter/kg: 110 / 20 = 5.50
+                    realUnitPrice = unitPrice / pkgSize;
+                }
+
+                return {
+                    productCode: item.productCode || "",
+                    productName: productName,
+                    unit: unit,
+                    quantity: realQuantity,
+                    unitPrice: realUnitPrice,
+                    discount: 0,
+                    totalPrice: totalPrice,
+                    batch: item.batch,
+                    expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined
+                };
+            }) : [],
             rawText: "Extracted via Gemini Vision"
         };
 
