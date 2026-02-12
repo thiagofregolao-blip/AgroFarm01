@@ -54,7 +54,8 @@ export class MessageHandler {
             ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
             ilike(farmProductsCatalog.category, `%${filters.product}%`),
             // Busca normalizada para ignorar símbolos (ex: "2,4-D" vs "24d")
-            sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
+            sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`,
+            sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
           )
         )
       );
@@ -180,6 +181,7 @@ export class MessageHandler {
               ilike(farmProductsCatalog.category, `%${filters.product}%`),
               // Busca normalizada por nome do produto
               sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`,
+              sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`,
               sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${filters.product.replace(/[^a-zA-Z0-9]/g, "")}%`}`,
               // Busca normalizada por fornecedor (remove caracteres especiais) para encontrar "C.Vale" com "cvale"
               ilike(farmInvoices.supplier, `%${filters.product}%`),
@@ -238,7 +240,8 @@ export class MessageHandler {
             ilike(farmProductsCatalog.name, `%${filters.product}%`),
             ilike(farmProductsCatalog.activeIngredient, `%${filters.product}%`),
             ilike(farmProductsCatalog.category, `%${filters.product}%`),
-            sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
+            sql`regexp_replace(${farmProductsCatalog.name}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`,
+            sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanTerm}%`}`
           )
         )
       );

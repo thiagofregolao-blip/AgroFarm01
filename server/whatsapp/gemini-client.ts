@@ -153,7 +153,8 @@ INSTRUÇÕES:
      - "category": categoria de despesa (diesel, mão de obra)
      - ATENÇÃO: Perguntas sobre "preço", "quanto paguei", "valor", "custo", "dívida", "quanto devo" ou "fatura" DEVEM ser "invoices" ou "expenses", NUNCA "stock".
      - CORREÇÃO: Corrija erros de digitação comuns em nomes de produtos (ex: "sphare" -> "Sphere", "gliphosato" -> "Glifosato").
-     - CONTEXTO: Se o usuário usar pronomes como "nele", "disso", "do último" ou referir-se a um produto da pergunta anterior sem nomeá-lo, USE O FILTRO "product" DO CONTEXTO DA CONVERSA ANTERIOR. Ex: Se contexto tem product="24d" e pergunta é "quanto paguei nele?", gere filters={"product": "24d"}.
+     - CONTEXTO: Se o usuário usar pronomes como "nele", "disso", "do último" ou referir-se a um produto da pergunta anterior sem nomeá-lo, USE O FILTRO "product" DO CONTEXTO DA CONVERSA ANTERIOR.
+     - IMPORTANTE: Se o usuário CITAR um novo produto (ex: "e o glifosato?"), IGNORE o contexto e use o NOME CITADO.
 3. Se for CONVERSA GERAL, SAUDAÇÃO OU DÚVIDA AGRÍCOLA (ex: "bom dia", "quem é você?", "como combater ferrugem"):
    - Defina "type": "conversation"
    - Defina "entity": "general"
@@ -267,6 +268,7 @@ INSTRUÇÕES:
 7. Se a lista for grande, resuma ou destaque os principais itens.
 8. Mantenha a resposta curta e direta para leitura no WhatsApp.
 9. PREÇOS E MOEDA: Respeite a moeda indicada nos dados (ex: "USD", "BRL"). Se o valor for "2.75", é "2,75", NÃO "2.750,00".
+10. FIDELIDADE: Se os dados não corresponderem ao produto perguntado, diga que não encontrou. NÃO recomende outros produtos a menos que o usuário peça explicitamente.
 
 RESPOSTA (apenas o texto final):`;
 
