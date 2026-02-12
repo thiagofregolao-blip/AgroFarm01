@@ -1144,14 +1144,88 @@ export default function PdvTerminal() {
                 </div>
             </div>
 
+
             {/* MOBILE bottom bar */}
             {cart.length > 0 && (
                 <div className="md:hidden fixed bottom-0 left-0 right-0 p-3 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg z-50">
-                    <Button className="w-full py-5 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-md" onClick={handleGoToPlot}>
-                        <ShoppingCart className="mr-2 h-5 w-5" />
-                        {cart.length} produto(s) → Talhões
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                    </Button>
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button className="w-full py-5 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-md">
+                                <ShoppingCart className="mr-2 h-5 w-5" />
+                                Ver Carrinho ({cart.length})
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl p-0 flex flex-col">
+                            <SheetHeader className="p-5 border-b border-gray-100">
+                                <SheetTitle className="flex items-center gap-2 text-emerald-800">
+                                    <ShoppingCart className="h-5 w-5" />
+                                    Seu Carrinho
+                                </SheetTitle>
+                            </SheetHeader>
+
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                {cart.map((item) => {
+                                    const stk = getStockForProduct(item.product.id);
+                                    const overStock = item.quantity > stk;
+                                    return (
+                                        <div key={item.product.id} className={`rounded-xl border p-3 ${overStock ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-gray-50/50"}`}>
+                                            <div className="flex items-start gap-3 mb-3">
+                                                {item.product.imageUrl ? (
+                                                    <img src={item.product.imageUrl} className="w-12 h-12 rounded-lg object-contain bg-white border border-gray-100 shrink-0" alt="" />
+                                                ) : (
+                                                    <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center shrink-0`}>
+                                                        <span className="text-xl">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-sm leading-tight text-gray-800 mb-1">{item.product.name}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`text-[10px] font-medium ${stk <= 0 ? "text-red-500" : "text-emerald-500"}`}>
+                                                            Estoque: {stk.toFixed(0)} {item.product.unit}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => removeFromCart(item.product.id)} className="text-gray-300 hover:text-red-500 p-1">
+                                                    <Trash2 className="h-5 w-5" />
+                                                </button>
+                                            </div>
+
+                                            {/* Quantity controls */}
+                                            <div className="flex items-center gap-2">
+                                                <button className="w-10 h-10 rounded-xl bg-white border border-gray-200 text-emerald-600 flex items-center justify-center shadow-sm active:scale-95 touch-manipulation"
+                                                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                                                    <Minus className="h-5 w-5" />
+                                                </button>
+                                                <Input type="number" step="1" inputMode="numeric" value={item.quantity}
+                                                    onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                                                    className="text-center text-lg font-bold flex-1 h-10 bg-white border-gray-200 text-gray-800 rounded-xl" />
+                                                <button className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200 active:scale-95 touch-manipulation"
+                                                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                                                    <Plus className="h-5 w-5" />
+                                                </button>
+                                                <span className="text-xs text-gray-400 font-medium w-8 text-center">{item.product.unit}</span>
+                                            </div>
+                                            {overStock && <p className="text-xs text-red-500 mt-2 font-medium">⚠️ Quantidade excede estoque!</p>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="p-4 border-t border-gray-100 bg-gray-50/80 pb-8">
+                                <div className="flex justify-between text-sm mb-3 px-1">
+                                    <span className="text-gray-500">{cart.length} produto(s)</span>
+                                    <span className="text-emerald-700 font-bold">{totalCartQty} unidades total</span>
+                                </div>
+                                <Button
+                                    className="w-full py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-lg shadow-emerald-200"
+                                    onClick={handleGoToPlot}
+                                >
+                                    Ir para Talhões
+                                    <ArrowRight className="ml-2 h-5 w-5" />
+                                </Button>
+                            </div>
+                        </SheetContent>
+                    </Sheet>
                 </div>
             )}
         </div>
