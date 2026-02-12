@@ -40,7 +40,7 @@ export class ZApiClient {
   async sendTextMessage(params: SendMessageParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
       const url = `${this.baseUrl}/instances/${this.instanceId}/token/${this.token}/send-text`;
-      
+
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -73,7 +73,7 @@ export class ZApiClient {
   async checkInstanceStatus(): Promise<{ connected: boolean; qrcode?: string }> {
     try {
       const url = `${this.baseUrl}/instances/${this.instanceId}/token/${this.token}/status`;
-      
+
       const response = await fetch(url, {
         method: "GET",
       });
@@ -101,12 +101,12 @@ export class ZApiClient {
   static formatPhoneNumber(phone: string): string {
     // Remove todos os caracteres não numéricos
     let cleaned = phone.replace(/\D/g, "");
-    
+
     // Se não começar com código do país, assume Brasil (55)
     if (cleaned.length === 11 && cleaned.startsWith("55") === false) {
       cleaned = "55" + cleaned;
     }
-    
+
     return cleaned;
   }
 
@@ -115,18 +115,21 @@ export class ZApiClient {
    */
   static parseWebhookMessage(body: any): ZApiWebhookMessage | null {
     try {
-      // Z-API envia mensagens recebidas no formato:
-      // { phone: "5511999999999", message: "texto", messageId: "...", timestamp: ... }
-      
-      if (!body.phone || !body.message) {
+      // Z-API envia mensagens recebidas com a mensagem dentro de 'text'
+      // Ex: { phone: "5511...", text: { message: "texto" }, ... }
+
+      const phone = body.phone;
+      const message = body.message || body.text?.message;
+
+      if (!phone || !message) {
         return null;
       }
 
       return {
-        phone: body.phone,
-        message: body.message,
+        phone: phone,
+        message: message,
         messageId: body.messageId,
-        timestamp: body.timestamp,
+        timestamp: body.momment || body.timestamp, // Z-API usa 'momment' (typo) ou timestamp
         instanceId: body.instanceId,
       };
     } catch (error) {
