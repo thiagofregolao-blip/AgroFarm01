@@ -17,6 +17,12 @@ export interface QueryIntent {
   response?: string; // Resposta direta da IA para conversas gerais
 }
 
+interface InteractionContext {
+  question: string;
+  data: any;
+  intent: QueryIntent;
+}
+
 export class GeminiClient {
   private apiKey: string;
   private model: string;
@@ -158,6 +164,56 @@ RESPOSTA (apenas JSON, sem markdown):`;
       question,
       response: "Desculpe, tive um problema técnico momentâneo. Pode repetir?"
     };
+  }
+
+  /**
+   * Gera resposta natural baseada nos dados encontrados
+   */
+  async generateNaturalResponse(data: any, intent: QueryIntent): Promise<string> {
+    try {
+      // Se não houver dados, retorna mensagem padrão da IA ou fallback
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        return "Desculpe, não encontrei nenhuma informação sobre isso no momento. 😕";
+      }
+
+      // Limita dados para não estourar tokens
+      const contextData = Array.isArray(data) ? data.slice(0, 15) : data;
+
+      const prompt = `
+Você é o AgroBot, assistente da AgroFarm.
+O usuário perguntou: "${intent.question}"
+
+Aqui estão os dados encontrados no sistema:
+${JSON.stringify(contextData, null, 2)}
+
+INSTRUÇÕES:
+1. Responda à pergunta do usuário usando esses dados de forma natural e conversacional.
+2. NÃO pareça um robô. Seja prestativo como um agrônomo parceiro.
+3. Use emojis adequados (📦, 💰, 🚜, etc).
+4. Use negrito (*texto*) para destacar valores, nomes de produtos e totais.
+5. Se for uma lista, organize com bullet points ou quebras de linha claras.
+6. Se a lista for grande, resuma ou destaque os principais itens.
+7. Mantenha a resposta curta e direta para leitura no WhatsApp.
+
+RESPOSTA (apenas o texto final):`;
+
+      const response = await fetch(
+        `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        }
+      );
+
+      const responseData = await response.json();
+      return responseData.candidates?.[0]?.content?.parts?.[0]?.text || "Aqui estão os dados que encontrei.";
+
+    } catch (error) {
+      console.error("[Gemini] Erro ao gerar resposta natural:", error);
+      // Fallback para formatadores antigos se a IA falhar
+      return this.formatResponse(data, intent);
+    }
   }
 
   /**

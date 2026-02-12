@@ -78,8 +78,8 @@ export class WhatsAppService {
         return;
       }
 
-      // 4. Formatar resposta com Gemini
-      const response = this.gemini.formatResponse(data, intent);
+      // 4. Formatar resposta com Gemini (Natural Language)
+      const response = await this.gemini.generateNaturalResponse(data, intent);
 
       // 5. Enviar resposta
       await this.sendMessage(phone, response);
