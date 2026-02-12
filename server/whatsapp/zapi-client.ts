@@ -137,8 +137,8 @@ export class ZApiClient {
       const phone = body.phone;
       const message = body.message || body.text?.message;
 
-      // Suporte a áudio
-      const isAudio = body.type === "audio" || body.type === "voice";
+      // Suporte a áudio (Z-API pode enviar type="ReceivedCallback" mas com objeto "audio")
+      const isAudio = body.type === "audio" || body.type === "voice" || !!body.audio || !!body.voice;
       const audioUrl = body.audio?.audioUrl || body.voice?.audioUrl || body.audioUrl;
 
       // Se for áudio, define uma mensagem padrão se vier vazia
