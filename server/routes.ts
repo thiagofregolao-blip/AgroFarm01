@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema } from "@shared/schema";
+import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema, farmFarmers } from "@shared/schema";
 import { visits } from "@shared/schema.crm";
 import { z } from "zod";
 import multer from "multer";
@@ -15,6 +15,12 @@ import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 
 const scryptAsync = promisify(scrypt);
+
+async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Blueprint: javascript_auth_all_persistance - Setup auth routes
@@ -5809,9 +5815,9 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         totalVolume: data.totalVolume,
         salesCount: data.salesCount,
         topProducts: Object.values(data.products)
-          .sort((a, b) => b.sales - a.sales)
+          .sort((a: any, b: any) => b.sales - a.sales)
           .slice(0, 5),
-      })).sort((a, b) => b.totalSales - a.totalSales);
+      })).sort((a: any, b: any) => b.totalSales - a.totalSales);
 
       res.json(result);
     } catch (error) {
@@ -6061,7 +6067,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       // Top 5 clients
       const topClients = Object.entries(clientSales)
         .map(([clientId, value]) => ({ clientId, value }))
-        .sort((a, b) => b.value - a.value)
+        .sort((a: any, b: any) => b.value - a.value)
         .slice(0, 5);
 
       res.json({
@@ -7477,7 +7483,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         .from(userClientLinks)
         .where(inArray(userClientLinks.id, uniqueClientIds));
 
-      const masterClientIds = userClientLinksData.map(link => link.masterClientId);
+      const masterClientIds = userClientLinksData.map((link: any) => link.masterClientId);
       const masterClientsData = await db
         .select()
         .from(masterClients)
@@ -7485,9 +7491,9 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
       // Build response with client details
       const clientTargets = Array.from(clientMap.values()).map(clientData => {
-        const userClientLink = userClientLinksData.find(link => link.id === clientData.clientId);
-        const masterClient = masterClientsData.find(mc => mc.id === userClientLink?.masterClientId);
-        const consultor = teamMembers.find(m => m.id === clientData.userId);
+        const userClientLink = userClientLinksData.find((link: any) => link.id === clientData.clientId);
+        const masterClient = masterClientsData.find((mc: any) => mc.id === userClientLink?.masterClientId);
+        const consultor = teamMembers.find((m: any) => m.id === clientData.userId);
 
         return {
           clientId: clientData.clientId,
@@ -8017,7 +8023,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         .where(eq(pendingOrders.uploadSessionId, sessionId));
 
       // Group orders by product code
-      const ordersByProduct = orders.reduce((acc, order) => {
+      const ordersByProduct = orders.reduce((acc: any, order: any) => {
         if (!acc[order.productCode]) {
           acc[order.productCode] = {
             totalQuantity: 0,
@@ -8040,7 +8046,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       const analysisResults = [];
 
       console.log('=== INVENTORY ITEMS ===');
-      console.log('First 10 inventory codes:', inventory.slice(0, 10).map(i => i.productCode));
+      console.log('First 10 inventory codes:', inventory.slice(0, 10).map((i: any) => i.productCode));
       console.log('Total inventory items:', inventory.length);
 
       for (const item of inventory) {
@@ -8347,7 +8353,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       let data;
       if (farm_id) {
         data = await db.query.fields.findMany({
-          where: (fields, { eq }) => eq(fields.farmId, farm_id as string)
+          where: (fields: any, { eq }: any) => eq(fields.farmId, farm_id as string)
         });
       } else {
         data = await db.query.fields.findMany();
@@ -8366,7 +8372,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         farmId: data.farmId,
         name: data.name,
         ...(data.crop && { crop: data.crop }),
-        ...(data.season && { season: data.season })
+        ...((data as any).season && { season: (data as any).season })
       };
       const [created] = await db.insert(fields).values(fieldData).returning();
       res.status(201).json(created);
@@ -8511,7 +8517,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         .innerJoin(products, eq(sales.productId, products.id))
         .where(eq(sales.clientId, clientId));
 
-      const names = history.map(h => h.productName);
+      const names = history.map((h: any) => h.productName);
       res.json({ purchasedProductNames: names });
     } catch (error) {
       console.error("History Error:", error);
@@ -8532,7 +8538,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       let targetSeasonId = seasonId;
 
       if (!targetSeasonId) {
-        const activeSeason = await CRMStorage.getActiveSeason();
+        const activeSeason = await (CRMStorage as any).getActiveSeason();
         if (activeSeason) targetSeasonId = activeSeason.id;
       }
 
@@ -8705,5 +8711,101 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
   });
 
   const httpServer = createServer(app);
+  // ==================== FARMERS MANAGEMENT (Super Admin) ====================
+
+  app.get("/api/admin/farmers", requireSuperAdmin, async (req, res) => {
+    try {
+      const allFarmers = await db.select().from(farmFarmers).orderBy(farmFarmers.name);
+      // Remove passwords before sending
+      const safeFarmers = allFarmers.map(({ password, ...f }: any) => f);
+      res.json(safeFarmers);
+    } catch (error) {
+      console.error("Failed to fetch farmers:", error);
+      res.status(500).json({ error: "Failed to fetch farmers" });
+    }
+  });
+
+  app.post("/api/admin/farmers", requireSuperAdmin, async (req, res) => {
+    try {
+      // Manual validation since we don't have a specific insert schema exported yet or want to handle password hashing
+      const { username, password, name, email, phone, document } = req.body;
+
+      if (!username || !password || !name) {
+        return res.status(400).json({ error: "Username, password and name are required" });
+      }
+
+      // Check if username exists
+      const existing = await db.select().from(farmFarmers).where(eq(farmFarmers.username, username)).limit(1);
+      if (existing.length > 0) {
+        return res.status(400).json({ error: "Username already exists" });
+      }
+
+      const hashedPassword = await hashPassword(password);
+
+      const [newFarmer] = await db.insert(farmFarmers).values({
+        username,
+        password: hashedPassword,
+        name,
+        email: email || null,
+        phone: phone || null,
+        document: document || null,
+      }).returning();
+
+      const { password: _, ...safeFarmer } = newFarmer;
+      res.status(201).json(safeFarmer);
+    } catch (error) {
+      console.error("Failed to create farmer:", error);
+      res.status(500).json({ error: "Failed to create farmer" });
+    }
+  });
+
+  app.patch("/api/admin/farmers/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { username, password, name, email, phone, document } = req.body;
+
+      // Hash password if provided
+      let updateData: any = { ...req.body };
+      if (updateData.password) {
+        updateData.password = await hashPassword(updateData.password);
+      } else {
+        delete updateData.password;
+      }
+
+      const [updatedFarmer] = await db.update(farmFarmers)
+        .set(updateData)
+        .where(eq(farmFarmers.id, id))
+        .returning();
+
+      if (!updatedFarmer) {
+        return res.status(404).json({ error: "Farmer not found" });
+      }
+
+      const { password: _, ...safeFarmer } = updatedFarmer;
+      res.json(safeFarmer);
+    } catch (error) {
+      console.error("Failed to update farmer:", error);
+      res.status(500).json({ error: "Failed to update farmer" });
+    }
+  });
+
+  app.delete("/api/admin/farmers/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const [deleted] = await db.delete(farmFarmers)
+        .where(eq(farmFarmers.id, id))
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ error: "Farmer not found" });
+      }
+
+      res.json({ message: "Farmer deleted successfully" });
+    } catch (error) {
+      console.error("Failed to delete farmer:", error);
+      res.status(500).json({ error: "Failed to delete farmer" });
+    }
+  });
+
   return httpServer;
 }
