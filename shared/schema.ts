@@ -1221,26 +1221,3 @@ export type InsertFarmSeason = z.infer<typeof insertFarmSeasonSchema>;
 export type FarmSeason = typeof farmSeasons.$inferSelect;
 
 // Farm Farmers (Agricultores management separately from internal team)
-export const farmFarmers = pgTable("farm_farmers", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  name: text("name").notNull(),
-  email: text("email"),
-  phone: text("phone"),
-  document: text("document"), // CPF/CNPJ
-  role: text("role").notNull().default("farmer"),
-  managerId: varchar("manager_id"), // Optional reference to a manager
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
-});
-
-export const insertFarmFarmerSchema = createInsertSchema(farmFarmers).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type FarmFarmer = typeof farmFarmers.$inferSelect;
-export type InsertFarmFarmer = z.infer<typeof insertFarmFarmerSchema>;
