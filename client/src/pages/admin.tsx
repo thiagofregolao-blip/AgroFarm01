@@ -54,20 +54,40 @@ export default function AdminPage() {
       <main className="flex-1 overflow-auto p-6">
         {activeTab === 'dashboard' && <DashboardManagement />}
         {activeTab === 'users' && (
-          <div className="space-y-4">
-            <h1 className="text-2xl font-bold text-red-600">DEBUG: USERS TAB ACTIVE</h1>
-            <Tabs defaultValue="team" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="team">Equipe Interna</TabsTrigger>
-                <TabsTrigger value="farmers">Agricultores</TabsTrigger>
-              </TabsList>
-              <TabsContent value="team">
+          <div className="p-10 bg-red-100 border-4 border-red-500 rounded-lg">
+            <h1 className="text-4xl font-bold text-red-600 mb-4">MODO DE DEBUG FORÇADO</h1>
+            <p className="text-xl mb-4 text-red-800">Se você está vendo isso, o deploy funcionou e o problema é no componente de ABAS.</p>
+
+            <div className="flex gap-4 mb-8">
+              <Button
+                variant="outline"
+                className="bg-blue-500 text-white hover:bg-blue-600"
+                onClick={() => alert('Simulação: Clicou em Equipe')}
+              >
+                Simular Aba Equipe
+              </Button>
+              <Button
+                variant="outline"
+                className="bg-green-500 text-white hover:bg-green-600"
+                onClick={() => alert('Simulação: Clicou em Agricultores')}
+              >
+                Simular Aba Agricultores
+              </Button>
+            </div>
+
+            <div className="mt-8 border-t border-red-300 pt-8">
+              <h2 className="text-2xl font-bold mb-4 text-gray-800">Conteúdo da Equipe (Renderizado Forçado):</h2>
+              <div className="bg-white p-4 rounded shadow">
                 <TeamManagement />
-              </TabsContent>
-              <TabsContent value="farmers">
+              </div>
+            </div>
+
+            <div className="mt-8 border-t border-red-300 pt-8">
+              <h2 className="text-2xl font-bold mb-4 text-gray-800">Conteúdo dos Agricultores (Renderizado Forçado):</h2>
+              <div className="bg-white p-4 rounded shadow">
                 <FarmersManagement />
-              </TabsContent>
-            </Tabs>
+              </div>
+            </div>
           </div>
         )}
         {activeTab === 'master-clients' && <MasterClientsManagement />}
