@@ -73,6 +73,16 @@ const runMigration = async () => {
             console.log('✅ Migração image_base64 concluída!');
         }
 
+        // Migration 6: Farm Farmers (Agricultores)
+        const farmFarmersPath = path.join(process.cwd(), 'migration_add_farm_farmers.sql');
+        if (fs.existsSync(farmFarmersPath)) {
+            const farmFarmersSql = fs.readFileSync(farmFarmersPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', farmFarmersPath);
+            console.log('🚀 Executando SQL (farm_farmers)...');
+            await sql.unsafe(farmFarmersSql);
+            console.log('✅ Migração farm_farmers concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
