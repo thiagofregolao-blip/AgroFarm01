@@ -63,6 +63,16 @@ const runMigration = async () => {
             console.log('✅ Migração WhatsApp concluída!');
         }
 
+        // Migration 5: Add image_base64 to products
+        const imageBase64Path = path.join(process.cwd(), 'migration_add_image_base64.sql');
+        if (fs.existsSync(imageBase64Path)) {
+            const imageBase64Sql = fs.readFileSync(imageBase64Path, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', imageBase64Path);
+            console.log('🚀 Executando SQL (image_base64)...');
+            await sql.unsafe(imageBase64Sql);
+            console.log('✅ Migração image_base64 concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
