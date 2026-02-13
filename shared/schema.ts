@@ -1056,6 +1056,7 @@ export const farmProductsCatalog = pgTable("farm_products_catalog", {
   category: text("category"), // herbicida, fungicida, inseticida, fertilizante, semente, adjuvante, etc.
   activeIngredient: text("active_ingredient"),
   imageUrl: text("image_url"),
+  imageBase64: text("image_base64"), // Store photo directly in DB
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

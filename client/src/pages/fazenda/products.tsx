@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -109,8 +109,23 @@ export default function FarmProducts() {
                                 {filtered.map((p: any) => (
                                     <tr key={p.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
                                         <td className="p-3">
-                                            <p className="font-medium">{p.name}</p>
-                                            {p.activeIngredient && <p className="text-xs text-gray-500">{p.activeIngredient}</p>}
+                                            <div className="flex items-center gap-3">
+                                                {p.imageBase64 || p.imageUrl ? (
+                                                    <img
+                                                        src={p.imageBase64 || p.imageUrl}
+                                                        alt={p.name}
+                                                        className="w-10 h-10 rounded-md object-cover border border-emerald-100 bg-white"
+                                                    />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                                                        <Package className="w-5 h-5" />
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <p className="font-medium">{p.name}</p>
+                                                    {p.activeIngredient && <p className="text-xs text-gray-500">{p.activeIngredient}</p>}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="p-3">
                                             <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
@@ -144,18 +159,60 @@ function ProductForm({ initial, onSave }: { initial?: any; onSave: () => void })
     const [dosePerHa, setDosePerHa] = useState(initial?.dosePerHa || "");
     const [category, setCategory] = useState(initial?.category || "");
     const [activeIngredient, setActiveIngredient] = useState(initial?.activeIngredient || "");
-    const [imageUrl, setImageUrl] = useState(initial?.imageUrl || "");
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string>(initial?.imageBase64 || initial?.imageUrl || "");
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setImageFile(file);
+            const url = URL.createObjectURL(file);
+            setPreviewUrl(url);
+        }
+    };
 
     const save = useMutation({
         mutationFn: async () => {
-            const payload = { name, unit, dosePerHa: dosePerHa || null, category, activeIngredient, imageUrl: imageUrl || null };
-            if (initial?.id) {
-                return apiRequest("PUT", `/api/farm/products/${initial.id}`, payload);
+            const formData = new FormData();
+            formData.append("name", name);
+            formData.append("unit", unit);
+            if (dosePerHa) formData.append("dosePerHa", dosePerHa);
+            if (category) formData.append("category", category);
+            if (activeIngredient) formData.append("activeIngredient", activeIngredient);
+
+            if (imageFile) {
+                formData.append("image", imageFile);
+            } else if (initial?.imageUrl && !previewUrl.startsWith("data:")) {
+                // Keep existing URL if no new file and not base64
+                formData.append("imageUrl", initial.imageUrl);
             }
-            return apiRequest("POST", "/api/farm/products", payload);
+
+            // If editing and no new file, we don't send "image" field, backend preserves existing.
+            // But if we want to clear it? For now, let's assume valid updates.
+
+            let url = "/api/farm/products";
+            let method = "POST";
+            if (initial?.id) {
+                url = `/api/farm/products/${initial.id}`;
+                method = "PUT";
+            }
+
+            const res = await fetch(url, {
+                method,
+                body: formData,
+                // Do not set Content-Type header, let browser set it with boundary for FormData
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Failed to save product");
+            }
+            return res.json();
         },
         onSuccess: () => { toast({ title: initial ? "Produto atualizado" : "Produto criado" }); onSave(); },
+        onError: (err) => { toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" }); }
     });
 
     return (
@@ -179,15 +236,40 @@ function ProductForm({ initial, onSave }: { initial?: any; onSave: () => void })
                 </Select>
             </div>
             <div><Label>Ingrediente Ativo</Label><Input value={activeIngredient} onChange={e => setActiveIngredient(e.target.value)} /></div>
-            <div>
-                <Label>URL da Imagem</Label>
-                <Input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://exemplo.com/imagem-produto.jpg" />
-                {imageUrl && (
-                    <div className="mt-2 w-20 h-20 rounded-lg border border-emerald-200 overflow-hidden bg-white">
-                        <img src={imageUrl} alt="Preview" className="w-full h-full object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+
+            <div className="space-y-2">
+                <Label>Foto do Produto</Label>
+                <div className="flex items-center gap-4">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full"
+                    >
+                        <Package className="mr-2 h-4 w-4" />
+                        {previewUrl ? "Alterar Foto" : "Tirar Foto / Upload"}
+                    </Button>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        capture="environment" // Opens rear camera on mobile
+                        onChange={handleFileChange}
+                    />
+                </div>
+
+                {previewUrl && (
+                    <div className="mt-2 relative w-full h-48 rounded-lg border border-emerald-200 overflow-hidden bg-gray-50 flex items-center justify-center">
+                        <img
+                            src={previewUrl}
+                            alt="Preview"
+                            className="max-w-full max-h-full object-contain"
+                        />
                     </div>
                 )}
             </div>
+
             <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={save.isPending}>
                 {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar
             </Button>
