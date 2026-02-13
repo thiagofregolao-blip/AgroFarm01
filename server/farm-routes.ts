@@ -6,6 +6,8 @@ import { Express, Request, Response, NextFunction } from "express";
 import { farmStorage } from "./farm-storage";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { db } from "./db";
+import { ZApiClient } from "./whatsapp/zapi-client";
 import multer from "multer";
 import { parseFarmInvoicePDF, parseFarmInvoiceImage } from "./parse-farm-invoice";
 
@@ -76,13 +78,18 @@ export function registerFarmRoutes(app: Express) {
             const { users } = await import("../shared/schema");
             const { eq } = await import("drizzle-orm");
 
+            const formattedPhone = whatsapp_number ? ZApiClient.formatPhoneNumber(whatsapp_number) : null;
+            console.log(`[PROFILE_UPDATE] Updating user ${userId} with phone: Raw='${whatsapp_number}' -> Formatted='${formattedPhone}'`);
+
             const [updatedUser] = await db.update(users)
                 .set({
                     name,
-                    whatsapp_number: whatsapp_number || null
+                    whatsapp_number: formattedPhone
                 })
                 .where(eq(users.id, userId))
                 .returning();
+
+            console.log(`[PROFILE_UPDATE] User updated in DB:`, updatedUser ? updatedUser.whatsapp_number : "failed");
 
             if (!updatedUser) {
                 return res.status(404).json({ error: "User not found" });

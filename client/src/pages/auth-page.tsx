@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sprout, Zap, BarChart3, TrendingUp } from "lucide-react";
+import { Sprout, Zap, BarChart3, Tractor, LineChart } from "lucide-react";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -217,10 +217,10 @@ export default function AuthPage() {
             </div>
 
             <h2 className="text-5xl font-bold mb-4 leading-tight">
-              Transforme suas vendas agrícolas
+              A Plataforma Completa para o Agronegócio
             </h2>
             <p className="text-lg text-green-50 mb-8">
-              Gerencie comissões, acompanhe metas e analise seu desempenho com tecnologia de ponta desenvolvida para o agronegócio.
+              Unificando gestão comercial e operações de campo. Conecte consultores e produtores com tecnologia de ponta para resultados superiores.
             </p>
           </div>
 
@@ -231,33 +231,33 @@ export default function AuthPage() {
                 <BarChart3 className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <h3 className="font-semibold mb-1">Análise Inteligente</h3>
+                <h3 className="font-semibold mb-1">Performance Comercial</h3>
                 <p className="text-sm text-green-50">
-                  Dashboard completo com insights sobre suas vendas e comissões
+                  Acompanhe metas, comissões e resultados de vendas em tempo real
                 </p>
               </div>
             </div>
 
             <div className="flex items-start gap-4 p-4 bg-white/10 backdrop-blur-sm rounded-xl">
               <div className="w-10 h-10 bg-[#F7D601] rounded-lg flex items-center justify-center flex-shrink-0">
-                <TrendingUp className="w-5 h-5 text-green-600" />
+                <Tractor className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <h3 className="font-semibold mb-1">Metas & Performance</h3>
+                <h3 className="font-semibold mb-1">Gestão da Produção</h3>
                 <p className="text-sm text-green-50">
-                  Acompanhe metas por safra e categorias de produtos
+                  Controle total de estoques, custos de safra e aplicações no campo
                 </p>
               </div>
             </div>
 
             <div className="flex items-start gap-4 p-4 bg-white/10 backdrop-blur-sm rounded-xl">
               <div className="w-10 h-10 bg-[#F7D601] rounded-lg flex items-center justify-center flex-shrink-0">
-                <Sprout className="w-5 h-5 text-green-600" />
+                <LineChart className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <h3 className="font-semibold mb-1">Mercado Agrícola</h3>
+                <h3 className="font-semibold mb-1">Decisões Estratégicas</h3>
                 <p className="text-sm text-green-50">
-                  Análise de penetração de mercado e oportunidades comerciais
+                  Insights valiosos baseados em dados integrados do plantio à colheita
                 </p>
               </div>
             </div>

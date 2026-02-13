@@ -148,20 +148,26 @@ export class WhatsAppService {
 
       // Buscar na tabela users pelo campo whatsapp_number
       // Usando SQL direto pois o campo pode não estar no schema Drizzle ainda
+      console.log(`[WhatsAppService] Find user - Raw: ${phone}, Formatted: ${formattedPhone}`);
+
+      // Buscar na tabela users pelo campo whatsapp_number
       const isNeon = process.env.DATABASE_URL?.includes('neon.tech');
 
       let userResult: any;
       if (isNeon) {
-        // Neon usa pool.query que retorna { rows: [...] }
-        userResult = await pool.query(`SELECT id, name FROM users WHERE whatsapp_number = $1 LIMIT 1`, [formattedPhone]);
+        userResult = await pool.query(`SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = $1 LIMIT 1`, [formattedPhone]);
+        console.log(`[WhatsAppService] Neon Query Result:`, userResult.rows);
         if (userResult.rows && userResult.rows.length > 0) {
           return { id: userResult.rows[0].id, name: userResult.rows[0].name };
         }
       } else {
-        // postgres-js usa pool que retorna array direto
-        userResult = await pool`SELECT id, name FROM users WHERE whatsapp_number = ${formattedPhone} LIMIT 1`;
+        userResult = await pool`SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = ${formattedPhone} LIMIT 1`;
+        console.log(`[WhatsAppService] Postgres Query Result found: ${userResult.length}`);
         if (userResult && userResult.length > 0) {
+          console.log(`[WhatsAppService] User found: ${userResult[0].name} (${userResult[0].whatsapp_number})`);
           return { id: userResult[0].id, name: userResult[0].name };
+        } else {
+          console.log(`[WhatsAppService] No user found for ${formattedPhone}`);
         }
       }
 
