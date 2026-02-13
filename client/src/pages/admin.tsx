@@ -68,20 +68,21 @@ export default function AdminPage() {
                 <FarmersManagement />
               </TabsContent>
             </Tabs>
+          </div>
         )}
-            {activeTab === 'master-clients' && <MasterClientsManagement />}
-            {activeTab === 'seasons' && <SeasonsManagement />}
-            {activeTab === 'categories' && <CategoriesManagement />}
-            {activeTab === 'subcategories' && <SubcategoriesManagement />}
-            {activeTab === 'products' && <ProductsManagement />}
-            {activeTab === 'price-table' && <PriceTableManagement />}
-            {activeTab === 'commissions' && <CommissionsManagement />}
-            {activeTab === 'parameters' && <ParametersManagement />}
-            {activeTab === 'barter' && <BarterManagement />}
-            {activeTab === 'timac' && <TimacManagement />}
-            {activeTab === 'planning-import' && <PlanningImportManagement />}
-            {activeTab === 'system' && <SystemManagement />}
-          </main>
+        {activeTab === 'master-clients' && <MasterClientsManagement />}
+        {activeTab === 'seasons' && <SeasonsManagement />}
+        {activeTab === 'categories' && <CategoriesManagement />}
+        {activeTab === 'subcategories' && <SubcategoriesManagement />}
+        {activeTab === 'products' && <ProductsManagement />}
+        {activeTab === 'price-table' && <PriceTableManagement />}
+        {activeTab === 'commissions' && <CommissionsManagement />}
+        {activeTab === 'parameters' && <ParametersManagement />}
+        {activeTab === 'barter' && <BarterManagement />}
+        {activeTab === 'timac' && <TimacManagement />}
+        {activeTab === 'planning-import' && <PlanningImportManagement />}
+        {activeTab === 'system' && <SystemManagement />}
+      </main>
     </div>
   );
 }
