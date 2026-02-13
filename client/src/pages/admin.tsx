@@ -53,7 +53,20 @@ export default function AdminPage() {
 
       <main className="flex-1 overflow-auto p-6">
         {activeTab === 'dashboard' && <DashboardManagement />}
-        {activeTab === 'users' && <AccessManagement />}
+        {activeTab === 'users' && (
+          <Tabs defaultValue="team" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="team">Equipe Interna</TabsTrigger>
+              <TabsTrigger value="farmers">Agricultores</TabsTrigger>
+            </TabsList>
+            <TabsContent value="team">
+              <TeamManagement />
+            </TabsContent>
+            <TabsContent value="farmers">
+              <FarmersManagement />
+            </TabsContent>
+          </Tabs>
+        )}
         {activeTab === 'master-clients' && <MasterClientsManagement />}
         {activeTab === 'seasons' && <SeasonsManagement />}
         {activeTab === 'categories' && <CategoriesManagement />}
