@@ -54,32 +54,34 @@ export default function AdminPage() {
       <main className="flex-1 overflow-auto p-6">
         {activeTab === 'dashboard' && <DashboardManagement />}
         {activeTab === 'users' && (
-          <Tabs defaultValue="team" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="team">Equipe Interna</TabsTrigger>
-              <TabsTrigger value="farmers">Agricultores</TabsTrigger>
-            </TabsList>
-            <TabsContent value="team">
-              <TeamManagement />
-            </TabsContent>
-            <TabsContent value="farmers">
-              <FarmersManagement />
-            </TabsContent>
-          </Tabs>
+          <div className="space-y-4">
+            <h1 className="text-2xl font-bold text-red-600">DEBUG: USERS TAB ACTIVE</h1>
+            <Tabs defaultValue="team" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="team">Equipe Interna</TabsTrigger>
+                <TabsTrigger value="farmers">Agricultores</TabsTrigger>
+              </TabsList>
+              <TabsContent value="team">
+                <TeamManagement />
+              </TabsContent>
+              <TabsContent value="farmers">
+                <FarmersManagement />
+              </TabsContent>
+            </Tabs>
         )}
-        {activeTab === 'master-clients' && <MasterClientsManagement />}
-        {activeTab === 'seasons' && <SeasonsManagement />}
-        {activeTab === 'categories' && <CategoriesManagement />}
-        {activeTab === 'subcategories' && <SubcategoriesManagement />}
-        {activeTab === 'products' && <ProductsManagement />}
-        {activeTab === 'price-table' && <PriceTableManagement />}
-        {activeTab === 'commissions' && <CommissionsManagement />}
-        {activeTab === 'parameters' && <ParametersManagement />}
-        {activeTab === 'barter' && <BarterManagement />}
-        {activeTab === 'timac' && <TimacManagement />}
-        {activeTab === 'planning-import' && <PlanningImportManagement />}
-        {activeTab === 'system' && <SystemManagement />}
-      </main>
+            {activeTab === 'master-clients' && <MasterClientsManagement />}
+            {activeTab === 'seasons' && <SeasonsManagement />}
+            {activeTab === 'categories' && <CategoriesManagement />}
+            {activeTab === 'subcategories' && <SubcategoriesManagement />}
+            {activeTab === 'products' && <ProductsManagement />}
+            {activeTab === 'price-table' && <PriceTableManagement />}
+            {activeTab === 'commissions' && <CommissionsManagement />}
+            {activeTab === 'parameters' && <ParametersManagement />}
+            {activeTab === 'barter' && <BarterManagement />}
+            {activeTab === 'timac' && <TimacManagement />}
+            {activeTab === 'planning-import' && <PlanningImportManagement />}
+            {activeTab === 'system' && <SystemManagement />}
+          </main>
     </div>
   );
 }
