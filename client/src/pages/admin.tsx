@@ -584,7 +584,7 @@ function TeamManagement() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Gestão da Equipe</CardTitle>
+          <CardTitle>Gestão da Equipe (Atualizado)</CardTitle>
           <CardDescription>Gerencie consultores, gerentes e demais membros da equipe.</CardDescription>
         </CardHeader>
         <CardContent>
