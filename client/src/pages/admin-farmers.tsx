@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Table,
     TableBody,
@@ -29,11 +30,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function AdminFarmersPage() {
     const { user, logoutMutation } = useAuth();
+    const [activeTab, setActiveTab] = useState("dashboard");
 
     return (
         <div className="flex flex-col h-screen bg-gray-50">
@@ -60,8 +62,187 @@ export default function AdminFarmersPage() {
             </header>
 
             <main className="flex-1 overflow-auto p-6 max-w-7xl mx-auto w-full">
-                <FarmersManagement />
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                    <TabsList className="grid w-full grid-cols-2 max-w-md">
+                        <TabsTrigger value="dashboard" className="flex items-center gap-2">
+                            <BarChart3 className="h-4 w-4" />
+                            Dashboard
+                        </TabsTrigger>
+                        <TabsTrigger value="farmers" className="flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Agricultores
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="dashboard" className="space-y-6">
+                        <FarmersDashboard />
+                    </TabsContent>
+
+                    <TabsContent value="farmers" className="space-y-6">
+                        <FarmersManagement />
+                    </TabsContent>
+                </Tabs>
             </main>
+        </div>
+    );
+}
+
+function FarmersDashboard() {
+    const { data: stats, isLoading } = useQuery<any>({
+        queryKey: ['/api/admin/farmers/dashboard/stats'],
+    });
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+            </div>
+        );
+    }
+
+    const formatNumber = (num: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(num);
+    };
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-bold tracking-tight">Dashboard de Agricultores</h2>
+                <p className="text-muted-foreground">Visão geral das métricas e estatísticas dos agricultores</p>
+            </div>
+
+            {/* Cards de Métricas */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Área Total</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{formatNumber(stats?.totalArea || 0)} ha</div>
+                        <p className="text-xs text-muted-foreground">Soma de todas as propriedades</p>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total de Agricultores</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats?.totalFarmers || 0}</div>
+                        <p className="text-xs text-muted-foreground">Agricultores cadastrados</p>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total de Propriedades</CardTitle>
+                        <Sprout className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats?.totalProperties || 0}</div>
+                        <p className="text-xs text-muted-foreground">Propriedades registradas</p>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Produtos Únicos</CardTitle>
+                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{stats?.productPrices?.length || 0}</div>
+                        <p className="text-xs text-muted-foreground">Produtos com preços registrados</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Produtos Mais Usados */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Produtos Mais Utilizados</CardTitle>
+                    <CardDescription>Top 10 produtos mais aplicados pelos agricultores</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats?.mostUsedProducts && stats.mostUsedProducts.length > 0 ? (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Produto</TableHead>
+                                    <TableHead className="text-right">Aplicações</TableHead>
+                                    <TableHead className="text-right">Quantidade Total</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.mostUsedProducts.map((product: any, index: number) => (
+                                    <TableRow key={product.productId || index}>
+                                        <TableCell className="font-medium">{product.productName || "N/A"}</TableCell>
+                                        <TableCell className="text-right">{product.applicationCount}</TableCell>
+                                        <TableCell className="text-right">{formatNumber(product.totalQuantity)}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                            Nenhum produto utilizado ainda.
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Preços dos Produtos das Faturas */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Preços dos Produtos (Faturas)</CardTitle>
+                    <CardDescription>Últimos preços importados das faturas dos agricultores</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {stats?.productPrices && stats.productPrices.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Produto</TableHead>
+                                        <TableHead>Fornecedor</TableHead>
+                                        <TableHead className="text-right">Preço Unitário</TableHead>
+                                        <TableHead>Unidade</TableHead>
+                                        <TableHead>Última Atualização</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stats.productPrices.map((price: any, index: number) => (
+                                        <TableRow key={price.productId || index}>
+                                            <TableCell className="font-medium">{price.productName || "N/A"}</TableCell>
+                                            <TableCell>{price.supplier || "N/A"}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <DollarSign className="h-3 w-3 text-muted-foreground" />
+                                                    {formatNumber(price.unitPrice)}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{price.unit || "N/A"}</TableCell>
+                                            <TableCell>
+                                                {price.lastInvoiceDate
+                                                    ? new Date(price.lastInvoiceDate).toLocaleDateString('pt-BR')
+                                                    : "N/A"}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                            Nenhum preço de produto registrado ainda.
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 }
@@ -169,9 +350,9 @@ function FarmersManagement() {
 
     const startEdit = (farmer: any) => {
         setEditingFarmer(farmer);
-        setName(farmer.users?.name || "");
-        setUsername(farmer.users?.username || "");
-        setWhatsappNumber(farmer.users?.whatsapp_number || "");
+        setName(farmer.name || "");
+        setUsername(farmer.username || "");
+        setWhatsappNumber(farmer.phone || "");
         setPropertySize(farmer.property_size?.toString() || "");
         setMainCulture(farmer.main_culture || "");
         setRegion(farmer.region || "");
@@ -185,7 +366,7 @@ function FarmersManagement() {
         const data: any = {
             name,
             username,
-            whatsapp_number: whatsappNumber,
+            phone: whatsappNumber,
             property_size: propertySize ? parseFloat(propertySize) : 0,
             main_culture: mainCulture,
             region
@@ -199,12 +380,17 @@ function FarmersManagement() {
     };
 
     const filteredFarmers = farmers?.filter(f =>
-        f.users?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.users?.username?.toLowerCase().includes(searchTerm.toLowerCase())
+        f.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        f.username?.toLowerCase().includes(searchTerm.toLowerCase())
     ) || [];
 
     return (
         <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-bold tracking-tight">Gestão de Agricultores</h2>
+                <p className="text-muted-foreground">Cadastre, edite e gerencie os agricultores do sistema</p>
+            </div>
+
             <div className="flex flex-col sm:flex-row justify-between gap-4 items-center">
                 <div className="relative w-full sm:w-72">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -230,7 +416,7 @@ function FarmersManagement() {
                         <Card key={farmer.id} className="hover:shadow-lg transition-shadow border-l-4 border-l-green-500">
                             <CardHeader className="pb-2">
                                 <CardTitle className="flex justify-between items-start">
-                                    <span>{farmer.users?.name}</span>
+                                    <span>{farmer.name}</span>
                                     <div className="flex gap-1">
                                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(farmer)}>
                                             <Edit className="h-4 w-4 text-blue-500" />
@@ -240,7 +426,7 @@ function FarmersManagement() {
                                         </Button>
                                     </div>
                                 </CardTitle>
-                                <CardDescription>@{farmer.users?.username}</CardDescription>
+                                <CardDescription>@{farmer.username}</CardDescription>
                             </CardHeader>
                             <CardContent className="text-sm space-y-2">
                                 <div className="grid grid-cols-2 gap-2">
@@ -250,7 +436,7 @@ function FarmersManagement() {
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground text-xs">Tamanho</p>
-                                        <p className="font-medium">{farmer.property_size} ha</p>
+                                        <p className="font-medium">{farmer.property_size || "N/A"} ha</p>
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground text-xs">Cultura Principal</p>
@@ -258,7 +444,7 @@ function FarmersManagement() {
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground text-xs">WhatsApp</p>
-                                        <p className="font-medium">{farmer.users?.whatsapp_number || "N/A"}</p>
+                                        <p className="font-medium">{farmer.phone || "N/A"}</p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -375,7 +561,7 @@ function FarmersManagement() {
                     <DialogHeader>
                         <DialogTitle>Confirmar Exclusão</DialogTitle>
                         <DialogDescription>
-                            Tem certeza que deseja remover o agricultor <b>{deletingFarmer?.users?.name}</b>?
+                            Tem certeza que deseja remover o agricultor <b>{deletingFarmer?.name}</b>?
                             Esta ação removerá também o acesso do usuário e não pode ser desfeita.
                         </DialogDescription>
                     </DialogHeader>

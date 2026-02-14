@@ -8,7 +8,7 @@ import multer from "multer";
 import { importExcelFile, importClientsFromExcel, importPlanningProducts } from "./import-excel";
 import { setupAuth, requireAuth, requireSuperAdmin, requireManager } from "./auth";
 import { db } from "./db";
-import { eq, sql, and, gt, desc, inArray, or } from "drizzle-orm";
+import { eq, sql, and, gt, desc, inArray, or, sum, count } from "drizzle-orm";
 import { parseCVALEPDF } from "./parse-cvale-pdf";
 import { emailService } from "./email";
 import { scrypt, randomBytes } from "crypto";
@@ -8804,6 +8804,96 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     } catch (error) {
       console.error("Failed to delete farmer:", error);
       res.status(500).json({ error: "Failed to delete farmer" });
+    }
+  });
+
+  // ==================== FARMERS DASHBOARD STATISTICS ====================
+
+  app.get("/api/admin/farmers/dashboard/stats", requireSuperAdmin, async (req, res) => {
+    try {
+      const { farmFarmers, farmProperties, farmApplications, farmProductsCatalog, farmInvoiceItems, farmInvoices } = await import("@shared/schema");
+
+      // 1. Total area (sum of all properties totalAreaHa)
+      const totalAreaResult = await db
+        .select({ totalArea: sum(farmProperties.totalAreaHa) })
+        .from(farmProperties);
+      const totalArea = parseFloat(totalAreaResult[0]?.totalArea || "0") || 0;
+
+      // 2. Total farmers count
+      const farmersCountResult = await db
+        .select({ count: count() })
+        .from(farmFarmers);
+      const totalFarmers = farmersCountResult[0]?.count || 0;
+
+      // 3. Most used products (top 10 by application count)
+      const mostUsedProducts = await db
+        .select({
+          productId: farmApplications.productId,
+          productName: farmProductsCatalog.name,
+          applicationCount: count(),
+          totalQuantity: sum(farmApplications.quantity),
+        })
+        .from(farmApplications)
+        .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
+        .groupBy(farmApplications.productId, farmProductsCatalog.name)
+        .orderBy(desc(count()))
+        .limit(10);
+
+      // 4. Product prices from invoices (latest price per product)
+      const productPrices = await db
+        .select({
+          productId: farmInvoiceItems.productId,
+          productName: farmInvoiceItems.productName,
+          unitPrice: farmInvoiceItems.unitPrice,
+          unit: farmInvoiceItems.unit,
+          invoiceDate: farmInvoices.issueDate,
+          supplier: farmInvoices.supplier,
+        })
+        .from(farmInvoiceItems)
+        .innerJoin(farmInvoices, eq(farmInvoiceItems.invoiceId, farmInvoices.id))
+        .where(sql`${farmInvoiceItems.productId} IS NOT NULL`)
+        .orderBy(desc(farmInvoices.issueDate));
+
+      // Group by product and get latest price
+      const latestPrices = new Map();
+      for (const item of productPrices) {
+        if (!item.productId) continue;
+        const key = item.productId;
+        if (!latestPrices.has(key) || 
+            (item.invoiceDate && latestPrices.get(key).invoiceDate && 
+             new Date(item.invoiceDate) > new Date(latestPrices.get(key).invoiceDate))) {
+          latestPrices.set(key, item);
+        }
+      }
+
+      // 5. Total properties count
+      const propertiesCountResult = await db
+        .select({ count: count() })
+        .from(farmProperties);
+      const totalProperties = propertiesCountResult[0]?.count || 0;
+
+      res.json({
+        totalArea: totalArea,
+        totalFarmers: totalFarmers,
+        totalProperties: totalProperties,
+        mostUsedProducts: mostUsedProducts.map(p => ({
+          productId: p.productId,
+          productName: p.productName,
+          applicationCount: Number(p.applicationCount),
+          totalQuantity: parseFloat(p.totalQuantity || "0"),
+        })),
+        productPrices: Array.from(latestPrices.values()).map(p => ({
+          productId: p.productId,
+          productName: p.productName,
+          unitPrice: parseFloat(p.unitPrice || "0"),
+          unit: p.unit,
+          lastInvoiceDate: p.invoiceDate,
+          supplier: p.supplier,
+        })),
+      });
+    } catch (error) {
+      console.error("Failed to fetch farmers dashboard stats:", error);
+      res.status(500).json({ error: "Failed to fetch dashboard statistics" });
     }
   });
 
