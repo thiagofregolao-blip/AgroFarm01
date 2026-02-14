@@ -54,40 +54,24 @@ export default function AdminPage() {
       <main className="flex-1 overflow-auto p-6">
         {activeTab === 'dashboard' && <DashboardManagement />}
         {activeTab === 'users' && (
-          <div className="p-10 bg-red-100 border-4 border-red-500 rounded-lg">
-            <h1 className="text-4xl font-bold text-red-600 mb-4">MODO DE DEBUG FORÇADO</h1>
-            <p className="text-xl mb-4 text-red-800">Se você está vendo isso, o deploy funcionou e o problema é no componente de ABAS.</p>
+          <div className="p-10 bg-blue-100 border-4 border-blue-500 rounded-lg">
+            <h1 className="text-2xl font-bold text-blue-700 mb-4 uppercase tracking-wider">Painel de Gestão de Acessos (Novo - v2)</h1>
+            <p className="text-lg mb-4 text-blue-800">Se você vê isso, o deploy ATUALIZOU e as abas devem funcionar abaixo.</p>
 
-            <div className="flex gap-4 mb-8">
-              <Button
-                variant="outline"
-                className="bg-blue-500 text-white hover:bg-blue-600"
-                onClick={() => alert('Simulação: Clicou em Equipe')}
-              >
-                Simular Aba Equipe
-              </Button>
-              <Button
-                variant="outline"
-                className="bg-green-500 text-white hover:bg-green-600"
-                onClick={() => alert('Simulação: Clicou em Agricultores')}
-              >
-                Simular Aba Agricultores
-              </Button>
-            </div>
+            <Tabs defaultValue="team" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-2 h-14 bg-blue-200 p-1">
+                <TabsTrigger value="team" className="text-lg font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm">Equipe Interna</TabsTrigger>
+                <TabsTrigger value="farmers" className="text-lg font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm">Agricultores</TabsTrigger>
+              </TabsList>
 
-            <div className="mt-8 border-t border-red-300 pt-8">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">Conteúdo da Equipe (Renderizado Forçado):</h2>
-              <div className="bg-white p-4 rounded shadow">
+              <TabsContent value="team" className="mt-6 bg-white p-4 rounded-xl shadow-md border border-blue-200">
                 <TeamManagement />
-              </div>
-            </div>
+              </TabsContent>
 
-            <div className="mt-8 border-t border-red-300 pt-8">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">Conteúdo dos Agricultores (Renderizado Forçado):</h2>
-              <div className="bg-white p-4 rounded shadow">
+              <TabsContent value="farmers" className="mt-6 bg-white p-4 rounded-xl shadow-md border border-green-200">
                 <FarmersManagement />
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           </div>
         )}
         {activeTab === 'master-clients' && <MasterClientsManagement />}
