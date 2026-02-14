@@ -54,24 +54,17 @@ export default function AdminPage() {
       <main className="flex-1 overflow-auto p-6">
         {activeTab === 'dashboard' && <DashboardManagement />}
         {activeTab === 'users' && (
-          <div className="p-10 bg-blue-100 border-4 border-blue-500 rounded-lg">
-            <h1 className="text-2xl font-bold text-blue-700 mb-4 uppercase tracking-wider">Painel de Gestão de Acessos (Novo - v2)</h1>
-            <p className="text-lg mb-4 text-blue-800">Se você vê isso, o deploy ATUALIZOU e as abas devem funcionar abaixo.</p>
-
-            <Tabs defaultValue="team" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-2 h-14 bg-blue-200 p-1">
-                <TabsTrigger value="team" className="text-lg font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm">Equipe Interna</TabsTrigger>
-                <TabsTrigger value="farmers" className="text-lg font-medium data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm">Agricultores</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="team" className="mt-6 bg-white p-4 rounded-xl shadow-md border border-blue-200">
-                <TeamManagement />
-              </TabsContent>
-
-              <TabsContent value="farmers" className="mt-6 bg-white p-4 rounded-xl shadow-md border border-green-200">
-                <FarmersManagement />
-              </TabsContent>
-            </Tabs>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">Gestão da Equipe Interna</h2>
+                <p className="text-muted-foreground">Gerencie consultores, gerentes e outros membros.</p>
+              </div>
+              <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-md text-sm border border-yellow-300">
+                Administração de Agricultores mudou para o novo <strong>Painel de Agricultores</strong>.
+              </div>
+            </div>
+            <TeamManagement />
           </div>
         )}
         {activeTab === 'master-clients' && <MasterClientsManagement />}
@@ -170,13 +163,9 @@ function AccessManagement() {
     <Tabs defaultValue="team" className="space-y-4">
       <TabsList>
         <TabsTrigger value="team">Equipe Interna</TabsTrigger>
-        <TabsTrigger value="farmers">Agricultores</TabsTrigger>
       </TabsList>
       <TabsContent value="team">
         <TeamManagement />
-      </TabsContent>
-      <TabsContent value="farmers">
-        <FarmersManagement />
       </TabsContent>
     </Tabs>
   );
@@ -806,205 +795,8 @@ function TeamManagement() {
   );
 }
 
-function FarmersManagement() {
-  const [editingFarmer, setEditingFarmer] = useState<any>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    username: "",
-    password: "",
-    email: "",
-    phone: "",
-    document: ""
-  });
-  const { toast } = useToast();
 
-  const { data: farmers, isLoading } = useQuery<any[]>({
-    queryKey: ['/api/admin/farmers'],
-  });
 
-  const createFarmerMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/admin/farmers", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/farmers'] });
-      toast({ title: "Agricultor criado com sucesso" });
-      setIsCreating(false);
-      resetForm();
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro ao criar",
-        description: error.message || "Verifique os dados e tente novamente.",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const updateFarmerMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      return apiRequest("PATCH", `/api/admin/farmers/${id}`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/farmers'] });
-      toast({ title: "Agricultor atualizado com sucesso" });
-      setEditingFarmer(null);
-      resetForm();
-    },
-    onError: () => {
-      toast({ title: "Erro ao atualizar", variant: "destructive" });
-    }
-  });
-
-  const deleteFarmerMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/admin/farmers/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/farmers'] });
-      toast({ title: "Agricultor excluído com sucesso" });
-    },
-    onError: () => {
-      toast({ title: "Erro ao excluir", variant: "destructive" });
-    }
-  });
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      username: "",
-      password: "",
-      email: "",
-      phone: "",
-      document: ""
-    });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingFarmer) {
-      updateFarmerMutation.mutate({ id: editingFarmer.id, data: formData });
-    } else {
-      createFarmerMutation.mutate(formData);
-    }
-  };
-
-  const startEdit = (farmer: any) => {
-    setEditingFarmer(farmer);
-    setFormData({
-      name: farmer.name,
-      username: farmer.username,
-      password: "", // Optional update
-      email: farmer.email || "",
-      phone: farmer.phone || "",
-      document: farmer.document || ""
-    });
-    setIsCreating(true);
-  };
-
-  const openCreate = () => {
-    setEditingFarmer(null);
-    resetForm();
-    setIsCreating(true);
-  };
-
-  if (isLoading) return <div className="text-center py-8">Carregando agricultores...</div>;
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Gestão de Agricultores</CardTitle>
-          <CardDescription>Cadastre e gerencie os acessos dos agricultores.</CardDescription>
-        </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus size={16} /> Novo Agricultor
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {farmers && farmers.length > 0 ? (
-            <div className="border rounded-lg divide-y">
-              {farmers.map((farmer) => (
-                <div key={farmer.id} className="p-4 flex items-center justify-between hover:bg-accent/50">
-                  <div>
-                    <p className="font-medium">{farmer.name}</p>
-                    <p className="text-sm text-muted-foreground">User: {farmer.username} | Doc: {farmer.document || "-"}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => startEdit(farmer)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => {
-                      if (confirm("Tem certeza que deseja excluir este agricultor?")) {
-                        deleteFarmerMutation.mutate(farmer.id);
-                      }
-                    }}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-muted-foreground py-8">Nenhum agricultor cadastrado.</p>
-          )}
-        </div>
-
-        <Dialog open={isCreating} onOpenChange={(open) => !open && setIsCreating(false)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingFarmer ? "Editar Agricultor" : "Novo Agricultor"}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Nome Completo</Label>
-                <Input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Usuário (Login)</Label>
-                  <Input required value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Senha {editingFarmer && "(opcional)"}</Label>
-                  <Input
-                    type="password"
-                    required={!editingFarmer}
-                    placeholder={editingFarmer ? "Manter atual" : ""}
-                    value={formData.password}
-                    onChange={e => setFormData({ ...formData, password: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Documento (CPF/RUC)</Label>
-                  <Input value={formData.document} onChange={e => setFormData({ ...formData, document: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Telefone</Label>
-                  <Input value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>Cancelar</Button>
-                <Button type="submit" disabled={createFarmerMutation.isPending}>
-                  {createFarmerMutation.isPending ? "Salvando..." : "Salvar"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
-  );
-}
 
 function CategoriesManagement() {
   const { toast } = useToast();

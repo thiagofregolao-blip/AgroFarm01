@@ -34,6 +34,8 @@ export default function AuthPage() {
         setLocation("/admin");
       } else if (user.role === 'gerente') {
         setLocation("/manager");
+      } else if (user.role === 'admin_agricultor') {
+        setLocation("/admin-farmers");
       } else if (user.role === 'faturista') {
         setLocation("/faturista");
       } else if (user.role === 'agricultor') {
@@ -149,6 +151,7 @@ export default function AuthPage() {
                       <SelectItem value="consultor">Consultor</SelectItem>
                       <SelectItem value="gerente">Gerentes</SelectItem>
                       <SelectItem value="administrador">Administradores</SelectItem>
+                      <SelectItem value="admin_agricultor">Admin Agricultor</SelectItem>
                       <SelectItem value="faturista">Faturista</SelectItem>
                       <SelectItem value="agricultor">Agricultor</SelectItem>
                     </SelectContent>

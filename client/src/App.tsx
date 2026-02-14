@@ -8,6 +8,7 @@ import { ConsultorRoute } from "@/lib/consultor-route";
 import { AdminRoute } from "@/lib/admin-route";
 import { ManagerRoute } from "@/lib/manager-route";
 import { FaturistaRoute } from "@/lib/faturista-route";
+import { AdminFarmerRoute } from "@/lib/admin-farmer-route";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
@@ -22,6 +23,7 @@ import Metas from "@/pages/metas";
 import Mercado from "@/pages/mercado";
 import HistoricoCompras from "@/pages/historico-compras";
 import AdminPage from "@/pages/admin";
+import AdminFarmersPage from "@/pages/admin-farmers";
 import ManagerPage from "@/pages/manager";
 import BarterPage from "@/pages/barter";
 import FaturistaPage from "@/pages/faturista";
@@ -67,6 +69,7 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password/:token" component={ResetPassword} />
       <AdminRoute path="/admin" component={AdminPage} />
+      <AdminFarmerRoute path="/admin-farmers" component={AdminFarmersPage} />
       <ManagerRoute path="/manager" component={ManagerPage} />
       <FaturistaRoute path="/faturista" component={FaturistaPage} />
 
