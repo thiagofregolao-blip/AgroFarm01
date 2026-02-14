@@ -75,12 +75,23 @@ const runMigration = async () => {
 
         // Migration 6: Farm Farmers (Agricultores)
         const farmFarmersPath = path.join(process.cwd(), 'migration_add_farm_farmers.sql');
+        console.log('🔍 Verificando arquivo:', farmFarmersPath);
+
         if (fs.existsSync(farmFarmersPath)) {
             const farmFarmersSql = fs.readFileSync(farmFarmersPath, 'utf-8');
             console.log('📄 Lendo arquivo de migração:', farmFarmersPath);
             console.log('🚀 Executando SQL (farm_farmers)...');
             await sql.unsafe(farmFarmersSql);
             console.log('✅ Migração farm_farmers concluída!');
+        } else {
+            console.error('❌ ARQUIVO DE MIGRAÇÃO NÃO ENCONTRADO:', farmFarmersPath);
+            console.log('📂 Diretório atual:', process.cwd());
+            try {
+                const files = fs.readdirSync(process.cwd());
+                console.log('📂 Arquivos na raiz:', files.join(', '));
+            } catch (err) {
+                console.error('Erro ao listar arquivos:', err);
+            }
         }
 
         console.log('✅ Todas as migrações concluídas com sucesso!');
