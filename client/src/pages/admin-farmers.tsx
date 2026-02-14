@@ -353,8 +353,8 @@ function FarmersManagement() {
         setName(farmer.name || "");
         setUsername(farmer.username || "");
         setWhatsappNumber(farmer.phone || "");
-        setPropertySize(farmer.property_size?.toString() || "");
-        setMainCulture(farmer.main_culture || "");
+        setPropertySize(farmer.propertySize?.toString() || "");
+        setMainCulture(farmer.mainCulture || "");
         setRegion(farmer.region || "");
         setPassword(""); // Don't fill password
     };
@@ -436,11 +436,11 @@ function FarmersManagement() {
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground text-xs">Tamanho</p>
-                                        <p className="font-medium">{farmer.property_size || "N/A"} ha</p>
+                                        <p className="font-medium">{farmer.propertySize ? `${farmer.propertySize} ha` : "N/A"}</p>
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground text-xs">Cultura Principal</p>
-                                        <p className="font-medium">{farmer.main_culture || "N/A"}</p>
+                                        <p className="font-medium">{farmer.mainCulture || "N/A"}</p>
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground text-xs">WhatsApp</p>

@@ -8728,7 +8728,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
   app.post("/api/admin/farmers", requireSuperAdmin, async (req, res) => {
     try {
       // Manual validation since we don't have a specific insert schema exported yet or want to handle password hashing
-      const { username, password, name, email, phone, document } = req.body;
+      const { username, password, name, email, phone, document, property_size, main_culture, region } = req.body;
 
       if (!username || !password || !name) {
         return res.status(400).json({ error: "Username, password and name are required" });
@@ -8749,6 +8749,9 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         email: email || null,
         phone: phone || null,
         document: document || null,
+        propertySize: property_size ? String(property_size) : null,
+        mainCulture: main_culture || null,
+        region: region || null,
       }).returning();
 
       const { password: _, ...safeFarmer } = newFarmer;
@@ -8762,14 +8765,21 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
   app.patch("/api/admin/farmers/:id", requireSuperAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { username, password, name, email, phone, document } = req.body;
+      const { username, password, name, email, phone, document, property_size, main_culture, region } = req.body;
 
       // Hash password if provided
-      let updateData: any = { ...req.body };
-      if (updateData.password) {
-        updateData.password = await hashPassword(updateData.password);
-      } else {
-        delete updateData.password;
+      let updateData: any = {};
+      if (username !== undefined) updateData.username = username;
+      if (name !== undefined) updateData.name = name;
+      if (email !== undefined) updateData.email = email || null;
+      if (phone !== undefined) updateData.phone = phone || null;
+      if (document !== undefined) updateData.document = document || null;
+      if (property_size !== undefined) updateData.propertySize = property_size ? String(property_size) : null;
+      if (main_culture !== undefined) updateData.mainCulture = main_culture || null;
+      if (region !== undefined) updateData.region = region || null;
+      
+      if (password) {
+        updateData.password = await hashPassword(password);
       }
 
       const [updatedFarmer] = await db.update(farmFarmers)

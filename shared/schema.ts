@@ -1023,6 +1023,9 @@ export const farmFarmers = pgTable("farm_farmers", {
   email: text("email"),
   phone: text("phone"),
   document: text("document"), // RUC / CPF
+  propertySize: decimal("property_size", { precision: 12, scale: 2 }), // Tamanho da propriedade em ha
+  mainCulture: text("main_culture"), // Cultura principal (Soja, Milho, etc.)
+  region: text("region"), // Região/Cidade/Estado
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

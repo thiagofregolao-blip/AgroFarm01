@@ -94,6 +94,16 @@ const runMigration = async () => {
             }
         }
 
+        // Migration 7: Add fields to farm_farmers (property_size, main_culture, region)
+        const farmFarmersFieldsPath = path.join(process.cwd(), 'migration_add_farm_farmers_fields.sql');
+        if (fs.existsSync(farmFarmersFieldsPath)) {
+            const farmFarmersFieldsSql = fs.readFileSync(farmFarmersFieldsPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', farmFarmersFieldsPath);
+            console.log('🚀 Executando SQL (farm_farmers_fields)...');
+            await sql.unsafe(farmFarmersFieldsSql);
+            console.log('✅ Migração farm_farmers_fields concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
