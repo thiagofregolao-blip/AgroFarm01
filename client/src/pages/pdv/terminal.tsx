@@ -14,6 +14,7 @@ import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type Re
 interface CartItem {
     product: any;
     quantity: number;
+    dosePerHa?: number;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -125,12 +126,23 @@ export default function PdvTerminal() {
     const isInCart = (productId: string) => cart.some(c => c.product.id === productId);
 
     const addToCart = (product: any) => {
-        if (!isInCart(product.id)) setCart([...cart, { product, quantity: 1 }]);
+        if (!isInCart(product.id)) {
+            setCart([...cart, {
+                product,
+                quantity: 1,
+                dosePerHa: product.dosePerHa ? parseFloat(product.dosePerHa) : undefined
+            }]);
+        }
     };
 
     const updateQuantity = (productId: string, qty: number) => {
         if (qty < 0) qty = 0;
         setCart(cart.map(c => c.product.id === productId ? { ...c, quantity: qty } : c));
+    };
+
+    const updateDose = (productId: string, dose: number) => {
+        if (dose < 0) dose = 0;
+        setCart(cart.map(c => c.product.id === productId ? { ...c, dosePerHa: dose } : c));
     };
 
     const removeFromCart = (productId: string) => {
@@ -151,8 +163,9 @@ export default function PdvTerminal() {
         return selectedPlots.reduce((sum, p) => sum + (parseFloat(p.areaHa) || 0), 0);
     }, [selectedPlots]);
 
-    const getDistribution = (product: any, totalQty: number) => {
-        const dose = parseFloat(product.dosePerHa);
+    const getDistribution = (item: CartItem) => {
+        const dose = item.dosePerHa !== undefined ? item.dosePerHa : parseFloat(item.product.dosePerHa);
+        const totalQty = item.quantity;
 
         if (dose && !isNaN(dose) && selectedPlots.length > 0) {
             let totalIdeal = 0;
@@ -208,7 +221,7 @@ export default function PdvTerminal() {
 
     const confirmationData = useMemo(() => {
         return cart.map(item => {
-            const dist = getDistribution(item.product, item.quantity);
+            const dist = getDistribution(item);
             const withOverrides = dist.map(d => {
                 const key = `${item.product.id}__${d.plotId}`;
                 const overridden = distOverrides[key] !== undefined ? distOverrides[key] : d.allocatedQty;
@@ -252,6 +265,11 @@ export default function PdvTerminal() {
             const applications: Array<{ productId: string; plotId: string; quantity: number; propertyId?: string; plotName: string; productName: string; dosePerHa?: number; unit: string }> = [];
 
             for (const item of confirmationData) {
+                // Determine dose from item (either override or product default)
+                // We find the original cart item to get the potentially edited dose
+                const cartItem = cart.find(c => c.product.id === item.product.id);
+                const appliedDose = cartItem?.dosePerHa;
+
                 for (const d of item.distribution) {
                     if (d.allocatedQty <= 0) continue;
                     const plot = selectedPlots.find(p => p.id === d.plotId);
@@ -270,7 +288,7 @@ export default function PdvTerminal() {
                         propertyId: plot?.propertyId,
                         plotName: d.plotName,
                         productName: item.product.name,
-                        dosePerHa: item.product.dosePerHa ? parseFloat(item.product.dosePerHa) : undefined,
+                        dosePerHa: appliedDose,
                         unit: item.product.unit,
                     });
                     count++;
@@ -647,8 +665,16 @@ export default function PdvTerminal() {
                         <div className="space-y-4">
                             {confirmationData.map((item) => {
                                 const p = item.product;
-                                const dose = parseFloat(p.dosePerHa);
-                                const hasDose = dose && !isNaN(dose);
+                                // Use the dose from the item (calculated in getDistribution using the overridden dose)
+                                // We need to find the cart item again to access the dosePerHa property if it wasn't preserved in confirmationData mapping
+                                // Actually, confirmationData items map `product` and `totalQty`. 
+                                // Let's check `getDistribution` again. It uses `item.dosePerHa`.
+                                // Wait, `confirmationData` maps `cart.map`. 
+                                // `item` here is the result of that map: `{ product, totalQty, distribution, totalAllocated }`
+                                // We should access the dose from the cart item associated with this product.
+                                const cartItem = cart.find(c => c.product.id === p.id);
+                                const dose = cartItem?.dosePerHa;
+                                const hasDose = dose !== undefined && dose !== null && !isNaN(dose);
                                 const diff = item.totalQty - item.totalAllocated;
 
                                 return (
@@ -1056,21 +1082,39 @@ export default function PdvTerminal() {
                                                     <Trash2 className="h-4 w-4" />
                                                 </button>
                                             </div>
-                                            {/* Quantity controls */}
-                                            <div className="flex items-center gap-1.5">
-                                                <button className="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-sm transition-colors active:scale-95"
-                                                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
-                                                    <Minus className="h-3.5 w-3.5 text-white" />
-                                                </button>
-                                                <Input type="number" step="1" value={item.quantity}
-                                                    onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
-                                                    className="text-center text-base font-bold flex-1 h-9 bg-white border-gray-200 text-gray-800 rounded-lg" />
-                                                <button className="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-sm transition-colors active:scale-95"
-                                                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
-                                                    <Plus className="h-3.5 w-3.5 text-white" />
-                                                </button>
-                                                <span className="text-xs text-gray-400 w-10 text-center font-medium">{item.product.unit}</span>
+
+                                            {/* Quantity & Dose controls */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Quantidade</Label>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <button className="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
+                                                            onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                                                            <Minus className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        <Input type="number" step="1" value={item.quantity}
+                                                            onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                                                            className="text-center text-base font-bold flex-1 h-9 bg-white border-gray-200 text-gray-800 rounded-lg" />
+                                                        <button className="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
+                                                            onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                                                            <Plus className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha ({item.product.unit})</Label>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.1"
+                                                        value={item.dosePerHa || ""}
+                                                        placeholder="N/A"
+                                                        onChange={(e) => updateDose(item.product.id, parseFloat(e.target.value) || 0)}
+                                                        className="text-center text-sm font-medium h-9 bg-blue-50/50 border-blue-100 text-blue-700 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                                    />
+                                                </div>
                                             </div>
+
                                             {overStock && (
                                                 <p className="text-[10px] text-red-500 font-medium mt-1.5 flex items-center gap-1">
                                                     ⚠️ Excede estoque disponível
@@ -1081,112 +1125,138 @@ export default function PdvTerminal() {
                                 })}
                             </div>
                         )}
-                    </div>
+                    </div >
 
                     {/* Cart footer */}
-                    <div className="p-4 border-t border-gray-100 bg-gray-50/80 space-y-3">
-                        {cart.length > 0 && (
-                            <div className="flex justify-between text-sm">
-                                <span className="text-gray-400">{cart.length} produto(s)</span>
-                                <span className="text-emerald-600 font-bold">{totalCartQty} unidades total</span>
-                            </div>
-                        )}
-                        <Button
+                    < div className="p-4 border-t border-gray-100 bg-gray-50/80 space-y-3" >
+                        {
+                            cart.length > 0 && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-400">{cart.length} produto(s)</span>
+                                    <span className="text-emerald-600 font-bold">{totalCartQty} unidades total</span>
+                                </div>
+                            )
+                        }
+                        < Button
                             className="w-full py-5 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-[0.98]"
                             onClick={handleGoToPlot}
                             disabled={cart.length === 0}
                         >
                             <ArrowRight className="mr-2 h-5 w-5" />
                             Selecionar Talhões
-                        </Button>
-                    </div>
-                </div>
-            </div>
+                        </Button >
+                    </div >
+                </div >
+            </div >
 
 
             {/* MOBILE bottom bar */}
-            {cart.length > 0 && (
-                <div className="md:hidden fixed bottom-0 left-0 right-0 p-3 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg z-50">
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button className="w-full py-5 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-md">
-                                <ShoppingCart className="mr-2 h-5 w-5" />
-                                Ver Carrinho ({cart.length})
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl p-0 flex flex-col">
-                            <SheetHeader className="p-5 border-b border-gray-100">
-                                <SheetTitle className="flex items-center gap-2 text-emerald-800">
-                                    <ShoppingCart className="h-5 w-5" />
-                                    Seu Carrinho
-                                </SheetTitle>
-                            </SheetHeader>
+            {
+                cart.length > 0 && (
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 p-3 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg z-50">
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button className="w-full py-5 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-md">
+                                    <ShoppingCart className="mr-2 h-5 w-5" />
+                                    Ver Carrinho ({cart.length})
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl p-0 flex flex-col">
+                                <SheetHeader className="p-5 border-b border-gray-100">
+                                    <SheetTitle className="flex items-center gap-2 text-emerald-800">
+                                        <ShoppingCart className="h-5 w-5" />
+                                        Seu Carrinho
+                                    </SheetTitle>
+                                </SheetHeader>
 
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                {cart.map((item) => {
-                                    const stk = getStockForProduct(item.product.id);
-                                    const overStock = item.quantity > stk;
-                                    return (
-                                        <div key={item.product.id} className={`rounded-xl border p-3 ${overStock ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-gray-50/50"}`}>
-                                            <div className="flex items-start gap-3 mb-3">
-                                                {item.product.imageUrl ? (
-                                                    <img src={item.product.imageUrl} className="w-12 h-12 rounded-lg object-contain bg-white border border-gray-100 shrink-0" alt="" />
-                                                ) : (
-                                                    <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center shrink-0`}>
-                                                        <span className="text-xl">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                    {cart.map((item) => {
+                                        const stk = getStockForProduct(item.product.id);
+                                        const overStock = item.quantity > stk;
+                                        return (
+                                            <div key={item.product.id} className={`rounded-xl border p-3 ${overStock ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-gray-50/50"}`}>
+                                                <div className="flex items-start gap-3 mb-3">
+                                                    {item.product.imageUrl ? (
+                                                        <img src={item.product.imageUrl} className="w-12 h-12 rounded-lg object-contain bg-white border border-gray-100 shrink-0" alt="" />
+                                                    ) : (
+                                                        <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center shrink-0`}>
+                                                            <span className="text-xl">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-sm leading-tight text-gray-800 mb-1">{item.product.name}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[10px] font-medium ${stk <= 0 ? "text-red-500" : "text-emerald-500"}`}>
+                                                                Estoque: {stk.toFixed(0)} {item.product.unit}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-sm leading-tight text-gray-800 mb-1">{item.product.name}</p>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`text-[10px] font-medium ${stk <= 0 ? "text-red-500" : "text-emerald-500"}`}>
-                                                            Estoque: {stk.toFixed(0)} {item.product.unit}
-                                                        </span>
+                                                    <button onClick={() => removeFromCart(item.product.id)} className="text-gray-300 hover:text-red-500 p-1">
+                                                        <Trash2 className="h-5 w-5" />
+                                                    </button>
+                                                </div>
+
+                                                {/* Quantity & Dose controls */}
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Qtd Total</Label>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <button className="w-10 h-10 rounded-xl bg-white border border-gray-200 text-emerald-600 flex items-center justify-center shadow-sm active:scale-95 touch-manipulation"
+                                                                onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                                                                <Minus className="h-5 w-5" />
+                                                            </button>
+                                                            <Input type="number" step="1" inputMode="numeric" value={item.quantity}
+                                                                onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                                                                className="text-center text-lg font-bold flex-1 h-10 bg-white border-gray-200 text-gray-800 rounded-xl" />
+                                                            <button className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200 active:scale-95 touch-manipulation"
+                                                                onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                                                                <Plus className="h-5 w-5" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha</Label>
+                                                        <div className="relative">
+                                                            <Input
+                                                                type="number"
+                                                                step="0.1"
+                                                                inputMode="decimal"
+                                                                value={item.dosePerHa || ""}
+                                                                placeholder="N/A"
+                                                                onChange={(e) => updateDose(item.product.id, parseFloat(e.target.value) || 0)}
+                                                                className="text-center text-lg font-medium h-10 bg-blue-50/50 border-blue-100 text-blue-700 rounded-xl focus:ring-blue-500 focus:border-blue-500 pr-8"
+                                                            />
+                                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-blue-400 font-medium pointer-events-none">
+                                                                {item.product.unit}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <button onClick={() => removeFromCart(item.product.id)} className="text-gray-300 hover:text-red-500 p-1">
-                                                    <Trash2 className="h-5 w-5" />
-                                                </button>
+                                                {overStock && <p className="text-xs text-red-500 mt-2 font-medium">⚠️ Quantidade excede estoque!</p>}
                                             </div>
-
-                                            {/* Quantity controls */}
-                                            <div className="flex items-center gap-2">
-                                                <button className="w-10 h-10 rounded-xl bg-white border border-gray-200 text-emerald-600 flex items-center justify-center shadow-sm active:scale-95 touch-manipulation"
-                                                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
-                                                    <Minus className="h-5 w-5" />
-                                                </button>
-                                                <Input type="number" step="1" inputMode="numeric" value={item.quantity}
-                                                    onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
-                                                    className="text-center text-lg font-bold flex-1 h-10 bg-white border-gray-200 text-gray-800 rounded-xl" />
-                                                <button className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200 active:scale-95 touch-manipulation"
-                                                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
-                                                    <Plus className="h-5 w-5" />
-                                                </button>
-                                                <span className="text-xs text-gray-400 font-medium w-8 text-center">{item.product.unit}</span>
-                                            </div>
-                                            {overStock && <p className="text-xs text-red-500 mt-2 font-medium">⚠️ Quantidade excede estoque!</p>}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="p-4 border-t border-gray-100 bg-gray-50/80 pb-8">
-                                <div className="flex justify-between text-sm mb-3 px-1">
-                                    <span className="text-gray-500">{cart.length} produto(s)</span>
-                                    <span className="text-emerald-700 font-bold">{totalCartQty} unidades total</span>
+                                        );
+                                    })}
                                 </div>
-                                <Button
-                                    className="w-full py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-lg shadow-emerald-200"
-                                    onClick={handleGoToPlot}
-                                >
-                                    Ir para Talhões
-                                    <ArrowRight className="ml-2 h-5 w-5" />
-                                </Button>
-                            </div>
-                        </SheetContent>
-                    </Sheet>
-                </div>
-            )}
-        </div>
+
+                                <div className="p-4 border-t border-gray-100 bg-gray-50/80 pb-8">
+                                    <div className="flex justify-between text-sm mb-3 px-1">
+                                        <span className="text-gray-500">{cart.length} produto(s)</span>
+                                        <span className="text-emerald-700 font-bold">{totalCartQty} unidades total</span>
+                                    </div>
+                                    <Button
+                                        className="w-full py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-lg shadow-emerald-200"
+                                        onClick={handleGoToPlot}
+                                    >
+                                        Ir para Talhões
+                                        <ArrowRight className="ml-2 h-5 w-5" />
+                                    </Button>
+                                </div>
+                            </SheetContent>
+                        </Sheet>
+                    </div>
+                )
+            }
+        </div >
     );
 }
