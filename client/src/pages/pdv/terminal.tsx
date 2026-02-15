@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X } from "lucide-react";
 import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
@@ -465,9 +465,9 @@ export default function PdvTerminal() {
         });
 
         return (
-            <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
+            <div className="h-screen bg-gradient-to-br from-gray-50 to-[#16A249]/5 text-gray-800 flex flex-col">
                 {/* Header with gradient */}
-                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shrink-0 shadow-md">
+                <header className="flex items-center justify-between px-5 py-3 bg-[#16A249] text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setStep("product")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
@@ -485,7 +485,7 @@ export default function PdvTerminal() {
                         <div className="p-4 border-b border-gray-100 bg-gray-50/50">
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Resumo do Pedido</p>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-bold text-emerald-600">{cart.length}</span>
+                                <span className="text-2xl font-bold text-[#16A249]">{cart.length}</span>
                                 <span className="text-sm text-gray-500">produtos selecionados</span>
                             </div>
                         </div>
@@ -529,7 +529,7 @@ export default function PdvTerminal() {
                                         <div key={prop.id} className="space-y-3">
                                             <div className="flex items-center justify-between px-1">
                                                 <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                                                    <span className="w-1 h-4 rounded-full bg-emerald-500 block"></span>
+                                                    <span className="w-1 h-4 rounded-full bg-[#16A249] block"></span>
                                                     {prop.name}
                                                     <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{propPlots.length} talhões</span>
                                                 </h3>
@@ -542,7 +542,7 @@ export default function PdvTerminal() {
                                                                 : [...selectedPlots.filter(p => !ids.includes(p.id)), ...propPlots];
                                                             setSelectedPlots(newPlots);
                                                         }}
-                                                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700 hover:underline"
+                                                        className="text-xs font-medium text-[#16A249] hover:text-[#15803d] hover:underline"
                                                     >
                                                         {allSelected ? "Desmarcar todos" : "Selecionar todos"}
                                                     </button>
@@ -557,15 +557,15 @@ export default function PdvTerminal() {
                                                             <button
                                                                 key={plot.id}
                                                                 onClick={() => togglePlot(plot)}
-                                                                className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? "bg-emerald-50/50 border-emerald-500 shadow-md shadow-emerald-100" : "bg-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5"}`}
+                                                                className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? "bg-[#16A249]/10 border-[#16A249] shadow-md shadow-green-100" : "bg-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5"}`}
                                                             >
                                                                 <div className="flex items-start justify-between mb-2">
-                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sel ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"}`}>
+                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sel ? "bg-[#16A249] text-white" : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"}`}>
                                                                         <MapPin className="h-4 w-4" />
                                                                     </div>
-                                                                    {sel && <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm"><Check className="h-3 w-3 text-white" /></div>}
+                                                                    {sel && <div className="w-5 h-5 rounded-full bg-[#16A249] flex items-center justify-center shadow-sm"><Check className="h-3 w-3 text-white" /></div>}
                                                                 </div>
-                                                                <h4 className={`font-bold text-sm mb-0.5 ${sel ? "text-emerald-900" : "text-gray-800"}`}>{plot.name}</h4>
+                                                                <h4 className={`font-bold text-sm mb-0.5 ${sel ? "text-[#064e3b]" : "text-gray-800"}`}>{plot.name}</h4>
                                                                 <p className="text-xs text-gray-500">{plot.areaHa} hectares</p>
                                                                 {plot.crop && <span className="absolute bottom-4 right-4 text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{plot.crop}</span>}
                                                             </button>
@@ -593,11 +593,12 @@ export default function PdvTerminal() {
                             <p className="text-xs text-gray-400">Total de área selecionada: {totalAreaSelected.toFixed(1)} ha</p>
                         </div>
                         <div className="flex items-center gap-4 flex-1 sm:flex-none justify-end">
-                            <span className="font-bold text-emerald-600 text-lg mr-2 sm:hidden">{selectedPlots.length} talhões</span>
+                            <span className="font-bold text-[#16A249] text-lg mr-2 sm:hidden">{selectedPlots.length} talhões</span>
                             <Button
-                                className="w-full sm:w-auto px-8 py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98]"
+                                className="w-full sm:w-auto px-8 py-6 text-base bg-[#16A249] hover:bg-[#15803d] text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all active:scale-[0.98]"
                                 onClick={handleGoToConfirm}
                                 disabled={selectedPlots.length === 0}
+
                             >
                                 Avançar
                                 <ArrowRight className="ml-2 h-5 w-5" />
@@ -702,7 +703,7 @@ export default function PdvTerminal() {
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-0.5">Total Saída</div>
-                                                <p className="font-bold text-emerald-600 text-2xl leading-none">{item.totalQty}</p>
+                                                <p className="font-bold text-[#16A249] text-2xl leading-none">{item.totalQty}</p>
                                                 <p className="text-xs text-gray-400">{p.unit}</p>
                                             </div>
                                         </div>
@@ -780,7 +781,7 @@ export default function PdvTerminal() {
                             <span className="hidden sm:inline">Cancelar</span>
                         </Button>
                         <Button
-                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98] order-2"
+                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-[#16A249] hover:bg-[#15803d] text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all active:scale-[0.98] order-2"
                             onClick={() => handleSubmit(false)}
                             disabled={submitting}
                         >
@@ -808,7 +809,7 @@ export default function PdvTerminal() {
     return (
         <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
             {/* Header with gradient */}
-            <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shrink-0 shadow-md">
+            <header className="flex items-center justify-between px-5 py-3 bg-[#16A249] text-white shrink-0 shadow-md">
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
                         <span className="text-lg">🏪</span>
@@ -901,7 +902,7 @@ export default function PdvTerminal() {
                     const isCurrent = step === s.key;
                     return (
                         <div key={s.key} className="flex items-center flex-1">
-                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${isCurrent ? "bg-emerald-100 text-emerald-700" : isActive ? "text-emerald-600" : "text-gray-300"}`}>
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${isCurrent ? "bg-[#16A249]/10 text-[#16A249]" : isActive ? "text-[#16A249]" : "text-gray-300"}`}>
                                 <span>{s.emoji}</span>
                                 <span className="hidden sm:inline">{s.label}</span>
                             </div>
@@ -966,7 +967,7 @@ export default function PdvTerminal() {
                                     <button
                                         key={p.id}
                                         onClick={() => addToCart(p)}
-                                        className={`group relative rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-xl hover:-translate-y-1 bg-white text-left ${inCart ? "ring-2 ring-emerald-500 shadow-lg shadow-emerald-100" : "shadow-md hover:shadow-lg border border-gray-100/80"}`}
+                                        className={`group relative rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-xl hover:-translate-y-1 bg-white text-left ${inCart ? "ring-2 ring-[#16A249] shadow-lg shadow-green-100" : "shadow-md hover:shadow-lg border border-gray-100/80"}`}
                                     >
                                         {/* Product image / icon */}
                                         <div className={`h-36 bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden`}>
@@ -985,7 +986,7 @@ export default function PdvTerminal() {
                                             </div>
                                             {/* Cart selected indicator */}
                                             {inCart && (
-                                                <div className="absolute top-2 left-2 w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg z-20">
+                                                <div className="absolute top-2 left-2 w-7 h-7 bg-[#16A249] rounded-lg flex items-center justify-center shadow-lg z-20">
                                                     <Check className="h-4 w-4 text-white" />
                                                 </div>
                                             )}
@@ -1091,14 +1092,14 @@ export default function PdvTerminal() {
                                                 <div>
                                                     <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Quantidade</Label>
                                                     <div className="flex items-center gap-1.5">
-                                                        <button className="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
+                                                        <button className="w-9 h-9 rounded-lg bg-[#16A249] hover:bg-[#15803d] flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
                                                             onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
                                                             <Minus className="h-3.5 w-3.5" />
                                                         </button>
                                                         <Input type="number" step="1" value={item.quantity}
                                                             onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
                                                             className="text-center text-base font-bold flex-1 h-9 bg-white border-gray-200 text-gray-800 rounded-lg" />
-                                                        <button className="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
+                                                        <button className="w-9 h-9 rounded-lg bg-[#16A249] hover:bg-[#15803d] flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
                                                             onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
                                                             <Plus className="h-3.5 w-3.5" />
                                                         </button>
@@ -1166,95 +1167,97 @@ export default function PdvTerminal() {
                             </SheetTrigger>
                             <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl p-0 flex flex-col">
                                 <SheetHeader className="p-5 border-b border-gray-100">
-                                    <SheetTitle className="flex items-center gap-2 text-emerald-800">
-                                        <ShoppingCart className="h-5 w-5" />
+                                    <SheetTitle className="flex items-center gap-2 text-[#064e3b]">
+                                        <ShoppingCart className="h-5 w-5 text-[#16A249]" />
                                         Seu Carrinho
                                     </SheetTitle>
+                                    <SheetDescription>
+                                        Revise os itens antes de prosseguir
+                                    </SheetDescription>
                                 </SheetHeader>
-
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                    {cart.map((item) => {
-                                        const stk = getStockForProduct(item.product.id);
-                                        const overStock = item.quantity > stk;
-                                        return (
-                                            <div key={item.product.id} className={`rounded-xl border p-3 ${overStock ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-gray-50/50"}`}>
-                                                <div className="flex items-start gap-3 mb-3">
+                                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                    {cart.length > 0 ? (
+                                        cart.map(item => (
+                                            <div key={item.product.id} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
+                                                <div className="flex items-center gap-3 mb-3">
                                                     {item.product.imageUrl ? (
-                                                        <img src={item.product.imageUrl} className="w-12 h-12 rounded-lg object-contain bg-white border border-gray-100 shrink-0" alt="" />
+                                                        <img src={item.product.imageUrl} className="w-12 h-12 rounded-lg object-contain bg-gray-50 border border-gray-100" alt="" />
                                                     ) : (
-                                                        <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center shrink-0`}>
+                                                        <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center`}>
                                                             <span className="text-xl">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
                                                         </div>
                                                     )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-sm leading-tight text-gray-800 mb-1">{item.product.name}</p>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`text-[10px] font-medium ${stk <= 0 ? "text-red-500" : "text-emerald-500"}`}>
-                                                                Estoque: {stk.toFixed(0)} {item.product.unit}
-                                                            </span>
-                                                        </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="font-bold text-sm text-gray-800 line-clamp-1">{item.product.name}</h4>
+                                                        <p className="text-xs text-gray-500">{item.product.category || "Geral"}</p>
                                                     </div>
-                                                    <button onClick={() => removeFromCart(item.product.id)} className="text-gray-300 hover:text-red-500 p-1">
-                                                        <Trash2 className="h-5 w-5" />
+                                                    <button
+                                                        onClick={() => removeFromCart(item.product.id)}
+                                                        className="w-8 h-8 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
                                                     </button>
                                                 </div>
 
-                                                {/* Quantity & Dose controls */}
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <div>
-                                                        <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Qtd Total</Label>
+                                                        <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Quantidade</Label>
                                                         <div className="flex items-center gap-1.5">
-                                                            <button className="w-10 h-10 rounded-xl bg-white border border-gray-200 text-emerald-600 flex items-center justify-center shadow-sm active:scale-95 touch-manipulation"
+                                                            <button className="w-9 h-9 rounded-lg bg-white border border-gray-200 text-[#16A249] flex items-center justify-center shadow-sm active:scale-95 touch-manipulation"
                                                                 onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
-                                                                <Minus className="h-5 w-5" />
+                                                                <Minus className="h-3.5 w-3.5" />
                                                             </button>
-                                                            <Input type="number" step="1" inputMode="numeric" value={item.quantity}
+                                                            <Input type="number" step="1" value={item.quantity}
                                                                 onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
-                                                                className="text-center text-lg font-bold flex-1 h-10 bg-white border-gray-200 text-gray-800 rounded-xl" />
-                                                            <button className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-200 active:scale-95 touch-manipulation"
+                                                                className="text-center text-base font-bold flex-1 h-9 bg-gray-50 border-transparent text-gray-800 rounded-lg focus:bg-white focus:border-[#16A249]" />
+                                                            <button className="w-9 h-9 rounded-lg bg-[#16A249] text-white flex items-center justify-center shadow-sm shadow-green-200 active:scale-95 touch-manipulation"
                                                                 onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
-                                                                <Plus className="h-5 w-5" />
+                                                                <Plus className="h-3.5 w-3.5" />
                                                             </button>
                                                         </div>
                                                     </div>
 
                                                     <div>
-                                                        <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha</Label>
-                                                        <div className="relative">
-                                                            <Input
-                                                                type="number"
-                                                                step="0.1"
-                                                                inputMode="decimal"
-                                                                value={item.dosePerHa || ""}
-                                                                placeholder="N/A"
-                                                                onChange={(e) => updateDose(item.product.id, parseFloat(e.target.value) || 0)}
-                                                                className="text-center text-lg font-medium h-10 bg-blue-50/50 border-blue-100 text-blue-700 rounded-xl focus:ring-blue-500 focus:border-blue-500 pr-8"
-                                                            />
-                                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-blue-400 font-medium pointer-events-none">
-                                                                {item.product.unit}
-                                                            </span>
-                                                        </div>
+                                                        <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha ({item.product.unit})</Label>
+                                                        <Input
+                                                            type="number"
+                                                            step="0.1"
+                                                            value={item.dosePerHa || ""}
+                                                            placeholder="N/A"
+                                                            onChange={(e) => updateDose(item.product.id, parseFloat(e.target.value) || 0)}
+                                                            className="text-center text-sm font-medium h-9 bg-blue-50/50 border-blue-100 text-blue-700 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                                        />
                                                     </div>
                                                 </div>
-                                                {overStock && <p className="text-xs text-red-500 mt-2 font-medium">⚠️ Quantidade excede estoque!</p>}
                                             </div>
-                                        );
-                                    })}
+                                        ))
+                                    ) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
+                                            <ShoppingCart className="h-12 w-12 opacity-20" />
+                                            <p className="text-sm font-medium">Seu carrinho está vazio</p>
+                                            <Button variant="outline" onClick={() => document.getElementById("mobile-cart-close")?.click()}>
+                                                Voltar às compras
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
-
-                                <div className="p-4 border-t border-gray-100 bg-gray-50/80 pb-8">
-                                    <div className="flex justify-between text-sm mb-3 px-1">
-                                        <span className="text-gray-500">{cart.length} produto(s)</span>
-                                        <span className="text-emerald-700 font-bold">{totalCartQty} unidades total</span>
+                                {cart.length > 0 && (
+                                    <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <span className="text-sm font-medium text-gray-600">Total de itens</span>
+                                            <span className="text-[#16A249] font-bold">{totalCartQty} unidades total</span>
+                                        </div>
+                                        <SheetTrigger asChild>
+                                            <Button
+                                                className="w-full py-6 text-base bg-[#16A249] hover:bg-[#15803d] text-white font-bold rounded-xl shadow-lg shadow-green-200"
+                                                onClick={() => setStep("plot")}
+                                            >
+                                                Avançar para Talhões
+                                                <ArrowRight className="ml-2 h-5 w-5" />
+                                            </Button>
+                                        </SheetTrigger>
                                     </div>
-                                    <Button
-                                        className="w-full py-6 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-lg shadow-emerald-200"
-                                        onClick={handleGoToPlot}
-                                    >
-                                        Ir para Talhões
-                                        <ArrowRight className="ml-2 h-5 w-5" />
-                                    </Button>
-                                </div>
+                                )}
                             </SheetContent>
                         </Sheet>
                     </div>
