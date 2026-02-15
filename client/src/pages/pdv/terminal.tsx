@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2 } from "lucide-react";
+import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X } from "lucide-react";
 import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
 
 interface CartItem {
@@ -774,25 +774,28 @@ export default function PdvTerminal() {
 
                 {/* Bottom bar */}
                 <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
-                    <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-4 mb-safe">
-                        <Button variant="outline" className="flex-1 py-4 text-sm border-gray-200 hover:bg-gray-50 text-gray-600 font-medium rounded-xl order-3 sm:order-1" onClick={reset}>
-                            Cancelar
+                    <div className="max-w-4xl mx-auto flex flex-row items-center gap-2 mb-safe">
+                        <Button variant="outline" className="h-12 w-12 sm:w-auto sm:flex-1 py-0 sm:py-4 px-0 sm:px-4 text-sm border-gray-200 hover:bg-gray-50 text-gray-600 font-medium rounded-xl shrink-0 sm:shrink order-1" onClick={reset}>
+                            <X className="h-5 w-5 sm:mr-2" />
+                            <span className="hidden sm:inline">Cancelar</span>
                         </Button>
                         <Button
-                            className="flex-1 py-4 text-sm bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98] order-2 sm:order-2"
+                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98] order-2"
                             onClick={() => handleSubmit(false)}
                             disabled={submitting}
                         >
-                            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />}
-                            Confirmar Saída
+                            {submitting ? <Loader2 className="mr-1 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <Check className="mr-1 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5" />}
+                            <span className="sm:hidden">Confirmar</span>
+                            <span className="hidden sm:inline">Confirmar Saída</span>
                         </Button>
                         <Button
-                            className="flex-1 py-4 text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] order-1 sm:order-3"
+                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] order-3"
                             onClick={() => handleSubmit(true)}
                             disabled={submitting}
                         >
-                            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <FileText className="mr-2 h-5 w-5" />}
-                            Confirmar e Gerar Receituário
+                            {submitting ? <Loader2 className="mr-1 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <FileText className="mr-1 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5" />}
+                            <span className="sm:hidden">Receituário</span>
+                            <span className="hidden sm:inline">Confirmar e Gerar Receituário</span>
                         </Button>
                     </div>
                 </div>
