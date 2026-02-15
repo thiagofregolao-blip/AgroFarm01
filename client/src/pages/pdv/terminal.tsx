@@ -479,9 +479,9 @@ export default function PdvTerminal() {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                    {/* LEFT: Cart Summary (Sidebar on desktop) */}
-                    <div className="w-full md:w-80 bg-white border-r border-gray-100 flex flex-col shadow-lg z-10 shrink-0 h-48 md:h-auto">
+                <div className="flex-1 overflow-hidden flex flex-col-reverse md:flex-row">
+                    {/* LEFT: Cart Summary (Sidebar on desktop, Bottom on mobile) */}
+                    <div className="w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-100 flex flex-col shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:shadow-lg z-10 shrink-0 h-64 md:h-auto">
                         <div className="p-4 border-b border-gray-100 bg-gray-50/50">
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Resumo do Pedido</p>
                             <div className="flex items-baseline gap-1">
