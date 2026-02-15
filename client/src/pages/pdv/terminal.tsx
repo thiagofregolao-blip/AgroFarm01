@@ -58,7 +58,17 @@ export default function PdvTerminal() {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [categoryFilter, setCategoryFilter] = useState<string>("");
     const [distOverrides, setDistOverrides] = useState<Record<string, number>>({});
+
     const [instructions, setInstructions] = useState<string>("");
+    const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
+
+    // Load offline queue on mount
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem("pdv_offline_queue");
+            if (saved) setOfflineQueue(JSON.parse(saved));
+        } catch { }
+    }, []);
 
     useEffect(() => {
         const setOn = () => setIsOnline(true);
@@ -84,15 +94,22 @@ export default function PdvTerminal() {
         },
         retry: false,
         refetchInterval: 60000,
-        // Try to initialize from sessionStorage as fallback
+        // Try to initialize from localStorage as fallback
         initialData: () => {
             try {
-                const cached = sessionStorage.getItem("pdvData");
+                const cached = localStorage.getItem("pdvData");
                 if (cached) return JSON.parse(cached);
             } catch { }
             return undefined;
         },
     });
+
+    // Cache pdvData to localStorage on success
+    useEffect(() => {
+        if (pdvData) {
+            localStorage.setItem("pdvData", JSON.stringify(pdvData));
+        }
+    }, [pdvData]);
 
     // Query para histórico de saídas (Moved to top level to avoid Hook rules violation)
     const { data: withdrawalsHistory } = useQuery({
@@ -258,28 +275,130 @@ export default function PdvTerminal() {
         setStep("confirm");
     };
 
+    // Helper to generate PDF from application list (shared between online/offline)
+    const generatePDFOutput = (applications: any[], openInNewTab: boolean) => {
+        const properties = pdvData?.properties || [];
+        const firstProperty = properties.find((p: any) =>
+            applications.some((app: any) => app.propertyId === p.id)
+        ) || properties[0];
+
+        // Reorganizar para a estrutura correta (produtos com seus talhões)
+        const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
+
+        applications.forEach(app => {
+            if (!productsByProduct.has(app.productName)) {
+                productsByProduct.set(app.productName, {
+                    productName: app.productName,
+                    dosePerHa: app.dosePerHa,
+                    unit: app.unit,
+                    plots: [],
+                });
+            }
+            const product = productsByProduct.get(app.productName)!;
+            const existingPlot = product.plots.find(p => p.plotName === app.plotName);
+            if (existingPlot) {
+                existingPlot.quantity += app.quantity;
+            } else {
+                product.plots.push({
+                    plotName: app.plotName,
+                    quantity: app.quantity,
+                });
+            }
+        });
+
+        // Criar estrutura de dados para PDF
+        const pdfData: ReceituarioData = {
+            propertyName: firstProperty?.name || "Propriedade",
+            appliedAt: new Date(),
+            instructions: instructions || undefined,
+            products: Array.from(productsByProduct.values()),
+        };
+
+        // Gerar PDF
+        const pdfBlob = generateReceituarioPDF(pdfData);
+
+        if (openInNewTab) {
+            // Abrir PDF diretamente em nova aba
+            openPDF(pdfBlob);
+            toast({
+                title: "Receituário gerado",
+                description: "O arquivo foi aberto em uma nova aba."
+            });
+        } else {
+            // Geração automática após confirmar: apenas fazer download silencioso
+            downloadPDF(pdfBlob);
+            toast({
+                title: "Receituário gerado automaticamente",
+                description: "O PDF foi baixado automaticamente. Você pode consultá-lo no histórico de saídas."
+            });
+        }
+    };
+
+    const processOfflineQueue = async () => {
+        if (!isOnline || offlineQueue.length === 0) return;
+
+        const queue = [...offlineQueue];
+        const failed: any[] = [];
+        let successCount = 0;
+
+        setSubmitting(true);
+        try {
+            for (const item of queue) {
+                try {
+                    await apiRequest("POST", "/api/pdv/withdraw", item.payload);
+                    successCount++;
+                } catch (e) {
+                    console.error("Failed to sync item", item, e);
+                    failed.push(item);
+                }
+            }
+
+            setOfflineQueue(failed);
+            localStorage.setItem("pdv_offline_queue", JSON.stringify(failed));
+
+            if (successCount > 0) {
+                toast({ title: `♻️ ${successCount} saídas sincronizadas!` });
+                queryClient.invalidateQueries({ queryKey: ["/api/pdv/withdrawals"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/pdv/data"] });
+            }
+            if (failed.length > 0) {
+                toast({ title: `⚠️ ${failed.length} falharam ao sincronizar. Tente novamente.`, variant: "destructive" });
+            }
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const handleSubmit = async (generatePDF = false) => {
         setSubmitting(true);
         try {
             let count = 0;
             const applications: Array<{ productId: string; plotId: string; quantity: number; propertyId?: string; plotName: string; productName: string; dosePerHa?: number; unit: string }> = [];
 
+            // Prepare payloads first
+            const payloads: any[] = [];
+
             for (const item of confirmationData) {
-                // Determine dose from item (either override or product default)
-                // We find the original cart item to get the potentially edited dose
                 const cartItem = cart.find(c => c.product.id === item.product.id);
                 const appliedDose = cartItem?.dosePerHa;
 
                 for (const d of item.distribution) {
                     if (d.allocatedQty <= 0) continue;
                     const plot = selectedPlots.find(p => p.id === d.plotId);
-                    await apiRequest("POST", "/api/pdv/withdraw", {
+
+                    const payload = {
                         productId: item.product.id,
                         quantity: d.allocatedQty,
                         plotId: d.plotId,
                         propertyId: plot?.propertyId,
-                        notes: count === 0 ? instructions : undefined, // Salvar instruções apenas na primeira aplicação
-                    });
+                        notes: count === 0 ? instructions : undefined,
+                    };
+                    payloads.push(payload);
+
+                    // If online, send immediately. If offline, queue it.
+                    if (isOnline) {
+                        await apiRequest("POST", "/api/pdv/withdraw", payload);
+                    }
 
                     applications.push({
                         productId: item.product.id,
@@ -295,68 +414,22 @@ export default function PdvTerminal() {
                 }
             }
 
-            toast({ title: `✅ ${count} saída(s) registrada(s) com sucesso!` });
-            queryClient.invalidateQueries({ queryKey: ["/api/pdv/data"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/pdv/withdrawals"] });
+            if (!isOnline) {
+                // Queue all payloads
+                const queueItems = payloads.map(p => ({ payload: p, timestamp: Date.now() }));
+                const newQueue = [...offlineQueue, ...queueItems];
+                setOfflineQueue(newQueue);
+                localStorage.setItem("pdv_offline_queue", JSON.stringify(newQueue));
+                toast({ title: "📡 Sem internet: Salvo para envio posterior", description: "Sincronize quando retomar conexão." });
+            } else {
+                toast({ title: `✅ ${count} saída(s) registrada(s) com sucesso!` });
+                queryClient.invalidateQueries({ queryKey: ["/api/pdv/data"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/pdv/withdrawals"] });
+            }
 
             // Gerar PDF se solicitado ou automaticamente após confirmar (opção b)
             if (applications.length > 0) {
-                // Organizar dados para o PDF
-                const properties = pdvData?.properties || [];
-                const firstProperty = properties.find((p: any) =>
-                    applications.some(app => app.propertyId === p.id)
-                ) || properties[0];
-
-                // Reorganizar para a estrutura correta (produtos com seus talhões)
-                const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
-
-                applications.forEach(app => {
-                    if (!productsByProduct.has(app.productName)) {
-                        productsByProduct.set(app.productName, {
-                            productName: app.productName,
-                            dosePerHa: app.dosePerHa,
-                            unit: app.unit,
-                            plots: [],
-                        });
-                    }
-                    const product = productsByProduct.get(app.productName)!;
-                    const existingPlot = product.plots.find(p => p.plotName === app.plotName);
-                    if (existingPlot) {
-                        existingPlot.quantity += app.quantity;
-                    } else {
-                        product.plots.push({
-                            plotName: app.plotName,
-                            quantity: app.quantity,
-                        });
-                    }
-                });
-
-                // Criar estrutura de dados para PDF
-                const pdfData: ReceituarioData = {
-                    propertyName: firstProperty?.name || "Propriedade",
-                    appliedAt: new Date(),
-                    instructions: instructions || undefined,
-                    products: Array.from(productsByProduct.values()),
-                };
-
-                // Gerar PDF
-                const pdfBlob = generateReceituarioPDF(pdfData);
-
-                if (generatePDF) {
-                    // Abrir PDF diretamente em nova aba
-                    openPDF(pdfBlob);
-                    toast({
-                        title: "Receituário gerado",
-                        description: "O arquivo foi aberto em uma nova aba."
-                    });
-                } else {
-                    // Geração automática após confirmar: apenas fazer download silencioso
-                    downloadPDF(pdfBlob);
-                    toast({
-                        title: "Receituário gerado automaticamente",
-                        description: "O PDF foi baixado automaticamente. Você pode consultá-lo no histórico de saídas."
-                    });
-                }
+                generatePDFOutput(applications, generatePDF);
             }
 
             reset();
@@ -883,6 +956,17 @@ export default function PdvTerminal() {
                         {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
                         {isOnline ? "Online" : "Offline"}
                     </div>
+                    {/* Sync Button */}
+                    {offlineQueue.length > 0 && isOnline && (
+                        <button
+                            onClick={processOfflineQueue}
+                            disabled={submitting}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium transition-colors animate-pulse"
+                        >
+                            <span className="text-xs">♻️</span>
+                            Sincronizar ({offlineQueue.length})
+                        </button>
+                    )}
                     <button onClick={handleLogout} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-sm font-medium transition-colors">
                         <LogOut className="h-4 w-4" />
                         Sair
