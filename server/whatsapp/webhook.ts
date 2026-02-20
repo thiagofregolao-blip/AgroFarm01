@@ -22,7 +22,16 @@ export function registerWhatsAppRoutes(app: Express, whatsappService: WhatsAppSe
       }
 
       // Processar mensagem de forma assíncrona (não bloquear resposta)
-      whatsappService.processIncomingMessage(message.phone, message.message, message.audioUrl).catch((error) => {
+      whatsappService.processIncomingMessage(
+        message.phone,
+        message.message,
+        message.audioUrl,
+        {
+          isGroup: message.isGroup,
+          chatId: message.chatId,
+          senderPhone: message.senderPhone,
+        }
+      ).catch((error) => {
         console.error("[WhatsApp] Erro ao processar mensagem:", error);
       });
 

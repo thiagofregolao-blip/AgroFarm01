@@ -15,6 +15,9 @@ interface WhatsAppServiceConfig {
   zapiBaseUrl?: string;
 }
 
+// Palavras-chave que acionam o bot em mensagens de grupo
+const TRIGGER_KEYWORDS = ["agrofarm", "@agrofarm", "agrofarma", "bot"];
+
 export class WhatsAppService {
   private zapi: ZApiClient;
   private gemini: GeminiClient;
@@ -35,47 +38,105 @@ export class WhatsAppService {
   }
 
   /**
-   * Processa mensagem recebida via webhook
+   * Verifica se a mensagem contém a palavra-chave de ativação
    */
+  private containsTriggerKeyword(message: string): boolean {
+    const lower = message.toLowerCase();
+    return TRIGGER_KEYWORDS.some(kw => lower.includes(kw));
+  }
+
+  /**
+   * Remove a palavra-chave da mensagem para enviar ao AI limpa
+   */
+  private stripTriggerKeyword(message: string): string {
+    let cleaned = message;
+    for (const kw of TRIGGER_KEYWORDS) {
+      cleaned = cleaned.replace(new RegExp(kw, "gi"), "").trim();
+    }
+    // Remover espaços extras
+    return cleaned.replace(/\s+/g, " ").trim();
+  }
+
   /**
    * Processa mensagem recebida via webhook
    */
-  async processIncomingMessage(phone: string, message: string, audioUrl?: string): Promise<void> {
+  async processIncomingMessage(
+    phone: string,
+    message: string,
+    audioUrl?: string,
+    groupInfo?: { isGroup?: boolean; chatId?: string; senderPhone?: string }
+  ): Promise<void> {
+    const isGroup = groupInfo?.isGroup || false;
+    const chatId = groupInfo?.chatId;
+    const senderPhone = groupInfo?.senderPhone || phone;
+
+    // Determinar para onde enviar a resposta
+    const replyTo = isGroup && chatId ? chatId : phone;
+    const replyIsGroup = isGroup && !!chatId;
+
     try {
-      // 1. Identificar usuário pelo número de WhatsApp
-      const user = await this.findUserByPhone(phone);
+      // Em grupo: só responder se contiver a palavra-chave
+      if (isGroup) {
+        if (!this.containsTriggerKeyword(message) && !audioUrl) {
+          // Mensagem de grupo sem keyword → ignorar silenciosamente
+          console.log(`[WhatsApp] Grupo: mensagem ignorada (sem keyword): "${message}"`);
+          return;
+        }
+        // Remover a keyword da mensagem antes de processar
+        if (!audioUrl) {
+          message = this.stripTriggerKeyword(message);
+          if (!message) {
+            await this.sendMessage(replyTo, "👋 Olá! Como posso ajudar? Pergunte sobre estoque, despesas, faturas ou aplicações.", replyIsGroup);
+            return;
+          }
+        }
+        console.log(`[WhatsApp] Grupo: mensagem acionada por keyword. Sender: ${senderPhone}`);
+      }
+
+      // 1. Identificar usuário pelo número de WhatsApp (em grupo, usar senderPhone)
+      const lookupPhone = isGroup ? senderPhone : phone;
+      const user = await this.findUserByPhone(lookupPhone);
 
       // Se for áudio, transcrever primeiro
       if (audioUrl) {
-        await this.sendMessage(phone, "🎧 Ouvindo seu áudio...");
+        await this.sendMessage(replyTo, "🎧 Ouvindo seu áudio...", replyIsGroup);
         const transcription = await this.gemini.transcribeAudio(audioUrl);
 
         if (!transcription) {
-          await this.sendMessage(phone, "❌ Não consegui entender o áudio. Pode tentar escrever?");
+          await this.sendMessage(replyTo, "❌ Não consegui entender o áudio. Pode tentar escrever?", replyIsGroup);
           return;
         }
 
         message = transcription;
-        await this.sendMessage(phone, `📝 *Entendi:* "${message}"`);
-      }
+        await this.sendMessage(replyTo, `📝 *Entendi:* "${message}"`, replyIsGroup);
 
-      const userFound = !!user; // apenas para checagem abaixo
+        // Em grupo, verificar keyword no áudio transcrevido
+        if (isGroup && !this.containsTriggerKeyword(message)) {
+          console.log(`[WhatsApp] Grupo: áudio transcrito sem keyword, ignorando.`);
+          return;
+        }
+        if (isGroup) {
+          message = this.stripTriggerKeyword(message);
+        }
+      }
 
       if (!user) {
         await this.sendMessage(
-          phone,
-          "❌ Usuário não encontrado.\n\nPor favor, cadastre seu número de WhatsApp no sistema primeiro."
+          replyTo,
+          "❌ Usuário não encontrado.\n\nPor favor, cadastre seu número de WhatsApp no sistema primeiro.",
+          replyIsGroup
         );
         return;
       }
 
       // 2. Interpretar pergunta com Gemini AI (com contexto)
-      const lastContext = this.userContexts.get(phone);
+      const contextKey = isGroup ? `${chatId}_${senderPhone}` : phone;
+      const lastContext = this.userContexts.get(contextKey);
       const intent = await this.gemini.interpretQuestion(message, user.id, lastContext);
 
       // Salvar contexto atual para próxima interação
       if (intent.type !== "unknown" && intent.type !== "conversation") {
-        this.userContexts.set(phone, {
+        this.userContexts.set(contextKey, {
           lastIntent: intent,
           timestamp: Date.now()
         });
@@ -83,15 +144,16 @@ export class WhatsAppService {
 
       // Se for apenas papo furado ou dúvida geral, responde direto
       if (intent.type === "conversation" && intent.response) {
-        await this.sendMessage(phone, intent.response);
+        await this.sendMessage(replyTo, intent.response, replyIsGroup);
         return;
       }
 
       if (intent.type === "unknown" || intent.confidence < 0.5) {
         await this.sendMessage(
-          phone,
+          replyTo,
           "🤔 Não entendi sua pergunta. Pode reformular?\n\n" +
-          "Eu sei consultar: Estoque, Despesas, Faturas e Aplicações."
+          "Eu sei consultar: Estoque, Despesas, Faturas e Aplicações.",
+          replyIsGroup
         );
         return;
       }
@@ -101,8 +163,9 @@ export class WhatsAppService {
 
       if (!data || (Array.isArray(data) && data.length === 0)) {
         await this.sendMessage(
-          phone,
-          "📭 Não encontrei informações para sua consulta."
+          replyTo,
+          "📭 Não encontrei informações para sua consulta.",
+          replyIsGroup
         );
         return;
       }
@@ -111,24 +174,26 @@ export class WhatsAppService {
       const response = await this.gemini.generateNaturalResponse(data, intent);
 
       // 5. Enviar resposta
-      await this.sendMessage(phone, response);
+      await this.sendMessage(replyTo, response, replyIsGroup);
     } catch (error) {
       console.error("[WhatsAppService] Erro ao processar mensagem:", error);
       await this.sendMessage(
-        phone,
-        "❌ Ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde."
+        replyTo,
+        "❌ Ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.",
+        replyIsGroup
       );
     }
   }
 
   /**
-   * Envia mensagem via Z-API
+   * Envia mensagem via Z-API (suporta chat individual e grupo)
    */
-  async sendMessage(phone: string, message: string): Promise<boolean> {
-    const formattedPhone = ZApi.formatPhoneNumber(phone);
+  async sendMessage(phoneOrChatId: string, message: string, isGroup: boolean = false): Promise<boolean> {
+    const formattedPhone = isGroup ? phoneOrChatId : ZApi.formatPhoneNumber(phoneOrChatId);
     const result = await this.zapi.sendTextMessage({
       phone: formattedPhone,
       message,
+      isGroup,
     });
 
     if (!result.success) {
@@ -140,29 +205,27 @@ export class WhatsAppService {
 
   /**
    * Busca usuário pelo número de WhatsApp
-   * Verifica tanto na tabela users quanto farm_farmers
+   * Verifica whatsapp_number principal E whatsapp_extra_numbers (JSON array)
    */
   private async findUserByPhone(phone: string): Promise<{ id: string; name: string } | null> {
     try {
       const formattedPhone = ZApi.formatPhoneNumber(phone);
-
-      // Buscar na tabela users pelo campo whatsapp_number
-      // Usando SQL direto pois o campo pode não estar no schema Drizzle ainda
       console.log(`[WhatsAppService] Find user - Raw: ${phone}, Formatted: ${formattedPhone}`);
 
-      // Buscar na tabela users pelo campo whatsapp_number
       const isNeon = process.env.DATABASE_URL?.includes('neon.tech');
 
+      // Buscar por whatsapp_number principal OU nos extras (JSON array)
       let userResult: any;
       if (isNeon) {
-        userResult = await pool.query(`SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = $1 LIMIT 1`, [formattedPhone]);
-        console.log(`[WhatsAppService] Neon Query Result:`, userResult.rows);
+        userResult = await pool.query(
+          `SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
+          [formattedPhone, `%${formattedPhone}%`]
+        );
         if (userResult.rows && userResult.rows.length > 0) {
           return { id: userResult.rows[0].id, name: userResult.rows[0].name };
         }
       } else {
-        userResult = await pool`SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = ${formattedPhone} LIMIT 1`;
-        console.log(`[WhatsAppService] Postgres Query Result found: ${userResult.length}`);
+        userResult = await pool`SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = ${formattedPhone} OR whatsapp_extra_numbers LIKE ${'%' + formattedPhone + '%'} LIMIT 1`;
         if (userResult && userResult.length > 0) {
           console.log(`[WhatsAppService] User found: ${userResult[0].name} (${userResult[0].whatsapp_number})`);
           return { id: userResult[0].id, name: userResult[0].name };
@@ -170,23 +233,6 @@ export class WhatsAppService {
           console.log(`[WhatsAppService] No user found for ${formattedPhone}`);
         }
       }
-
-      // Buscar na tabela farm_farmers pelo campo whatsapp_number ou phone
-      // Removido temporariamente pois a tabela farm_farmers ainda não existe na produção
-      /*
-      let farmerResult: any;
-      if (isNeon) {
-        farmerResult = await pool.query(`SELECT id, name FROM farm_farmers WHERE whatsapp_number = $1 OR phone = $1 LIMIT 1`, [formattedPhone]);
-        if (farmerResult.rows && farmerResult.rows.length > 0) {
-          return { id: farmerResult.rows[0].id, name: farmerResult.rows[0].name || "Agricultor" };
-        }
-      } else {
-        farmerResult = await pool`SELECT id, name FROM farm_farmers WHERE whatsapp_number = ${formattedPhone} OR phone = ${formattedPhone} LIMIT 1`;
-        if (farmerResult && farmerResult.length > 0) {
-          return { id: farmerResult[0].id, name: farmerResult[0].name || "Agricultor" };
-        }
-      }
-      */
 
       return null;
     } catch (error) {

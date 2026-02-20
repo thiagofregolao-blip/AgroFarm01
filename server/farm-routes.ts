@@ -60,6 +60,7 @@ export function registerFarmRoutes(app: Express) {
                 username: user.username,
                 role: user.role,
                 whatsapp_number: user.whatsapp_number,
+                whatsapp_extra_numbers: user.whatsapp_extra_numbers,
             });
         } catch (error) {
             console.error("[FARM_ME]", error);
@@ -70,7 +71,7 @@ export function registerFarmRoutes(app: Express) {
     // Update user profile (name and whatsapp)
     app.put("/api/farm/me", requireFarmer, async (req, res) => {
         try {
-            const { name, whatsapp_number } = req.body;
+            const { name, whatsapp_number, whatsapp_extra_numbers } = req.body;
             const userId = (req.user as any).id;
 
             // Dynamically import db to avoid circular dependency issues
@@ -84,7 +85,8 @@ export function registerFarmRoutes(app: Express) {
             const [updatedUser] = await db.update(users)
                 .set({
                     name,
-                    whatsapp_number: formattedPhone
+                    whatsapp_number: formattedPhone,
+                    whatsapp_extra_numbers: whatsapp_extra_numbers || null,
                 })
                 .where(eq(users.id, userId))
                 .returning();
@@ -101,6 +103,7 @@ export function registerFarmRoutes(app: Express) {
                 username: updatedUser.username,
                 role: updatedUser.role,
                 whatsapp_number: updatedUser.whatsapp_number || undefined,
+                whatsapp_extra_numbers: updatedUser.whatsapp_extra_numbers || undefined,
             });
         } catch (error) {
             console.error("[FARM_ME_UPDATE]", error);

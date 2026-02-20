@@ -11,9 +11,10 @@ interface ZApiConfig {
 }
 
 interface SendMessageParams {
-  phone: string; // Número no formato: 5511999999999 (sem +)
+  phone: string; // Número no formato: 5511999999999 (sem +) ou chatId do grupo
   message: string;
   delay?: number; // Delay em segundos antes de enviar
+  isGroup?: boolean; // Se true, envia para grupo via chatId
 }
 
 interface ZApiWebhookMessage {
@@ -24,6 +25,9 @@ interface ZApiWebhookMessage {
   messageId?: string;
   timestamp?: number;
   instanceId?: string;
+  isGroup?: boolean;
+  chatId?: string; // ID do grupo (ex: 5511999999999-group@g.us)
+  senderPhone?: string; // Quem enviou no grupo
 }
 
 export class ZApiClient {
@@ -56,14 +60,23 @@ export class ZApiClient {
         headers["Client-Token"] = this.clientToken;
       }
 
+      // Para grupos, usar o endpoint send-text com chatId
+      const body: any = {
+        message: params.message,
+        delay: params.delay || 0,
+      };
+
+      // Se for grupo, enviar para chatId; caso contrário, para phone
+      if (params.isGroup) {
+        body.chatId = params.phone; // chatId do grupo
+      } else {
+        body.phone = params.phone;
+      }
+
       const response = await fetch(url, {
         method: "POST",
         headers: headers,
-        body: JSON.stringify({
-          phone: params.phone,
-          message: params.message,
-          delay: params.delay || 0,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -147,6 +160,13 @@ export class ZApiClient {
       const phone = body.phone;
       const message = body.message || body.text?.message;
 
+      // Detectar se é mensagem de grupo
+      // Z-API envia isGroup: true e chatId com formato "5511999999999-group@g.us"
+      const isGroup = body.isGroup === true || (body.chatId && String(body.chatId).includes("@g.us"));
+      const chatId = body.chatId || body.chat?.id;
+      // Em grupos, body.phone é o número do grupo e body.participant ou body.senderPhone é quem mandou
+      const senderPhone = body.participant || body.senderPhone || body.phone;
+
       // Suporte a áudio (Z-API pode enviar type="ReceivedCallback" mas com objeto "audio")
       const isAudio = body.type === "audio" || body.type === "voice" || !!body.audio || !!body.voice;
       const audioUrl = body.audio?.audioUrl || body.voice?.audioUrl || body.audioUrl;
@@ -166,6 +186,9 @@ export class ZApiClient {
         messageId: body.messageId,
         timestamp: body.momment || body.timestamp, // Z-API usa 'momment' (typo) ou timestamp
         instanceId: body.instanceId,
+        isGroup,
+        chatId: isGroup ? chatId : undefined,
+        senderPhone: isGroup ? senderPhone : phone,
       };
     } catch (error) {
       console.error("[Z-API] Erro ao parsear webhook:", error);
