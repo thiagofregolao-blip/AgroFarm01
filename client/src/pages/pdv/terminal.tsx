@@ -143,15 +143,18 @@ export default function PdvTerminal() {
     const isInCart = (productId: string) => cart.some(c => c.product.id === productId);
 
     const addToCart = (product: any) => {
+        if (isInCart(product.id)) {
+            // Toggle: remove from cart if already there
+            setCart(cart.filter(c => c.product.id !== product.id));
+            return;
+        }
         const stockQty = getStockForProduct(product.id);
         if (stockQty <= 0) return; // Block adding products with no stock
-        if (!isInCart(product.id)) {
-            setCart([...cart, {
-                product,
-                quantity: 1,
-                dosePerHa: product.dosePerHa ? parseFloat(product.dosePerHa) : undefined
-            }]);
-        }
+        setCart([...cart, {
+            product,
+            quantity: 1,
+            dosePerHa: product.dosePerHa ? parseFloat(product.dosePerHa) : undefined
+        }]);
     };
 
     const updateQuantity = (productId: string, qty: number) => {
@@ -1182,8 +1185,18 @@ export default function PdvTerminal() {
                                                             onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
                                                             <Minus className="h-3.5 w-3.5" />
                                                         </button>
-                                                        <Input type="number" step="1" value={item.quantity}
-                                                            onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                                                        <Input type="text" inputMode="numeric"
+                                                            value={item.quantity === 0 ? "" : item.quantity}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                if (val === "" || val === "0") {
+                                                                    updateQuantity(item.product.id, 0);
+                                                                } else {
+                                                                    const num = parseFloat(val);
+                                                                    if (!isNaN(num)) updateQuantity(item.product.id, num);
+                                                                }
+                                                            }}
+                                                            onFocus={(e) => e.target.select()}
                                                             className="text-center text-base font-bold flex-1 h-9 bg-white border-gray-200 text-gray-800 rounded-lg" />
                                                         <button className="w-9 h-9 rounded-lg bg-[#16A249] hover:bg-[#15803d] flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
                                                             onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
