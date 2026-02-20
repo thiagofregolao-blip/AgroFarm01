@@ -143,6 +143,8 @@ export default function PdvTerminal() {
     const isInCart = (productId: string) => cart.some(c => c.product.id === productId);
 
     const addToCart = (product: any) => {
+        const stockQty = getStockForProduct(product.id);
+        if (stockQty <= 0) return; // Block adding products with no stock
         if (!isInCart(product.id)) {
             setCart([...cart, {
                 product,
@@ -154,6 +156,8 @@ export default function PdvTerminal() {
 
     const updateQuantity = (productId: string, qty: number) => {
         if (qty < 0) qty = 0;
+        const stockQty = getStockForProduct(productId);
+        if (qty > stockQty) qty = stockQty; // Cap at available stock
         setCart(cart.map(c => c.product.id === productId ? { ...c, quantity: qty } : c));
     };
 
@@ -1041,7 +1045,7 @@ export default function PdvTerminal() {
 
                     {/* Product grid — 4 per row */}
                     <div className="flex-1 overflow-y-auto p-4">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="flex flex-col gap-2">
                             {filtered.map((p: any) => {
                                 const stockQty = getStockForProduct(p.id);
                                 const inCart = isInCart(p.id);
@@ -1051,53 +1055,51 @@ export default function PdvTerminal() {
                                     <button
                                         key={p.id}
                                         onClick={() => addToCart(p)}
-                                        className={`group relative rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-xl hover:-translate-y-1 bg-white text-left ${inCart ? "ring-2 ring-[#16A249] shadow-lg shadow-green-100" : "shadow-md hover:shadow-lg border border-gray-100/80"}`}
+                                        disabled={lowStock}
+                                        className={`group relative flex items-center gap-3 rounded-xl overflow-hidden transition-all duration-200 bg-white text-left p-2 pr-3 ${lowStock ? "opacity-60 cursor-not-allowed" : "hover:shadow-lg hover:-translate-y-0.5"} ${inCart ? "ring-2 ring-[#16A249] shadow-md shadow-green-100" : "shadow-sm border border-gray-100/80"}`}
                                     >
-                                        {/* Product image / icon */}
-                                        <div className={`h-36 bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden`}>
-                                            {/* Decorative shimmer */}
-                                            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 group-hover:via-white/20 transition-all" />
+                                        {/* Product image — left side */}
+                                        <div className={`w-20 h-20 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden shrink-0`}>
                                             {p.imageUrl ? (
-                                                <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-3 bg-white/95 relative z-10"
+                                                <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-1.5 bg-white/95 rounded-lg"
                                                     onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.classList.remove("hidden"); }} />
                                             ) : null}
-                                            <div className={`flex flex-col items-center justify-center relative z-10 ${p.imageUrl ? "hidden" : ""}`}>
-                                                <span className="text-5xl drop-shadow-lg group-hover:scale-110 transition-transform duration-300">{CATEGORY_EMOJI[p.category] || "📦"}</span>
-                                            </div>
-                                            {/* Stock badge */}
-                                            <div className={`absolute top-2 right-2 px-2 py-1 rounded-lg text-[10px] font-bold text-white z-20 ${lowStock ? "bg-red-500" : "bg-black/40 backdrop-blur-sm"}`}>
-                                                {stockQty.toFixed(0)} {p.unit}
+                                            <div className={`flex items-center justify-center ${p.imageUrl ? "hidden" : ""}`}>
+                                                <span className="text-3xl drop-shadow-lg">{CATEGORY_EMOJI[p.category] || "📦"}</span>
                                             </div>
                                             {/* Cart selected indicator */}
                                             {inCart && (
-                                                <div className="absolute top-2 left-2 w-7 h-7 bg-[#16A249] rounded-lg flex items-center justify-center shadow-lg z-20">
-                                                    <Check className="h-4 w-4 text-white" />
+                                                <div className="absolute top-1 left-1 w-5 h-5 bg-[#16A249] rounded-md flex items-center justify-center shadow-sm z-20">
+                                                    <Check className="h-3 w-3 text-white" />
                                                 </div>
                                             )}
-                                            {/* Category pill */}
-                                            <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-white/25 backdrop-blur-sm text-[10px] font-semibold text-white z-20">
-                                                {p.category ? p.category.charAt(0).toUpperCase() + p.category.slice(1) : "Outro"}
-                                            </div>
                                         </div>
-                                        {/* Product info */}
-                                        <div className="p-3">
-                                            <p className="font-bold text-sm leading-snug line-clamp-2 text-gray-800 group-hover:text-emerald-700 transition-colors min-h-[2.5rem]" title={p.name}>
+
+                                        {/* Product info — right side */}
+                                        <div className="flex-1 min-w-0 py-0.5">
+                                            <p className="font-bold text-sm leading-snug line-clamp-2 text-gray-800 group-hover:text-emerald-700 transition-colors" title={p.name}>
                                                 {p.name}
                                             </p>
-                                            <div className="flex items-center justify-between mt-2">
+                                            <div className="flex items-center gap-2 mt-1">
                                                 {p.dosePerHa ? (
                                                     <div className="flex items-center gap-1">
-                                                        <Droplets className="h-3.5 w-3.5 text-blue-500" />
-                                                        <span className="text-xs text-blue-500 font-semibold">{parseFloat(p.dosePerHa).toFixed(1)} {p.unit}/ha</span>
+                                                        <Droplets className="h-3 w-3 text-blue-500" />
+                                                        <span className="text-[11px] text-blue-500 font-semibold">{parseFloat(p.dosePerHa).toFixed(1)} {p.unit}/ha</span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs text-gray-300">{p.unit || "—"}</span>
+                                                    <span className="text-[11px] text-gray-300">{p.unit || "—"}</span>
                                                 )}
-                                                {/* Mini stock bar */}
-                                                <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${lowStock ? "bg-red-100 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
-                                                    {lowStock ? "Sem estoque" : `${stockQty.toFixed(0)} disp.`}
-                                                </div>
+                                                {p.category && (
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">
+                                                        {p.category.charAt(0).toUpperCase() + p.category.slice(1)}
+                                                    </span>
+                                                )}
                                             </div>
+                                        </div>
+
+                                        {/* Stock badge — far right */}
+                                        <div className={`shrink-0 text-xs font-bold px-2 py-1 rounded-lg ${lowStock ? "bg-red-100 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
+                                            {lowStock ? "Sem estoque" : `${stockQty.toFixed(0)} ${p.unit}`}
                                         </div>
                                     </button>
                                 );
