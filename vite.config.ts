@@ -20,7 +20,7 @@ export default defineConfig({
         display: "standalone",
         orientation: "portrait",
         scope: "/",
-        start_url: "/pdv/login",
+        start_url: "/",
         icons: [
           {
             src: "icon-192x192.png",
@@ -37,6 +37,22 @@ export default defineConfig({
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
+          },
+        ],
+        shortcuts: [
+          {
+            name: "PDV - Ponto de Venda",
+            short_name: "PDV",
+            description: "Acessar o terminal de vendas",
+            url: "/pdv/login",
+            icons: [{ src: "icon-192x192.png", sizes: "192x192" }],
+          },
+          {
+            name: "Painel Administrativo",
+            short_name: "Admin",
+            description: "Acessar o painel administrativo",
+            url: "/",
+            icons: [{ src: "icon-192x192.png", sizes: "192x192" }],
           },
         ],
       },
