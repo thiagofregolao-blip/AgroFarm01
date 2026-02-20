@@ -104,6 +104,16 @@ const runMigration = async () => {
             console.log('✅ Migração farm_farmers_fields concluída!');
         }
 
+        // Migration 8: Add whatsapp_extra_numbers to users
+        const whatsappExtraPath = path.join(process.cwd(), 'migration_whatsapp_extra_numbers.sql');
+        if (fs.existsSync(whatsappExtraPath)) {
+            const whatsappExtraSql = fs.readFileSync(whatsappExtraPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', whatsappExtraPath);
+            console.log('🚀 Executando SQL (whatsapp_extra_numbers)...');
+            await sql.unsafe(whatsappExtraSql);
+            console.log('✅ Migração whatsapp_extra_numbers concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
