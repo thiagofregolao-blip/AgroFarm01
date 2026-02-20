@@ -28,12 +28,12 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
     const handleLogout = () => {
         logoutMutation.mutate(undefined, {
-            onSuccess: () => setLocation("/auth"),
+            onSuccess: () => setLocation("/fazenda/login"),
         });
     };
 
     if (!user) {
-        setLocation("/auth");
+        setLocation("/fazenda/login");
         return null;
     }
 

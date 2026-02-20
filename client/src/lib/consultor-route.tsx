@@ -37,5 +37,21 @@ export function ConsultorRoute({
     );
   }
 
+  if (user.role === 'agricultor') {
+    return (
+      <Route path={path}>
+        <Redirect to="/fazenda" />
+      </Route>
+    );
+  }
+
+  if (user.role === 'admin_agricultor') {
+    return (
+      <Route path={path}>
+        <Redirect to="/admin-farmers" />
+      </Route>
+    );
+  }
+
   return <Route path={path} component={Component} />;
 }
