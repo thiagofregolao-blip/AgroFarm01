@@ -92,7 +92,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
             </aside>
 
             {/* ===== MAIN CONTENT (offset by sidebar width) ===== */}
-            <main className="flex-1 ml-[60px] md:ml-[200px] min-h-screen">
+            <main className="flex-1 ml-[60px] md:ml-[200px] min-h-screen overflow-x-hidden max-w-[calc(100vw-60px)] md:max-w-[calc(100vw-200px)]">
                 {/* Top bar with page title */}
                 <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/60 shadow-sm sticky top-0 z-30">
                     <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
@@ -103,7 +103,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     </div>
                 </header>
 
-                <div className="px-4 sm:px-6 lg:px-8 py-6">
+                <div className="px-2 sm:px-6 lg:px-8 py-4 sm:py-6 overflow-x-auto">
                     {children}
                 </div>
             </main>

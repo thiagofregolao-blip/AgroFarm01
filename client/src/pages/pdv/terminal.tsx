@@ -1016,7 +1016,7 @@ export default function PdvTerminal() {
             </aside>
 
             {/* ===== MAIN CONTENT (offset by sidebar) ===== */}
-            <div className="flex-1 ml-[56px] flex flex-col h-screen">
+            <div className="flex-1 ml-[56px] flex flex-col h-screen overflow-x-hidden max-w-[calc(100vw-56px)]">
                 {/* Compact top bar */}
                 <header className="flex items-center justify-between px-4 py-2 bg-white/90 backdrop-blur-sm border-b border-gray-200/60 shadow-sm shrink-0 z-20">
                     <div className="flex items-center gap-2">
