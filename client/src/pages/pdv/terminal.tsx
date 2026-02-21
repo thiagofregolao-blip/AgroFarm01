@@ -519,7 +519,7 @@ export default function PdvTerminal() {
 
     const handleLogout = () => {
         exitFullscreen();
-        window.location.href = "https://www.agrofarmdigital.com/auth";
+        setLocation("/pdv/login");
     };
 
     if (pdvLoading) {
@@ -531,7 +531,7 @@ export default function PdvTerminal() {
     }
 
     if (pdvError || !pdvData) {
-        window.location.href = "https://www.agrofarmdigital.com/auth";
+        setLocation("/pdv/login");
         return null;
     }
 
