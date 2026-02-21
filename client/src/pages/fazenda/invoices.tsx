@@ -289,32 +289,35 @@ export default function FarmInvoices() {
                                 {invoices.map((inv: any) => (
                                     <div
                                         key={inv.id}
-                                        className={`flex items-center gap-4 p-3 rounded-lg border cursor-pointer transition-colors
+                                        className={`p-3 rounded-lg border cursor-pointer transition-colors
                       ${selectedInvoice === inv.id ? "border-emerald-300 bg-emerald-50" : "border-gray-100 hover:bg-gray-50"}`}
                                         onClick={() => setSelectedInvoice(inv.id)}
                                     >
-                                        <FileText className={`h-5 w-5 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-sm truncate">#{inv.invoiceNumber || "—"} — {inv.supplier || "Fornecedor desconhecido"}</p>
-                                            <p className="text-xs text-gray-500">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "Data desconhecida"}</p>
+                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <FileText className={`h-4 w-4 shrink-0 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
+                                                <p className="font-medium text-sm truncate">#{inv.invoiceNumber || "—"} — {inv.supplier || "Fornecedor desconhecido"}</p>
+                                            </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (confirm("Excluir esta fatura? Esta ação não pode ser desfeita.")) {
+                                                        deleteMutation.mutate(inv.id);
+                                                    }
+                                                }}
+                                                className="p-1 rounded hover:bg-red-100 transition-colors shrink-0"
+                                                title="Excluir fatura"
+                                            >
+                                                <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
+                                            </button>
                                         </div>
-                                        <Badge variant={inv.status === "confirmed" ? "default" : "secondary"}>
-                                            {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
-                                        </Badge>
-                                        <p className="font-semibold text-sm">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-                                        <Eye className="h-4 w-4 text-gray-400" />
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (confirm("Excluir esta fatura? Esta ação não pode ser desfeita.")) {
-                                                    deleteMutation.mutate(inv.id);
-                                                }
-                                            }}
-                                            className="p-1 rounded hover:bg-red-100 transition-colors"
-                                            title="Excluir fatura"
-                                        >
-                                            <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
-                                        </button>
+                                        <div className="flex items-center gap-3 pl-6">
+                                            <p className="text-xs text-gray-500">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "Data desconhecida"}</p>
+                                            <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0.5">
+                                                {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                            </Badge>
+                                            <p className="font-semibold text-sm ml-auto">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
