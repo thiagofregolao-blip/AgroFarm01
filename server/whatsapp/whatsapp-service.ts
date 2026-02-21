@@ -54,6 +54,18 @@ const COMMAND_KEYWORDS = [
   "aplicação", "aplicacao", "aplicar",
   "relatório", "relatorio", "resumo",
   "talhão", "talhao", "propriedade",
+  // Conversacional - manter na mensagem
+  "oi", "olá", "ola", "bom dia", "boa tarde", "boa noite",
+  "obrigado", "obrigada", "valeu", "vlw", "tmj",
+  "como vai", "tudo bem", "e aí", "eai",
+  "tchau", "até mais", "ate mais", "flw",
+  // Agronomia - CRUCIAL manter na mensagem
+  "controle", "controlar", "combater", "combate",
+  "doença", "doenca", "praga", "pragas", "erva daninha", "planta daninha",
+  "ferrugem", "percevejo", "lagarta", "pulgão", "pulgao",
+  "buva", "capim", "picão", "picao", "caruru",
+  "recomendação", "recomendacao", "receita", "indicação", "indicacao",
+  "usar contra", "bom para", "bom pra", "serve para", "serve pra",
 ];
 
 export class WhatsAppService {
