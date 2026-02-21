@@ -37,6 +37,13 @@ const TRIGGER_KEYWORDS = [
   "obrigado", "obrigada", "valeu", "vlw", "tmj",
   "como vai", "tudo bem", "e aí", "eai",
   "tchau", "até mais", "ate mais", "flw",
+  // Agronomia / recomendações
+  "controle", "controlar", "combater", "combate",
+  "doença", "doenca", "praga", "pragas", "erva daninha", "planta daninha",
+  "ferrugem", "percevejo", "lagarta", "pulgão", "pulgao",
+  "buva", "capim", "picão", "picao", "caruru",
+  "recomendação", "recomendacao", "receita", "indicação", "indicacao",
+  "usar contra", "bom para", "bom pra", "serve para", "serve pra",
 ];
 // Palavras que NÃO devem ser removidas da mensagem (são comandos, não keywords de ativação)
 const COMMAND_KEYWORDS = [
@@ -178,6 +185,26 @@ export class WhatsAppService {
       // Se for apenas papo furado ou dúvida geral, responde direto
       if (intent.type === "conversation" && intent.response) {
         await this.sendMessage(replyTo, intent.response, replyIsGroup);
+        return;
+      }
+
+      // Se for consulta agronômica / recomendação de produto
+      if (intent.type === "recommendation") {
+        await this.sendMessage(replyTo, "🧑‍🌾 Deixa eu analisar seu estoque e te dar uma recomendação...", replyIsGroup);
+
+        // Buscar estoque completo do agricultor
+        const stockData = await this.handler.executeQuery(
+          { type: "query", entity: "stock", filters: {}, confidence: 1, question: intent.question },
+          user.id
+        );
+
+        if (!stockData || stockData.length === 0) {
+          await this.sendMessage(replyTo, "📭 Não encontrei produtos no seu estoque. Cadastre seus produtos primeiro para que eu possa recomendar!", replyIsGroup);
+          return;
+        }
+
+        const recommendation = await this.gemini.generateAgronomicRecommendation(stockData, intent);
+        await this.sendMessage(replyTo, recommendation, replyIsGroup);
         return;
       }
 

@@ -9,7 +9,7 @@ interface GeminiConfig {
 }
 
 export interface QueryIntent {
-  type: "query" | "action" | "conversation" | "unknown";
+  type: "query" | "action" | "conversation" | "recommendation" | "unknown";
   entity: "stock" | "expenses" | "invoices" | "applications" | "properties" | "plots" | "general" | "unknown";
   filters?: Record<string, any>;
   question?: string;
@@ -159,32 +159,40 @@ REGRAS:
    - Para "obrigado/valeu" → agradeça e diga que tá sempre ali
    - Para "tchau" → despeça-se caloroso, deseje boa safra
    - Para perguntas sobre você → conte quem você é de forma simpática
-   - Para dúvidas agrícolas (pragas, clima, doenças) → dê dicas breves e úteis
 
-2. Se for CONSULTA DE DADOS (estoque, preço, fatura, despesa, aplicação):
+2. Se for CONSULTA AGRONÔMICA / RECOMENDAÇÃO (ex: "o que usar contra ferrugem?", "tem algo bom pra planta daninha?", "como controlar percevejo?", "qual herbicida usar?", "preciso de fungicida para soja"):
+   - type: "recommendation", entity: "stock"
+   - No campo "filters", extraia a "pest" (praga/doença/erva daninha) e opcionalmente a "crop" (cultura)
+   - Ex: {"pest": "ferrugem", "crop": "soja"}
+   - IMPORTANTE: NÃO responda direto — o sistema vai buscar o estoque do agricultor primeiro!
+
+3. Se for CONSULTA DE DADOS (estoque, preço, fatura, despesa, aplicação):
    - type: "query", entity: a tabela certa
    - Extraia filters: product, period, category
    - "preço/valor/quanto paguei" → entity: "invoices"
    - Corrija erros de digitação em nomes de produtos
 
-3. Se tiver CONTEXTO anterior e o usuário fizer referência ("e dele?", "desse produto"):
+4. Se tiver CONTEXTO anterior e o usuário fizer referência ("e dele?", "desse produto"):
    - USE o filtro do contexto anterior
 
 RETORNE APENAS JSON:
 {
-  "type": "query|conversation|unknown",
+  "type": "query|conversation|recommendation|unknown",
   "entity": "stock|expenses|invoices|applications|properties|plots|general|unknown",
-  "filters": { "product": "nome", "period": "month", "category": "nome" },
+  "filters": { "product": "nome", "period": "month", "category": "nome", "pest": "praga/doença", "crop": "cultura" },
   "confidence": 0.0-1.0,
   "response": "Texto (apenas se type=conversation)"
 }
 
 EXEMPLOS:
-- "Bom dia!" → {"type":"conversation","entity":"general","response":"Bom dia, parceiro! ☀️🚜 Que o sol esteja bonito aí no campo! Como posso te ajudar hoje?","confidence":1.0}
+- "Bom dia!" → {"type":"conversation","entity":"general","response":"Bom dia, parceiro! ☀️🚜 Que o sol esteja bonito aí no campo!","confidence":1.0}
 - "Valeu, AgroBot!" → {"type":"conversation","entity":"general","response":"Tmj! 💪 Tô aqui sempre que precisar. Boas colheitas! 🌾","confidence":1.0}
 - "Quanto tenho de estoque?" → {"type":"query","entity":"stock","filters":{},"confidence":0.9}
 - "Preço do glifosato" → {"type":"query","entity":"invoices","filters":{"product":"glifosato"},"confidence":0.9}
-- "O que é ferrugem asiática?" → {"type":"conversation","entity":"general","response":"A ferrugem asiática é uma doença causada pelo fungo Phakopsora pachyrhizi que ataca a soja. É importante monitorar desde o R1 e aplicar fungicida preventivo! 🌱 Quer que eu veja suas aplicações recentes?","confidence":1.0}
+- "O que usar contra ferrugem na soja?" → {"type":"recommendation","entity":"stock","filters":{"pest":"ferrugem","crop":"soja"},"confidence":0.95}
+- "Tem algo no estoque pra planta daninha?" → {"type":"recommendation","entity":"stock","filters":{"pest":"planta daninha"},"confidence":0.9}
+- "Qual herbicida usar pra capim?" → {"type":"recommendation","entity":"stock","filters":{"pest":"capim"},"confidence":0.9}
+- "Como controlar percevejo?" → {"type":"recommendation","entity":"stock","filters":{"pest":"percevejo"},"confidence":0.9}
 
 RESPOSTA (apenas JSON, sem markdown):`;
   }
@@ -434,5 +442,98 @@ RESPOSTA (texto pronto para WhatsApp, sem markdown):`;
     });
 
     return message;
+  }
+
+  /**
+   * Gera recomendação agronômica cruzando estoque do agricultor com conhecimento técnico
+   */
+  async generateAgronomicRecommendation(stockData: any[], intent: QueryIntent): Promise<string> {
+    try {
+      const pest = intent.filters?.pest || "problema não especificado";
+      const crop = intent.filters?.crop || "";
+
+      // Preparar dados do estoque simplificados
+      const stockSummary = stockData.map(item => ({
+        nome: item.productName,
+        ingredienteAtivo: item.activeIngredient,
+        categoria: item.category,
+        quantidade: parseFloat(item.quantity || 0),
+        unidade: item.unit,
+      }));
+
+      const prompt = `
+Você é um AGRÔNOMO PROFISSIONAL com 20 anos de experiência no campo, integrado ao AgroBot.
+O agricultor está te consultando pelo WhatsApp e precisa de uma recomendação técnica.
+
+PERGUNTA DO AGRICULTOR:
+"${intent.question}"
+
+PROBLEMA IDENTIFICADO: ${pest}${crop ? ` na cultura de ${crop}` : ""}
+
+ESTOQUE DO AGRICULTOR (produtos que ele TEM disponível):
+${JSON.stringify(stockSummary, null, 2)}
+
+SUA MISSÃO:
+1. Analise o estoque e identifique quais produtos são EFICAZES contra "${pest}"
+   - Use seu conhecimento sobre ingredientes ativos e suas indicações
+   - Considere herbicidas, fungicidas, inseticidas e adjuvantes conforme o caso
+2. Para cada produto recomendado do estoque, explique:
+   - POR QUE é bom para esse problema (mecanismo de ação)
+   - DOSE recomendada aproximada (por hectare)
+   - QUANDO aplicar (momento ideal)
+3. Se NÃO encontrar produtos adequados no estoque:
+   - Informe que o agricultor não tem o produto ideal
+   - SUGIRA quais ingredientes ativos ele deveria comprar
+
+FORMATO DE RESPOSTA (WhatsApp):
+🧑‍🌾 *RECOMENDAÇÃO AGRONÔMICA*
+─────────────────
+🎯 *Problema:* ${pest}${crop ? ` (${crop})` : ""}
+
+✅ *DO SEU ESTOQUE:*
+
+🔹 *Nome do Produto*
+   💊 Ingrediente ativo: X
+   📏 Dose: X L/ha ou kg/ha
+   ⏰ Aplicar: momento ideal
+   💡 Por quê: explicação breve
+
+[se não tiver produto adequado:]
+⚠️ *PRODUTOS QUE VOCÊ PRECISA COMPRAR:*
+Ingrediente ativo X (ex: produto comercial Y)
+
+─────────────────
+📌 *Dica:* [observação prática útil]
+
+REGRAS:
+- Máximo 400 palavras
+- Seja TÉCNICO mas ACESSÍVEL (linguagem do campo)
+- Use formatação WhatsApp (*negrito*)
+- Valores decimais com vírgula
+- Se não tiver certeza do ingrediente ativo, NÃO invente
+- Sempre termine com uma dica prática
+
+RESPOSTA (texto pronto para WhatsApp):`;
+
+      const response = await fetch(
+        `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        }
+      );
+
+      const responseData = await response.json();
+      const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (text) return text;
+
+      return `🧑‍🌾 Não consegui analisar seu estoque para "${pest}" agora. Tente perguntar de outra forma ou consulte um agrônomo presencialmente. 🌱`;
+
+    } catch (error) {
+      console.error("[Gemini] Erro na recomendação agronômica:", error);
+      return `❌ Erro ao gerar recomendação. Tente novamente em instantes.`;
+    }
   }
 }
