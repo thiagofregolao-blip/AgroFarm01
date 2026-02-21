@@ -64,40 +64,44 @@ function PlotCostCard({ plot, maxCost }: { plot: any; maxCost: number }) {
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
             {/* Header */}
             <button
-                className="w-full text-left p-5 flex items-center gap-4"
+                className="w-full text-left p-4 space-y-2"
                 onClick={() => setExpanded(!expanded)}
             >
-                {/* Cost indicator ring */}
-                <div className="relative w-16 h-16 shrink-0">
-                    <svg viewBox="0 0 36 36" className="w-16 h-16 transform -rotate-90">
-                        <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-200 dark:text-gray-700" />
-                        <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3"
-                            stroke="url(#grad)" strokeDasharray={`${pct} ${100 - pct}`} strokeLinecap="round"
-                            className="transition-all duration-700" />
-                        <defs>
-                            <linearGradient id="grad"><stop offset="0%" stopColor="#f97316" /><stop offset="100%" stopColor="#ef4444" /></linearGradient>
-                        </defs>
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <MapPin className="w-5 h-5 text-orange-500" />
+                {/* Row 1: Icon + Name + Chevron */}
+                <div className="flex items-center gap-3">
+                    {/* Cost indicator ring — compact */}
+                    <div className="relative w-10 h-10 shrink-0">
+                        <svg viewBox="0 0 36 36" className="w-10 h-10 transform -rotate-90">
+                            <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3.5" className="text-gray-200 dark:text-gray-700" />
+                            <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3.5"
+                                stroke={`url(#grad-${plot.plotId})`} strokeDasharray={`${pct} ${100 - pct}`} strokeLinecap="round"
+                                className="transition-all duration-700" />
+                            <defs>
+                                <linearGradient id={`grad-${plot.plotId}`}><stop offset="0%" stopColor="#f97316" /><stop offset="100%" stopColor="#ef4444" /></linearGradient>
+                            </defs>
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <MapPin className="w-4 h-4 text-orange-500" />
+                        </div>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-base text-gray-900 dark:text-white truncate">{plot.plotName}</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {plot.propertyName} • {plot.plotAreaHa.toFixed(1)} ha
+                            {plot.plotCrop && <span> • {plot.plotCrop}</span>}
+                        </p>
+                    </div>
+
+                    <div className="shrink-0 text-gray-400">
+                        {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                     </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white truncate">{plot.plotName}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {plot.propertyName} • {plot.plotAreaHa.toFixed(1)} ha
-                        {plot.plotCrop && <span> • {plot.plotCrop}</span>}
-                    </p>
-                </div>
-
-                <div className="text-right shrink-0">
-                    <p className="text-xl font-bold text-orange-600 dark:text-orange-400">{formatCurrency(plot.totalCost)}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{formatCurrency(plot.costPerHa)}/ha</p>
-                </div>
-
-                <div className="shrink-0 text-gray-400">
-                    {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                {/* Row 2: Cost info */}
+                <div className="flex items-center justify-between pl-[52px]">
+                    <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCurrency(plot.totalCost)}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">{formatCurrency(plot.costPerHa)}/ha</p>
                 </div>
             </button>
 
