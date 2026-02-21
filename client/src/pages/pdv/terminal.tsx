@@ -1346,8 +1346,18 @@ export default function PdvTerminal() {
                                                                     onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
                                                                     <Minus className="h-3.5 w-3.5" />
                                                                 </button>
-                                                                <Input type="number" step="1" value={item.quantity}
-                                                                    onChange={(e) => updateQuantity(item.product.id, parseFloat(e.target.value) || 0)}
+                                                                <Input type="text" inputMode="numeric"
+                                                                    value={item.quantity === 0 ? "" : item.quantity}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        if (val === "" || val === "0") {
+                                                                            updateQuantity(item.product.id, 0);
+                                                                        } else {
+                                                                            const num = parseFloat(val);
+                                                                            if (!isNaN(num)) updateQuantity(item.product.id, num);
+                                                                        }
+                                                                    }}
+                                                                    onFocus={(e) => e.target.select()}
                                                                     className="text-center text-base font-bold flex-1 h-9 bg-gray-50 border-transparent text-gray-800 rounded-lg focus:bg-white focus:border-[#16A249]" />
                                                                 <button className="w-9 h-9 rounded-lg bg-[#16A249] text-white flex items-center justify-center shadow-sm shadow-green-200 active:scale-95 touch-manipulation"
                                                                     onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
