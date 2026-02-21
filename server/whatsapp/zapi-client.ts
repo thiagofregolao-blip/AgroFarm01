@@ -161,9 +161,10 @@ export class ZApiClient {
       const message = body.message || body.text?.message;
 
       // Detectar se é mensagem de grupo
-      // Z-API envia isGroup: true e chatId com formato "5511999999999-group@g.us"
-      const isGroup = body.isGroup === true || (body.chatId && String(body.chatId).includes("@g.us"));
-      const chatId = body.chatId || body.chat?.id;
+      // Z-API envia isGroup: true e phone com formato "120363407188318982-group"
+      const isGroup = body.isGroup === true || (body.phone && String(body.phone).includes("-group"));
+      // Z-API usa body.phone como identificador do grupo (e.g. "120363407188318982-group")
+      const chatId = body.chatId || body.chat?.id || (isGroup ? body.phone : undefined);
       // Em grupos, body.phone é o número do grupo e body.participantPhone é quem mandou
       const senderPhone = body.participantPhone || body.participant || body.senderPhone || body.phone;
 
