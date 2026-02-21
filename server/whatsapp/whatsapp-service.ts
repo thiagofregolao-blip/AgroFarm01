@@ -16,9 +16,33 @@ interface WhatsAppServiceConfig {
 }
 
 // Palavras-chave que acionam o bot em mensagens de grupo
-const TRIGGER_KEYWORDS = ["agrofarm", "@agrofarm", "agrofarma", "bot", "estoque", "aplicações", "aplicacoes", "faturas", "despesas", "custo", "safra"];
+const TRIGGER_KEYWORDS = [
+  // Nome do bot
+  "agrofarm", "@agrofarm", "agrofarma", "bot",
+  // Comandos diretos
+  "estoque", "aplicações", "aplicacoes", "faturas", "despesas", "custo", "safra",
+  // Consultas de preço/valor
+  "preço", "preco", "precio", "valor", "quanto",
+  // Produtos agrícolas genéricos
+  "produto", "produtos", "herbicida", "fungicida", "inseticida", "adubo", "fertilizante",
+  // Ações comuns
+  "compra", "compras", "gasto", "gastos", "nota", "notas",
+  "aplicação", "aplicacao", "aplicar",
+  // Consultas gerais
+  "relatório", "relatorio", "resumo", "ajuda", "help",
+  // Propriedades
+  "talhão", "talhao", "propriedade",
+];
 // Palavras que NÃO devem ser removidas da mensagem (são comandos, não keywords de ativação)
-const COMMAND_KEYWORDS = ["estoque", "aplicações", "aplicacoes", "faturas", "despesas", "custo", "safra"];
+const COMMAND_KEYWORDS = [
+  "estoque", "aplicações", "aplicacoes", "faturas", "despesas", "custo", "safra",
+  "preço", "preco", "precio", "valor", "quanto",
+  "produto", "produtos", "herbicida", "fungicida", "inseticida", "adubo", "fertilizante",
+  "compra", "compras", "gasto", "gastos", "nota", "notas",
+  "aplicação", "aplicacao", "aplicar",
+  "relatório", "relatorio", "resumo",
+  "talhão", "talhao", "propriedade",
+];
 
 export class WhatsAppService {
   private zapi: ZApiClient;

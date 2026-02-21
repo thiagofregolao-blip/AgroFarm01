@@ -258,19 +258,34 @@ O usuário perguntou: "${intent.question}"
 Aqui estão os dados encontrados no sistema:
 ${JSON.stringify(contextData, null, 2)}
 
-INSTRUÇÕES:
-1. Responda à pergunta do usuário usando esses dados de forma natural e conversacional.
-2. IMPORTANTE: Os dados abaixo pertencem ao USUÁRIO (agricultor). NUNCA diga "na AgroFarm temos". Sempre use "seu estoque", "sua fazenda", "registrado no sistema", "encontrei nas suas faturas".
-3. NÃO pareça um robô. Seja prestativo como um agrônomo parceiro.
-4. Use emojis adequados (📦, 💰, 🚜, etc).
-5. Use negrito (*texto*) para destacar valores, nomes de produtos e totais.
-6. Se for uma lista, organize com bullet points ou quebras de linha claras.
-7. Se a lista for grande, resuma ou destaque os principais itens.
-8. Mantenha a resposta curta e direta para leitura no WhatsApp.
-9. PREÇOS E MOEDA: Respeite a moeda indicada nos dados (ex: "USD", "BRL"). Se o valor for "2.75", é "2,75", NÃO "2.750,00".
-10. FIDELIDADE: Se os dados não corresponderem ao produto perguntado, diga que não encontrou. NÃO recomende outros produtos a menos que o usuário peça explicitamente.
+INSTRUÇÕES DE FORMATAÇÃO (WhatsApp):
+1. Use *texto* para negrito. NÃO use markdown com # ou **.
+2. Use emojis como marcadores (📦 🔹 💰 🌱), NÃO use • ou -.
+3. Organize listas de forma LIMPA e ALINHADA.
+4. Para ESTOQUE, use este formato:
+   📦 *SEU ESTOQUE*
+   ─────────────────
+   🔹 *Nome Produto*
+      Qtd: 100 LT | Custo: $2,75
+   🔹 *Outro Produto*
+      Qtd: 50 KG | Custo: $15,00
+   ─────────────────
+   Total: X produtos
 
-RESPOSTA (apenas o texto final):`;
+5. Para PREÇOS/FATURAS, mostre:
+   💰 *PREÇO: Nome Produto*
+   ─────────────────
+   📄 Última compra: $XX,XX (data)
+   🏪 Fornecedor: Nome
+
+6. Respostas CURTAS e DIRETAS (máximo 300 palavras).
+7. NUNCA diga "na AgroFarm" — use "seu estoque", "sua fazenda".
+8. Valores numéricos: use vírgula para decimais (2,75 e não 2.75).
+9. Se quantidade for negativa, avise com ⚠️.
+10. Se houver muitos itens (>10), faça um RESUMO com os 8 mais importantes.
+11. Respeite a moeda dos dados (USD = $, BRL = R$, PYG = ₲).
+
+RESPOSTA (apenas o texto final, sem markdown, pronto para WhatsApp):`;
 
       const response = await fetch(
         `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
