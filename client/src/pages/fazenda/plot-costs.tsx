@@ -226,7 +226,7 @@ export default function PlotCosts() {
                     ) : (
                         <>
                             {/* KPI Cards */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
                                     <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
                                         <DollarSign className="h-4 w-4 text-orange-500" />
