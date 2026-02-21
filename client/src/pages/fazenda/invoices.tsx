@@ -289,15 +289,14 @@ export default function FarmInvoices() {
                                 {invoices.map((inv: any) => (
                                     <div
                                         key={inv.id}
-                                        className={`p-3 rounded-lg border cursor-pointer transition-colors
+                                        className={`p-3 rounded-lg border cursor-pointer transition-colors overflow-hidden
                       ${selectedInvoice === inv.id ? "border-emerald-300 bg-emerald-50" : "border-gray-100 hover:bg-gray-50"}`}
                                         onClick={() => setSelectedInvoice(inv.id)}
                                     >
-                                        <div className="flex items-center justify-between gap-2 mb-1">
-                                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                <FileText className={`h-4 w-4 shrink-0 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
-                                                <p className="font-medium text-sm truncate">#{inv.invoiceNumber || "—"} — {inv.supplier || "Fornecedor desconhecido"}</p>
-                                            </div>
+                                        {/* Row 1: Icon + invoice info + delete */}
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <FileText className={`h-4 w-4 shrink-0 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
+                                            <p className="font-medium text-sm truncate flex-1 min-w-0">#{inv.invoiceNumber || "—"}</p>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -311,12 +310,15 @@ export default function FarmInvoices() {
                                                 <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
                                             </button>
                                         </div>
-                                        <div className="flex items-center gap-3 pl-6">
-                                            <p className="text-xs text-gray-500">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "Data desconhecida"}</p>
-                                            <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0.5">
-                                                {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
-                                            </Badge>
-                                            <p className="font-semibold text-sm ml-auto">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                                        {/* Row 2: Date + Badge + Price */}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <p className="text-xs text-gray-500 shrink-0">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "—"}</p>
+                                                <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0 h-5 shrink-0">
+                                                    {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                                </Badge>
+                                            </div>
+                                            <p className="font-bold text-sm text-gray-900 shrink-0">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
                                         </div>
                                     </div>
                                 ))}
