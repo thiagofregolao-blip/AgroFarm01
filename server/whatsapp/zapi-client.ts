@@ -60,15 +60,22 @@ export class ZApiClient {
         headers["Client-Token"] = this.clientToken;
       }
 
-      // Para grupos, usar o endpoint send-text com chatId
+      // Para grupos, usar o endpoint send-text com phone no formato correto
       const body: any = {
         message: params.message,
         delay: params.delay || 0,
       };
 
-      // Se for grupo, enviar para chatId; caso contrário, para phone
       if (params.isGroup) {
-        body.chatId = params.phone; // chatId do grupo
+        // Z-API webhook sends group as "123456-group" but send API needs "123456@g.us"
+        let groupPhone = params.phone;
+        if (groupPhone.endsWith("-group")) {
+          groupPhone = groupPhone.replace("-group", "@g.us");
+        } else if (!groupPhone.includes("@g.us")) {
+          groupPhone = groupPhone + "@g.us";
+        }
+        body.phone = groupPhone;
+        console.log(`[Z-API] Sending group message to: ${groupPhone}`);
       } else {
         body.phone = params.phone;
       }
