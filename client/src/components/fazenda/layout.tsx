@@ -26,12 +26,14 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
     const handleLogout = () => {
         logoutMutation.mutate(undefined, {
-            onSuccess: () => setLocation("/fazenda/login"),
+            onSuccess: () => {
+                window.location.href = "https://www.agrofarmdigital.com/auth";
+            },
         });
     };
 
     if (!user) {
-        setLocation("/fazenda/login");
+        window.location.href = "https://www.agrofarmdigital.com/auth";
         return null;
     }
 
