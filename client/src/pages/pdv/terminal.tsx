@@ -889,7 +889,7 @@ export default function PdvTerminal() {
     return (
         <div className="h-screen bg-gray-100 text-gray-800 flex">
             {/* ===== FIXED GREEN SIDEBAR for PDV ===== */}
-            <aside className="w-[56px] bg-gradient-to-b from-emerald-700 via-emerald-600 to-emerald-800 text-white flex flex-col shrink-0 fixed left-0 top-0 bottom-0 z-40 shadow-xl">
+            <aside className="w-[72px] bg-gradient-to-b from-emerald-700 via-emerald-600 to-emerald-800 text-white flex flex-col shrink-0 fixed left-0 top-0 bottom-0 z-40 shadow-xl">
                 {/* Logo */}
                 <div className="flex items-center justify-center py-4 border-b border-white/10">
                     <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg">
@@ -898,45 +898,49 @@ export default function PdvTerminal() {
                 </div>
 
                 {/* Nav icons */}
-                <nav className="flex-1 flex flex-col items-center py-3 gap-1">
+                <nav className="flex-1 flex flex-col items-center py-3 gap-1 px-1">
                     {/* Cart badge */}
                     <button
                         onClick={() => setStep("product")}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all relative ${step === "product" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
+                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all relative ${step === "product" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Produtos"
                     >
                         <ShoppingCart className="h-5 w-5" />
+                        <span className="text-[9px] font-medium leading-tight">Produtos</span>
                         {cart.length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] font-bold flex items-center justify-center text-white shadow">{cart.length}</span>
+                            <span className="absolute top-0.5 right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] font-bold flex items-center justify-center text-white shadow">{cart.length}</span>
                         )}
                     </button>
 
                     <button
                         onClick={() => step !== "product" && setStep("plot")}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${step === "plot" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
+                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${step === "plot" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Talhões"
                     >
                         <MapPin className="h-5 w-5" />
+                        <span className="text-[9px] font-medium leading-tight">Talhões</span>
                     </button>
 
                     <button
                         onClick={() => step !== "product" && step !== "plot" && setStep("confirm")}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${step === "confirm" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
+                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${step === "confirm" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Confirmar"
                     >
                         <Check className="h-5 w-5" />
+                        <span className="text-[9px] font-medium leading-tight">Confirmar</span>
                     </button>
 
-                    <div className="w-6 border-t border-white/10 my-2" />
+                    <div className="w-8 border-t border-white/10 my-2" />
 
                     {/* History Sheet */}
                     <Sheet>
                         <SheetTrigger asChild>
-                            <button className="w-10 h-10 rounded-xl flex items-center justify-center text-emerald-200/60 hover:bg-white/10 hover:text-white transition-all" title="Histórico">
+                            <button className="w-full flex flex-col items-center gap-0.5 py-2 rounded-xl text-emerald-200/60 hover:bg-white/10 hover:text-white transition-all" title="Histórico">
                                 <FileText className="h-5 w-5" />
+                                <span className="text-[9px] font-medium leading-tight">Histórico</span>
                             </button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="w-[300px] sm:w-[400px] bg-slate-50 p-0 ml-[56px]">
+                        <SheetContent side="left" className="w-[300px] sm:w-[400px] bg-slate-50 p-0 ml-[72px]">
                             <SheetHeader className="p-4 border-b border-gray-200 bg-white">
                                 <SheetTitle className="flex items-center gap-2 text-emerald-700">
                                     <FileText className="h-5 w-5" />
@@ -986,8 +990,9 @@ export default function PdvTerminal() {
                     </Sheet>
 
                     {/* Online status */}
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isOnline ? "text-emerald-300" : "text-red-300"}`} title={isOnline ? "Online" : "Offline"}>
+                    <div className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl ${isOnline ? "text-emerald-300" : "text-red-300"}`} title={isOnline ? "Online" : "Offline"}>
                         {isOnline ? <Wifi className="h-5 w-5" /> : <WifiOff className="h-5 w-5" />}
+                        <span className="text-[9px] font-medium leading-tight">{isOnline ? "Online" : "Offline"}</span>
                     </div>
 
                     {/* Sync */}
@@ -995,10 +1000,11 @@ export default function PdvTerminal() {
                         <button
                             onClick={processOfflineQueue}
                             disabled={submitting}
-                            className="w-10 h-10 rounded-xl flex items-center justify-center bg-yellow-500/30 text-yellow-200 hover:bg-yellow-500/50 transition-all animate-pulse"
+                            className="w-full flex flex-col items-center gap-0.5 py-2 rounded-xl bg-yellow-500/30 text-yellow-200 hover:bg-yellow-500/50 transition-all animate-pulse"
                             title={`Sincronizar (${offlineQueue.length})`}
                         >
                             <span className="text-sm">♻️</span>
+                            <span className="text-[9px] font-medium leading-tight">Sync</span>
                         </button>
                     )}
                 </nav>
@@ -1007,16 +1013,17 @@ export default function PdvTerminal() {
                 <div className="p-2 border-t border-white/10">
                     <button
                         onClick={handleLogout}
-                        className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto text-emerald-200/60 hover:bg-red-500/20 hover:text-red-200 transition-colors"
+                        className="w-full flex flex-col items-center gap-0.5 py-2 rounded-xl text-emerald-200/60 hover:bg-red-500/20 hover:text-red-200 transition-colors"
                         title="Sair"
                     >
                         <LogOut className="h-5 w-5" />
+                        <span className="text-[9px] font-medium leading-tight">Sair</span>
                     </button>
                 </div>
             </aside>
 
             {/* ===== MAIN CONTENT (offset by sidebar) ===== */}
-            <div className="flex-1 ml-[56px] flex flex-col h-screen overflow-x-hidden max-w-[calc(100vw-56px)]">
+            <div className="flex-1 ml-[72px] flex flex-col h-screen overflow-x-hidden max-w-[calc(100vw-72px)]">
                 {/* Compact top bar */}
                 <header className="flex items-center justify-between px-4 py-2 bg-white/90 backdrop-blur-sm border-b border-gray-200/60 shadow-sm shrink-0 z-20">
                     <div className="flex items-center gap-2">
@@ -1296,7 +1303,7 @@ export default function PdvTerminal() {
                 {/* MOBILE bottom bar */}
                 {
                     cart.length > 0 && (
-                        <div className="md:hidden fixed bottom-0 left-[56px] right-0 p-3 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg z-50">
+                        <div className="md:hidden fixed bottom-0 left-[72px] right-0 p-3 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg z-50">
                             <Sheet>
                                 <SheetTrigger asChild>
                                     <Button className="w-full py-5 text-base bg-gradient-to-r from-emerald-600 to-emerald-500 font-bold rounded-xl shadow-md">
