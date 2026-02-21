@@ -164,8 +164,8 @@ export class ZApiClient {
       // Z-API envia isGroup: true e chatId com formato "5511999999999-group@g.us"
       const isGroup = body.isGroup === true || (body.chatId && String(body.chatId).includes("@g.us"));
       const chatId = body.chatId || body.chat?.id;
-      // Em grupos, body.phone é o número do grupo e body.participant ou body.senderPhone é quem mandou
-      const senderPhone = body.participant || body.senderPhone || body.phone;
+      // Em grupos, body.phone é o número do grupo e body.participantPhone é quem mandou
+      const senderPhone = body.participantPhone || body.participant || body.senderPhone || body.phone;
 
       // Suporte a áudio (Z-API pode enviar type="ReceivedCallback" mas com objeto "audio")
       const isAudio = body.type === "audio" || body.type === "voice" || !!body.audio || !!body.voice;

@@ -16,7 +16,9 @@ interface WhatsAppServiceConfig {
 }
 
 // Palavras-chave que acionam o bot em mensagens de grupo
-const TRIGGER_KEYWORDS = ["agrofarm", "@agrofarm", "agrofarma", "bot"];
+const TRIGGER_KEYWORDS = ["agrofarm", "@agrofarm", "agrofarma", "bot", "estoque", "aplicações", "aplicacoes", "faturas", "despesas", "custo", "safra"];
+// Palavras que NÃO devem ser removidas da mensagem (são comandos, não keywords de ativação)
+const COMMAND_KEYWORDS = ["estoque", "aplicações", "aplicacoes", "faturas", "despesas", "custo", "safra"];
 
 export class WhatsAppService {
   private zapi: ZApiClient;
@@ -50,9 +52,13 @@ export class WhatsAppService {
    */
   private stripTriggerKeyword(message: string): string {
     let cleaned = message;
-    for (const kw of TRIGGER_KEYWORDS) {
+    // Only strip name-based triggers, NOT command keywords
+    const nameKeywords = TRIGGER_KEYWORDS.filter(kw => !COMMAND_KEYWORDS.includes(kw));
+    for (const kw of nameKeywords) {
       cleaned = cleaned.replace(new RegExp(kw, "gi"), "").trim();
     }
+    // Remove mentions like @number
+    cleaned = cleaned.replace(/@\d+/g, "").trim();
     // Remover espaços extras
     return cleaned.replace(/\s+/g, " ").trim();
   }
@@ -230,6 +236,13 @@ export class WhatsAppService {
           console.log(`[WhatsAppService] User found: ${userResult[0].name} (${userResult[0].whatsapp_number})`);
           return { id: userResult[0].id, name: userResult[0].name };
         } else {
+          console.log(`[WhatsAppService] No user found in users table for ${formattedPhone}, checking farm_farmers...`);
+          // Fallback: check farm_farmers table
+          const farmerResult = await pool`SELECT id, name, whatsapp_number FROM farm_farmers WHERE whatsapp_number = ${formattedPhone} LIMIT 1`;
+          if (farmerResult && farmerResult.length > 0) {
+            console.log(`[WhatsAppService] Farmer found: ${farmerResult[0].name} (${farmerResult[0].whatsapp_number})`);
+            return { id: farmerResult[0].id, name: farmerResult[0].name };
+          }
           console.log(`[WhatsAppService] No user found for ${formattedPhone}`);
         }
       }
