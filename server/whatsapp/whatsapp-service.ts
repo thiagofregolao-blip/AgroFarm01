@@ -32,6 +32,11 @@ const TRIGGER_KEYWORDS = [
   "relatório", "relatorio", "resumo", "ajuda", "help",
   // Propriedades
   "talhão", "talhao", "propriedade",
+  // Conversacional / saudações
+  "oi", "olá", "ola", "bom dia", "boa tarde", "boa noite",
+  "obrigado", "obrigada", "valeu", "vlw", "tmj",
+  "como vai", "tudo bem", "e aí", "eai",
+  "tchau", "até mais", "ate mais", "flw",
 ];
 // Palavras que NÃO devem ser removidas da mensagem (são comandos, não keywords de ativação)
 const COMMAND_KEYWORDS = [
@@ -116,7 +121,7 @@ export class WhatsAppService {
         if (!audioUrl) {
           message = this.stripTriggerKeyword(message);
           if (!message) {
-            await this.sendMessage(replyTo, "👋 Olá! Como posso ajudar? Pergunte sobre estoque, despesas, faturas ou aplicações.", replyIsGroup);
+            await this.sendMessage(replyTo, "E aí! 😄 Sou o AgroBot, seu parceiro na gestão da fazenda! 🚜\n\nPode me perguntar sobre:\n📦 *Estoque* — \"quanto tenho de glifosato?\"\n💰 *Preços* — \"preço do 24D\"\n📄 *Faturas* — \"minhas faturas\"\n🌱 *Aplicações* — \"o que apliquei?\"\n💸 *Despesas* — \"gastos do mês\"\n\nOu pode só bater um papo! 😊", replyIsGroup);
             return;
           }
         }
@@ -164,13 +169,11 @@ export class WhatsAppService {
       const lastContext = this.userContexts.get(contextKey);
       const intent = await this.gemini.interpretQuestion(message, user.id, lastContext);
 
-      // Salvar contexto atual para próxima interação
-      if (intent.type !== "unknown" && intent.type !== "conversation") {
-        this.userContexts.set(contextKey, {
-          lastIntent: intent,
-          timestamp: Date.now()
-        });
-      }
+      // Salvar contexto para próxima interação (inclusive conversas)
+      this.userContexts.set(contextKey, {
+        lastIntent: intent,
+        timestamp: Date.now()
+      });
 
       // Se for apenas papo furado ou dúvida geral, responde direto
       if (intent.type === "conversation" && intent.response) {
@@ -181,8 +184,7 @@ export class WhatsAppService {
       if (intent.type === "unknown" || intent.confidence < 0.5) {
         await this.sendMessage(
           replyTo,
-          "🤔 Não entendi sua pergunta. Pode reformular?\n\n" +
-          "Eu sei consultar: Estoque, Despesas, Faturas e Aplicações.",
+          "Hmm, não entendi bem! 😅 Tenta me perguntar de outro jeito?\n\nExemplos:\n📦 \"Qual meu estoque?\"\n💰 \"Preço do glifosato\"\n📄 \"Minhas faturas\"\n🌱 \"O que apliquei hoje?\"\n\nOu manda um \"oi\" e conversamos! 😊",
           replyIsGroup
         );
         return;
