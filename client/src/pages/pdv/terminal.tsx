@@ -332,12 +332,26 @@ export default function PdvTerminal() {
                 description: "O arquivo foi aberto em uma nova aba."
             });
         } else {
-            // Geração automática após confirmar: apenas fazer download silencioso
-            downloadPDF(pdfBlob);
-            toast({
-                title: "Receituário gerado automaticamente",
-                description: "O PDF foi baixado automaticamente. Você pode consultá-lo no histórico de saídas."
-            });
+            // Detectar mobile/PWA - abrir em vez de download silencioso
+            const isMobile = window.innerWidth < 768 ||
+                window.matchMedia('(display-mode: standalone)').matches ||
+                (navigator as any).standalone === true;
+
+            if (isMobile) {
+                // No mobile/PWA, abrir o PDF para o agricultor ver imediatamente
+                openPDF(pdfBlob);
+                toast({
+                    title: "Receituário gerado",
+                    description: "O arquivo foi aberto para visualização."
+                });
+            } else {
+                // Desktop: download silencioso
+                downloadPDF(pdfBlob);
+                toast({
+                    title: "Receituário gerado automaticamente",
+                    description: "O PDF foi baixado automaticamente. Você pode consultá-lo no histórico de saídas."
+                });
+            }
         }
     };
 

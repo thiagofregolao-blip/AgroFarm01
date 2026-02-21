@@ -64,16 +64,10 @@ export class ZApiClient {
       };
 
       if (params.isGroup) {
-        // Z-API webhook sends group as "123456-group", API expects "123456@g.us"
-        let groupId = params.phone;
-        if (groupId.endsWith("-group")) {
-          groupId = groupId.replace("-group", "@g.us");
-        } else if (!groupId.includes("@g.us")) {
-          groupId = groupId + "@g.us";
-        }
-        // Z-API group messages: set phone to group ID
-        body.phone = groupId;
-        console.log(`[Z-API] Sending group message to: ${groupId}, body:`, JSON.stringify(body));
+        // Z-API docs: groups use phone field with "-group" suffix as-is
+        // e.g. "120363407188318982-group"
+        body.phone = params.phone;
+        console.log(`[Z-API] Sending group message to: ${params.phone}, body:`, JSON.stringify(body));
       } else {
         body.phone = params.phone;
       }
