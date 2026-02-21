@@ -54,45 +54,53 @@ export class ZApiClient {
         "Content-Type": "application/json",
       };
 
-      // Se houver clientToken configurado nos envs, envia o header
-      // Se não, não envia (ou envia o token da instância como fallback se o usuário não configurou nada novo, mas isso pode dar erro)
       if (this.clientToken) {
         headers["Client-Token"] = this.clientToken;
       }
 
-      // Para grupos, usar o endpoint send-text com phone no formato correto
       const body: any = {
         message: params.message,
         delay: params.delay || 0,
       };
 
       if (params.isGroup) {
-        // Z-API webhook sends group as "123456-group" but send API needs "123456@g.us"
-        let groupPhone = params.phone;
-        if (groupPhone.endsWith("-group")) {
-          groupPhone = groupPhone.replace("-group", "@g.us");
-        } else if (!groupPhone.includes("@g.us")) {
-          groupPhone = groupPhone + "@g.us";
+        // Z-API webhook sends group as "123456-group", API expects "123456@g.us"
+        let groupId = params.phone;
+        if (groupId.endsWith("-group")) {
+          groupId = groupId.replace("-group", "@g.us");
+        } else if (!groupId.includes("@g.us")) {
+          groupId = groupId + "@g.us";
         }
-        body.phone = groupPhone;
-        console.log(`[Z-API] Sending group message to: ${groupPhone}`);
+        // Z-API group messages: set phone to group ID
+        body.phone = groupId;
+        console.log(`[Z-API] Sending group message to: ${groupId}, body:`, JSON.stringify(body));
       } else {
         body.phone = params.phone;
       }
 
+      console.log(`[Z-API] POST ${url}`);
       const response = await fetch(url, {
         method: "POST",
         headers: headers,
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log(`[Z-API] Response status: ${response.status}, body: ${responseText}`);
+
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { rawResponse: responseText };
+      }
 
       if (!response.ok) {
         console.error("[Z-API] Erro ao enviar mensagem:", data);
-        return { success: false, error: data.message || "Erro desconhecido" };
+        return { success: false, error: data.message || data.error || "Erro desconhecido" };
       }
 
+      console.log(`[Z-API] Message sent successfully:`, data);
       return { success: true, messageId: data.messageId };
     } catch (error) {
       console.error("[Z-API] Erro na requisição:", error);
