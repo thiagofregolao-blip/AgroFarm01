@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import FarmLayout from "@/components/fazenda/layout";
@@ -7,13 +7,61 @@ import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Warehouse, Map, Package, FileText, ArrowUpRight, ArrowDownRight,
-    Loader2, Building2, ChevronDown, ChevronUp, Calendar
+    Loader2, Building2, ChevronDown, ChevronUp, Calendar, RefreshCw
 } from "lucide-react";
 
 export default function FarmDashboard() {
     const [, setLocation] = useLocation();
     const { user, isLoading } = useAuth();
     const [expandedSupplier, setExpandedSupplier] = useState<string | null>(null);
+    const queryClient = useQueryClient();
+
+    // Pull-to-refresh state
+    const [refreshing, setRefreshing] = useState(false);
+    const [pullDistance, setPullDistance] = useState(0);
+    const touchStartY = useRef(0);
+    const isPulling = useRef(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const PULL_THRESHOLD = 80;
+
+    const handleRefresh = useCallback(async () => {
+        setRefreshing(true);
+        setPullDistance(0);
+        await queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/farm/properties"] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/farm/stock/movements"] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices/summary/by-supplier"] });
+        // Small delay for visual feedback
+        await new Promise(r => setTimeout(r, 600));
+        setRefreshing(false);
+    }, [queryClient]);
+
+    const onTouchStart = useCallback((e: React.TouchEvent) => {
+        const scrollTop = containerRef.current?.closest('main')?.scrollTop || 0;
+        if (scrollTop <= 5) {
+            touchStartY.current = e.touches[0].clientY;
+            isPulling.current = true;
+        }
+    }, []);
+
+    const onTouchMove = useCallback((e: React.TouchEvent) => {
+        if (!isPulling.current || refreshing) return;
+        const distance = e.touches[0].clientY - touchStartY.current;
+        if (distance > 0) {
+            setPullDistance(Math.min(distance * 0.5, PULL_THRESHOLD + 20));
+        }
+    }, [refreshing]);
+
+    const onTouchEnd = useCallback(() => {
+        if (!isPulling.current) return;
+        isPulling.current = false;
+        if (pullDistance >= PULL_THRESHOLD && !refreshing) {
+            handleRefresh();
+        } else {
+            setPullDistance(0);
+        }
+    }, [pullDistance, refreshing, handleRefresh]);
 
     const { data: stock = [] } = useQuery({
         queryKey: ["/api/farm/stock"],
@@ -89,11 +137,46 @@ export default function FarmDashboard() {
 
     return (
         <FarmLayout>
-            <div className="space-y-6">
+            <div
+                ref={containerRef}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                className="space-y-6"
+            >
+                {/* Pull-to-refresh indicator */}
+                {(pullDistance > 0 || refreshing) && (
+                    <div
+                        className="flex items-center justify-center transition-all duration-200 overflow-hidden"
+                        style={{ height: refreshing ? 48 : pullDistance }}
+                    >
+                        <div className={`flex items-center gap-2 text-emerald-600 ${refreshing ? "animate-pulse" : ""}`}>
+                            <RefreshCw
+                                className={`h-5 w-5 transition-transform duration-300 ${refreshing ? "animate-spin" : ""}`}
+                                style={{ transform: refreshing ? undefined : `rotate(${(pullDistance / PULL_THRESHOLD) * 360}deg)` }}
+                            />
+                            <span className="text-sm font-medium">
+                                {refreshing ? "Atualizando..." : pullDistance >= PULL_THRESHOLD ? "Solte para atualizar" : "Puxe para atualizar"}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Header */}
-                <div>
-                    <h1 className="text-3xl font-bold text-emerald-800">Olá, {user?.name} 👋</h1>
-                    <p className="text-emerald-600 mt-1">Bem-vindo ao painel de gestão da sua fazenda</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold text-emerald-800">Olá, {user?.name} 👋</h1>
+                        <p className="text-emerald-600 mt-1">Bem-vindo ao painel de gestão da sua fazenda</p>
+                    </div>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors text-sm font-medium disabled:opacity-50"
+                        title="Atualizar dados"
+                    >
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                        Atualizar
+                    </button>
                 </div>
 
                 {/* Summary Cards */}
@@ -244,8 +327,8 @@ export default function FarmDashboard() {
                                                                     #{inv.invoiceNumber || "—"}
                                                                 </span>
                                                                 <span className={`text-xs px-1.5 py-0.5 rounded ${inv.status === "confirmed"
-                                                                        ? "bg-green-100 text-green-700"
-                                                                        : "bg-yellow-100 text-yellow-700"
+                                                                    ? "bg-green-100 text-green-700"
+                                                                    : "bg-yellow-100 text-yellow-700"
                                                                     }`}>
                                                                     {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
                                                                 </span>
