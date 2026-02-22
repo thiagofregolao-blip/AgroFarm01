@@ -264,31 +264,41 @@ export class FarmStorage {
         return db.insert(farmInvoiceItems).values(items).returning();
     }
 
-    // Confirm invoice: create stock entries + movements
+    // Confirm invoice: create stock entries + movements (unless skipStockEntry is set)
     async confirmInvoice(invoiceId: string, farmerId: string): Promise<void> {
         await dbReady;
-        const items = await this.getInvoiceItems(invoiceId);
 
-        for (const item of items) {
-            if (!item.productId) continue;
+        // Check if this invoice should skip stock entry
+        const invoice = await this.getInvoiceById(invoiceId);
+        const skipStock = invoice?.skipStockEntry === true;
 
-            const qty = parseFloat(item.quantity);
-            const cost = parseFloat(item.unitPrice);
+        if (!skipStock) {
+            const items = await this.getInvoiceItems(invoiceId);
 
-            // Update stock
-            await this.upsertStock(farmerId, item.productId, qty, cost);
+            for (const item of items) {
+                if (!item.productId) continue;
 
-            // Record movement
-            await db.insert(farmStockMovements).values({
-                farmerId,
-                productId: item.productId,
-                type: "entry",
-                quantity: String(qty),
-                unitCost: String(cost),
-                referenceType: "invoice",
-                referenceId: invoiceId,
-                notes: `Fatura item: ${item.productName}`,
-            });
+                const qty = parseFloat(item.quantity);
+                const cost = parseFloat(item.unitPrice);
+
+                // Update stock
+                await this.upsertStock(farmerId, item.productId, qty, cost);
+
+                // Record movement
+                await db.insert(farmStockMovements).values({
+                    farmerId,
+                    productId: item.productId,
+                    type: "entry",
+                    quantity: String(qty),
+                    unitCost: String(cost),
+                    referenceType: "invoice",
+                    referenceId: invoiceId,
+                    notes: `Fatura item: ${item.productName}`,
+                });
+            }
+            console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITH stock entry.`);
+        } else {
+            console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITHOUT stock entry (skip_stock_entry=true).`);
         }
 
         await this.updateInvoiceStatus(invoiceId, "confirmed");

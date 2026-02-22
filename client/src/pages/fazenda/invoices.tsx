@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function FarmInvoices() {
@@ -20,6 +20,7 @@ export default function FarmInvoices() {
     const [uploading, setUploading] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
     const [selectedSeasonId, setSelectedSeasonId] = useState<string>("");
+    const [skipStockEntry, setSkipStockEntry] = useState(false);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
 
     const { user } = useAuth();
@@ -89,6 +90,9 @@ export default function FarmInvoices() {
             if (selectedSeasonId) {
                 formData.append("seasonId", selectedSeasonId);
             }
+            if (skipStockEntry) {
+                formData.append("skipStockEntry", "true");
+            }
 
             const res = await fetch("/api/farm/invoices/import", {
                 method: "POST",
@@ -101,7 +105,7 @@ export default function FarmInvoices() {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
             setSelectedInvoice(data.invoice.id);
             setImportDialogOpen(false);
-            toast({ title: `📄 ${data.message}` });
+            toast({ title: skipStockEntry ? `📄 ${data.message} (sem entrada no estoque)` : `📄 ${data.message}` });
         } catch (err) {
             toast({ title: "Erro ao importar fatura", variant: "destructive" });
         } finally {
@@ -156,6 +160,29 @@ export default function FarmInvoices() {
                                         </optgroup>
                                     )}
                                 </select>
+                            </div>
+                            {/* Toggle: Importar sem dar entrada no estoque */}
+                            <div
+                                className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${skipStockEntry
+                                        ? 'border-amber-400 bg-amber-50'
+                                        : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                onClick={() => setSkipStockEntry(!skipStockEntry)}
+                            >
+                                <div className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors ${skipStockEntry ? 'bg-amber-500 text-white' : 'border-2 border-gray-300'
+                                    }`}>
+                                    {skipStockEntry && <Check className="h-3.5 w-3.5" />}
+                                </div>
+                                <div className="flex-1">
+                                    <span className={`text-sm font-medium ${skipStockEntry ? 'text-amber-800' : 'text-gray-700'}`}>
+                                        Importar apenas financeiro
+                                    </span>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        Registra a fatura e valores no sistema, mas <strong>não dá entrada no estoque</strong>.
+                                        Use para faturas antigas cujos produtos já foram utilizados.
+                                    </p>
+                                </div>
+                                <Info className={`h-4 w-4 mt-0.5 flex-shrink-0 ${skipStockEntry ? 'text-amber-500' : 'text-gray-400'}`} />
                             </div>
                             <div>
                                 <label className="text-sm font-medium text-gray-700 mb-2 block">Arquivo PDF</label>

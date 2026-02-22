@@ -114,6 +114,16 @@ const runMigration = async () => {
             console.log('✅ Migração whatsapp_extra_numbers concluída!');
         }
 
+        // Migration 9: Add skip_stock_entry to farm_invoices
+        const skipStockPath = path.join(process.cwd(), 'migration_add_skip_stock_entry.sql');
+        if (fs.existsSync(skipStockPath)) {
+            const skipStockSql = fs.readFileSync(skipStockPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', skipStockPath);
+            console.log('🚀 Executando SQL (skip_stock_entry)...');
+            await sql.unsafe(skipStockSql);
+            console.log('✅ Migração skip_stock_entry concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

@@ -422,6 +422,7 @@ export function registerFarmRoutes(app: Express) {
 
             // Create invoice record
             const seasonId = req.body?.seasonId || null;
+            const skipStockEntry = req.body?.skipStockEntry === "true";
             const invoice = await farmStorage.createInvoice({
                 farmerId: (req.user as any).id,
                 seasonId,
@@ -431,6 +432,7 @@ export function registerFarmRoutes(app: Express) {
                 currency: parsed.currency,
                 totalAmount: String(parsed.totalAmount),
                 status: "pending",
+                skipStockEntry,
                 rawPdfData: parsed.rawText.substring(0, 5000), // Save first 5k chars for debug
             });
 
@@ -505,7 +507,15 @@ export function registerFarmRoutes(app: Express) {
             }
 
             await farmStorage.confirmInvoice(req.params.id, (req.user as any).id);
-            res.json({ message: "Fatura confirmada. Estoque atualizado." });
+
+            // Check if this invoice should skip stock entry
+            const updatedInvoice = await farmStorage.getInvoiceById(req.params.id);
+            const skipped = updatedInvoice?.skipStockEntry;
+            res.json({
+                message: skipped
+                    ? "Fatura confirmada. Estoque NÃO atualizado (apenas financeiro)."
+                    : "Fatura confirmada. Estoque atualizado."
+            });
         } catch (error) {
             console.error("[FARM_INVOICE_CONFIRM]", error);
             res.status(500).json({ error: "Failed to confirm invoice" });

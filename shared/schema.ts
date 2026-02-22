@@ -1098,6 +1098,7 @@ export const farmInvoices = pgTable("farm_invoices", {
   currency: text("currency").default("USD"),
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }),
   status: text("status").notNull().default("pending"), // pending, confirmed, cancelled
+  skipStockEntry: boolean("skip_stock_entry").notNull().default(false), // Se true, não dá entrada no estoque ao confirmar
   rawPdfData: text("raw_pdf_data"), // Texto extraído do PDF para debug
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
