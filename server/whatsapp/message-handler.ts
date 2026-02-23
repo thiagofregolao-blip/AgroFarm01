@@ -69,7 +69,7 @@ export class MessageHandler {
     console.log(`[MessageHandler] Clean term: '${filters?.product || 'N/A'}' - Stock found: ${stock.length}`);
 
     // Enrich stock with last purchase price
-    const stockWithPrice = await Promise.all(stock.map(async (item) => {
+    const stockWithPrice = await Promise.all(stock.map(async (item: any) => {
       // Buscar última compra deste produto
       const lastPurchase = await db
         .select({
@@ -191,6 +191,14 @@ export class MessageHandler {
         )
         .orderBy(desc(farmInvoices.issueDate))
         .limit(10);
+
+      // Fallback Inteligente: 
+      // Se não achou faturas daquele produto, pode ser que o usuário 
+      // tenha o produto em estoque através de entrada manual/ajuste (sem fatura).
+      if (invoicesWithItems.length === 0) {
+        console.log(`[MessageHandler] Sem faturas para '${filters.product}'. Tentando buscar em Estoque...`);
+        return this.getStock(userId, filters);
+      }
 
       return invoicesWithItems;
     }
