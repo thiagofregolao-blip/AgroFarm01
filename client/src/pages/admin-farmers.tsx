@@ -444,7 +444,7 @@ function FarmersManagement() {
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground text-xs">WhatsApp</p>
-                                        <p className="font-medium">{farmer.phone || "N/A"}</p>
+                                        <p className="font-medium">{farmer.whatsapp_number || "N/A"}</p>
                                     </div>
                                 </div>
                             </CardContent>

@@ -1,10 +1,10 @@
 import { db, dbReady } from "./db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import {
-    farmFarmers, farmProperties, farmPlots, farmProductsCatalog,
+    users, farmProperties, farmPlots, farmProductsCatalog,
     farmStock, farmInvoices, farmInvoiceItems, farmStockMovements,
     farmApplications, farmExpenses, farmPdvTerminals, farmSeasons,
-    type InsertFarmFarmer, type FarmFarmer,
+    type InsertUser, type User,
     type InsertFarmProperty, type FarmProperty,
     type InsertFarmPlot, type FarmPlot,
     type InsertFarmProductCatalog, type FarmProductCatalog,
@@ -24,33 +24,35 @@ import {
 
 export class FarmStorage {
     // ==================== Farmers ====================
-    async getFarmerById(id: string): Promise<FarmFarmer | undefined> {
+    async getFarmerById(id: string): Promise<User | undefined> {
         await dbReady;
-        const [farmer] = await db.select().from(farmFarmers).where(eq(farmFarmers.id, id));
+        const [farmer] = await db.select().from(users).where(eq(users.id, id));
         return farmer;
     }
 
-    async getFarmerByUsername(username: string): Promise<FarmFarmer | undefined> {
+    async getFarmerByUsername(username: string): Promise<User | undefined> {
         await dbReady;
-        const [farmer] = await db.select().from(farmFarmers).where(eq(farmFarmers.username, username));
+        const [farmer] = await db.select().from(users).where(eq(users.username, username));
         return farmer;
     }
 
-    async createFarmer(data: InsertFarmFarmer): Promise<FarmFarmer> {
+    async createFarmer(data: InsertUser): Promise<User> {
         await dbReady;
-        const [farmer] = await db.insert(farmFarmers).values(data).returning();
+        const [farmer] = await db.insert(users).values(data).returning();
         return farmer;
     }
 
-    async updateFarmer(id: string, data: Partial<InsertFarmFarmer>): Promise<FarmFarmer> {
+    async updateFarmer(id: string, data: Partial<InsertUser>): Promise<User> {
         await dbReady;
-        const [farmer] = await db.update(farmFarmers).set(data).where(eq(farmFarmers.id, id)).returning();
+        const [farmer] = await db.update(users).set(data).where(eq(users.id, id)).returning();
         return farmer;
     }
 
-    async getAllFarmers(): Promise<FarmFarmer[]> {
+    async getAllFarmers(): Promise<User[]> {
         await dbReady;
-        return db.select().from(farmFarmers).orderBy(farmFarmers.name);
+        return db.select().from(users)
+            .where(inArray(users.role, ['agricultor', 'admin_agricultor']))
+            .orderBy(users.name);
     }
 
     // ==================== Properties ====================

@@ -14,10 +14,17 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
-  role: text("role").notNull().default("consultor"), // consultor, gerente, administrador, faturista
-  managerId: varchar("manager_id").references((): any => users.id), // gerente responsável (apenas para consultores)
+  role: text("role").notNull().default("consultor"), // consultor, gerente, administrador, faturista, agricultor, admin_agricultor
+  managerId: varchar("manager_id").references((): any => users.id), // gerente responsável
   whatsapp_number: text("whatsapp_number"), // Número de WhatsApp para integração
   whatsapp_extra_numbers: text("whatsapp_extra_numbers"), // JSON array de números extras para grupos
+
+  // Custom fields for farmers
+  email: text("email"),
+  document: text("document"), // RUC / CPF
+  propertySize: decimal("property_size", { precision: 12, scale: 2 }), // Tamanho da propriedade em ha
+  mainCulture: text("main_culture"), // Cultura principal (Soja, Milho, etc.)
+  region: text("region"), // Região/Cidade/Estado
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
@@ -1012,28 +1019,13 @@ export type InsertPlanningGlobalConfiguration = z.infer<typeof insertPlanningGlo
 export type PlanningGlobalConfiguration = typeof planningGlobalConfigurations.$inferSelect;
 
 // ============================================================================
-// FARM STOCK MANAGEMENT SYSTEM — Tabelas independentes do CRM
+// FARM STOCK MANAGEMENT SYSTEM
 // ============================================================================
-
-// Agricultores (login próprio, separado dos users do CRM)
-export const farmFarmers = pgTable("farm_farmers", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  name: text("name").notNull(),
-  email: text("email"),
-  phone: text("phone"),
-  document: text("document"), // RUC / CPF
-  propertySize: decimal("property_size", { precision: 12, scale: 2 }), // Tamanho da propriedade em ha
-  mainCulture: text("main_culture"), // Cultura principal (Soja, Milho, etc.)
-  region: text("region"), // Região/Cidade/Estado
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-});
 
 // Propriedades / Fazendas
 export const farmProperties = pgTable("farm_properties", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   location: text("location"),
   totalAreaHa: decimal("total_area_ha", { precision: 12, scale: 2 }),
@@ -1067,7 +1059,7 @@ export const farmProductsCatalog = pgTable("farm_products_catalog", {
 // Estoque atual (snapshot, atualizado a cada movimentação)
 export const farmStock = pgTable("farm_stock", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull().default("0"),
   averageCost: decimal("average_cost", { precision: 15, scale: 4 }).notNull().default("0"), // Custo médio ponderado
@@ -1079,7 +1071,7 @@ export const farmStock = pgTable("farm_stock", {
 // Safras da fazenda
 export const farmSeasons = pgTable("farm_seasons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
@@ -1090,7 +1082,7 @@ export const farmSeasons = pgTable("farm_seasons", {
 // Faturas importadas
 export const farmInvoices = pgTable("farm_invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   seasonId: varchar("season_id").references(() => farmSeasons.id),
   invoiceNumber: text("invoice_number"),
   supplier: text("supplier"),
@@ -1122,7 +1114,7 @@ export const farmInvoiceItems = pgTable("farm_invoice_items", {
 // Movimentações de estoque
 export const farmStockMovements = pgTable("farm_stock_movements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   seasonId: varchar("season_id").references(() => farmSeasons.id),
   productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
   type: text("type").notNull(), // "entry" (entrada via fatura) ou "exit" (saída via PDV)
@@ -1137,7 +1129,7 @@ export const farmStockMovements = pgTable("farm_stock_movements", {
 // Aplicações nos talhões (registradas pelo PDV)
 export const farmApplications = pgTable("farm_applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
   plotId: varchar("plot_id").notNull().references(() => farmPlots.id, { onDelete: "cascade" }),
   propertyId: varchar("property_id").notNull().references(() => farmProperties.id, { onDelete: "cascade" }),
@@ -1152,7 +1144,7 @@ export const farmApplications = pgTable("farm_applications", {
 // Despesas extras (diesel, frete, mão de obra)
 export const farmExpenses = pgTable("farm_expenses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   plotId: varchar("plot_id").references(() => farmPlots.id),
   propertyId: varchar("property_id").references(() => farmProperties.id),
   category: text("category").notNull(), // diesel, frete, mao_de_obra, outro
@@ -1165,7 +1157,7 @@ export const farmExpenses = pgTable("farm_expenses", {
 // Terminais PDV (login do tablet no depósito)
 export const farmPdvTerminals = pgTable("farm_pdv_terminals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  farmerId: varchar("farmer_id").notNull().references(() => farmFarmers.id, { onDelete: "cascade" }),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(), // ex: "Depósito Principal"
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
@@ -1177,9 +1169,7 @@ export const farmPdvTerminals = pgTable("farm_pdv_terminals", {
 
 // ============ Farm Zod Schemas & Types ============
 
-export const insertFarmFarmerSchema = createInsertSchema(farmFarmers).omit({ id: true, createdAt: true });
-export type InsertFarmFarmer = z.infer<typeof insertFarmFarmerSchema>;
-export type FarmFarmer = typeof farmFarmers.$inferSelect;
+
 
 export const insertFarmPropertySchema = createInsertSchema(farmProperties).omit({ id: true, createdAt: true });
 export type InsertFarmProperty = z.infer<typeof insertFarmPropertySchema>;

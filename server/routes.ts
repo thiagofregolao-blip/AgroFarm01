@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema, farmFarmers } from "@shared/schema";
+import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema } from "@shared/schema";
 import { visits } from "@shared/schema.crm";
 import { z } from "zod";
 import multer from "multer";
@@ -8715,7 +8715,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
   app.get("/api/admin/farmers", requireFarmAdmin, async (req, res) => {
     try {
-      const allFarmers = await db.select().from(farmFarmers).orderBy(farmFarmers.name);
+      const allFarmers = await db.select().from(users).where(inArray(users.role, ['agricultor', 'admin_agricultor'])).orderBy(users.name);
       // Remove passwords before sending
       const safeFarmers = allFarmers.map(({ password, ...f }: any) => f);
       res.json(safeFarmers);
@@ -8735,23 +8735,24 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       }
 
       // Check if username exists
-      const existing = await db.select().from(farmFarmers).where(eq(farmFarmers.username, username)).limit(1);
+      const existing = await db.select().from(users).where(eq(users.username, username)).limit(1);
       if (existing.length > 0) {
         return res.status(400).json({ error: "Username already exists" });
       }
 
       const hashedPassword = await hashPassword(password);
 
-      const [newFarmer] = await db.insert(farmFarmers).values({
+      const [newFarmer] = await db.insert(users).values({
         username,
         password: hashedPassword,
         name,
         email: email || null,
-        phone: phone || null,
+        whatsapp_number: phone || null,
         document: document || null,
         propertySize: property_size ? String(property_size) : null,
         mainCulture: main_culture || null,
         region: region || null,
+        role: "agricultor",
       }).returning();
 
       const { password: _, ...safeFarmer } = newFarmer;
@@ -8772,7 +8773,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       if (username !== undefined) updateData.username = username;
       if (name !== undefined) updateData.name = name;
       if (email !== undefined) updateData.email = email || null;
-      if (phone !== undefined) updateData.phone = phone || null;
+      if (phone !== undefined) updateData.whatsapp_number = phone || null;
       if (document !== undefined) updateData.document = document || null;
       if (property_size !== undefined) updateData.propertySize = property_size ? String(property_size) : null;
       if (main_culture !== undefined) updateData.mainCulture = main_culture || null;
@@ -8782,9 +8783,9 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         updateData.password = await hashPassword(password);
       }
 
-      const [updatedFarmer] = await db.update(farmFarmers)
+      const [updatedFarmer] = await db.update(users)
         .set(updateData)
-        .where(eq(farmFarmers.id, id))
+        .where(eq(users.id, id))
         .returning();
 
       if (!updatedFarmer) {
@@ -8802,8 +8803,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
   app.delete("/api/admin/farmers/:id", requireFarmAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const [deleted] = await db.delete(farmFarmers)
-        .where(eq(farmFarmers.id, id))
+      const [deleted] = await db.delete(users)
+        .where(eq(users.id, id))
         .returning();
 
       if (!deleted) {
@@ -8821,7 +8822,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
   app.get("/api/admin/farmers/dashboard/stats", requireFarmAdmin, async (req, res) => {
     try {
-      const { farmFarmers, farmProperties, farmApplications, farmProductsCatalog, farmInvoiceItems, farmInvoices } = await import("@shared/schema");
+      const { users, farmProperties, farmApplications, farmProductsCatalog, farmInvoiceItems, farmInvoices } = await import("@shared/schema");
 
       // 1. Total area (sum of all properties totalAreaHa)
       const totalAreaResult = await db
@@ -8832,7 +8833,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       // 2. Total farmers count
       const farmersCountResult = await db
         .select({ count: count() })
-        .from(farmFarmers);
+        .from(users)
+        .where(inArray(users.role, ['agricultor', 'admin_agricultor']));
       const totalFarmers = farmersCountResult[0]?.count || 0;
 
       // 3. Most used products (top 10 by application count)
