@@ -283,35 +283,36 @@ export class WhatsAppService {
       const formattedPhone = ZApi.formatPhoneNumber(phone);
       console.log(`[WhatsAppService] Find user - Raw: ${phone}, Formatted: ${formattedPhone}`);
 
+      // Calculate Brazilian variations (with and without 9th digit)
+      const phoneVariants = [formattedPhone];
+      if (formattedPhone.startsWith('55') && formattedPhone.length === 12) {
+        phoneVariants.push(formattedPhone.substring(0, 4) + '9' + formattedPhone.substring(4));
+      } else if (formattedPhone.startsWith('55') && formattedPhone.length === 13) {
+        phoneVariants.push(formattedPhone.substring(0, 4) + formattedPhone.substring(5));
+      }
+
       const isNeon = process.env.DATABASE_URL?.includes('neon.tech');
 
-      // Buscar por whatsapp_number principal OU nos extras (JSON array)
-      let userResult: any;
-      if (isNeon) {
-        userResult = await pool.query(
-          `SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
-          [formattedPhone, `%${formattedPhone}%`]
-        );
-        if (userResult.rows && userResult.rows.length > 0) {
-          return { id: userResult.rows[0].id, name: userResult.rows[0].name };
-        }
-      } else {
-        userResult = await pool`SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = ${formattedPhone} OR whatsapp_extra_numbers LIKE ${'%' + formattedPhone + '%'} LIMIT 1`;
-        if (userResult && userResult.length > 0) {
-          console.log(`[WhatsAppService] User found: ${userResult[0].name} (${userResult[0].whatsapp_number})`);
-          return { id: userResult[0].id, name: userResult[0].name };
-        } else {
-          console.log(`[WhatsAppService] No user found in users table for ${formattedPhone}, checking farm_farmers...`);
-          // Fallback: check farm_farmers table
-          const farmerResult = await pool`SELECT id, name, whatsapp_number FROM farm_farmers WHERE whatsapp_number = ${formattedPhone} LIMIT 1`;
-          if (farmerResult && farmerResult.length > 0) {
-            console.log(`[WhatsAppService] Farmer found: ${farmerResult[0].name} (${farmerResult[0].whatsapp_number})`);
-            return { id: farmerResult[0].id, name: farmerResult[0].name };
+      for (const variant of phoneVariants) {
+        let userResult: any;
+        if (isNeon) {
+          userResult = await pool.query(
+            `SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
+            [variant, `%${variant}%`]
+          );
+          if (userResult.rows && userResult.rows.length > 0) {
+            return { id: userResult.rows[0].id, name: userResult.rows[0].name };
           }
-          console.log(`[WhatsAppService] No user found for ${formattedPhone}`);
+        } else {
+          userResult = await pool`SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = ${variant} OR whatsapp_extra_numbers LIKE ${'%' + variant + '%'} LIMIT 1`;
+          if (userResult && userResult.length > 0) {
+            console.log(`[WhatsAppService] User found: ${userResult[0].name} (${userResult[0].whatsapp_number})`);
+            return { id: userResult[0].id, name: userResult[0].name };
+          }
         }
       }
 
+      console.log(`[WhatsAppService] No user found for ${formattedPhone} or variations: ${phoneVariants.join(', ')}`);
       return null;
     } catch (error) {
       console.error("[WhatsAppService] Erro ao buscar usuário:", error);
