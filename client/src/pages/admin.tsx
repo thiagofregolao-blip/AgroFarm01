@@ -600,7 +600,7 @@ function TeamManagement() {
           <div className="space-y-4">
             {users && users.length > 0 ? (
               <div className="border rounded-lg divide-y">
-                {users.map((user: any) => (
+                {users.filter((user: any) => user.role !== 'agricultor' && user.role !== 'admin_agricultor').map((user: any) => (
                   <div key={user.id} className="p-4 flex items-center justify-between hover:bg-accent/50 transition-colors">
                     <div>
                       <p className="font-medium">{user.name}</p>
@@ -615,7 +615,7 @@ function TeamManagement() {
                             ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200'
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                         }`}>
-                        {user.role === 'administrador' ? 'Administrador' : user.role === 'gerente' ? 'Gerente' : user.role === 'faturista' ? 'Faturista' : 'Consultor'}
+                        {user.role === 'administrador' ? 'Administrador' : user.role === 'gerente' ? 'Gerente' : user.role === 'faturista' ? 'Faturista' : user.role === 'agricultor' ? 'Agricultor' : user.role === 'admin_agricultor' ? 'Admin Agricultor' : 'Consultor'}
                       </span>
                       <Button
                         variant="ghost"
@@ -693,6 +693,8 @@ function TeamManagement() {
                   <SelectItem value="gerente">Gerente</SelectItem>
                   <SelectItem value="administrador">Administrador</SelectItem>
                   <SelectItem value="faturista">Faturista</SelectItem>
+                  <SelectItem value="agricultor">Agricultor</SelectItem>
+                  <SelectItem value="admin_agricultor">Admin Agricultor</SelectItem>
                 </SelectContent>
               </Select>
             </div>
