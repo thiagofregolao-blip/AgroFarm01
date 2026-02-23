@@ -297,17 +297,17 @@ export class WhatsAppService {
         let userResult: any;
         if (isNeon) {
           userResult = await pool.query(
-            `SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
+            `SELECT id, name, manager_id, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
             [variant, `%${variant}%`]
           );
           if (userResult.rows && userResult.rows.length > 0) {
-            return { id: userResult.rows[0].id, name: userResult.rows[0].name };
+            return { id: userResult.rows[0].manager_id || userResult.rows[0].id, name: userResult.rows[0].name };
           }
         } else {
-          userResult = await pool`SELECT id, name, whatsapp_number FROM users WHERE whatsapp_number = ${variant} OR whatsapp_extra_numbers LIKE ${'%' + variant + '%'} LIMIT 1`;
+          userResult = await pool`SELECT id, name, manager_id, whatsapp_number FROM users WHERE whatsapp_number = ${variant} OR whatsapp_extra_numbers LIKE ${'%' + variant + '%'} LIMIT 1`;
           if (userResult && userResult.length > 0) {
             console.log(`[WhatsAppService] User found: ${userResult[0].name} (${userResult[0].whatsapp_number})`);
-            return { id: userResult[0].id, name: userResult[0].name };
+            return { id: userResult[0].manager_id || userResult[0].id, name: userResult[0].name };
           }
         }
       }
