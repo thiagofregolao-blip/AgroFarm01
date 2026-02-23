@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { 
-  BarChart3, 
-  ShoppingCart, 
-  Percent, 
-  Users, 
-  Calendar, 
-  Package, 
-  FileText, 
-  Settings, 
+import {
+  BarChart3,
+  ShoppingCart,
+  Percent,
+  Users,
+  Calendar,
+  Package,
+  FileText,
+  Settings,
   Target,
   Sprout,
   TrendingUp,
@@ -57,7 +57,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
     const handleHashChange = () => {
       setCurrentHash(window.location.hash);
     };
-    
+
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
@@ -90,10 +90,9 @@ export default function Sidebar({ collapsed }: SidebarProps) {
   };
 
   return (
-    <aside 
-      className={`bg-card border-r border-border flex flex-col slide-in transition-all duration-300 ${
-        collapsed ? 'w-20' : 'w-72'
-      }`}
+    <aside
+      className={`bg-card border-r border-border flex flex-col slide-in transition-all duration-300 ${collapsed ? 'w-20' : 'w-72'
+        }`}
       data-testid="sidebar"
     >
       {/* Logo & Brand */}
@@ -120,16 +119,15 @@ export default function Sidebar({ collapsed }: SidebarProps) {
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location === item.href || (item.href === '/dashboard' && location === '/');
-                
+
                 return (
                   <li key={item.href}>
-                    <Link 
+                    <Link
                       href={item.href}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${
-                        isActive 
-                          ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border-green-600 dark:border-green-500' 
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${isActive
+                          ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border-green-600 dark:border-green-500'
                           : 'hover:bg-muted text-foreground border-transparent'
-                      }`}
+                        }`}
                       data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
                     >
                       <Icon className="text-lg flex-shrink-0" size={20} />
@@ -152,16 +150,15 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                 {configItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = location === item.href;
-                  
+
                   return (
                     <li key={item.href}>
-                      <Link 
+                      <Link
                         href={item.href}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${
-                          isActive 
-                            ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border-green-600 dark:border-green-500' 
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${isActive
+                            ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border-green-600 dark:border-green-500'
                             : 'hover:bg-muted text-foreground border-transparent'
-                        }`}
+                          }`}
                         data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
                       >
                         <Icon className="text-lg flex-shrink-0" size={20} />
@@ -189,7 +186,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
               {/* Main link - Only show when NOT on manager page */}
               {location !== '/manager' && (
                 <li>
-                  <Link 
+                  <Link
                     href="/manager#dashboard"
                     className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 hover:bg-muted text-foreground border-transparent"
                     data-testid="nav-painel-gerente"
@@ -201,18 +198,17 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   </Link>
                 </li>
               )}
-              
+
               {/* Submenu - Only show when on manager page */}
               {location === '/manager' && !collapsed && (
                 <>
                   <li>
                     <a
                       href="#dashboard"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#dashboard' || currentHash === ''
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#dashboard' || currentHash === ''
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-dashboard"
                     >
                       <TrendingUp className="text-lg flex-shrink-0" size={18} />
@@ -222,11 +218,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#team"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#team'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#team'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-team"
                     >
                       <Users className="text-lg flex-shrink-0" size={18} />
@@ -236,11 +231,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#action-plans"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#action-plans'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#action-plans'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-action-plans"
                     >
                       <ListChecks className="text-lg flex-shrink-0" size={18} />
@@ -250,11 +244,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#metas"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#metas'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#metas'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-metas"
                     >
                       <Target className="text-lg flex-shrink-0" size={18} />
@@ -277,13 +270,12 @@ export default function Sidebar({ collapsed }: SidebarProps) {
             )}
             <ul className="space-y-1">
               <li>
-                <Link 
+                <Link
                   href="/admin#dashboard"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${
-                    location === '/admin'
-                      ? 'bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border-blue-600 dark:border-blue-500' 
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${location === '/admin'
+                      ? 'bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border-blue-600 dark:border-blue-500'
                       : 'hover:bg-muted text-foreground border-transparent'
-                  }`}
+                    }`}
                   data-testid="nav-super-admin"
                 >
                   <Settings className="text-lg flex-shrink-0" size={20} />
@@ -292,18 +284,32 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   )}
                 </Link>
               </li>
-              
+              <li>
+                <Link
+                  href="/admin-products"
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${location === '/admin-products'
+                      ? 'bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border-blue-600 dark:border-blue-500'
+                      : 'hover:bg-muted text-foreground border-transparent'
+                    }`}
+                  data-testid="nav-admin-products"
+                >
+                  <Package className="text-lg flex-shrink-0" size={20} />
+                  {!collapsed && (
+                    <span className="menu-text font-medium">Catálogo Global</span>
+                  )}
+                </Link>
+              </li>
+
               {/* Submenu - Only show when on admin page */}
               {location === '/admin' && !collapsed && (
                 <>
                   <li>
                     <a
                       href="#dashboard"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#dashboard' || currentHash === ''
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#dashboard' || currentHash === ''
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-dashboard"
                     >
                       <BarChart3 className="text-lg flex-shrink-0" size={18} />
@@ -313,11 +319,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#users"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#users'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#users'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-users"
                     >
                       <Users className="text-lg flex-shrink-0" size={18} />
@@ -327,11 +332,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#master-clients"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#master-clients'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#master-clients'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-master-clients"
                     >
                       <Users className="text-lg flex-shrink-0" size={18} />
@@ -341,11 +345,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#categories"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#categories'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#categories'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-categories"
                     >
                       <Package className="text-lg flex-shrink-0" size={18} />
@@ -355,11 +358,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#subcategories"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#subcategories'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#subcategories'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-subcategories"
                     >
                       <Package className="text-lg flex-shrink-0" size={18} />
@@ -369,11 +371,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#products"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#products'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#products'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-products"
                     >
                       <Package className="text-lg flex-shrink-0" size={18} />
@@ -383,11 +384,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#commissions"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#commissions'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#commissions'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-commissions"
                     >
                       <Percent className="text-lg flex-shrink-0" size={18} />
@@ -397,11 +397,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#parameters"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#parameters'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#parameters'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-parameters"
                     >
                       <Settings className="text-lg flex-shrink-0" size={18} />
@@ -411,11 +410,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#barter"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#barter'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#barter'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-barter"
                     >
                       <Repeat className="text-lg flex-shrink-0" size={18} />
@@ -425,11 +423,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   <li>
                     <a
                       href="#timac"
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${
-                        currentHash === '#timac'
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ml-4 ${currentHash === '#timac'
                           ? 'bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200'
                           : 'hover:bg-muted text-foreground'
-                      }`}
+                        }`}
                       data-testid="tab-timac"
                     >
                       <Target className="text-lg flex-shrink-0" size={18} />
@@ -452,13 +449,12 @@ export default function Sidebar({ collapsed }: SidebarProps) {
             )}
             <ul className="space-y-1">
               <li>
-                <Link 
+                <Link
                   href="/faturista"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${
-                    location === '/faturista'
-                      ? 'bg-orange-50 dark:bg-orange-950 text-orange-800 dark:text-orange-200 border-orange-600 dark:border-orange-500' 
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors border-l-4 ${location === '/faturista'
+                      ? 'bg-orange-50 dark:bg-orange-950 text-orange-800 dark:text-orange-200 border-orange-600 dark:border-orange-500'
                       : 'hover:bg-muted text-foreground border-transparent'
-                  }`}
+                    }`}
                   data-testid="nav-faturista"
                 >
                   <Package className="text-lg flex-shrink-0" size={20} />

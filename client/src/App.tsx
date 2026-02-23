@@ -24,6 +24,7 @@ import Mercado from "@/pages/mercado";
 import HistoricoCompras from "@/pages/historico-compras";
 import AdminPage from "@/pages/admin";
 import AdminFarmersPage from "@/pages/admin-farmers";
+import AdminProductsPage from "@/pages/admin-products";
 import ManagerPage from "@/pages/manager";
 import BarterPage from "@/pages/barter";
 import FaturistaPage from "@/pages/faturista";
@@ -70,6 +71,7 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password/:token" component={ResetPassword} />
       <AdminRoute path="/admin" component={AdminPage} />
+      <AdminRoute path="/admin-products" component={AdminProductsPage} />
       <AdminFarmerRoute path="/admin-farmers" component={AdminFarmersPage} />
       <ManagerRoute path="/manager" component={ManagerPage} />
       <FaturistaRoute path="/faturista" component={FaturistaPage} />

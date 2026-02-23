@@ -456,6 +456,8 @@ export function registerFarmRoutes(app: Express) {
                             category: null,
                             dosePerHa: null,
                             activeIngredient: null,
+                            status: "pending_review",
+                            isDraft: true
                         });
                         allProducts.push(matchedProduct); // Add to list to avoid duplicates in same invoice
                         console.log(`[FARM_INVOICE_IMPORT] Auto-created product: ${item.productName} (${matchedProduct.id})`);

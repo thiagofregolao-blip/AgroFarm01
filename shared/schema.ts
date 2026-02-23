@@ -1053,6 +1053,8 @@ export const farmProductsCatalog = pgTable("farm_products_catalog", {
   activeIngredient: text("active_ingredient"),
   imageUrl: text("image_url"),
   imageBase64: text("image_base64"), // Store photo directly in DB
+  status: text("status").notNull().default("active"), // active, pending_review
+  isDraft: boolean("is_draft").notNull().default(false), // true se auto-criado via importação do agricultor
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

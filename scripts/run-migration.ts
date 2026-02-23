@@ -104,7 +104,17 @@ const runMigration = async () => {
             console.log('✅ Migração farm_farmers_fields concluída!');
         }
 
-        // Migration 7.5: Merge farm_farmers into users
+        // Migration 8: Add status and is_draft to farmProductsCatalog
+        const catalogStatusPath = path.join(process.cwd(), 'migration_add_catalog_status.sql');
+        if (fs.existsSync(catalogStatusPath)) {
+            const catalogStatusSql = fs.readFileSync(catalogStatusPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', catalogStatusPath);
+            console.log('🚀 Executando SQL (catalog_status)...');
+            await sql.unsafe(catalogStatusSql);
+            console.log('✅ Migração catalog_status concluída!');
+        }
+
+        // Migration 9: Merge farm_farmers into users
         const mergeFarmersPath = path.join(process.cwd(), 'migration_merge_farm_farmers.sql');
         if (fs.existsSync(mergeFarmersPath)) {
             const mergeFarmersSql = fs.readFileSync(mergeFarmersPath, 'utf-8');

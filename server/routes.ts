@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema } from "@shared/schema";
+import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema, farmProductsCatalog } from "@shared/schema";
 import { visits } from "@shared/schema.crm";
 import { z } from "zod";
 import multer from "multer";
@@ -19,7 +19,7 @@ const scryptAsync = promisify(scrypt);
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${buf.toString("hex")}.${salt}`;
+  return `${buf.toString("hex")}.${salt} `;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -200,7 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ message: `Auto-populated segments for ${updatedCount} products` });
+      res.json({ message: `Auto - populated segments for ${updatedCount} products` });
     } catch (error) {
       res.status(500).json({ error: "Failed to auto-populate segments" });
     }
@@ -812,37 +812,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/setup-planning-db", async (req, res) => {
     try {
       const migrationSql = `
-CREATE TABLE IF NOT EXISTS "planning_products_base" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"name" text NOT NULL,
-	"segment" text,
-	"dose_per_ha" numeric(10, 3),
-	"price" numeric(10, 2),
-	"unit" text,
-	"season_id" varchar REFERENCES "seasons"("id"),
-	"created_at" timestamp DEFAULT now() NOT NULL
+CREATE TABLE IF NOT EXISTS "planning_products_base"(
+  "id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "name" text NOT NULL,
+  "segment" text,
+  "dose_per_ha" numeric(10, 3),
+  "price" numeric(10, 2),
+  "unit" text,
+  "season_id" varchar REFERENCES "seasons"("id"),
+  "created_at" timestamp DEFAULT now() NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS "sales_planning" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"client_id" varchar NOT NULL REFERENCES "user_client_links"("id") ON DELETE cascade,
-	"user_id" varchar NOT NULL REFERENCES "users"("id"),
-	"season_id" varchar NOT NULL REFERENCES "seasons"("id"),
-	"total_planting_area" numeric(10, 2),
-	"fungicides_area" numeric(10, 2) DEFAULT '0.00',
-	"insecticides_area" numeric(10, 2) DEFAULT '0.00',
-	"herbicides_area" numeric(10, 2) DEFAULT '0.00',
-	"seed_treatment_area" numeric(10, 2) DEFAULT '0.00',
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "sales_planning_unique" UNIQUE("client_id","season_id")
+CREATE TABLE IF NOT EXISTS "sales_planning"(
+  "id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "client_id" varchar NOT NULL REFERENCES "user_client_links"("id") ON DELETE cascade,
+  "user_id" varchar NOT NULL REFERENCES "users"("id"),
+  "season_id" varchar NOT NULL REFERENCES "seasons"("id"),
+  "total_planting_area" numeric(10, 2),
+  "fungicides_area" numeric(10, 2) DEFAULT '0.00',
+  "insecticides_area" numeric(10, 2) DEFAULT '0.00',
+  "herbicides_area" numeric(10, 2) DEFAULT '0.00',
+  "seed_treatment_area" numeric(10, 2) DEFAULT '0.00',
+  "updated_at" timestamp DEFAULT now() NOT NULL,
+  CONSTRAINT "sales_planning_unique" UNIQUE("client_id", "season_id")
 );
 
-CREATE TABLE IF NOT EXISTS "sales_planning_items" (
-	"id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"planning_id" varchar NOT NULL REFERENCES "sales_planning"("id") ON DELETE cascade,
-	"product_id" varchar NOT NULL REFERENCES "planning_products_base"("id"),
-	"quantity" numeric(15, 2) NOT NULL,
-	"total_amount" numeric(15, 2) NOT NULL
+CREATE TABLE IF NOT EXISTS "sales_planning_items"(
+  "id" varchar PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "planning_id" varchar NOT NULL REFERENCES "sales_planning"("id") ON DELETE cascade,
+  "product_id" varchar NOT NULL REFERENCES "planning_products_base"("id"),
+  "quantity" numeric(15, 2) NOT NULL,
+  "total_amount" numeric(15, 2) NOT NULL
 );
 `;
 
@@ -966,7 +966,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
           updatedCount++;
         } catch (error) {
-          errors.push(`Sale ${sale.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          errors.push(`Sale ${sale.id}: ${error instanceof Error ? error.message : 'Unknown error'} `);
         }
       }
 
@@ -1169,7 +1169,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
       res.json({
         success: true,
-        message: `Configuração salva com sucesso! O potencial será calculado automaticamente para ${clientCount} clientes com badge (80/20 ou Mercado).`,
+        message: `Configuração salva com sucesso! O potencial será calculado automaticamente para ${clientCount} clientes com badge(80 / 20 ou Mercado).`,
         clientCount
       });
 
@@ -1443,7 +1443,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       );
       const clientRatesMap = new Map(
         allClientRates.flatMap((rates, idx) =>
-          rates.map(r => [`${top8020Clients[idx].id}-${r.categoryId}`, r])
+          rates.map(r => [`${top8020Clients[idx].id} -${r.categoryId} `, r])
         )
       );
 
@@ -1453,7 +1453,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       );
       const externalPurchasesMap = new Map(
         allExternalPurchases.flatMap((purchases, idx) =>
-          purchases.map(p => [`${top8020Clients[idx].id}-${p.categoryId}`, p])
+          purchases.map(p => [`${top8020Clients[idx].id} -${p.categoryId} `, p])
         )
       );
 
@@ -1471,7 +1471,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         const salesBySubcategory = clientSales.reduce((acc, sale) => {
           const subcategoryId = productSubcategoryMap.get(sale.productId);
           if (subcategoryId) {
-            const key = `${sale.categoryId}-${subcategoryId}`;
+            const key = `${sale.categoryId} -${subcategoryId} `;
             const amount = parseFloat(sale.totalAmount);
             acc[key] = (acc[key] || 0) + amount;
           }
@@ -1486,7 +1486,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         // Iterate over all categories instead of just market investment rates
         categories.forEach(category => {
           // Check if there's a custom rate for this client and category
-          const customRate = clientRatesMap.get(`${client.id}-${category.id}`);
+          const customRate = clientRatesMap.get(`${client.id} -${category.id} `);
           const defaultRate = rateMap.get(category.id);
 
           // Use custom rate if available, otherwise use default rate
@@ -1503,7 +1503,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
           const cvaleAmount = salesByCategory[category.id] || 0;
 
           // Get external purchases for this client and category
-          const externalPurchase = externalPurchasesMap.get(`${client.id}-${category.id}`);
+          const externalPurchase = externalPurchasesMap.get(`${client.id} -${category.id} `);
           const externalAmount = externalPurchase ? parseFloat(externalPurchase.amount) : 0;
 
           const categoryTotalRealized = cvaleAmount + externalAmount;
@@ -1528,7 +1528,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
             const externalSubcategories = (externalPurchase?.subcategories as Record<string, number>) || {};
 
             subcategoryDetails = agroquimicosSubcategories.map(subcat => {
-              const cvaleSubAmount = salesBySubcategory[`${category.id}-${subcat.id}`] || 0;
+              const cvaleSubAmount = salesBySubcategory[`${category.id} -${subcat.id} `] || 0;
               const externalSubAmount = externalSubcategories[subcat.id] || 0;
               const totalSubAmount = cvaleSubAmount + externalSubAmount;
 
@@ -1840,7 +1840,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
               userId,
               type: "oportunidade",
               title: "Cliente top sem compras",
-              message: `O cliente ${client.name} está no grupo top 80/20 mas ainda não fez compras na safra ${activeSeason.name}.`,
+              message: `O cliente ${client.name} está no grupo top 80 / 20 mas ainda não fez compras na safra ${activeSeason.name}.`,
               severity: "warning",
               relatedId: client.id,
               relatedType: "client",
@@ -1861,7 +1861,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
             userId,
             type: "prazo_safra",
             title: "Safra próxima do fim",
-            message: `A safra ${activeSeason.name} termina em ${daysUntilEnd} dias. Finalize suas vendas e metas!`,
+            message: `A safra ${activeSeason.name} termina em ${daysUntilEnd} dias.Finalize suas vendas e metas!`,
             severity: daysUntilEnd <= 7 ? "urgent" : "warning",
             relatedId: activeSeason.id,
             relatedType: "season",
@@ -1897,7 +1897,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       const userClients = await storage.getClientsForUser(vendedorId, false);
 
       console.log(`[PDF Import] Looking for client: "${parsed.clientName}"`);
-      console.log(`[PDF Import] Available clients (${userClients.length}):`, userClients.map(c => c.name).join(', '));
+      console.log(`[PDF Import] Available clients(${userClients.length}): `, userClients.map(c => c.name).join(', '));
 
       const matchedClient = userClients.find(c =>
         parsed.clientName && (
@@ -1915,7 +1915,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         });
       }
 
-      console.log(`[PDF Import] Matched client: ${matchedClient.name}`);
+      console.log(`[PDF Import] Matched client: ${matchedClient.name} `);
 
       const allSeasons = await storage.getAllSeasons();
       const matchedSeason = allSeasons.find(s =>
@@ -2377,7 +2377,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         const { scryptSync, randomBytes } = await import("crypto");
         const salt = randomBytes(16).toString("hex");
         const buf = scryptSync(password, salt, 64);
-        updateData.password = `${buf.toString("hex")}.${salt}`;
+        updateData.password = `${buf.toString("hex")}.${salt} `;
       }
 
       const updated = await storage.updateUser(req.params.id, updateData);
@@ -2479,6 +2479,151 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     }
   });
 
+  // ==================== GLOBAL PRODUCTS CATALOG (SUPER ADMIN) ====================
+
+  app.get("/api/admin/products", requireSuperAdmin, async (req, res) => {
+    try {
+      const products = await db.select().from(farmProductsCatalog).orderBy(desc(farmProductsCatalog.createdAt));
+      res.json(products);
+    } catch (error) {
+      console.error("Error fetching global products:", error);
+      res.status(500).json({ error: "Failed to fetch global products" });
+    }
+  });
+
+  app.post("/api/admin/products", requireSuperAdmin, async (req, res) => {
+    try {
+      const { name, activeIngredient, dosePerHa, category, unit, status } = req.body;
+      const [newProduct] = await db.insert(farmProductsCatalog).values({
+        name,
+        activeIngredient,
+        dosePerHa: dosePerHa ? String(dosePerHa) : null,
+        category,
+        unit: unit || 'LT',
+        status: status || 'active',
+        isDraft: false
+      }).returning();
+      res.status(201).json(newProduct);
+    } catch (error) {
+      console.error("Error creating global product:", error);
+      res.status(400).json({ error: "Failed to create product" });
+    }
+  });
+
+  app.patch("/api/admin/products/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const { name, activeIngredient, dosePerHa, category, unit, status, isDraft } = req.body;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (activeIngredient !== undefined) updateData.activeIngredient = activeIngredient;
+      if (dosePerHa !== undefined) updateData.dosePerHa = dosePerHa ? String(dosePerHa) : null;
+      if (category !== undefined) updateData.category = category;
+      if (unit !== undefined) updateData.unit = unit;
+      if (status !== undefined) updateData.status = status;
+      if (isDraft !== undefined) updateData.isDraft = isDraft;
+
+      const [updated] = await db.update(farmProductsCatalog)
+        .set(updateData)
+        .where(eq(farmProductsCatalog.id, req.params.id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating global product:", error);
+      res.status(400).json({ error: "Failed to update product" });
+    }
+  });
+
+  app.post("/api/admin/products/import", requireSuperAdmin, upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No PDF file uploaded" });
+      }
+
+      const mimeType = req.file.mimetype;
+      if (mimeType !== 'application/pdf') {
+        return res.status(400).json({ error: "Apenas arquivos PDF são permitidos para importação." });
+      }
+
+      console.log(`[GLOBAL_CATALOG_IMPORT] Processing PDF: ${req.file.originalname} (${req.file.size} bytes)`);
+      const { parseGlobalCatalogPdf } = await import("./whatsapp/gemini-client");
+
+      const parsedProducts = await parseGlobalCatalogPdf(req.file.buffer);
+      console.log(`[GLOBAL_CATALOG_IMPORT] Gemini extracted ${parsedProducts.length} products`);
+
+      const results = {
+        created: 0,
+        updated: 0,
+        errors: 0,
+        details: [] as string[]
+      };
+
+      for (const p of parsedProducts) {
+        try {
+          // Check if product already exists by exact name
+          const existing = await db.select().from(farmProductsCatalog)
+            .where(eq(farmProductsCatalog.name, p.name))
+            .limit(1);
+
+          if (existing.length > 0) {
+            // Update existing
+            await db.update(farmProductsCatalog).set({
+              activeIngredient: p.activeIngredient || existing[0].activeIngredient,
+              category: p.category || existing[0].category,
+              dosePerHa: p.dosePerHa ? String(p.dosePerHa) : existing[0].dosePerHa,
+              unit: p.unit || existing[0].unit,
+              status: 'active', // clear any draft status if it was pending
+              isDraft: false
+            }).where(eq(farmProductsCatalog.id, existing[0].id));
+            results.updated++;
+          } else {
+            // Create new
+            await db.insert(farmProductsCatalog).values({
+              name: p.name,
+              activeIngredient: p.activeIngredient || null,
+              category: p.category || 'Outros',
+              dosePerHa: p.dosePerHa ? String(p.dosePerHa) : null,
+              unit: p.unit || 'LT',
+              status: 'active',
+              isDraft: false
+            });
+            results.created++;
+          }
+        } catch (err) {
+          console.error(`[GLOBAL_CATALOG_IMPORT] Error processing product ${p.name}: `, err);
+          results.errors++;
+          results.details.push(`Falha ao processar: ${p.name} `);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Importação concluída.${results.created} criados, ${results.updated} atualizados.`,
+        results
+      });
+    } catch (error) {
+      console.error("[GLOBAL_CATALOG_IMPORT_ERROR]", error);
+      res.status(500).json({ error: "Falha ao processar o PDF do catálogo." });
+    }
+  });
+
+  app.delete("/api/admin/products/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      // Hard delete product (fails if bound to an invoice due to foreign key constraints, which is correct behavior)
+      await db.delete(farmProductsCatalog).where(eq(farmProductsCatalog.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting global product (it might be in use):", error);
+      res.status(400).json({ error: "Não é possível excluir o produto porque ele está sendo usado em faturas ou estoques." });
+    }
+  });
+
+  // =================================================================================
+
   app.post("/api/admin/categories", requireSuperAdmin, async (req, res) => {
     try {
       const category = insertCategorySchema.parse(req.body);
@@ -2565,7 +2710,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
       const subcategoryById = new Map(allSubcategories.map((s: any) => [s.id, s]));
       const subcategoryByName = new Map(
-        allSubcategories.map((s: any) => [`${s.categoryId}:${String(s.name).trim().toLowerCase()}`, s]),
+        allSubcategories.map((s: any) => [`${s.categoryId}:${String(s.name).trim().toLowerCase()} `, s]),
       );
 
       let created = 0;
@@ -2621,7 +2766,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
           }
 
           if (!resolvedCategoryId) {
-            errors.push(`Linha ${i + 2} (${name}): categoria inválida ou não encontrada (${categoryToken || "vazia"})`);
+            errors.push(`Linha ${i + 2} (${name}): categoria inválida ou não encontrada(${categoryToken || "vazia"})`);
             continue;
           }
 
@@ -2654,7 +2799,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
             if (byId) {
               subcategoryId = byId.id;
             } else {
-              const byName = subcategoryByName.get(`${resolvedCategoryId}:${subcategoryToken.toLowerCase()}`);
+              const byName = subcategoryByName.get(`${resolvedCategoryId}:${subcategoryToken.toLowerCase()} `);
               if (byName) subcategoryId = byName.id;
             }
           }
@@ -2699,7 +2844,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
           created++;
         } catch (err: any) {
           console.error("Erro importando produto linha", i + 2, err);
-          errors.push(`Linha ${i + 2}: ${err?.message || "erro desconhecido"}`);
+          errors.push(`Linha ${i + 2}: ${err?.message || "erro desconhecido"} `);
         }
       }
 
@@ -3280,16 +3425,16 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
           };
 
           if (!productData.mercaderia || productData.mercaderia.trim() === '') {
-            errors.push(`Linha ${i + 1}: Mercaderia vazia ou não encontrada. Colunas disponíveis: ${Object.keys(row).join(', ')}`);
+            errors.push(`Linha ${i + 1}: Mercaderia vazia ou não encontrada.Colunas disponíveis: ${Object.keys(row).join(', ')} `);
             continue;
           }
 
-          console.log(`Importando linha ${i + 1}:`, productData.mercaderia);
+          console.log(`Importando linha ${i + 1}: `, productData.mercaderia);
           await db.insert(productsPriceTable).values(productData);
           imported++;
         } catch (error: any) {
-          console.error(`Erro na linha ${i + 1}:`, error);
-          errors.push(`Linha ${i + 1} (${row['MERCADERIA'] || row['Mercaderia'] || 'sem nome'}): ${error.message}`);
+          console.error(`Erro na linha ${i + 1}: `, error);
+          errors.push(`Linha ${i + 1} (${row['MERCADERIA'] || row['Mercaderia'] || 'sem nome'}): ${error.message} `);
         }
       }
 
@@ -3339,7 +3484,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
       res.json({
         success: true,
-        message: `Migração concluída. ${updated} tipos de subcategorias processadas.`,
+        message: `Migração concluída.${updated} tipos de subcategorias processadas.`,
         subcategories: subcategoryVariations
       });
     } catch (error) {
@@ -4018,7 +4163,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       const userId = req.user.id;
       const { seasonId } = req.params;
 
-      console.log(`[MARKET-CARDS] Fetching cards for Season: ${seasonId}, User: ${userId}`);
+      console.log(`[MARKET - CARDS] Fetching cards for Season: ${seasonId}, User: ${userId} `);
 
       // Get all categories
       let allCategories = await db.select().from(categories);
@@ -4075,7 +4220,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         const managerId = currentUser[0]?.managerId || userId;
         const managerRates = await storage.getManagerTeamRates(managerId, seasonId);
         managerRates.forEach(r => managerRatesMap.set(r.categoryId, r));
-        console.log(`[MARKET-CARDS] Found ${managerRates.length} manager team rates for manager ${managerId}`);
+        console.log(`[MARKET - CARDS] Found ${managerRates.length} manager team rates for manager ${managerId}`);
       } catch (mgrRateError) {
         console.error('[MARKET-CARDS] Error fetching manager rates:', mgrRateError);
       }
@@ -4099,7 +4244,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         salesData = [];
       }
 
-      console.log(`[MARKET-CARDS] User ${userId}: Found ${salesData.length} total sales`);
+      console.log(`[MARKET - CARDS] User ${userId}: Found ${salesData.length} total sales`);
 
       // Calculate Monthly Sales for Chart
       const monthlySalesMap = new Array(12).fill(0);
@@ -4171,8 +4316,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         validApps = [];
       }
 
-      console.log(`[MARKET-CARDS] Pipeline Statuses: ${pipelineStatuses.length}`, pipelineStatuses.slice(0, 3));
-      console.log(`[MARKET-CARDS] All Apps: ${allApps.length}, Valid Apps: ${validApps.length}`);
+      console.log(`[MARKET - CARDS] Pipeline Statuses: ${pipelineStatuses.length} `, pipelineStatuses.slice(0, 3));
+      console.log(`[MARKET - CARDS] All Apps: ${allApps.length}, Valid Apps: ${validApps.length} `);
 
       // Helper to differentiate Agroquimicos
       const isAgroquimico = (type: string | null | undefined) => {
@@ -4258,7 +4403,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
           pipelineMap.get(p.clientId)!.set(p.categoryId, p.status || 'ABERTO');
         }
       });
-      console.log(`[MARKET-CARDS] Pipeline Map Keys (Clients): ${pipelineMap.size}`);
+      console.log(`[MARKET - CARDS] Pipeline Map Keys(Clients): ${pipelineMap.size} `);
 
       // 0. Calculate Global Sales (C.Vale) - All clients, regardless of badge
       salesData.forEach(sale => {
@@ -4746,9 +4891,9 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       let pipeline: any[] = [];
       try {
         pipeline = await storage.getClientCategoryPipeline(clientId, userId, seasonId);
-        console.log(`[CLIENT-MARKET-PANEL] Fetched ${pipeline.length} pipeline records for client ${clientId}, season ${seasonId}`);
+        console.log(`[CLIENT - MARKET - PANEL] Fetched ${pipeline.length} pipeline records for client ${clientId}, season ${seasonId} `);
         if (pipeline.length > 0) {
-          console.log(`[CLIENT-MARKET-PANEL] Pipeline records:`, JSON.stringify(pipeline, null, 2));
+          console.log(`[CLIENT - MARKET - PANEL] Pipeline records: `, JSON.stringify(pipeline, null, 2));
         }
       } catch (pipelineError: any) {
         console.error('[CLIENT-MARKET-PANEL] Error fetching pipeline:', pipelineError);
@@ -4870,7 +5015,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
             console.warn('[CLIENT-MARKET-PANEL] Skipping app with missing categoria or applicationNumber:', app);
             return;
           }
-          const key = `${app.categoria}-${app.applicationNumber}`;
+          const key = `${app.categoria} -${app.applicationNumber} `;
           const clientArea = parseFloat(client.userClientArea || client.masterClientArea || '0') || 0;
           const pricePerHa = parseFloat(app.pricePerHa || '0') || 0;
           // ALWAYS calculate dynamically based on current client area
@@ -5019,8 +5164,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       // Update pipeline statuses
       if (pipelineStatuses && Array.isArray(pipelineStatuses) && pipelineStatuses.length > 0) {
         try {
-          console.log(`[CLIENT-MARKET-PANEL] Updating pipeline for client ${clientId}, season ${seasonId}, items: ${pipelineStatuses.length}`);
-          console.log(`[CLIENT-MARKET-PANEL] Pipeline statuses payload:`, JSON.stringify(pipelineStatuses, null, 2));
+          console.log(`[CLIENT - MARKET - PANEL] Updating pipeline for client ${clientId}, season ${seasonId}, items: ${pipelineStatuses.length} `);
+          console.log(`[CLIENT - MARKET - PANEL] Pipeline statuses payload: `, JSON.stringify(pipelineStatuses, null, 2));
 
           const finalSeasonId = seasonId || (await storage.getActiveSeason())?.id;
           if (!finalSeasonId) {
@@ -5032,7 +5177,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
             // Filter out null statuses - if status is null, we should delete the record or set to ABERTO
             const finalStatus = ps.status === null ? 'ABERTO' : ps.status;
 
-            console.log(`[CLIENT-MARKET-PANEL] Upserting pipeline: category=${ps.categoryId}, status=${finalStatus} (original: ${ps.status}), season=${finalSeasonId}`);
+            console.log(`[CLIENT - MARKET - PANEL] Upserting pipeline: category = ${ps.categoryId}, status = ${finalStatus} (original: ${ps.status}), season = ${finalSeasonId} `);
 
             const result = await storage.upsertClientCategoryPipeline({
               clientId,
@@ -5041,9 +5186,9 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
               seasonId: finalSeasonId,
               status: finalStatus
             });
-            console.log(`[CLIENT-MARKET-PANEL] Pipeline upsert result:`, JSON.stringify(result, null, 2));
+            console.log(`[CLIENT - MARKET - PANEL] Pipeline upsert result: `, JSON.stringify(result, null, 2));
           }
-          console.log(`[CLIENT-MARKET-PANEL] Successfully updated ${pipelineStatuses.length} pipeline statuses`);
+          console.log(`[CLIENT - MARKET - PANEL] Successfully updated ${pipelineStatuses.length} pipeline statuses`);
 
         } catch (pipelineError: any) {
           console.error('[CLIENT-MARKET-PANEL] Pipeline update error:', pipelineError);
@@ -5060,7 +5205,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
           }
         }
       } else {
-        console.log(`[CLIENT-MARKET-PANEL] No pipeline statuses to update (pipelineStatuses=${pipelineStatuses}, length=${pipelineStatuses?.length || 0})`);
+        console.log(`[CLIENT - MARKET - PANEL] No pipeline statuses to update(pipelineStatuses = ${pipelineStatuses}, length = ${pipelineStatuses?.length || 0})`);
       }
 
       // Update application statuses
@@ -6710,7 +6855,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
         const teamRatesAccessMap = new Map<string, typeof teamMarketRates[0]>();
         teamMarketRates.forEach(rate => {
           // Key: clientId:categoryId
-          teamRatesAccessMap.set(`${rate.user_client_links.id}:${rate.client_market_rates.categoryId}`, rate);
+          teamRatesAccessMap.set(`${rate.user_client_links.id}:${rate.client_market_rates.categoryId} `, rate);
         });
 
         // Calculate total potential by category
@@ -6721,7 +6866,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
         teamMarketClients.forEach(client => {
           categories.forEach(cat => {
-            const key = `${client.id}:${cat.id}`;
+            const key = `${client.id}:${cat.id} `;
             const specificRate = teamRatesAccessMap.get(key);
 
             let potential = 0;
@@ -6762,7 +6907,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
           const area = parseFloat(client.userArea || client.masterArea || '0');
           if (area > 0) {
             categories.forEach(cat => {
-              const key = `${client.id}:${cat.id}`;
+              const key = `${client.id}:${cat.id} `;
               const specificRate = teamRatesAccessMap.get(key);
               let investment = 0;
 
@@ -6880,7 +7025,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
               const area = parseFloat(client.userArea || client.masterArea || '0');
               if (area > 0) {
-                const key = `${client.id}:${cat.id}`;
+                const key = `${client.id}:${cat.id} `;
                 const specificRate = teamRatesAccessMap.get(key);
                 let investment = 0;
 

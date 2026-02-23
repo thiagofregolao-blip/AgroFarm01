@@ -529,10 +529,99 @@ RESPOSTA (texto pronto para WhatsApp):`;
       if (text) return text;
 
       return `🧑‍🌾 Não consegui analisar seu estoque para "${pest}" agora. Tente perguntar de outra forma ou consulte um agrônomo presencialmente. 🌱`;
-
     } catch (error) {
       console.error("[Gemini] Erro na recomendação agronômica:", error);
       return `❌ Erro ao gerar recomendação. Tente novamente em instantes.`;
     }
+  }
+}
+
+/**
+ * Helper independente para extrair lista de produtos de um PDF do Catálogo Global.
+ */
+export async function parseGlobalCatalogPdf(pdfBuffer: Buffer): Promise<any[]> {
+  try {
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+    // Extract text from PDF
+    const data = new Uint8Array(pdfBuffer);
+    const pdf = await getDocument({ data }).promise;
+    let fullText = "";
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(" ");
+      fullText += pageText + "\n";
+    }
+
+    if (!fullText.trim()) {
+      throw new Error("PDF seems to be empty or unreadable.");
+    }
+
+    const prompt = `Você é um agrônomo especialista em leitura de catálogos e bulários agrícolas.
+Extraia uma lista de TODOS os produtos mencionados neste texto de catálogo PDF.
+
+RETORNE APENAS UM ARRAY JSON VÁLIDO. NÃO INCLUA NADA FORA DOS COLCHETES [].
+Exemplo do formato exigido:
+[
+  {
+    "name": "NOME COMERCIAL DO PRODUTO (ex: SPHERE MAX, PREMIO, ROUNDUP)",
+    "activeIngredient": "Princípio Ativo (se houver)",
+    "category": "Uma destas opções exatas: Tratamento de semente, Herbicidas, Inseticidas, Fungicidas, Especialidades, Sementes, Fertilizantes, Outros",
+    "dosePerHa": Número (dose média por hectare, ex: 1.5, 0.5, 2.0. Se não achar, mande null),
+    "unit": "LT, KG ou UNI"
+  }
+]
+
+REGRAS RÍGIDAS:
+1. O texto do catálogo pode estar bagunçado, tente inferir os blocos de produtos.
+2. NOME deve estar em MAIÚSCULAS para facilitar busca futura.
+3. Se "dosePerHa" for um intervalo (ex: "1 a 2"), mande a média (1.5). DEVE SER UM NUMERO DECIMAL.
+4. CATEGORY DEVE ser estritamente uma da lista acima. Se for adubo, use Fertilizantes. Se for fungicida de ferrugem, use Fungicidas.
+
+TEXTO DO CATÁLOGO EXTRAÍDO:
+${fullText.substring(0, 30000)} // Limite de 30k chars pra não estourar payload
+`;
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada.");
+
+    // Using gemini-2.0-flash exactly as we fixed earlier for invoice parsing
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1, // Low temp for strictly structured JSON extraction
+          }
+        }),
+      }
+    );
+
+    const apiData = await response.json();
+
+    if (!response.ok) {
+      console.error("[Gemini Catalog Parse] API Error:", apiData);
+      throw new Error(apiData.error?.message || "Failed to call Gemini API");
+    }
+
+    const text = apiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    try {
+      const parsed = JSON.parse(cleanJson);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error("[Gemini Catalog Parse] Failed to parse JSON. Raw output:", text);
+      throw new Error("A IA não retornou um formato JSON válido.");
+    }
+
+  } catch (error) {
+    console.error("[parseGlobalCatalogPdf] Fatal error:", error);
+    throw error;
   }
 }
