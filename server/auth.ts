@@ -174,3 +174,14 @@ export function requireManager(req: any, res: any, next: any) {
   }
   next();
 }
+
+// Middleware to protect farm admin routes (admin_agricultor OR administrador)
+export function requireFarmAdmin(req: any, res: any, next: any) {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  if (req.user.role !== 'admin_agricultor' && req.user.role !== 'administrador') {
+    return res.status(403).json({ error: "Farm administrator access required" });
+  }
+  next();
+}

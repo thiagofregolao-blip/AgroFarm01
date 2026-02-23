@@ -6,7 +6,7 @@ import { visits } from "@shared/schema.crm";
 import { z } from "zod";
 import multer from "multer";
 import { importExcelFile, importClientsFromExcel, importPlanningProducts } from "./import-excel";
-import { setupAuth, requireAuth, requireSuperAdmin, requireManager } from "./auth";
+import { setupAuth, requireAuth, requireSuperAdmin, requireManager, requireFarmAdmin } from "./auth";
 import { db } from "./db";
 import { eq, sql, and, gt, desc, inArray, or, sum, count } from "drizzle-orm";
 import { parseCVALEPDF } from "./parse-cvale-pdf";
@@ -8713,7 +8713,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
   const httpServer = createServer(app);
   // ==================== FARMERS MANAGEMENT (Super Admin) ====================
 
-  app.get("/api/admin/farmers", requireSuperAdmin, async (req, res) => {
+  app.get("/api/admin/farmers", requireFarmAdmin, async (req, res) => {
     try {
       const allFarmers = await db.select().from(farmFarmers).orderBy(farmFarmers.name);
       // Remove passwords before sending
@@ -8725,7 +8725,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     }
   });
 
-  app.post("/api/admin/farmers", requireSuperAdmin, async (req, res) => {
+  app.post("/api/admin/farmers", requireFarmAdmin, async (req, res) => {
     try {
       // Manual validation since we don't have a specific insert schema exported yet or want to handle password hashing
       const { username, password, name, email, phone, document, property_size, main_culture, region } = req.body;
@@ -8762,7 +8762,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     }
   });
 
-  app.patch("/api/admin/farmers/:id", requireSuperAdmin, async (req, res) => {
+  app.patch("/api/admin/farmers/:id", requireFarmAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const { username, password, name, email, phone, document, property_size, main_culture, region } = req.body;
@@ -8777,7 +8777,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       if (property_size !== undefined) updateData.propertySize = property_size ? String(property_size) : null;
       if (main_culture !== undefined) updateData.mainCulture = main_culture || null;
       if (region !== undefined) updateData.region = region || null;
-      
+
       if (password) {
         updateData.password = await hashPassword(password);
       }
@@ -8799,7 +8799,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
     }
   });
 
-  app.delete("/api/admin/farmers/:id", requireSuperAdmin, async (req, res) => {
+  app.delete("/api/admin/farmers/:id", requireFarmAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const [deleted] = await db.delete(farmFarmers)
@@ -8819,7 +8819,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
 
   // ==================== FARMERS DASHBOARD STATISTICS ====================
 
-  app.get("/api/admin/farmers/dashboard/stats", requireSuperAdmin, async (req, res) => {
+  app.get("/api/admin/farmers/dashboard/stats", requireFarmAdmin, async (req, res) => {
     try {
       const { farmFarmers, farmProperties, farmApplications, farmProductsCatalog, farmInvoiceItems, farmInvoices } = await import("@shared/schema");
 
@@ -8869,9 +8869,9 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items" (
       for (const item of productPrices) {
         if (!item.productId) continue;
         const key = item.productId;
-        if (!latestPrices.has(key) || 
-            (item.invoiceDate && latestPrices.get(key).invoiceDate && 
-             new Date(item.invoiceDate) > new Date(latestPrices.get(key).invoiceDate))) {
+        if (!latestPrices.has(key) ||
+          (item.invoiceDate && latestPrices.get(key).invoiceDate &&
+            new Date(item.invoiceDate) > new Date(latestPrices.get(key).invoiceDate))) {
           latestPrices.set(key, item);
         }
       }
