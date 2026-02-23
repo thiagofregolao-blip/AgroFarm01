@@ -183,6 +183,12 @@ export class WhatsAppService {
         return;
       }
 
+      // Regra Estrita: Apenas agricultores podem usar o WhatsApp Bot. Outros papéis (consultor, gerente, etc) são ignorados.
+      if (user.role !== 'agricultor') {
+        console.log(`[WhatsAppService] Match de numero, porem o role do usuario (${user.name}) é '${user.role}'. Ignorando a mensagem pois o bot é exclusivo para agricultores.`);
+        return;
+      }
+
       // 2. Interpretar pergunta com Gemini AI (com contexto)
       const contextKey = isGroup ? `${chatId}_${senderPhone}` : phone;
       const lastContext = this.userContexts.get(contextKey);
@@ -282,7 +288,7 @@ export class WhatsAppService {
    * Busca usuário pelo número de WhatsApp
    * Verifica whatsapp_number principal E whatsapp_extra_numbers (JSON array)
    */
-  private async findUserByPhone(phone: string): Promise<{ id: string; name: string } | null> {
+  private async findUserByPhone(phone: string): Promise<{ id: string; name: string; role: string } | null> {
     try {
       const formattedPhone = ZApi.formatPhoneNumber(phone);
       console.log(`[WhatsAppService] Find user - Raw: ${phone}, Formatted: ${formattedPhone}`);
@@ -301,44 +307,19 @@ export class WhatsAppService {
         let userResult: any;
         if (isNeon) {
           userResult = await pool.query(
-            `SELECT id, name, manager_id, role, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
+            `SELECT id, name, role, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
             [variant, `%${variant}%`]
           );
           if (userResult.rows && userResult.rows.length > 0) {
             const u = userResult.rows[0];
-            let effectiveId = u.manager_id || u.id;
-
-            // Fallback: If no manager_id is set but user is a team member, attempt to link them to the main admin_agricultor automatically
-            if (!u.manager_id && ['consultor', 'agricultor', 'faturista'].includes(u.role)) {
-              try {
-                const adminRes = await pool.query(`SELECT id FROM users WHERE role = 'admin_agricultor' OR role = 'administrador' ORDER BY created_at ASC LIMIT 1`);
-                if (adminRes.rows && adminRes.rows.length > 0) {
-                  effectiveId = adminRes.rows[0].id;
-                  console.log(`[WhatsAppService] User ${u.name} has no manager_id! Linking implicitly to admin_agricultor ${effectiveId}`);
-                }
-              } catch (e) { }
-            }
-
-            return { id: effectiveId, name: u.name };
+            return { id: u.id, name: u.name, role: u.role };
           }
         } else {
-          userResult = await pool`SELECT id, name, manager_id, role, whatsapp_number FROM users WHERE whatsapp_number = ${variant} OR whatsapp_extra_numbers LIKE ${'%' + variant + '%'} LIMIT 1`;
+          userResult = await pool`SELECT id, name, role, whatsapp_number FROM users WHERE whatsapp_number = ${variant} OR whatsapp_extra_numbers LIKE ${'%' + variant + '%'} LIMIT 1`;
           if (userResult && userResult.length > 0) {
             const u = userResult[0];
-            let effectiveId = u.manager_id || u.id;
-
-            if (!u.manager_id && ['consultor', 'agricultor', 'faturista'].includes(u.role)) {
-              try {
-                const adminRes = await pool`SELECT id FROM users WHERE role = 'admin_agricultor' OR role = 'administrador' LIMIT 1`;
-                if (adminRes && adminRes.length > 0) {
-                  effectiveId = adminRes[0].id;
-                  console.log(`[WhatsAppService] User ${u.name} has no manager_id! Linking implicitly to admin_agricultor ${effectiveId}`);
-                }
-              } catch (e) { }
-            }
-
-            console.log(`[WhatsAppService] User found: ${u.name} (${u.whatsapp_number})`);
-            return { id: effectiveId, name: u.name };
+            console.log(`[WhatsAppService] User found: ${u.name} (${u.whatsapp_number}) - Role: ${u.role}`);
+            return { id: u.id, name: u.name, role: u.role };
           }
         }
       }
