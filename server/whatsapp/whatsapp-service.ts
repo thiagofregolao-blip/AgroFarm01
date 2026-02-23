@@ -187,6 +187,7 @@ export class WhatsAppService {
       const contextKey = isGroup ? `${chatId}_${senderPhone}` : phone;
       const lastContext = this.userContexts.get(contextKey);
       const intent = await this.gemini.interpretQuestion(message, user.id, lastContext);
+      console.log(`[WhatsAppService] Intent resolved:`, JSON.stringify(intent));
 
       // Salvar contexto para próxima interação (inclusive conversas)
       this.userContexts.set(contextKey, {
@@ -196,6 +197,7 @@ export class WhatsAppService {
 
       // Se for apenas papo furado ou dúvida geral, responde direto
       if (intent.type === "conversation" && intent.response) {
+        console.log(`[WhatsAppService] Sending conversation response:`, intent.response);
         await this.sendMessage(replyTo, intent.response, replyIsGroup);
         return;
       }
@@ -245,6 +247,7 @@ export class WhatsAppService {
       const response = await this.gemini.generateNaturalResponse(data, intent);
 
       // 5. Enviar resposta
+      console.log(`[WhatsAppService] Sending response to WhatsApp:`, response.substring(0, 100));
       await this.sendMessage(replyTo, response, replyIsGroup);
     } catch (error) {
       console.error("[WhatsAppService] Erro ao processar mensagem:", error);
@@ -261,6 +264,7 @@ export class WhatsAppService {
    */
   async sendMessage(phoneOrChatId: string, message: string, isGroup: boolean = false): Promise<boolean> {
     const formattedPhone = isGroup ? phoneOrChatId : ZApi.formatPhoneNumber(phoneOrChatId);
+    console.log(`[WhatsAppService] Sending raw text to ${formattedPhone}`);
     const result = await this.zapi.sendTextMessage({
       phone: formattedPhone,
       message,
@@ -297,17 +301,44 @@ export class WhatsAppService {
         let userResult: any;
         if (isNeon) {
           userResult = await pool.query(
-            `SELECT id, name, manager_id, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
+            `SELECT id, name, manager_id, role, whatsapp_number FROM users WHERE whatsapp_number = $1 OR whatsapp_extra_numbers LIKE $2 LIMIT 1`,
             [variant, `%${variant}%`]
           );
           if (userResult.rows && userResult.rows.length > 0) {
-            return { id: userResult.rows[0].manager_id || userResult.rows[0].id, name: userResult.rows[0].name };
+            const u = userResult.rows[0];
+            let effectiveId = u.manager_id || u.id;
+
+            // Fallback: If no manager_id is set but user is a team member, attempt to link them to the main admin_agricultor automatically
+            if (!u.manager_id && ['consultor', 'agricultor', 'faturista'].includes(u.role)) {
+              try {
+                const adminRes = await pool.query(`SELECT id FROM users WHERE role = 'admin_agricultor' OR role = 'administrador' ORDER BY created_at ASC LIMIT 1`);
+                if (adminRes.rows && adminRes.rows.length > 0) {
+                  effectiveId = adminRes.rows[0].id;
+                  console.log(`[WhatsAppService] User ${u.name} has no manager_id! Linking implicitly to admin_agricultor ${effectiveId}`);
+                }
+              } catch (e) { }
+            }
+
+            return { id: effectiveId, name: u.name };
           }
         } else {
-          userResult = await pool`SELECT id, name, manager_id, whatsapp_number FROM users WHERE whatsapp_number = ${variant} OR whatsapp_extra_numbers LIKE ${'%' + variant + '%'} LIMIT 1`;
+          userResult = await pool`SELECT id, name, manager_id, role, whatsapp_number FROM users WHERE whatsapp_number = ${variant} OR whatsapp_extra_numbers LIKE ${'%' + variant + '%'} LIMIT 1`;
           if (userResult && userResult.length > 0) {
-            console.log(`[WhatsAppService] User found: ${userResult[0].name} (${userResult[0].whatsapp_number})`);
-            return { id: userResult[0].manager_id || userResult[0].id, name: userResult[0].name };
+            const u = userResult[0];
+            let effectiveId = u.manager_id || u.id;
+
+            if (!u.manager_id && ['consultor', 'agricultor', 'faturista'].includes(u.role)) {
+              try {
+                const adminRes = await pool`SELECT id FROM users WHERE role = 'admin_agricultor' OR role = 'administrador' LIMIT 1`;
+                if (adminRes && adminRes.length > 0) {
+                  effectiveId = adminRes[0].id;
+                  console.log(`[WhatsAppService] User ${u.name} has no manager_id! Linking implicitly to admin_agricultor ${effectiveId}`);
+                }
+              } catch (e) { }
+            }
+
+            console.log(`[WhatsAppService] User found: ${u.name} (${u.whatsapp_number})`);
+            return { id: effectiveId, name: u.name };
           }
         }
       }

@@ -1,10 +1,10 @@
-import { db } from './server/db';
+import { db, dbReady } from './server/db';
 import { farmInvoiceItems, farmInvoices, farmProductsCatalog } from './shared/schema';
 import { ilike, and, or, eq, sql } from 'drizzle-orm';
 
 async function check() {
+  await dbReady;
   const filters = { product: "SPHERE MAX" };
-  const userId = 'placeholder'; // We don't have the user ID, so we will omit it for testing the ilike
 
   const invoicesWithItems = await db
     .select({
