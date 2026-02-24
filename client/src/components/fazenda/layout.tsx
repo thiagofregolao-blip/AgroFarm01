@@ -10,7 +10,6 @@ const navItems = [
     { label: "Início", href: "/fazenda", icon: Home },
     { label: "Propriedades", href: "/fazenda/propriedades", icon: Map },
     { label: "Safras", href: "/fazenda/safras", icon: Sprout },
-    { label: "Produtos", href: "/fazenda/produtos", icon: Package },
     { label: "Faturas", href: "/fazenda/faturas", icon: FileText },
     { label: "Estoque", href: "/fazenda/estoque", icon: Warehouse },
     { label: "Aplicações", href: "/fazenda/aplicacoes", icon: BarChart3 },

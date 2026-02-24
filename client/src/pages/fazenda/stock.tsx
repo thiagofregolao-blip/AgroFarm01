@@ -1,16 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import FarmLayout from "@/components/fazenda/layout";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { useState } from "react";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package } from "lucide-react";
+import { useState, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 export default function FarmStock() {
     const [, setLocation] = useLocation();
+    const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
 
     const { user } = useAuth();
@@ -39,11 +45,14 @@ export default function FarmStock() {
     return (
         <FarmLayout>
             <div className="space-y-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-emerald-800">Depósito / Estoque</h1>
-                    <p className="text-emerald-600 text-sm">
-                        {stock.length} itens — Valor total: <strong>${totalValue.toLocaleString("en", { minimumFractionDigits: 2 })}</strong>
-                    </p>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-emerald-800">Depósito / Estoque</h1>
+                        <p className="text-emerald-600 text-sm">
+                            {stock.length} itens — Valor total: <strong>${totalValue.toLocaleString("en", { minimumFractionDigits: 2 })}</strong>
+                        </p>
+                    </div>
+                    <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
                 </div>
 
                 <Tabs defaultValue="stock">
@@ -141,5 +150,207 @@ export default function FarmStock() {
                 </Tabs>
             </div>
         </FarmLayout>
+    );
+}
+
+const CATEGORIES = [
+    { value: "Herbicida", label: "Herbicida" },
+    { value: "Fungicida", label: "Fungicida" },
+    { value: "Inseticida", label: "Inseticida" },
+    { value: "Fertilizante", label: "Fertilizante" },
+    { value: "Semente", label: "Semente" },
+    { value: "Adjuvante", label: "Adjuvante" },
+    { value: "Outro", label: "Outro" },
+];
+
+const UNITS = ["LT", "KG", "UNI", "SC"];
+
+function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
+    const [open, setOpen] = useState(false);
+    const { toast } = useToast();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [name, setName] = useState("");
+    const [category, setCategory] = useState("");
+    const [unit, setUnit] = useState("");
+    const [activeIngredient, setActiveIngredient] = useState("");
+    const [quantity, setQuantity] = useState("");
+    const [unitCost, setUnitCost] = useState("");
+    const [previewUrl, setPreviewUrl] = useState("");
+
+    const extractPhoto = useMutation({
+        mutationFn: async (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch("/api/farm/stock/extract-photo", {
+                method: "POST",
+                body: formData
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Falha ao analisar a foto");
+            }
+            return res.json();
+        },
+        onSuccess: (data: any) => {
+            setName(data.name || "");
+            setCategory(data.category || "");
+            setUnit(data.unit || "LT");
+            setActiveIngredient(data.activeIngredient || "");
+            toast({ title: "Dados extraídos com sucesso!", description: "Revise e insira as quantidades." });
+        },
+        onError: (e) => {
+            toast({ title: "Erro na IA", description: e.message, variant: "destructive" });
+        }
+    });
+
+    const saveStock = useMutation({
+        mutationFn: async () => {
+            return apiRequest("POST", "/api/farm/stock", {
+                name,
+                category,
+                unit,
+                activeIngredient,
+                quantity: parseFloat(quantity),
+                unitCost: parseFloat(unitCost)
+            });
+        },
+        onSuccess: () => {
+            toast({ title: "Produto adicionado ao estoque!" });
+            setOpen(false);
+            onSuccess();
+        },
+        onError: (e: any) => {
+            toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" });
+        }
+    });
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setPreviewUrl(URL.createObjectURL(file));
+            extractPhoto.mutate(file);
+        }
+    };
+
+    const resetForm = () => {
+        setName("");
+        setCategory("");
+        setUnit("");
+        setActiveIngredient("");
+        setQuantity("");
+        setUnitCost("");
+        setPreviewUrl("");
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => {
+            setOpen(o);
+            if (!o) resetForm();
+        }}>
+            <DialogTrigger asChild>
+                <Button className="bg-emerald-600 hover:bg-emerald-700">
+                    <Plus className="mr-2 h-4 w-4" /> Adicionar Produto
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Entrada Avulsa no Estoque</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                    {/* Botão de Câmera e IA */}
+                    <div className="flex flex-col gap-2">
+                        <Label>1. Tire uma foto do rótulo/embalagem</Label>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handleFileChange}
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full relative h-[60px]"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={extractPhoto.isPending}
+                        >
+                            {extractPhoto.isPending ? (
+                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analisando Rótulo...</>
+                            ) : previewUrl ? (
+                                <div className="flex items-center absolute inset-0 rounded-md overflow-hidden opacity-30">
+                                    <img src={previewUrl} className="w-full h-full object-cover" />
+                                </div>
+                            ) : null}
+                            <span className="relative z-10 flex items-center">
+                                <Camera className="mr-2 h-5 w-5 text-emerald-600" />
+                                {previewUrl ? "Trocar Foto" : "Tirar Foto (IA)"}
+                            </span>
+                        </Button>
+                        <p className="text-xs text-muted-foreground">A inteligência artificial preencherá os dados automaticamente.</p>
+                    </div>
+
+                    <hr className="my-2 border-emerald-100" />
+
+                    {/* Formulário de Produto */}
+                    <div className="space-y-3">
+                        <Label className="text-emerald-800 font-semibold">2. Revise e Inseria Quantidades</Label>
+
+                        <div>
+                            <Label>Nome do Produto *</Label>
+                            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: SPHERE MAX" disabled={saveStock.isPending} />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label>Categoria</Label>
+                                <Select value={category} onValueChange={setCategory}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label>Unidade</Label>
+                                <Select value={unit} onValueChange={setUnit}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <Label>Ingrediente Ativo <span className="text-gray-400 font-normal">(Opcional)</span></Label>
+                            <Input value={activeIngredient} onChange={e => setActiveIngredient(e.target.value)} placeholder="Ex: Ciproconazol" disabled={saveStock.isPending} />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label>Quantidade Adicionada *</Label>
+                                <Input type="number" step="0.01" min="0" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Ex: 50" disabled={saveStock.isPending} />
+                            </div>
+                            <div>
+                                <Label>Custo Unitário (R$) *</Label>
+                                <Input type="number" step="0.01" min="0" value={unitCost} onChange={e => setUnitCost(e.target.value)} placeholder="Ex: 15.50" disabled={saveStock.isPending} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <Button
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 mt-4"
+                        onClick={() => saveStock.mutate()}
+                        disabled={saveStock.isPending || extractPhoto.isPending || !name || !quantity || !unitCost}
+                    >
+                        {saveStock.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Package className="mr-2 h-4 w-4" />}
+                        Confirmar Entrada no Estoque
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }

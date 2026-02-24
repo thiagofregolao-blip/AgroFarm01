@@ -625,3 +625,85 @@ ${fullText.substring(0, 30000)} // Limite de 30k chars pra não estourar payload
     throw error;
   }
 }
+
+export async function parseProductPhoto(imageBuffer: Buffer, mimeType: string): Promise<{
+  name: string;
+  activeIngredient: string | null;
+  category: string | null;
+  unit: string | null;
+}> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
+
+    const base64Image = imageBuffer.toString("base64");
+
+    const prompt = `Você é um agrônomo especialista em produtos químicos agrícolas. 
+Analise a imagem deste rótulo/embalagem de defensivo ou insumo agrícola.
+Extraia os seguintes dados do produto:
+1. "name": O nome comercial principal (ex: SPHERE MAX, ROUNDUP, PREMIO). Apenas o nome.
+2. "activeIngredient": O princípio ativo (se visível).
+3. "category": Classifique estritamente como uma destas opções: "Herbicida", "Fungicida", "Inseticida", "Fertilizante", "Semente", "Adjuvante", "Outro".
+4. "unit": O tipo de unidade da embalagem estritamente como: "LT" (se for líquido/litros), "KG" (se for sólido/quilos), "UNI" (se for unidade/caixa) ou "SC" (se for saco).
+
+Retorne APENAS UM JSON VÁLIDO no formato exato baixo, sem comentários adicionais:
+{
+  "name": "NOME DO PRODUTO",
+  "activeIngredient": "Princípio Ativo",
+  "category": "Fungicida",
+  "unit": "LT"
+}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: mimeType,
+                    data: base64Image
+                  }
+                }
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.1,
+          }
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("[Gemini Image Parse] API Error:", data);
+      throw new Error(data.error?.message || "Erro na API Gemini");
+    }
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    try {
+      const parsed = JSON.parse(cleanJson);
+      return {
+        name: parsed.name || "Produto Desconhecido",
+        activeIngredient: parsed.activeIngredient || null,
+        category: parsed.category || "Outro",
+        unit: parsed.unit || "LT"
+      };
+    } catch (e) {
+      console.error("[Gemini Image Parse] Invalid JSON:", cleanJson);
+      throw new Error("A IA não conseguiu entender a embalagem.");
+    }
+  } catch (error) {
+    console.error("[parseProductPhoto] Fatal error:", error);
+    throw error;
+  }
+}

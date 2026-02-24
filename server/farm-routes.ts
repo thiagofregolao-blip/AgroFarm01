@@ -7,6 +7,8 @@ import { farmStorage } from "./farm-storage";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { db } from "./db";
+import { sql } from "drizzle-orm";
+import { farmProductsCatalog, farmStockMovements } from "@shared/schema";
 import { ZApiClient } from "./whatsapp/zapi-client";
 import multer from "multer";
 import { parseFarmInvoicePDF, parseFarmInvoiceImage } from "./parse-farm-invoice";
@@ -334,6 +336,85 @@ export function registerFarmRoutes(app: Express) {
             res.status(500).json({ error: "Failed to get stock movements" });
         }
     });
+
+    app.post("/api/farm/stock/extract-photo", requireFarmer, upload.single("file"), async (req, res) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: "Nenhuma imagem enviada." });
+            }
+
+            const mimeType = req.file.mimetype;
+            if (!mimeType.startsWith('image/')) {
+                return res.status(400).json({ error: "Apenas imagens (JPG, PNG) são permitidas." });
+            }
+
+            const { parseProductPhoto } = await import("./whatsapp/gemini-client");
+            const extractedData = await parseProductPhoto(req.file.buffer, mimeType);
+
+            res.json(extractedData);
+        } catch (error) {
+            console.error("[FARM_STOCK_EXTRACT_PHOTO]", error);
+            res.status(500).json({ error: "Falha ao analisar a foto da embalagem." });
+        }
+    });
+
+    app.post("/api/farm/stock", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            const { name, activeIngredient, category, unit, quantity, unitCost } = req.body;
+
+            if (!name || isNaN(parseFloat(quantity)) || isNaN(parseFloat(unitCost))) {
+                return res.status(400).json({ error: "Dados inválidos para entrada de estoque." });
+            }
+
+            let productId: string;
+
+            // 1. Check if product already exists in global catalog by exact name (case insensitive)
+            const existing = await db.select().from(farmProductsCatalog)
+                .where(sql`LOWER(${farmProductsCatalog.name}) = LOWER(${name})`)
+                .limit(1);
+
+            if (existing.length > 0) {
+                productId = existing[0].id;
+            } else {
+                // 2. Auto-create if it doesn't exist (flagged for review)
+                const [newProduct] = await db.insert(farmProductsCatalog).values({
+                    name: name.toUpperCase(),
+                    activeIngredient: activeIngredient || null,
+                    category: category || "Outros",
+                    unit: unit || "LT",
+                    dosePerHa: null,
+                    status: 'pending_review',
+                    isDraft: true
+                }).returning();
+                productId = newProduct.id;
+            }
+
+            // 3. Upsert into farmer's physical stock
+            const parsedQty = parseFloat(quantity);
+            const parsedCost = parseFloat(unitCost);
+
+            const updatedStock = await farmStorage.upsertStock(farmerId, productId, parsedQty, parsedCost);
+
+            // 4. Register movement
+            await db.insert(farmStockMovements).values({
+                farmerId,
+                productId,
+                type: 'entry',
+                quantity: String(parsedQty),
+                unitCost: String(parsedCost),
+                referenceType: 'manual_entry',
+                notes: 'Entrada manual avulsa',
+                date: new Date()
+            });
+
+            res.status(201).json(updatedStock);
+        } catch (error) {
+            console.error("[FARM_STOCK_POST]", error);
+            res.status(500).json({ error: "Failed to add manual stock entry" });
+        }
+    });
+
 
     // ==================== INVOICES ====================
 
@@ -937,8 +1018,8 @@ export function registerFarmRoutes(app: Express) {
                 batchId: string;
                 appliedAt: Date;
                 applications: typeof applications;
-                propertyName?: string;
-                notes?: string;
+                propertyName?: string | null;
+                notes?: string | null;
             }> = [];
 
             // Ordenar por data (mais recente primeiro)
