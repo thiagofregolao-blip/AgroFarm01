@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ProductsManagement } from "./admin-products";
 
 export default function AdminFarmersPage() {
     const { user, logoutMutation } = useAuth();
@@ -63,7 +64,7 @@ export default function AdminFarmersPage() {
 
             <main className="flex-1 overflow-auto p-6 max-w-7xl mx-auto w-full">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-2 max-w-md">
+                    <TabsList className="grid w-full grid-cols-3 max-w-2xl">
                         <TabsTrigger value="dashboard" className="flex items-center gap-2">
                             <BarChart3 className="h-4 w-4" />
                             Dashboard
@@ -71,6 +72,10 @@ export default function AdminFarmersPage() {
                         <TabsTrigger value="farmers" className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
                             Agricultores
+                        </TabsTrigger>
+                        <TabsTrigger value="products" className="flex items-center gap-2">
+                            <Sprout className="h-4 w-4" />
+                            Catálogo Global
                         </TabsTrigger>
                     </TabsList>
 
@@ -80,6 +85,10 @@ export default function AdminFarmersPage() {
 
                     <TabsContent value="farmers" className="space-y-6">
                         <FarmersManagement />
+                    </TabsContent>
+
+                    <TabsContent value="products" className="space-y-6">
+                        <ProductsManagement />
                     </TabsContent>
                 </Tabs>
             </main>

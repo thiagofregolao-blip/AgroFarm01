@@ -67,7 +67,7 @@ export default function AdminProductsPage() {
     );
 }
 
-function ProductsManagement() {
+export function ProductsManagement() {
     const { toast } = useToast();
     const [searchTerm, setSearchTerm] = useState("");
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -89,15 +89,15 @@ function ProductsManagement() {
 
     // Fetch Products
     const { data: products, isLoading } = useQuery<any[]>({
-        queryKey: ['/api/admin/products'],
+        queryKey: ['/api/admin/global-products'],
     });
 
     const createProductMutation = useMutation({
         mutationFn: async (data: any) => {
-            return apiRequest("POST", "/api/admin/products", data);
+            return apiRequest("POST", "/api/admin/global-products", data);
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/admin/global-products'] });
             toast({ title: "Produto cadastrado com sucesso" });
             setIsCreateOpen(false);
             resetForm();
@@ -113,10 +113,10 @@ function ProductsManagement() {
 
     const updateProductMutation = useMutation({
         mutationFn: async ({ id, data }: { id: string; data: any }) => {
-            return apiRequest("PATCH", `/api/admin/products/${id}`, data);
+            return apiRequest("PATCH", `/api/admin/global-products/${id}`, data);
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/admin/global-products'] });
             toast({ title: "Produto atualizado com sucesso" });
             setEditingProduct(null);
             setApprovingProduct(null);
@@ -133,10 +133,10 @@ function ProductsManagement() {
 
     const deleteProductMutation = useMutation({
         mutationFn: async (id: string) => {
-            return apiRequest("DELETE", `/api/admin/products/${id}`);
+            return apiRequest("DELETE", `/api/admin/global-products/${id}`);
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/admin/global-products'] });
             toast({ title: "Produto removido com sucesso" });
             setDeletingProduct(null);
         },
@@ -154,7 +154,7 @@ function ProductsManagement() {
             const formData = new FormData();
             formData.append('file', file);
 
-            const res = await fetch('/api/admin/products/import', {
+            const res = await fetch('/api/admin/global-products/import', {
                 method: 'POST',
                 body: formData,
             });
@@ -166,7 +166,7 @@ function ProductsManagement() {
             return res.json();
         },
         onSuccess: (data: any) => {
-            queryClient.invalidateQueries({ queryKey: ['/api/admin/products'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/admin/global-products'] });
             toast({
                 title: "Importação concluída",
                 description: `Catálogo processado com sucesso.`

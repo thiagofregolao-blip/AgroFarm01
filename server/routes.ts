@@ -2481,7 +2481,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
 
   // ==================== GLOBAL PRODUCTS CATALOG (SUPER ADMIN) ====================
 
-  app.get("/api/admin/products", requireSuperAdmin, async (req, res) => {
+  app.get("/api/admin/global-products", requireFarmAdmin, async (req, res) => {
     try {
       const products = await db.select().from(farmProductsCatalog).orderBy(desc(farmProductsCatalog.createdAt));
       res.json(products);
@@ -2491,7 +2491,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
-  app.post("/api/admin/products", requireSuperAdmin, async (req, res) => {
+  app.post("/api/admin/global-products", requireFarmAdmin, async (req, res) => {
     try {
       const { name, activeIngredient, dosePerHa, category, unit, status } = req.body;
       const [newProduct] = await db.insert(farmProductsCatalog).values({
@@ -2510,7 +2510,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
-  app.patch("/api/admin/products/:id", requireSuperAdmin, async (req, res) => {
+  app.patch("/api/admin/global-products/:id", requireFarmAdmin, async (req, res) => {
     try {
       const { name, activeIngredient, dosePerHa, category, unit, status, isDraft } = req.body;
 
@@ -2538,7 +2538,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
-  app.post("/api/admin/products/import", requireSuperAdmin, upload.single("file"), async (req, res) => {
+  app.post("/api/admin/global-products/import", requireFarmAdmin, upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No PDF file uploaded" });
@@ -2611,7 +2611,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
-  app.delete("/api/admin/products/:id", requireSuperAdmin, async (req, res) => {
+  app.delete("/api/admin/global-products/:id", requireFarmAdmin, async (req, res) => {
     try {
       // Hard delete product (fails if bound to an invoice due to foreign key constraints, which is correct behavior)
       await db.delete(farmProductsCatalog).where(eq(farmProductsCatalog.id, req.params.id));
