@@ -148,7 +148,7 @@
                     "parameters": [
                         {
                             "name": "whatsapp_number",
-                            "value": "={{ $node[\"Webhook Z-API\"].json.body.phone }}"
+                            "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
                         }
                     ]
                 }
@@ -173,7 +173,7 @@
                     "parameters": [
                         {
                             "name": "whatsapp_number",
-                            "value": "={{ $node[\"Webhook Z-API\"].json.body.phone }}"
+                            "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
                         },
                         {
                             "name": "limit",
@@ -202,7 +202,7 @@
                     "parameters": [
                         {
                             "name": "whatsapp_number",
-                            "value": "={{ $node[\"Webhook Z-API\"].json.body.phone }}"
+                            "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
                         },
                         {
                             "name": "limit",
