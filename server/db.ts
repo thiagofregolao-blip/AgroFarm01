@@ -140,6 +140,15 @@ export async function ensureSchema() {
       console.log("✅ Coluna coordinates verificada.");
     } catch (e) { /* ignora se já existe */ }
 
+    // 5. Garantir status em farm_expenses
+    try {
+      await execute(`
+        ALTER TABLE farm_expenses 
+        ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'confirmed';
+      `);
+      console.log("✅ Coluna status em farm_expenses verificada.");
+    } catch (e) { /* ignora se já existe */ }
+
     console.log("✅ Schema verificado/corrigido com sucesso.");
   } catch (error) {
     console.error("❌ Erro ao verificar schema:", error);
