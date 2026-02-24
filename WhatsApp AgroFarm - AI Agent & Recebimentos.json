@@ -103,7 +103,7 @@
       "parameters": {
         "text": "={{ $json.body.text.message || $json.body.message }}",
         "options": {
-          "systemMessage": "Você é o assistente virtual da AgroFarm. Você ajuda o agricultor tirando dúvidas sobre o estoque dele, sobre as aplicações no campo e sobre as despesas dele. Seja educado, use emojis agrícolas e responda sempre de forma curta no formato WhatsApp. O número de WhatsApp do agricultor atual é: {{$node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone}}. SEMPRE passe exatamente este whatsapp_number quando for usar as tools para consultar estoque, faturas ou aplicações. É OBRIGATÓRIO."
+          "systemMessage": "Você é o assistente virtual da AgroFarm. Você ajuda o agricultor tirando dúvidas sobre o estoque dele, sobre as aplicações no campo e sobre as despesas dele. Seja educado, use emojis agrícolas e responda sempre de forma curta no formato WhatsApp.\\n\\nIMPORTANTE PARA USO DE TOOLS:\\nO número de WhatsApp do agricultor atual é: {{$node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone}}.\\n\\nSEMPRE passe esse `whatsapp_number` como uma STRING (texto entre aspas, ex: \\\"0986123456\\\") quando for chamar qualquer tool. NUNCA envie como numeral, pois números iniciados com zero quebram o parser JSON do n8n."
         }
       },
       "id": "a9dabd5c-0307-4340-acdd-74d5f50b4723",
@@ -195,7 +195,8 @@
           "values": [
             {
               "name": "whatsapp_number",
-              "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
+              "valueProvider": "model",
+              "required": true
             },
             {
               "name": "limit",
@@ -233,7 +234,8 @@
           "values": [
             {
               "name": "whatsapp_number",
-              "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
+              "valueProvider": "model",
+              "required": true
             }
           ]
         },
@@ -263,11 +265,12 @@
         "method": "GET",
         "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/applications",
         "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
+        "parametersQuery": {
+          "values": [
             {
               "name": "whatsapp_number",
-              "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
+              "valueProvider": "model",
+              "required": true
             },
             {
               "name": "limit",
