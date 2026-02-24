@@ -1143,7 +1143,6 @@ export const farmApplications = pgTable("farm_applications", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
-// Despesas extras (diesel, frete, mão de obra)
 export const farmExpenses = pgTable("farm_expenses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -1152,6 +1151,7 @@ export const farmExpenses = pgTable("farm_expenses", {
   category: text("category").notNull(), // diesel, frete, mao_de_obra, outro
   description: text("description"),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  status: text("status", { enum: ["pending", "confirmed"] }).default("confirmed"), // Para aprovações do WhatsApp/n8n
   expenseDate: timestamp("expense_date").notNull().default(sql`now()`),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });

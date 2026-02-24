@@ -1120,5 +1120,123 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // ==================== n8n / WhatsApp Webhooks ====================
+
+    app.post("/api/farm/webhook/n8n/receipt", upload.single("file"), async (req, res) => {
+        try {
+            const { whatsapp_number } = req.body;
+            if (!whatsapp_number) {
+                return res.status(400).json({ error: "whatsapp_number is required" });
+            }
+
+            // Find farmer by phone number
+            const { users, farmExpenses, farmInvoices } = await import("../shared/schema");
+            const { eq, or, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number);
+
+            // Search by main number or extra numbers
+            const farmers = await db.select().from(users).where(
+                or(
+                    eq(users.whatsapp_number, formattedPhone),
+                    sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
+                )
+            ).limit(1);
+
+            if (farmers.length === 0) {
+                return res.status(404).json({ error: "Farmer not found for this phone number" });
+            }
+
+            const farmer = farmers[0];
+
+            if (!req.file) {
+                return res.status(400).json({ error: "Image file is required" });
+            }
+
+            const mimeType = req.file.mimetype;
+            if (!mimeType.startsWith('image/')) {
+                return res.status(400).json({ error: "Only images are supported" });
+            }
+
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
+
+            const base64Image = req.file.buffer.toString("base64");
+
+            const prompt = `Você é um assistente do AgroFarm. O agricultor enviou uma foto pelo WhatsApp de um COMPROVANTE, NOTA FISCAL ou RECIBO.
+Analise a imagem e classifique se é uma Despesa com Veículos/Frete/Serviços (expense) ou se é uma Fatura de Insumos/Produtos Agrícolas (invoice).
+
+Retorne APENAS UM JSON VÁLIDO no formato:
+{
+  "type": "expense" | "invoice" | "unknown",
+  "totalAmount": 150.50,
+  "description": "Breve resumo do que foi comprado/gasto (ex: Abastecimento Diesel S10, Compra de Glifosato)",
+  "category": "diesel" | "frete" | "mao_de_obra" | "outro" (SE for expense. Se invoice, deixe "outro")
+}`;
+
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                parts: [
+                                    { text: prompt },
+                                    { inline_data: { mime_type: mimeType, data: base64Image } }
+                                ]
+                            }
+                        ],
+                        generationConfig: { temperature: 0.1 }
+                    })
+                }
+            );
+
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+            let parsed;
+            try {
+                parsed = JSON.parse(cleanJson);
+            } catch (e) {
+                return res.status(400).json({ error: "Failed to parse image content" });
+            }
+
+            const amount = parseFloat(parsed.totalAmount) || 0;
+
+            if (parsed.type === "expense") {
+                await db.insert(farmExpenses).values({
+                    farmerId: farmer.id,
+                    amount: String(amount),
+                    description: `[Via WhatsApp] ${parsed.description}`,
+                    category: parsed.category || 'outro',
+                    status: 'pending',
+                });
+                return res.json({ message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) recebida e aguardando aprovação no painel AgroFarm!` });
+            }
+            else if (parsed.type === "invoice") {
+                await db.insert(farmInvoices).values({
+                    farmerId: farmer.id,
+                    totalAmount: String(amount),
+                    notes: `[Via WhatsApp] ${parsed.description}`,
+                    status: 'pending',
+                    supplier: "Via WhatsApp",
+                    invoiceNumber: `WPP-${Date.now().toString().slice(-6)}`
+                });
+                return res.json({ message: `✅ Fatura de R$ ${amount.toFixed(2)} recebida! Os itens estão aguardando sua revisão e aprovação no painel AgroFarm.` });
+            }
+            else {
+                return res.json({ message: `🤔 Hum, não consegui entender essa imagem. Parece um comprovante? Se sim, tente tirar uma foto mais nítida dos valores.` });
+            }
+
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_RECEIPT]", error);
+            res.status(500).json({ error: "Internal server error during receipt processing" });
+        }
+    });
+
     console.log("✅ Farm routes registered (/api/farm/*, /api/pdv/*)");
 }

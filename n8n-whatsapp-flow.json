@@ -1,0 +1,132 @@
+{
+    "name": "WhatsApp AgroFarm - Recebimento de Notas e Despesas",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "whatsapp-recebido",
+                "options": {}
+            },
+            "id": "1",
+            "name": "Webhook Z-API / Evolution",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ $json.body.isImage || $json.body.type === 'image' }}",
+                            "value2": true
+                        }
+                    ]
+                }
+            },
+            "id": "2",
+            "name": "É Imagem?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                450,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://sua-url-do-agrofarm.up.railway.app/api/farm/webhook/n8n/receipt",
+                "sendBody": true,
+                "contentType": "multipart-form-data",
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "whatsapp_number",
+                            "value": "={{ $json.body.sender.phone || $node[\"Webhook Z-API / Evolution\"].json.body.phone }}"
+                        }
+                    ]
+                },
+                "sendBinaryData": true,
+                "binaryPropertyName": "file:data"
+            },
+            "id": "4",
+            "name": "Enviar para a AgroFarm API",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                700,
+                150
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.z-api.io/instances/SEU_ID/token/SEU_TOKEN/send-text",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "phone",
+                            "value": "={{ $node[\"Webhook Z-API / Evolution\"].json.body.phone }}"
+                        },
+                        {
+                            "name": "message",
+                            "value": "={{ $json.message }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "5",
+            "name": "Responder no WhatsApp (Sucesso)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                950,
+                150
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook Z-API / Evolution": {
+            "main": [
+                [
+                    {
+                        "node": "É Imagem?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "É Imagem?": {
+            "main": [
+                [
+                    {
+                        "node": "Enviar para a AgroFarm API",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Enviar para a AgroFarm API": {
+            "main": [
+                [
+                    {
+                        "node": "Responder no WhatsApp (Sucesso)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {},
+    "versionId": "f03125e9-eddb-42f3-80ec-fe2bbdc52fde"
+}
