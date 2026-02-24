@@ -1238,5 +1238,124 @@ Retorne APENAS UM JSON VÁLIDO no formato:
         }
     });
 
+    app.get("/api/farm/webhook/n8n/stock", async (req, res) => {
+        try {
+            const { whatsapp_number } = req.query;
+            if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
+
+            const { users } = await import("../shared/schema");
+            const { eq, or, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+
+            const farmers = await db.select().from(users).where(
+                or(
+                    eq(users.whatsapp_number, formattedPhone),
+                    sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
+                )
+            ).limit(1);
+
+            if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
+
+            const stock = await farmStorage.getStock(farmers[0].id);
+            res.json(stock.map(s => ({
+                produto: s.productName,
+                quantidade: parseFloat(s.quantity).toFixed(2),
+                unidade: s.productUnit,
+                categoria: s.productCategory
+            })));
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_STOCK]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
+    app.get("/api/farm/webhook/n8n/applications", async (req, res) => {
+        try {
+            const { whatsapp_number, limit = 5 } = req.query;
+            if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
+
+            const { users } = await import("../shared/schema");
+            const { eq, or, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+
+            const farmers = await db.select().from(users).where(
+                or(
+                    eq(users.whatsapp_number, formattedPhone),
+                    sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
+                )
+            ).limit(1);
+
+            if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
+
+            const applications = await farmStorage.getApplications(farmers[0].id);
+            const recent = applications.slice(0, Number(limit)).map(a => ({
+                data: new Date(a.appliedAt).toLocaleDateString("pt-BR"),
+                produto: a.productName,
+                quantidade: parseFloat(a.quantity).toFixed(2),
+                propriedade: a.propertyName
+            }));
+
+            res.json(recent);
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_APPS]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
+    app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
+        try {
+            const { whatsapp_number, limit = 5 } = req.query;
+            if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
+
+            const { users, farmExpenses, farmInvoices } = await import("../shared/schema");
+            const { eq, or, sql, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+
+            const farmers = await db.select().from(users).where(
+                or(
+                    eq(users.whatsapp_number, formattedPhone),
+                    sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
+                )
+            ).limit(1);
+
+            if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
+
+            const expenses = await db.select().from(farmExpenses)
+                .where(eq(farmExpenses.farmerId, farmers[0].id))
+                .orderBy(desc(farmExpenses.createdAt))
+                .limit(Number(limit));
+
+            const invoices = await db.select().from(farmInvoices)
+                .where(eq(farmInvoices.farmerId, farmers[0].id))
+                .orderBy(desc(farmInvoices.createdAt))
+                .limit(Number(limit));
+
+            res.json({
+                despesas: expenses.map((e: any) => ({
+                    descricao: e.description,
+                    valor: parseFloat(e.amount).toFixed(2),
+                    categoria: e.category,
+                    data: new Date(e.createdAt).toLocaleDateString("pt-BR"),
+                    status: e.status
+                })),
+                faturas: invoices.map((i: any) => ({
+                    fornecedor: i.supplier,
+                    valorTotal: parseFloat(i.totalAmount || "0").toFixed(2),
+                    data: new Date(i.createdAt).toLocaleDateString("pt-BR"),
+                    status: i.status
+                }))
+            });
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_INVOICES]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
     console.log("✅ Farm routes registered (/api/farm/*, /api/pdv/*)");
 }
