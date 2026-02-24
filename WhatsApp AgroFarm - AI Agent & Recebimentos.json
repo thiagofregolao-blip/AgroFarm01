@@ -103,7 +103,7 @@
       "parameters": {
         "text": "={{ $json.body.text.message || $json.body.message }}",
         "options": {
-          "systemMessage": "Você é o assistente virtual da AgroFarm. Você ajuda o agricultor tirando dúvidas sobre o estoque dele, sobre as aplicações no campo e sobre as despesas dele. Seja educado, use emojis agrícolas e responda sempre de forma curta no formato WhatsApp. Você tem ferramentas (tools) conectadas ao banco de dados do agricultor para responder com precisão."
+          "systemMessage": "Você é o assistente virtual da AgroFarm. Você ajuda o agricultor tirando dúvidas sobre o estoque dele, sobre as aplicações no campo e sobre as despesas dele. Seja educado, use emojis agrícolas e responda sempre de forma curta no formato WhatsApp. O número de WhatsApp do agricultor atual é: {{$node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone}}. SEMPRE passe exatamente este whatsapp_number quando for usar as tools para consultar estoque, faturas ou aplicações. É OBRIGATÓRIO."
         }
       },
       "id": "a9dabd5c-0307-4340-acdd-74d5f50b4723",
@@ -199,6 +199,15 @@
               "value": "5"
             }
           ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
         }
       },
       "id": "66e3cf32-5333-4cab-ad12-d3085a446f6e",
@@ -219,6 +228,15 @@
             {
               "name": "whatsapp_number",
               "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
           ]
         }
@@ -245,6 +263,15 @@
             {
               "name": "limit",
               "value": "5"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
           ]
         }
