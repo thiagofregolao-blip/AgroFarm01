@@ -40,7 +40,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://sua-url-do-agrofarm.up.railway.app/api/farm/webhook/n8n/receipt",
+        "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/receipt",
         "sendBody": true,
         "contentType": "multipart-form-data",
         "bodyParameters": {
@@ -186,10 +186,13 @@
     },
     {
       "parameters": {
-        "url": "https://sua-url-do-agrofarm.up.railway.app/api/farm/webhook/n8n/invoices",
+        "name": "consultarFaturas",
+        "description": "Lista resumos das últimas notas fiscais e despesas (frete, óleo diesel) lançadas pelo agricultor.",
+        "method": "GET",
+        "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/invoices",
         "sendQuery": true,
-        "parametersQuery": {
-          "values": [
+        "queryParameters": {
+          "parameters": [
             {
               "name": "whatsapp_number",
               "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
@@ -221,10 +224,13 @@
     },
     {
       "parameters": {
-        "url": "https://sua-url-do-agrofarm.up.railway.app/api/farm/webhook/n8n/stock",
+        "name": "consultarEstoque",
+        "description": "Busca a quantidade de todos os produtos que o agricultor tem no estoque físico. Use ferramentas sempre que o agricultor perguntar sobre produtos ou inventário.",
+        "method": "GET",
+        "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/stock",
         "sendQuery": true,
-        "parametersQuery": {
-          "values": [
+        "queryParameters": {
+          "parameters": [
             {
               "name": "whatsapp_number",
               "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
@@ -252,10 +258,13 @@
     },
     {
       "parameters": {
-        "url": "https://sua-url-do-agrofarm.up.railway.app/api/farm/webhook/n8n/applications",
+        "name": "consultarAplicacoes",
+        "description": "Mostra o histórico das últimas aplicações que o agricultor fez na lavoura (produto espalhado, talhão, quantidade, data).",
+        "method": "GET",
+        "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/applications",
         "sendQuery": true,
-        "parametersQuery": {
-          "values": [
+        "queryParameters": {
+          "parameters": [
             {
               "name": "whatsapp_number",
               "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
