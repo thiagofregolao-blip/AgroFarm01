@@ -191,8 +191,8 @@
         "method": "GET",
         "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/invoices",
         "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
+        "parametersQuery": {
+          "values": [
             {
               "name": "whatsapp_number",
               "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
@@ -229,8 +229,8 @@
         "method": "GET",
         "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/stock",
         "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
+        "parametersQuery": {
+          "values": [
             {
               "name": "whatsapp_number",
               "value": "={{ $node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone }}"
