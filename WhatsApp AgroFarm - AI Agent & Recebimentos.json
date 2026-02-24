@@ -11,10 +11,7 @@
       "name": "Webhook Z-API",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [
-        -704,
-        144
-      ],
+      "position": [-704, 144],
       "webhookId": "c9cb34e7-772f-4587-9910-bb4c4b57570b"
     },
     {
@@ -32,10 +29,7 @@
       "name": "É Imagem?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        -512,
-        144
-      ]
+      "position": [-512, 144]
     },
     {
       "parameters": {
@@ -57,10 +51,7 @@
       "name": "Processar Recibo Inteligente",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        -208,
-        -16
-      ]
+      "position": [-208, -16]
     },
     {
       "parameters": {
@@ -94,10 +85,7 @@
       "name": "Responder (Sucesso Imagem)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        48,
-        -16
-      ]
+      "position": [48, -16]
     },
     {
       "parameters": {
@@ -110,10 +98,7 @@
       "name": "AgroFarm AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1,
-      "position": [
-        -208,
-        288
-      ]
+      "position": [-208, 288]
     },
     {
       "parameters": {
@@ -125,10 +110,7 @@
       "name": "Google Gemini Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
-      "position": [
-        -256,
-        496
-      ],
+      "position": [-256, 496],
       "credentials": {
         "googlePalmApi": {
           "id": "kZk7EVTfZ0vJ6Gfu",
@@ -142,10 +124,7 @@
       "name": "Memória (Window Buffer)",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.1,
-      "position": [
-        -96,
-        496
-      ]
+      "position": [-96, 496]
     },
     {
       "parameters": {
@@ -179,10 +158,7 @@
       "name": "Responder (IA Agent Text)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        192,
-        288
-      ]
+      "position": [192, 288]
     },
     {
       "parameters": {
@@ -203,25 +179,13 @@
               "value": "5"
             }
           ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "User-Agent",
-              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-          ]
         }
       },
       "id": "66e3cf32-5333-4cab-ad12-d3085a446f6e",
       "name": "Tool_ConsultarFaturas",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
-      "position": [
-        352,
-        496
-      ]
+      "position": [352, 496]
     },
     {
       "parameters": {
@@ -238,25 +202,13 @@
               "required": true
             }
           ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "User-Agent",
-              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-          ]
         }
       },
       "id": "8580a35f-d836-4a82-868c-34558747a721",
       "name": "ConsultarEstoque",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
-      "position": [
-        48,
-        496
-      ]
+      "position": [48, 496]
     },
     {
       "parameters": {
@@ -277,25 +229,13 @@
               "value": "5"
             }
           ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "User-Agent",
-              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-          ]
         }
       },
       "id": "4bb0ba97-388b-42e4-b0cf-dab537da2c75",
       "name": "ConsultarAplicacoes",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
-      "position": [
-        192,
-        496
-      ]
+      "position": [192, 496]
     }
   ],
   "pinData": {},
