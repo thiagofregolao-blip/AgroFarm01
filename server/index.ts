@@ -55,9 +55,9 @@ app.use((req, res, next) => {
 
 
 (async () => {
-  // HOTFIX: Ensure schema integrity before starting (Fix missing columns in prod)
-  const { ensureSchema } = await import("./db");
-  await ensureSchema();
+  // HOTFIX removed: ensureSchema() was causing db locks on Railway zero-downtime deploys
+  // const { ensureSchema } = await import("./db");
+  // await ensureSchema();
 
   const server = await registerRoutes(app);
 
