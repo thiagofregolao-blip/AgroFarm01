@@ -22,7 +22,7 @@
         "conditions": {
           "boolean": [
             {
-              "value1": "={{ !!$json.body?.image?.imageUrl || !!$json.body?.document?.documentUrl || !!$json.body?.photo || !!$json.body?.imageUrl }}",
+              "value1": "={{ !!$json.body?.image?.imageUrl || !!$json.body?.document?.documentUrl }}",
               "value2": true
             }
           ]
@@ -43,7 +43,7 @@
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/receipt",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"whatsapp_number\": \"{{ $json.body.phone }}\", \"imageUrl\": \"{{ $json.body.image?.imageUrl || $json.body.document?.documentUrl || $json.body.imageUrl }}\" }",
+        "jsonBody": "={ \"whatsapp_number\": \"{{ $json.body.phone }}\", \"imageUrl\": \"{{ $json.body.image?.imageUrl || $json.body.document?.documentUrl }}\" }",
         "options": {}
       },
       "id": "1190cbeb-181a-49f2-89c5-99e0d4790150",
