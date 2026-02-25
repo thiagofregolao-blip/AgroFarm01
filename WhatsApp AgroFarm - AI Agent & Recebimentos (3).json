@@ -185,12 +185,14 @@
         "parametersQuery": {
           "values": [
             {
-              "name": "whatsapp_number"
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
             },
             {
               "name": "search",
-              "valueProvider": "fieldValue",
-              "value": "={{ $fromAI(\"query\") }}"
+              "valueProvider": "fromAI",
+              "description": "Nome exato do produto a ser pesquisado (ex: glifosato)"
             }
           ]
         },
@@ -221,7 +223,9 @@
         "parametersQuery": {
           "values": [
             {
-              "name": "whatsapp_number"
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
             }
           ]
         },
@@ -234,7 +238,8 @@
               "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
           ]
-        }
+        },
+        "toolDescription": "Usa esta ferramenta para verificar a quantidade de produtos disponíveis no estoque do usuário (fazenda) no momento."
       },
       "id": "e5b5205a-6da4-45f8-8d9a-75ecf6462aa6",
       "name": "ConsultarEstoque",
@@ -252,7 +257,9 @@
         "parametersQuery": {
           "values": [
             {
-              "name": "whatsapp_number"
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
             }
           ]
         },
@@ -265,7 +272,8 @@
               "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
           ]
-        }
+        },
+        "toolDescription": "Usa esta ferramenta para consultar o histórico recente de aplicações de produtos (defensivos agrícolas) na lavoura para o agricultor."
       },
       "id": "7d0c55a4-7bca-4b2c-b36b-26a35c6c3137",
       "name": "ConsultarAplicacoes",
@@ -285,8 +293,8 @@
           "values": [
             {
               "name": "search",
-              "valueProvider": "fieldValue",
-              "value": "={{ $fromAI(\"query\") }}"
+              "valueProvider": "fromAI",
+              "description": "Envie a dúvida agronômica do usuário (ex: dosagem do produto, o que é, etc)"
             }
           ]
         },

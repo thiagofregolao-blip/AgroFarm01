@@ -1460,8 +1460,16 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const searchString = search ? String(search).trim() : null;
 
             if (searchString) {
+                console.log(`[WEBHOOK_N8N_INVOICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number})`);
                 const { farmInvoiceItems } = await import("../shared/schema");
-                const cleanSearch = searchString.replace(/[^a-zA-Z0-9]/g, "");
+                const cleanSearch = searchString.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+                const words = cleanSearch.split(" ").filter(w => w.length > 2);
+
+                const searchConditions = words.map(w => sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`);
+
+                // If the AI sends a single word or multiple, we require at least one word to match. 
+                // Using or() if multiple words are sent to broaden the search, or and() to narrow it. Let's use OR for flexibility.
+                const combinedSearch = searchConditions.length > 0 ? or(...searchConditions) : sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`;
 
                 // Deep search in invoice items
                 const items = await db.select({
@@ -1477,11 +1485,13 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     .where(
                         and(
                             eq(farmInvoices.farmerId, farmers[0].id),
-                            sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch}%`}`
+                            combinedSearch
                         )
                     )
                     .orderBy(desc(farmInvoices.createdAt))
                     .limit(Number(limit));
+
+                console.log(`[WEBHOOK_N8N_INVOICES] Found ${items.length} items for "${searchString}"`);
 
                 return res.json({
                     resultadosBusca: items.map((i: any) => ({
