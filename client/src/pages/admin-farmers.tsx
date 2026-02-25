@@ -33,6 +33,8 @@ import {
 import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProductsManagement } from "./admin-products";
+import { ManualsManagement } from "./admin-manuals";
+import { FileText } from "lucide-react";
 
 export default function AdminFarmersPage() {
     const { user, logoutMutation } = useAuth();
@@ -64,7 +66,7 @@ export default function AdminFarmersPage() {
 
             <main className="flex-1 overflow-auto p-6 max-w-7xl mx-auto w-full">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-3 max-w-2xl">
+                    <TabsList className="grid w-full grid-cols-4 max-w-3xl">
                         <TabsTrigger value="dashboard" className="flex items-center gap-2">
                             <BarChart3 className="h-4 w-4" />
                             Dashboard
@@ -75,7 +77,11 @@ export default function AdminFarmersPage() {
                         </TabsTrigger>
                         <TabsTrigger value="products" className="flex items-center gap-2">
                             <Sprout className="h-4 w-4" />
-                            Catálogo Global
+                            Catálogo
+                        </TabsTrigger>
+                        <TabsTrigger value="manuals" className="flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Manuais RAG
                         </TabsTrigger>
                     </TabsList>
 
@@ -89,6 +95,10 @@ export default function AdminFarmersPage() {
 
                     <TabsContent value="products" className="space-y-6">
                         <ProductsManagement />
+                    </TabsContent>
+
+                    <TabsContent value="manuals" className="space-y-6">
+                        <ManualsManagement />
                     </TabsContent>
                 </Tabs>
             </main>

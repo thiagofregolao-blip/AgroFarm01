@@ -1081,6 +1081,15 @@ export const farmSeasons = pgTable("farm_seasons", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// Manuais Agronômicos (RAG)
+export const farmManuals = pgTable("farm_manuals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  segment: text("segment").notNull(), // Plantas Daninhas, Herbicidas, Nutrição, etc.
+  contentText: text("content_text").notNull(), // Texto extraído para IA ler
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // Faturas importadas
 export const farmInvoices = pgTable("farm_invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1188,6 +1197,10 @@ export type FarmProductCatalog = typeof farmProductsCatalog.$inferSelect;
 export const insertFarmStockSchema = createInsertSchema(farmStock).omit({ id: true, updatedAt: true });
 export type InsertFarmStock = z.infer<typeof insertFarmStockSchema>;
 export type FarmStock = typeof farmStock.$inferSelect;
+
+export const insertFarmManualSchema = createInsertSchema(farmManuals).omit({ id: true, createdAt: true });
+export type InsertFarmManual = z.infer<typeof insertFarmManualSchema>;
+export type FarmManual = typeof farmManuals.$inferSelect;
 
 export const insertFarmInvoiceSchema = createInsertSchema(farmInvoices).omit({ id: true, createdAt: true });
 export type InsertFarmInvoice = z.infer<typeof insertFarmInvoiceSchema>;

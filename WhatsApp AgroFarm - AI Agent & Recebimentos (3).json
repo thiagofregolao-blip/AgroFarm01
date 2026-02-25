@@ -190,7 +190,7 @@
             {
               "name": "search",
               "valueProvider": "fieldValue",
-              "value": "=={{ $fromAI(\"query\") }}"
+              "value": "={{ $fromAI(\"query\") }}"
             }
           ]
         },
@@ -278,73 +278,36 @@
     },
     {
       "parameters": {
-        "name": "ConsultarManuaisAgronomicos",
-        "description": "Sempre que o usuário perguntar sobre dosagem, carências, modos de aplicação ou pragas, leia os manuais oficias por aqui."
+        "toolDescription": "Sempre que o usuário perguntar sobre dosagem, carências, modos de aplicação ou pragas, envie a dúvida do usuário no parâmetro search para esta ferramenta e ela lerá os manuais oficias.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/manuals",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "search",
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI(\"query\") }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "AgroFarm/1.0"
+            }
+          ]
+        }
       },
       "id": "8b51d46b-8007-4e0d-b841-a1b7eabc7a1e",
       "name": "ConsultarManuaisAgronomicos",
-      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
         752,
         2032
-      ]
-    },
-    {
-      "parameters": {},
-      "id": "7bf3b092-23c2-40a7-bc59-7b752df2f80c",
-      "name": "In-Memory Vector Store",
-      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
-      "typeVersion": 1,
-      "position": [
-        752,
-        2232
-      ]
-    },
-    {
-      "parameters": {
-        "modelName": "models/text-embedding-004"
-      },
-      "id": "e8a93e50-2f10-410a-8bf8-d3f18e1d52d3",
-      "name": "Embeddings Google Gemini",
-      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
-      "typeVersion": 1,
-      "position": [
-        600,
-        2384
-      ],
-      "credentials": {
-        "googlePalmApi": {
-          "id": "kZk7EVTfZ0vJ6Gfu",
-          "name": "Google Gemini(PaLM) Api account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "options": {}
-      },
-      "id": "52f82ac2-6e27-4dd3-b1d5-22e3ebc0a0c6",
-      "name": "Default Data Loader",
-      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
-      "typeVersion": 1,
-      "position": [
-        900,
-        2384
-      ]
-    },
-    {
-      "parameters": {
-        "fileSelector": "/app/agronomico/*",
-        "options": {}
-      },
-      "id": "c6210f13-68d2-4318-ae96-b6b2308eb91c",
-      "name": "Ler Manuais (Read Files)",
-      "type": "n8n-nodes-base.readWriteFile",
-      "typeVersion": 1,
-      "position": [
-        1152,
-        2384
       ]
     }
   ],
@@ -461,56 +424,12 @@
         ]
       ]
     },
-    "In-Memory Vector Store": {
-      "ai_vectorStore": [
-        [
-          {
-            "node": "ConsultarManuaisAgronomicos",
-            "type": "ai_vectorStore",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Embeddings Google Gemini": {
-      "ai_embedding": [
-        [
-          {
-            "node": "In-Memory Vector Store",
-            "type": "ai_embedding",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Default Data Loader": {
-      "ai_document": [
-        [
-          {
-            "node": "In-Memory Vector Store",
-            "type": "ai_document",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "ConsultarManuaisAgronomicos": {
       "ai_tool": [
         [
           {
             "node": "AgroFarm AI Agent",
             "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ler Manuais (Read Files)": {
-      "main": [
-        [
-          {
-            "node": "Default Data Loader",
-            "type": "main",
             "index": 0
           }
         ]

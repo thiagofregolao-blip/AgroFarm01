@@ -649,6 +649,46 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // --- Admin Manuals API (RAG) ---
+    app.post("/api/admin/manuals", requireFarmer, upload.single("file"), async (req, res) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: "PDF file required" });
+            }
+            const { title, segment } = req.body;
+            if (!title || !segment) {
+                return res.status(400).json({ error: "Title and Segment required" });
+            }
+
+            const { extractManualText } = await import("./whatsapp/gemini-client");
+            if (req.file.mimetype !== "application/pdf") {
+                return res.status(400).json({ error: "Only PDF files are supported" });
+            }
+
+            const extractedText = await extractManualText(req.file.buffer, req.file.mimetype);
+            if (!extractedText.trim()) {
+                return res.status(400).json({ error: "Could not extract text from the PDF" });
+            }
+
+            const { farmManuals } = await import("../shared/schema");
+            const { db } = await import("./db");
+
+            const [newManual] = await db.insert(farmManuals).values({
+                title,
+                segment,
+                contentText: extractedText
+            }).returning();
+
+            res.status(201).json({
+                message: "Manual uploaded and parsed successfully",
+                manual: newManual
+            });
+        } catch (error) {
+            console.error("[ADMIN_MANUALS_POST]", error);
+            res.status(500).json({ error: "Failed to process and upload manual" });
+        }
+    });
+
     // ==================== APPLICATIONS ====================
 
     app.get("/api/farm/applications", requireFarmer, async (req, res) => {
@@ -1470,6 +1510,19 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             });
         } catch (error) {
             console.error("[WEBHOOK_N8N_INVOICES]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
+    app.get("/api/farm/webhook/n8n/manuals", async (req, res) => {
+        try {
+            const { farmManuals } = await import("../shared/schema");
+            const { db } = await import("./db");
+
+            const manuals = await db.select().from(farmManuals);
+            res.json({ manuals });
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_MANUALS]", error);
             res.status(500).json({ error: "Internal server error" });
         }
     });
