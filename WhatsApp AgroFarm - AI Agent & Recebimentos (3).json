@@ -332,6 +332,20 @@
         900,
         2384
       ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "/app/agronomico/*",
+        "options": {}
+      },
+      "id": "c6210f13-68d2-4318-ae96-b6b2308eb91c",
+      "name": "Ler Manuais (Read Files)",
+      "type": "n8n-nodes-base.readFiles",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        2384
+      ]
     }
   ],
   "pinData": {},
@@ -486,6 +500,17 @@
           {
             "node": "AgroFarm AI Agent",
             "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Manuais (Read Files)": {
+      "main": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "main",
             "index": 0
           }
         ]
