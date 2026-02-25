@@ -1533,9 +1533,93 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
-    app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
+    app.get("/api/farm/webhook/n8n/prices", async (req, res) => {
         try {
             const { whatsapp_number, limit = 5, search } = req.query;
+            if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
+            if (!search) return res.status(400).json({ error: "search parameter (product name) is required" });
+
+            const { users, farmInvoices } = await import("../shared/schema");
+            const { eq, or, sql, desc, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+
+            const farmers = await db.select().from(users).where(
+                or(
+                    eq(users.whatsapp_number, formattedPhone),
+                    sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
+                )
+            ).limit(1);
+
+            if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
+
+            const searchString = String(search).trim();
+            console.log(`[WEBHOOK_N8N_PRICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number})`);
+            const { farmInvoiceItems, farmProductsCatalog } = await import("../shared/schema");
+
+            let searchCondition;
+
+            if (searchString === "DEBUG_ALL_ITEMS") {
+                searchCondition = sql`1=1`;
+            } else {
+                const cleanSearch = searchString.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+                const words = cleanSearch.split(" ").filter(w => w.length > 2);
+
+                const searchConditions = words.map(w => or(
+                    sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
+                    sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
+                    sql`regexp_replace(${farmProductsCatalog.category}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`
+                ));
+                searchCondition = searchConditions.length > 0 ? or(...searchConditions) : or(
+                    sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
+                    sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
+                    sql`regexp_replace(${farmProductsCatalog.category}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`
+                );
+            }
+
+            // Deep search in invoice items
+            const items = await db.select({
+                date: farmInvoices.createdAt,
+                supplier: farmInvoices.supplier,
+                productName: farmInvoiceItems.productName,
+                quantity: farmInvoiceItems.quantity,
+                unit: farmInvoiceItems.unit,
+                unitPrice: farmInvoiceItems.unitPrice,
+            })
+                .from(farmInvoiceItems)
+                .innerJoin(farmInvoices, eq(farmInvoiceItems.invoiceId, farmInvoices.id))
+                .leftJoin(farmProductsCatalog, eq(farmInvoiceItems.productId, farmProductsCatalog.id))
+                .where(
+                    and(
+                        eq(farmInvoices.farmerId, farmers[0].id),
+                        searchCondition
+                    )
+                )
+                .orderBy(desc(farmInvoices.createdAt))
+                .limit(Number(limit));
+
+            console.log(`[WEBHOOK_N8N_PRICES] Found ${items.length} items for "${searchString}"`);
+
+            return res.json({
+                resultadosBusca: items.map((i: any) => ({
+                    dataCompra: new Date(i.date).toLocaleDateString("pt-BR"),
+                    fornecedor: i.supplier,
+                    produto: i.productName,
+                    quantidade: parseFloat(i.quantity).toFixed(2) + " " + i.unit,
+                    precoUnitario: parseFloat(i.unitPrice).toFixed(2)
+                }))
+            });
+
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_PRICES]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
+    app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
+        try {
+            const { whatsapp_number, limit = 5 } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
 
             const { users, farmExpenses, farmInvoices } = await import("../shared/schema");
@@ -1552,67 +1636,6 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             ).limit(1);
 
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
-
-            const searchString = search ? String(search).trim() : null;
-
-            if (searchString) {
-                console.log(`[WEBHOOK_N8N_INVOICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number})`);
-                const { farmInvoiceItems, farmProductsCatalog } = await import("../shared/schema");
-
-                let searchCondition;
-
-                if (searchString === "DEBUG_ALL_ITEMS") {
-                    searchCondition = sql`1=1`;
-                } else {
-                    const cleanSearch = searchString.replace(/[^a-zA-Z0-9 ]/g, "").trim();
-                    const words = cleanSearch.split(" ").filter(w => w.length > 2);
-
-                    const searchConditions = words.map(w => or(
-                        sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
-                        sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
-                        sql`regexp_replace(${farmProductsCatalog.category}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`
-                    ));
-                    searchCondition = searchConditions.length > 0 ? or(...searchConditions) : or(
-                        sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
-                        sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
-                        sql`regexp_replace(${farmProductsCatalog.category}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`
-                    );
-                }
-
-
-                // Deep search in invoice items
-                const items = await db.select({
-                    date: farmInvoices.createdAt,
-                    supplier: farmInvoices.supplier,
-                    productName: farmInvoiceItems.productName,
-                    quantity: farmInvoiceItems.quantity,
-                    unit: farmInvoiceItems.unit,
-                    unitPrice: farmInvoiceItems.unitPrice,
-                })
-                    .from(farmInvoiceItems)
-                    .innerJoin(farmInvoices, eq(farmInvoiceItems.invoiceId, farmInvoices.id))
-                    .leftJoin(farmProductsCatalog, eq(farmInvoiceItems.productId, farmProductsCatalog.id))
-                    .where(
-                        and(
-                            eq(farmInvoices.farmerId, farmers[0].id),
-                            searchCondition
-                        )
-                    )
-                    .orderBy(desc(farmInvoices.createdAt))
-                    .limit(Number(limit));
-
-                console.log(`[WEBHOOK_N8N_INVOICES] Found ${items.length} items for "${searchString}"`);
-
-                return res.json({
-                    resultadosBusca: items.map((i: any) => ({
-                        dataCompra: new Date(i.date).toLocaleDateString("pt-BR"),
-                        fornecedor: i.supplier,
-                        produto: i.productName,
-                        quantidade: parseFloat(i.quantity).toFixed(2) + " " + i.unit,
-                        precoUnitario: parseFloat(i.unitPrice).toFixed(2)
-                    }))
-                });
-            }
 
             // Default behavior if no search term: return recent totals
             const expenses = await db.select().from(farmExpenses)

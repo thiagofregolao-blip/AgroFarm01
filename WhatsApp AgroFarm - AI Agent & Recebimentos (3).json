@@ -179,7 +179,7 @@
     },
     {
       "parameters": {
-        "toolDescription": " \"Usa esta ferramenta para buscar faturas antigas OU para pesquisar preços de produtos específicos comprados no passado. Quando o usuário perguntar o preço de algo, mande o nome do produto no parâmetro de busca.\"",
+        "toolDescription": "Esta ferramenta busca TOTALIZADORES de compras e faturas. Não use essa ferramenta para buscar preço unitário de produtos. Retorna data e fornecedor de faturas recentes.",
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/invoices",
         "sendQuery": true,
         "parametersQuery": {
@@ -188,11 +188,6 @@
               "name": "whatsapp_number",
               "valueProvider": "fieldValue",
               "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
-            },
-            {
-              "name": "search",
-              "valueProvider": "fromAI",
-              "description": "Nome exato do produto a ser pesquisado (ex: glifosato)"
             }
           ]
         },
@@ -317,6 +312,45 @@
         752,
         2032
       ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "A ferramenta IDEAL E INSUPERÁVEL para consultar PREÇO, COMPRA OU FATURA DE UM PRODUTO ESPECÍFICO. Quando o usuário perguntar 'quanto paguei no glifosato?' use esta ferramenta e envie o nome do produto no parâmetro de busca.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/prices",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            },
+            {
+              "name": "search",
+              "valueProvider": "fromAI",
+              "description": "Nome exato do produto a ser pesquisado (ex: glifosato)"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "e6e0dc69-727e-4b4e-8744-e09c57d29fcf",
+      "name": "ConsultarPrecoProduto",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        752,
+        2032
+      ]
     }
   ],
   "pinData": {},
@@ -433,6 +467,17 @@
       ]
     },
     "ConsultarManuaisAgronomicos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarPrecoProduto": {
       "ai_tool": [
         [
           {
