@@ -283,7 +283,7 @@
       },
       "id": "8b51d46b-8007-4e0d-b841-a1b7eabc7a1e",
       "name": "ConsultarManuaisAgronomicos",
-      "type": "@n8n/n8n-nodes-langchain.toolVectorStoreRetriever",
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
       "typeVersion": 1,
       "position": [
         752,
