@@ -649,8 +649,20 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // Middleware specific for Admin Manuals
+    function requireAdminManuals(req: Request, res: Response, next: NextFunction) {
+        if (!req.isAuthenticated || !req.isAuthenticated()) {
+            return res.status(401).json({ error: "Autenticação necessária" });
+        }
+        const role = (req.user as any)?.role;
+        if (role !== 'administrador' && role !== 'admin_agricultor') {
+            return res.status(403).json({ error: "Acesso restrito a administradores" });
+        }
+        next();
+    }
+
     // --- Admin Manuals API (RAG) ---
-    app.post("/api/admin/manuals", requireFarmer, upload.single("file"), async (req, res) => {
+    app.post("/api/admin/manuals", requireAdminManuals, upload.single("file"), async (req, res) => {
         try {
             if (!req.file) {
                 return res.status(400).json({ error: "PDF file required" });

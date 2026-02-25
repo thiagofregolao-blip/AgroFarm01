@@ -144,6 +144,16 @@ const runMigration = async () => {
             console.log('✅ Migração skip_stock_entry concluída!');
         }
 
+        // Migration 10: Create farm_manuals table for RAG
+        const farmManualsPath = path.join(process.cwd(), 'migration_add_farm_manuals.sql');
+        if (fs.existsSync(farmManualsPath)) {
+            const farmManualsSql = fs.readFileSync(farmManualsPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', farmManualsPath);
+            console.log('🚀 Executando SQL (farm_manuals)...');
+            await sql.unsafe(farmManualsSql);
+            console.log('✅ Migração farm_manuals concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
