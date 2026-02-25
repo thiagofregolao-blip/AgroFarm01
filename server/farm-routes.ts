@@ -1387,11 +1387,11 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
         try {
-            const { whatsapp_number, limit = 5 } = req.query;
+            const { whatsapp_number, limit = 5, search } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
 
             const { users, farmExpenses, farmInvoices } = await import("../shared/schema");
-            const { eq, or, sql, desc } = await import("drizzle-orm");
+            const { eq, or, sql, desc, and } = await import("drizzle-orm");
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
@@ -1405,6 +1405,44 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
+            const searchString = search ? String(search).trim() : null;
+
+            if (searchString) {
+                const { farmInvoiceItems } = await import("../shared/schema");
+                const cleanSearch = searchString.replace(/[^a-zA-Z0-9]/g, "");
+
+                // Deep search in invoice items
+                const items = await db.select({
+                    date: farmInvoices.createdAt,
+                    supplier: farmInvoices.supplier,
+                    productName: farmInvoiceItems.productName,
+                    quantity: farmInvoiceItems.quantity,
+                    unit: farmInvoiceItems.unit,
+                    unitPrice: farmInvoiceItems.unitPrice,
+                })
+                    .from(farmInvoiceItems)
+                    .innerJoin(farmInvoices, eq(farmInvoiceItems.invoiceId, farmInvoices.id))
+                    .where(
+                        and(
+                            eq(farmInvoices.farmerId, farmers[0].id),
+                            sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch}%`}`
+                        )
+                    )
+                    .orderBy(desc(farmInvoices.createdAt))
+                    .limit(Number(limit));
+
+                return res.json({
+                    resultadosBusca: items.map((i: any) => ({
+                        dataCompra: new Date(i.date).toLocaleDateString("pt-BR"),
+                        fornecedor: i.supplier,
+                        produto: i.productName,
+                        quantidade: parseFloat(i.quantity).toFixed(2) + " " + i.unit,
+                        precoUnitario: parseFloat(i.unitPrice).toFixed(2)
+                    }))
+                });
+            }
+
+            // Default behavior if no search term: return recent totals
             const expenses = await db.select().from(farmExpenses)
                 .where(eq(farmExpenses.farmerId, farmers[0].id))
                 .orderBy(desc(farmExpenses.createdAt))
