@@ -394,6 +394,11 @@
             "node": "AgroFarm AI Agent",
             "type": "ai_languageModel",
             "index": 0
+          },
+          {
+            "node": "ConsultarManuaisAgronomicos",
+            "type": "ai_languageModel",
+            "index": 0
           }
         ]
       ]
