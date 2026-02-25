@@ -163,7 +163,7 @@ export class FarmStorage {
     }
 
     // ==================== Stock ====================
-    async getStock(farmerId: string): Promise<(FarmStock & { productName: string; productUnit: string; productCategory: string | null })[]> {
+    async getStock(farmerId: string): Promise<(FarmStock & { productName: string; productUnit: string; productCategory: string | null; productImageUrl: string | null; productDosePerHa: string | null })[]> {
         await dbReady;
         const result = await db.select({
             id: farmStock.id,
@@ -175,6 +175,8 @@ export class FarmStorage {
             productName: farmProductsCatalog.name,
             productUnit: farmProductsCatalog.unit,
             productCategory: farmProductsCatalog.category,
+            productImageUrl: farmProductsCatalog.imageUrl,
+            productDosePerHa: farmProductsCatalog.dosePerHa,
         }).from(farmStock)
             .innerJoin(farmProductsCatalog, eq(farmStock.productId, farmProductsCatalog.id))
             .where(eq(farmStock.farmerId, farmerId))

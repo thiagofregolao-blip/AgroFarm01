@@ -1058,8 +1058,19 @@ export function registerFarmRoutes(app: Express) {
     app.get("/api/pdv/data", requirePdv, async (req, res) => {
         try {
             const farmerId = (req.session as any).pdvFarmerId;
-            const products = await farmStorage.getAllProducts();
             const stock = await farmStorage.getStock(farmerId);
+
+            // Map the user's localized stock to a 'products' array that the frontend expects
+            // This prevents the global catalog from leaking into the user's PDV
+            const products = stock.map(s => ({
+                id: s.productId,
+                name: s.productName,
+                category: s.productCategory,
+                unit: s.productUnit,
+                imageUrl: s.productImageUrl || null,
+                dosePerHa: s.productDosePerHa || null,
+            }));
+
             const plots = await farmStorage.getPlotsByFarmer(farmerId);
             const properties = await farmStorage.getProperties(farmerId);
             res.json({ products, stock, plots, properties });
@@ -1461,7 +1472,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
             if (searchString) {
                 console.log(`[WEBHOOK_N8N_INVOICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number})`);
-                const { farmInvoiceItems } = await import("../shared/schema");
+                const { farmInvoiceItems, farmProductsCatalog } = await import("../shared/schema");
 
                 let searchCondition;
 
@@ -1471,8 +1482,16 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     const cleanSearch = searchString.replace(/[^a-zA-Z0-9 ]/g, "").trim();
                     const words = cleanSearch.split(" ").filter(w => w.length > 2);
 
-                    const searchConditions = words.map(w => sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`);
-                    searchCondition = searchConditions.length > 0 ? or(...searchConditions) : sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`;
+                    const searchConditions = words.map(w => or(
+                        sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
+                        sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
+                        sql`regexp_replace(${farmProductsCatalog.category}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`
+                    ));
+                    searchCondition = searchConditions.length > 0 ? or(...searchConditions) : or(
+                        sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
+                        sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
+                        sql`regexp_replace(${farmProductsCatalog.category}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`
+                    );
                 }
 
 
@@ -1487,6 +1506,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 })
                     .from(farmInvoiceItems)
                     .innerJoin(farmInvoices, eq(farmInvoiceItems.invoiceId, farmInvoices.id))
+                    .leftJoin(farmProductsCatalog, eq(farmInvoiceItems.productId, farmProductsCatalog.id))
                     .where(
                         and(
                             eq(farmInvoices.farmerId, farmers[0].id),
