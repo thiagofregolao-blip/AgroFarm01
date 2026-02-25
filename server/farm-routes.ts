@@ -1462,14 +1462,19 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             if (searchString) {
                 console.log(`[WEBHOOK_N8N_INVOICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number})`);
                 const { farmInvoiceItems } = await import("../shared/schema");
-                const cleanSearch = searchString.replace(/[^a-zA-Z0-9 ]/g, "").trim();
-                const words = cleanSearch.split(" ").filter(w => w.length > 2);
 
-                const searchConditions = words.map(w => sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`);
+                let searchCondition;
 
-                // If the AI sends a single word or multiple, we require at least one word to match. 
-                // Using or() if multiple words are sent to broaden the search, or and() to narrow it. Let's use OR for flexibility.
-                const combinedSearch = searchConditions.length > 0 ? or(...searchConditions) : sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`;
+                if (searchString === "DEBUG_ALL_ITEMS") {
+                    searchCondition = sql`1=1`;
+                } else {
+                    const cleanSearch = searchString.replace(/[^a-zA-Z0-9 ]/g, "").trim();
+                    const words = cleanSearch.split(" ").filter(w => w.length > 2);
+
+                    const searchConditions = words.map(w => sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`);
+                    searchCondition = searchConditions.length > 0 ? or(...searchConditions) : sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`;
+                }
+
 
                 // Deep search in invoice items
                 const items = await db.select({
@@ -1485,7 +1490,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     .where(
                         and(
                             eq(farmInvoices.farmerId, farmers[0].id),
-                            combinedSearch
+                            searchCondition
                         )
                     )
                     .orderBy(desc(farmInvoices.createdAt))
