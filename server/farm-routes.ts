@@ -1259,14 +1259,42 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     invoiceNumber: parsed.invoiceNumber || `WPP-${Date.now().toString().slice(-6)}`
                 }).returning();
 
+                const allProducts = await farmStorage.getAllProducts();
                 let itemsCount = 0;
+
                 if (parsed.items && Array.isArray(parsed.items) && parsed.items.length > 0) {
                     for (const item of parsed.items) {
                         const q = parseFloat(item.quantity) || 1;
                         const uPrice = parseFloat(item.unitPrice) || 0;
                         const tPrice = parseFloat(item.totalPrice) || (q * uPrice);
+
+                        // Try to match product by name (fuzzy)
+                        let matchedProduct = allProducts.find(p =>
+                            p.name.toUpperCase().includes(item.productName.toUpperCase().substring(0, 10)) ||
+                            item.productName.toUpperCase().includes(p.name.toUpperCase().substring(0, 10))
+                        );
+
+                        // Auto-create product if not found in catalog
+                        if (!matchedProduct) {
+                            try {
+                                matchedProduct = await farmStorage.createProduct({
+                                    name: item.productName,
+                                    unit: item.unit || "UN",
+                                    category: null,
+                                    dosePerHa: null,
+                                    activeIngredient: null,
+                                    status: "pending_review",
+                                    isDraft: true
+                                });
+                                allProducts.push(matchedProduct); // Add to list to avoid duplicates in same invoice
+                            } catch (err) {
+                                console.error(`[FARM_WEBHOOK_RECEIPT] Failed to auto-create product: ${item.productName}`, err);
+                            }
+                        }
+
                         await db.insert(farmInvoiceItems).values({
                             invoiceId: newInvoice.id,
+                            productId: matchedProduct?.id || null,
                             productName: item.productName || "Produto Desconhecido",
                             quantity: String(q),
                             unit: item.unit || "UN",
