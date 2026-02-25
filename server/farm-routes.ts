@@ -1132,11 +1132,14 @@ export function registerFarmRoutes(app: Express) {
 
     // ==================== n8n / WhatsApp Webhooks ====================
 
-    app.post("/api/farm/webhook/n8n/receipt", upload.single("file"), async (req, res) => {
+    app.post("/api/farm/webhook/n8n/receipt", async (req, res) => {
         try {
-            const { whatsapp_number } = req.body;
+            const { whatsapp_number, imageUrl } = req.body;
             if (!whatsapp_number) {
                 return res.status(400).json({ error: "whatsapp_number is required" });
+            }
+            if (!imageUrl) {
+                return res.status(400).json({ error: "imageUrl is required" });
             }
 
             // Find farmer by phone number
@@ -1160,19 +1163,25 @@ export function registerFarmRoutes(app: Express) {
 
             const farmer = farmers[0];
 
-            if (!req.file) {
-                return res.status(400).json({ error: "Image file is required" });
+            // Download image from Z-API URL
+            console.log(`[WEBHOOK_N8N_RECEIPT] Downloading image from: ${imageUrl}`);
+            const imageResponse = await fetch(imageUrl);
+            if (!imageResponse.ok) {
+                throw new Error(`Failed to download image from Z-API: ${imageResponse.statusText}`);
             }
 
-            const mimeType = req.file.mimetype;
-            if (!mimeType.startsWith('image/')) {
-                return res.status(400).json({ error: "Only images are supported" });
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
+
+            if (!mimeType.startsWith('image/') && !mimeType.includes('pdf')) {
+                return res.status(400).json({ error: "Downloaded file is not an image or PDF" });
             }
 
             const apiKey = process.env.GEMINI_API_KEY;
             if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
-            const base64Image = req.file.buffer.toString("base64");
+            const base64Image = buffer.toString("base64");
 
             const prompt = `Você é um assistente do AgroFarm. O agricultor enviou uma foto pelo WhatsApp de um COMPROVANTE, NOTA FISCAL ou RECIBO.
 Analise a imagem e classifique se é uma Despesa com Veículos/Frete/Serviços (expense) ou se é uma Fatura de Insumos/Produtos Agrícolas (invoice).
