@@ -1516,10 +1516,24 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.get("/api/farm/webhook/n8n/manuals", async (req, res) => {
         try {
+            const { search } = req.query;
             const { farmManuals } = await import("../shared/schema");
             const { db } = await import("./db");
 
             const manuals = await db.select().from(farmManuals);
+
+            if (search) {
+                const { answerFromManuals } = await import("./whatsapp/gemini-client");
+
+                let context = manuals.map((m: any) => `\n### MANUAL: ${m.title} (Segmento: ${m.segment})\n${m.contentText}`).join("\n");
+
+                if (context.length > 500000) context = context.substring(0, 500000) + "...";
+
+                const answer = await answerFromManuals(search as string, context);
+
+                return res.json({ resposta: answer });
+            }
+
             res.json({ manuals });
         } catch (error) {
             console.error("[WEBHOOK_N8N_MANUALS]", error);

@@ -758,3 +758,48 @@ Retorne APENAS o texto extraído, sem introduções ou formatação markdown des
     throw error;
   }
 }
+
+export async function answerFromManuals(query: string, manualsContext: string): Promise<string> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
+
+    const prompt = `Você é um assistente agronômico especialista do sistema AgroFarm. 
+Responda à dúvida do usuário de forma clara, prestativa e técnica, baseando-se EXCLUSIVAMENTE nas informações contidas nos manuais oficiais abaixo.
+Se a resposta não estiver nos manuais, diga "Infelizmente, não encontrei essa informação nos manuais agronômicos da base de conhecimento atual."
+
+MANUAIS OFICIAIS:
+${manualsContext}
+
+DÚVIDA DO AGRICULTOR:
+"${query}"
+
+SUA RESPOSTA COMPLETA E DETALHADA:`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1
+          }
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("[Gemini RAG] API Error:", data);
+      throw new Error(data.error?.message || "Erro na API Gemini");
+    }
+
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Não foi possível gerar a resposta.";
+  } catch (error) {
+    console.error("[answerFromManuals] Fatal error:", error);
+    throw error;
+  }
+}
