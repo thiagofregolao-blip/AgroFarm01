@@ -8,7 +8,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
-import { farmProductsCatalog, farmStockMovements } from "@shared/schema";
+import { farmProductsCatalog, farmStockMovements, farmInvoiceItems } from "@shared/schema";
 import { ZApiClient } from "./whatsapp/zapi-client";
 import multer from "multer";
 import { parseFarmInvoicePDF, parseFarmInvoiceImage } from "./parse-farm-invoice";
@@ -1143,7 +1143,7 @@ export function registerFarmRoutes(app: Express) {
             }
 
             // Find farmer by phone number
-            const { users, farmExpenses, farmInvoices } = await import("../shared/schema");
+            const { users, farmExpenses, farmInvoices, farmInvoiceItems } = await import("../shared/schema");
             const { eq, or, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
 
@@ -1183,15 +1183,28 @@ export function registerFarmRoutes(app: Express) {
 
             const base64Image = buffer.toString("base64");
 
-            const prompt = `Você é um assistente do AgroFarm. O agricultor enviou uma foto pelo WhatsApp de um COMPROVANTE, NOTA FISCAL ou RECIBO.
+            const prompt = `Você é um assistente do AgroFarm. A imagem é um COMPROVANTE, NOTA FISCAL ou RECIBO.
 Analise a imagem e classifique se é uma Despesa com Veículos/Frete/Serviços (expense) ou se é uma Fatura de Insumos/Produtos Agrícolas (invoice).
 
-Retorne APENAS UM JSON VÁLIDO no formato:
+Se for 'invoice', extraia TAMBÉM o fornecedor (fornecedor), o número da nota (se houver) e TODOS os produtos contidos nela com suas respectivas quantidades, unidades e valores.
+
+Retorne APENAS UM JSON VÁLIDO no formato exato:
 {
   "type": "expense" | "invoice" | "unknown",
   "totalAmount": 150.50,
-  "description": "Breve resumo do que foi comprado/gasto (ex: Abastecimento Diesel S10, Compra de Glifosato)",
-  "category": "diesel" | "frete" | "mao_de_obra" | "outro" (SE for expense. Se invoice, deixe "outro")
+  "description": "Breve resumo geral (ex: Compra de Glifosato e Adubos)",
+  "category": "diesel" | "frete" | "mao_de_obra" | "outro",
+  "invoiceNumber": "123456",
+  "supplier": "Nome da Empresa Fornecedora",
+  "items": [
+    {
+      "productName": "Nome do Produto Exato da Nota",
+      "quantity": 10.5,
+      "unit": "LT",
+      "unitPrice": 15.00,
+      "totalPrice": 157.50
+    }
+  ]
 }`;
 
             const response = await fetch(
@@ -1237,15 +1250,34 @@ Retorne APENAS UM JSON VÁLIDO no formato:
                 return res.json({ message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) recebida e aguardando aprovação no painel AgroFarm!` });
             }
             else if (parsed.type === "invoice") {
-                await db.insert(farmInvoices).values({
+                const [newInvoice] = await db.insert(farmInvoices).values({
                     farmerId: farmer.id,
                     totalAmount: String(amount),
                     notes: `[Via WhatsApp] ${parsed.description}`,
                     status: 'pending',
-                    supplier: "Via WhatsApp",
-                    invoiceNumber: `WPP-${Date.now().toString().slice(-6)}`
-                });
-                return res.json({ message: `✅ Fatura de R$ ${amount.toFixed(2)} recebida! Os itens estão aguardando sua revisão e aprovação no painel AgroFarm.` });
+                    supplier: parsed.supplier || "Via WhatsApp",
+                    invoiceNumber: parsed.invoiceNumber || `WPP-${Date.now().toString().slice(-6)}`
+                }).returning();
+
+                let itemsCount = 0;
+                if (parsed.items && Array.isArray(parsed.items) && parsed.items.length > 0) {
+                    for (const item of parsed.items) {
+                        const q = parseFloat(item.quantity) || 1;
+                        const uPrice = parseFloat(item.unitPrice) || 0;
+                        const tPrice = parseFloat(item.totalPrice) || (q * uPrice);
+                        await db.insert(farmInvoiceItems).values({
+                            invoiceId: newInvoice.id,
+                            productName: item.productName || "Produto Desconhecido",
+                            quantity: String(q),
+                            unit: item.unit || "UN",
+                            unitPrice: String(uPrice),
+                            totalPrice: String(tPrice)
+                        });
+                        itemsCount++;
+                    }
+                }
+
+                return res.json({ message: `✅ Fatura de R$ ${amount.toFixed(2)} recebida da ${parsed.supplier || 'empresa'} com ${itemsCount} itens! Eles já estão aguardando sua revisão no painel AgroFarm.` });
             }
             else {
                 return res.json({ message: `🤔 Hum, não consegui entender essa imagem. Parece um comprovante? Se sim, tente tirar uma foto mais nítida dos valores.` });

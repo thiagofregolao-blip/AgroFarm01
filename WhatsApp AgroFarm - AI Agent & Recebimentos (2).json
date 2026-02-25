@@ -7,13 +7,13 @@
         "path": "whatsapp-recebido",
         "options": {}
       },
-      "id": "29759160-6d46-4280-a013-83d4ab0d4bd9",
+      "id": "e5cb1a47-7b9f-4930-adf6-b7a0693404a9",
       "name": "Webhook Z-API",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        -704,
-        144
+        -640,
+        960
       ],
       "webhookId": "c9cb34e7-772f-4587-9910-bb4c4b57570b"
     },
@@ -28,13 +28,13 @@
           ]
         }
       },
-      "id": "ae98a393-5467-4c56-b97c-a80cdd304929",
+      "id": "defca1d9-6c7f-45db-8034-fa277050af74",
       "name": "É Imagem?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        -512,
-        144
+        -448,
+        960
       ]
     },
     {
@@ -46,13 +46,13 @@
         "jsonBody": "={ \"whatsapp_number\": \"{{ $json.body.phone }}\", \"imageUrl\": \"{{ $json.body.image?.imageUrl || $json.body.document?.documentUrl || $json.body.imageUrl }}\" }",
         "options": {}
       },
-      "id": "1190cbeb-181a-49f2-89c5-99e0d4790150",
+      "id": "0a7bff30-0a75-486a-8edb-09badaae418e",
       "name": "Processar Recibo Inteligente",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        -208,
-        -16
+        -144,
+        800
       ]
     },
     {
@@ -83,29 +83,29 @@
         },
         "options": {}
       },
-      "id": "c43aae59-dc27-48e4-ba55-01cbb33a6103",
+      "id": "e05be139-3192-4cf1-be08-ece756b98557",
       "name": "Responder (Sucesso Imagem)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        48,
-        -16
+        112,
+        800
       ]
     },
     {
       "parameters": {
-        "text": "={{ $json.body.text.message || $json.body.message }}",
+        "text": "=Mensagem: {{ $json.body.text.message || $json.body.message }} | Celular Autorizado: {{ $json.body.phone }}",
         "options": {
-          "systemMessage": "Você é o assistente virtual da AgroFarm. Você ajuda o agricultor tirando dúvidas sobre o estoque dele, sobre as aplicações no campo e sobre as despesas dele. Seja educado, use emojis agrícolas e responda sempre de forma curta no formato WhatsApp.\\n\\nIMPORTANTE PARA USO DE TOOLS:\\nO número de WhatsApp do agricultor atual é: {{$node[\"Webhook Z-API\"].json.body.sender.phone || $node[\"Webhook Z-API\"].json.body.phone}}.\\n\\nSEMPRE passe esse `whatsapp_number` como uma STRING (texto entre aspas, ex: \\\"0986123456\\\") quando for chamar qualquer tool. NUNCA envie como numeral, pois números iniciados com zero quebram o parser JSON do n8n."
+          "systemMessage": "=Você é o assistente virtual da AgroFarm. Você ajuda o agricultor tirando dúvidas sobre o estoque dele, sobre as aplicações no campo e sobre as despesas dele. Seja educado, use emojis agrícolas e responda sempre de forma curta no formato WhatsApp.\n\nIMPORTANTE PARA USO DE TOOLS:\nO número de WhatsApp do agricultor atual é: {{$json.body.phone}}.\n\nSEMPRE passe esse `whatsapp_number` como uma STRING (texto entre aspas, ex: \"0986123456\") quando for chamar qualquer tool. NUNCA envie como numeral, pois números iniciados com zero quebram o parser JSON do n8n.\n\nREGRA ABSOLUTA: Quando usar a ferramenta de estoque, você DEVE ler os dados e listar TODOS os itens integralmente na sua resposta do WhatsApp. Nunca resuma, nunca oculte e nunca agrupe itens!\n"
         }
       },
-      "id": "a9dabd5c-0307-4340-acdd-74d5f50b4723",
+      "id": "9f8669db-95ee-4468-b00f-0ddafca7fda6",
       "name": "AgroFarm AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1,
       "position": [
-        -208,
-        288
+        -144,
+        1104
       ]
     },
     {
@@ -114,13 +114,13 @@
           "temperature": 0.3
         }
       },
-      "id": "cf0aebb8-59a8-4e6f-aaa8-6f0ea721210f",
+      "id": "cca84a87-d1d5-409c-a2d2-c2a654ecdc8e",
       "name": "Google Gemini Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        -256,
-        496
+        -192,
+        1296
       ],
       "credentials": {
         "googlePalmApi": {
@@ -131,13 +131,13 @@
     },
     {
       "parameters": {},
-      "id": "50cbe963-23f6-44ba-93c8-abd81e38e952",
+      "id": "7606da21-d033-4146-807a-04bc217204a3",
       "name": "Memória (Window Buffer)",
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.1,
       "position": [
-        -96,
-        496
+        -32,
+        1312
       ]
     },
     {
@@ -168,99 +168,106 @@
         },
         "options": {}
       },
-      "id": "364de3c2-58ec-430a-93f6-6b3548cd701d",
+      "id": "b5ff4abc-3a64-4e5c-9a6d-8d2726ae8629",
       "name": "Responder (IA Agent Text)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        192,
-        288
+        256,
+        1104
       ]
     },
     {
       "parameters": {
-        "name": "consultarFaturas",
-        "description": "Lista resumos das últimas notas fiscais e despesas (frete, óleo diesel) lançadas pelo agricultor.",
-        "method": "GET",
-        "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/invoices",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/invoices",
         "sendQuery": true,
         "parametersQuery": {
           "values": [
             {
-              "name": "whatsapp_number",
-              "valueProvider": "model",
-              "required": true
-            },
+              "name": "whatsapp_number"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
             {
-              "name": "limit",
-              "value": "5"
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
           ]
         }
       },
-      "id": "66e3cf32-5333-4cab-ad12-d3085a446f6e",
+      "id": "25c1b3e2-9c14-4536-a9ac-8ee91f0ffe18",
       "name": "Tool_ConsultarFaturas",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        352,
-        496
+        480,
+        1280
       ]
     },
     {
       "parameters": {
-        "name": "consultarEstoque",
-        "description": "Busca a quantidade de todos os produtos que o agricultor tem no estoque físico. Use ferramentas sempre que o agricultor perguntar sobre produtos ou inventário.",
-        "method": "GET",
-        "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/stock",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/stock",
         "sendQuery": true,
         "parametersQuery": {
           "values": [
             {
-              "name": "whatsapp_number",
-              "valueProvider": "model",
-              "required": true
+              "name": "whatsapp_number"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
           ]
         }
       },
-      "id": "8580a35f-d836-4a82-868c-34558747a721",
+      "id": "884ea777-a249-4547-ad99-4c04e3e1ed81",
       "name": "ConsultarEstoque",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        48,
-        496
+        128,
+        1344
       ]
     },
     {
       "parameters": {
-        "name": "consultarAplicacoes",
-        "description": "Mostra o histórico das últimas aplicações que o agricultor fez na lavoura (produto espalhado, talhão, quantidade, data).",
-        "method": "GET",
-        "url": "https://agrofarmdigital.com/api/farm/webhook/n8n/applications",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/applications",
         "sendQuery": true,
         "parametersQuery": {
           "values": [
             {
-              "name": "whatsapp_number",
-              "valueProvider": "model",
-              "required": true
-            },
+              "name": "whatsapp_number"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
             {
-              "name": "limit",
-              "value": "5"
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
           ]
         }
       },
-      "id": "4bb0ba97-388b-42e4-b0cf-dab537da2c75",
+      "id": "cb0c0a76-2bce-4ef4-a75f-6d0f2974da4d",
       "name": "ConsultarAplicacoes",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        192,
-        496
+        320,
+        1360
       ]
     }
   ],
@@ -373,13 +380,13 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "8cd0f90e-73ef-45ce-bfc0-ecb047eaa3a0",
+  "versionId": "6166192e-e227-4749-ac18-6755eed248ec",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "a939899d1215f1aae302cbc8a068b07f3522ec7c828451b54c395d8f2a932836"
