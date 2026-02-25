@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Monitor, Loader2, Wifi, WifiOff } from "lucide-react";
+import { Plus, Monitor, Loader2, Wifi, WifiOff, Tractor, Wheat } from "lucide-react";
 
 export default function FarmTerminals() {
     const [, setLocation] = useLocation();
@@ -73,7 +73,16 @@ export default function FarmTerminals() {
                                             {t.isOnline ? <Wifi className="h-5 w-5 text-green-600" /> : <WifiOff className="h-5 w-5 text-gray-400" />}
                                         </div>
                                         <div>
-                                            <p className="font-semibold text-emerald-800">{t.name}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-semibold text-emerald-800">{t.name}</p>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${t.type === 'diesel' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                    {t.type === 'diesel' ? (
+                                                        <span className="flex items-center gap-1"><Tractor className="h-3 w-3" /> Diesel/Frota</span>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1"><Wheat className="h-3 w-3" /> Insumos/Roça</span>
+                                                    )}
+                                                </span>
+                                            </div>
                                             <p className="text-xs text-gray-500">@{t.username}</p>
                                         </div>
                                     </div>
@@ -95,7 +104,7 @@ export default function FarmTerminals() {
                     </CardContent>
                 </Card>
             </div>
-        </FarmLayout>
+        </FarmLayout >
     );
 }
 
@@ -104,10 +113,11 @@ function TerminalForm({ properties, onSave }: { properties: any[]; onSave: () =>
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [propertyId, setPropertyId] = useState("");
+    const [type, setType] = useState("estoque");
     const { toast } = useToast();
 
     const save = useMutation({
-        mutationFn: () => apiRequest("POST", "/api/farm/pdv-terminals", { name, username, password, propertyId: propertyId || null }),
+        mutationFn: () => apiRequest("POST", "/api/farm/pdv-terminals", { name, username, password, propertyId: propertyId || null, type }),
         onSuccess: () => { toast({ title: "Terminal criado" }); onSave(); },
         onError: () => toast({ title: "Erro ao criar terminal", variant: "destructive" }),
     });
@@ -122,6 +132,16 @@ function TerminalForm({ properties, onSave }: { properties: any[]; onSave: () =>
                 <Select value={propertyId} onValueChange={setPropertyId}>
                     <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                     <SelectContent>{properties.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                </Select>
+            </div>
+            <div>
+                <Label>Modalidade do PDV *</Label>
+                <Select value={type} onValueChange={setType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="estoque">Terminal Agrícola (Roça/Insumos)</SelectItem>
+                        <SelectItem value="diesel">Bomba de Abastecimento (Diesel/Frota)</SelectItem>
+                    </SelectContent>
                 </Select>
             </div>
             <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={save.isPending}>

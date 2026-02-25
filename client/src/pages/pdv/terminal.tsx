@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X } from "lucide-react";
+import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X, Tractor, Gauge } from "lucide-react";
 import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
 
 interface CartItem {
@@ -61,6 +61,10 @@ export default function PdvTerminal() {
 
     const [instructions, setInstructions] = useState<string>("");
     const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
+
+    const [selectedEquipment, setSelectedEquipment] = useState<any>(null);
+    const [horimeter, setHorimeter] = useState<string>("");
+    const [odometer, setOdometer] = useState<string>("");
 
     // Load offline queue on mount
     useEffect(() => {
@@ -134,10 +138,13 @@ export default function PdvTerminal() {
 
     const categories = Array.from(new Set(products.map((p: any) => p.category).filter(Boolean))) as string[];
 
+    const isDiesel = pdvData?.terminal?.type === "diesel";
+
     const filtered = products.filter((p: any) => {
         const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
         const matchesCategory = !categoryFilter || p.category === categoryFilter;
-        return matchesSearch && matchesCategory;
+        const matchesDiesel = !isDiesel || p.category === "Combustível" || p.name.toLowerCase().includes("ar");
+        return matchesSearch && matchesCategory && matchesDiesel;
     });
 
     const isInCart = (productId: string) => cart.some(c => c.product.id === productId);
@@ -274,9 +281,16 @@ export default function PdvTerminal() {
     };
 
     const handleGoToConfirm = () => {
-        if (selectedPlots.length === 0) {
-            toast({ title: "Selecione pelo menos um talhão", variant: "destructive" });
-            return;
+        if (isDiesel) {
+            if (!selectedEquipment) {
+                toast({ title: "Selecione a máquina/veículo", variant: "destructive" });
+                return;
+            }
+        } else {
+            if (selectedPlots.length === 0) {
+                toast({ title: "Selecione pelo menos um talhão", variant: "destructive" });
+                return;
+            }
         }
         setDistOverrides({});
         setStep("confirm");
@@ -407,7 +421,14 @@ export default function PdvTerminal() {
                     if (d.allocatedQty <= 0) continue;
                     const plot = selectedPlots.find(p => p.id === d.plotId);
 
-                    const payload = {
+                    const payload = isDiesel ? {
+                        productId: item.product.id,
+                        quantity: d.allocatedQty,
+                        equipmentId: selectedEquipment?.id || null,
+                        horimeter: horimeter || null,
+                        odometer: odometer || null,
+                        notes: count === 0 ? instructions : undefined,
+                    } : {
                         productId: item.product.id,
                         quantity: d.allocatedQty,
                         plotId: d.plotId,
@@ -468,7 +489,9 @@ export default function PdvTerminal() {
         setSearch("");
         setCategoryFilter("");
         setDistOverrides({});
-        setInstructions("");
+        setSelectedEquipment(null);
+        setHorimeter("");
+        setOdometer("");
     };
 
     const handleRegenerateReceituario = async (batch: any) => {
@@ -579,7 +602,7 @@ export default function PdvTerminal() {
                         <div className="p-4 border-b border-gray-100 bg-gray-50/50">
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Resumo do Pedido</p>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-bold text-[#16A249]">{cart.length}</span>
+                                <span className={`text-2xl font-bold ${isDiesel ? "text-amber-600" : "text-[#16A249]"}`}>{cart.length}</span>
                                 <span className="text-sm text-gray-500">produtos selecionados</span>
                             </div>
                         </div>
@@ -602,80 +625,150 @@ export default function PdvTerminal() {
                         </div>
                     </div>
 
-                    {/* RIGHT: Plot Selection Grid */}
+                    {/* RIGHT: View Area (Equipment or Plot Grid) */}
                     <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/50">
-                        {/* Info Banner */}
-
-
-                        {properties.length === 0 && plots.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
-                                <span className="text-4xl mb-3">🌾</span>
-                                <p className="text-lg font-medium">Nenhum talhão encontrado</p>
-                                <p className="text-sm">Cadastre propriedades e talhões para continuar</p>
-                            </div>
-                        ) : (
+                        {isDiesel ? (
                             <div className="space-y-6">
-                                {properties.map((prop: any) => {
-                                    const propPlots = plotsByProp[prop.id] || [];
-                                    const allSelected = propPlots.every((p: any) => isPlotSelected(p.id));
-
-                                    return (
-                                        <div key={prop.id} className="space-y-3">
-                                            <div className="flex items-center justify-between px-1">
-                                                <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                                                    <span className="w-1 h-4 rounded-full bg-[#16A249] block"></span>
-                                                    {prop.name}
-                                                    <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{propPlots.length} talhões</span>
-                                                </h3>
-                                                {propPlots.length > 0 && (
-                                                    <button
-                                                        onClick={() => {
-                                                            const ids = propPlots.map((p: any) => p.id);
-                                                            const newPlots = allSelected
-                                                                ? selectedPlots.filter(p => !ids.includes(p.id))
-                                                                : [...selectedPlots.filter(p => !ids.includes(p.id)), ...propPlots];
-                                                            setSelectedPlots(newPlots);
-                                                        }}
-                                                        className="text-xs font-medium text-[#16A249] hover:text-[#15803d] hover:underline"
-                                                    >
-                                                        {allSelected ? "Desmarcar todos" : "Selecionar todos"}
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                                {propPlots.length > 0 ? (
-                                                    propPlots.map((plot: any) => {
-                                                        const sel = isPlotSelected(plot.id);
-                                                        return (
-                                                            <button
-                                                                key={plot.id}
-                                                                onClick={() => togglePlot(plot)}
-                                                                className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? "bg-[#16A249]/10 border-[#16A249] shadow-md shadow-green-100" : "bg-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5"}`}
-                                                            >
-                                                                <div className="flex items-start justify-between mb-2">
-                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sel ? "bg-[#16A249] text-white" : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"}`}>
-                                                                        <MapPin className="h-4 w-4" />
-                                                                    </div>
-                                                                    {sel && <div className="w-5 h-5 rounded-full bg-[#16A249] flex items-center justify-center shadow-sm"><Check className="h-3 w-3 text-white" /></div>}
-                                                                </div>
-                                                                <h4 className={`font-bold text-sm mb-0.5 ${sel ? "text-[#064e3b]" : "text-gray-800"}`}>{plot.name}</h4>
-                                                                <p className="text-xs text-gray-500">{plot.areaHa} hectares</p>
-                                                                {plot.crop && <span className="absolute bottom-4 right-4 text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{plot.crop}</span>}
-                                                            </button>
-                                                        );
-                                                    })
-                                                ) : (
-                                                    <div className="col-span-full py-4 text-center text-gray-400 text-sm italic bg-white rounded-xl border border-dashed border-gray-200">
-                                                        Nenhum talhão cadastrado nesta propriedade
+                                <div className="flex items-center justify-between px-1 mb-2">
+                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                        <Tractor className="h-5 w-5 text-amber-600" />
+                                        MÁQUINAS E VEÍCULOS
+                                    </h3>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                    {pdvData?.equipment?.map((eq: any) => {
+                                        const sel = selectedEquipment?.id === eq.id;
+                                        return (
+                                            <button
+                                                key={eq.id}
+                                                onClick={() => setSelectedEquipment(sel ? null : eq)}
+                                                className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? "bg-amber-50 border-amber-500 shadow-md shadow-amber-100" : "bg-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5"}`}
+                                            >
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sel ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"}`}>
+                                                        <Tractor className="h-4 w-4" />
                                                     </div>
-                                                )}
+                                                    {sel && <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-sm"><Check className="h-3 w-3 text-white" /></div>}
+                                                </div>
+                                                <h4 className={`font-bold text-sm mb-0.5 line-clamp-2 ${sel ? "text-amber-900" : "text-gray-800"}`}>{eq.name}</h4>
+                                                <p className="text-xs text-gray-500">{eq.type}</p>
+                                            </button>
+                                        );
+                                    })}
+                                    {(!pdvData?.equipment || pdvData.equipment.length === 0) && (
+                                        <div className="col-span-full py-8 text-center text-gray-400 text-sm italic bg-white rounded-xl border border-dashed border-gray-200">
+                                            Nenhum equipamento cadastrado na frota
+                                        </div>
+                                    )}
+                                </div>
+
+                                {selectedEquipment && (
+                                    <div className="mt-8 p-5 bg-white rounded-xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-2">
+                                        <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                            <Gauge className="h-5 w-5 text-gray-400" />
+                                            Informações de Telemetria <span className="text-xs font-normal text-gray-400 ml-2">(Opcional)</span>
+                                        </h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <Label className="text-xs font-bold text-gray-600 mb-1.5 block">Horímetro</Label>
+                                                <div className="relative">
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="0"
+                                                        value={horimeter}
+                                                        onChange={e => setHorimeter(e.target.value)}
+                                                        className="pl-3 pr-10 bg-gray-50 border-gray-200 focus:bg-white"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">HR</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs font-bold text-gray-600 mb-1.5 block">Hodômetro</Label>
+                                                <div className="relative">
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="0"
+                                                        value={odometer}
+                                                        onChange={e => setOdometer(e.target.value)}
+                                                        className="pl-3 pr-10 bg-gray-50 border-gray-200 focus:bg-white"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">KM</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                )}
                             </div>
-                        )}
+                        ) : (
+                            properties.length === 0 && plots.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
+                                    <span className="text-4xl mb-3">🌾</span>
+                                    <p className="text-lg font-medium">Nenhum talhão encontrado</p>
+                                    <p className="text-sm">Cadastre propriedades e talhões para continuar</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {properties.map((prop: any) => {
+                                        const propPlots = plotsByProp[prop.id] || [];
+                                        const allSelected = propPlots.every((p: any) => isPlotSelected(p.id));
+
+                                        return (
+                                            <div key={prop.id} className="space-y-3">
+                                                <div className="flex items-center justify-between px-1">
+                                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                                        <span className="w-1 h-4 rounded-full bg-[#16A249] block"></span>
+                                                        {prop.name}
+                                                        <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{propPlots.length} talhões</span>
+                                                    </h3>
+                                                    {propPlots.length > 0 && (
+                                                        <button
+                                                            onClick={() => {
+                                                                const ids = propPlots.map((p: any) => p.id);
+                                                                const newPlots = allSelected
+                                                                    ? selectedPlots.filter(p => !ids.includes(p.id))
+                                                                    : [...selectedPlots.filter(p => !ids.includes(p.id)), ...propPlots];
+                                                                setSelectedPlots(newPlots);
+                                                            }}
+                                                            className="text-xs font-medium text-[#16A249] hover:text-[#15803d] hover:underline"
+                                                        >
+                                                            {allSelected ? "Desmarcar todos" : "Selecionar todos"}
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                                    {propPlots.length > 0 ? (
+                                                        propPlots.map((plot: any) => {
+                                                            const sel = isPlotSelected(plot.id);
+                                                            return (
+                                                                <button
+                                                                    key={plot.id}
+                                                                    onClick={() => togglePlot(plot)}
+                                                                    className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? "bg-[#16A249]/10 border-[#16A249] shadow-md shadow-green-100" : "bg-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5"}`}
+                                                                >
+                                                                    <div className="flex items-start justify-between mb-2">
+                                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sel ? "bg-[#16A249] text-white" : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"}`}>
+                                                                            <MapPin className="h-4 w-4" />
+                                                                        </div>
+                                                                        {sel && <div className="w-5 h-5 rounded-full bg-[#16A249] flex items-center justify-center shadow-sm"><Check className="h-3 w-3 text-white" /></div>}
+                                                                    </div>
+                                                                    <h4 className={`font-bold text-sm mb-0.5 ${sel ? "text-[#064e3b]" : "text-gray-800"}`}>{plot.name}</h4>
+                                                                    <p className="text-xs text-gray-500">{plot.areaHa} hectares</p>
+                                                                    {plot.crop && <span className="absolute bottom-4 right-4 text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{plot.crop}</span>}
+                                                                </button>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="col-span-full py-4 text-center text-gray-400 text-sm italic bg-white rounded-xl border border-dashed border-gray-200">
+                                                            Nenhum talhão cadastrado nesta propriedade
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
                     </div>
                 </div>
 
@@ -723,22 +816,24 @@ export default function PdvTerminal() {
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-64 md:pb-32">
                     <div className="max-w-4xl mx-auto space-y-6">
                         {/* Summary Cards */}
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className={`grid ${isDiesel ? 'grid-cols-2' : 'grid-cols-3'} gap-4`}>
                             <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
                                 <span className="text-2xl mb-1">📦</span>
                                 <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Produtos</p>
                                 <p className="text-xl font-bold text-gray-800">{cart.length}</p>
                             </div>
                             <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-                                <span className="text-2xl mb-1">📍</span>
-                                <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Talhões</p>
-                                <p className="text-xl font-bold text-gray-800">{selectedPlots.length}</p>
+                                <span className="text-2xl mb-1">{isDiesel ? "🚜" : "📍"}</span>
+                                <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">{isDiesel ? "Veículo" : "Talhões"}</p>
+                                <p className="text-xl font-bold text-gray-800 line-clamp-1 px-2 text-center">{isDiesel ? selectedEquipment?.name : selectedPlots.length}</p>
                             </div>
-                            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-                                <span className="text-2xl mb-1">📏</span>
-                                <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Área Total</p>
-                                <p className="text-xl font-bold text-gray-800">{totalAreaSelected.toFixed(1)} <span className="text-sm font-normal text-gray-400">ha</span></p>
-                            </div>
+                            {!isDiesel && (
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                                    <span className="text-2xl mb-1">📏</span>
+                                    <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Área Total</p>
+                                    <p className="text-xl font-bold text-gray-800">{totalAreaSelected.toFixed(1)} <span className="text-sm font-normal text-gray-400">ha</span></p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Campo de Instruções */}
@@ -927,7 +1022,7 @@ export default function PdvTerminal() {
                     </button>
 
                     <button
-                        onClick={() => step !== "product" && setStep("plot")}
+                        onClick={() => { if (step === "confirm") setStep("plot"); }}
                         className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${step === "plot" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Talhões"
                     >
@@ -936,7 +1031,7 @@ export default function PdvTerminal() {
                     </button>
 
                     <button
-                        onClick={() => step !== "product" && step !== "plot" && setStep("confirm")}
+                        onClick={() => { }}
                         className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${step === "confirm" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Confirmar"
                     >
@@ -1049,7 +1144,7 @@ export default function PdvTerminal() {
                         {/* Stepper pills */}
                         {[
                             { label: "Produtos", emoji: "📦", key: "product" },
-                            { label: "Talhões", emoji: "📍", key: "plot" },
+                            { label: isDiesel ? "Veículo" : "Talhões", emoji: isDiesel ? "🚜" : "📍", key: "plot" },
                             { label: "Confirmar", emoji: "✅", key: "confirm" },
                         ].map((s, i) => {
                             const steps = ["product", "plot", "confirm"];
@@ -1307,7 +1402,7 @@ export default function PdvTerminal() {
                                 disabled={cart.length === 0}
                             >
                                 <ArrowRight className="mr-2 h-5 w-5" />
-                                Selecionar Talhões
+                                {isDiesel ? "Selecionar Veículo" : "Selecionar Talhões"}
                             </Button>
                         </div>
                     </div>
@@ -1422,7 +1517,7 @@ export default function PdvTerminal() {
                                                     className="w-full py-6 text-base bg-[#16A249] hover:bg-[#15803d] text-white font-bold rounded-xl shadow-lg shadow-green-200"
                                                     onClick={() => setStep("plot")}
                                                 >
-                                                    Avançar para Talhões
+                                                    {isDiesel ? "Avançar para Máquinas" : "Avançar para Talhões"}
                                                     <ArrowRight className="ml-2 h-5 w-5" />
                                                 </Button>
                                             </SheetTrigger>

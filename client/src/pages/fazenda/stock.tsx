@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2 } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw } from "lucide-react";
 import { useState, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -127,9 +127,12 @@ export default function FarmStock() {
                                                     <td className="text-right p-3 font-mono">${cost.toFixed(2)}</td>
                                                     <td className="text-right p-3 font-mono font-semibold">${(qty * cost).toFixed(2)}</td>
                                                     <td className="text-right p-3">
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
-                                                            {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                                        </Button>
+                                                        <div className="flex justify-end gap-2">
+                                                            <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
+                                                                {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                            </Button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -374,6 +377,102 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                     >
                         {saveStock.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Package className="mr-2 h-4 w-4" />}
                         Confirmar Entrada no Estoque
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: () => void }) {
+    const [open, setOpen] = useState(false);
+    const { toast } = useToast();
+
+    // Default values fetched from current stockItem
+    const [quantity, setQuantity] = useState(stockItem.quantity.toString());
+    const [averageCost, setAverageCost] = useState(stockItem.averageCost.toString());
+    const [reason, setReason] = useState("");
+
+    const updateStock = useMutation({
+        mutationFn: async () => {
+            return apiRequest("PUT", `/api/farm/stock/${stockItem.id}`, {
+                quantity: parseFloat(quantity),
+                averageCost: parseFloat(averageCost),
+                reason,
+            });
+        },
+        onSuccess: () => {
+            toast({ title: "Estoque atualizado", description: "O ajuste foi registrado com sucesso." });
+            setOpen(false);
+            onSuccess();
+        },
+        onError: (e: any) => {
+            toast({ title: "Erro na edição", description: e.message, variant: "destructive" });
+        }
+    });
+
+    const resetForm = () => {
+        setQuantity(stockItem.quantity.toString());
+        setAverageCost(stockItem.averageCost.toString());
+        setReason("");
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => {
+            setOpen(o);
+            if (!o) resetForm();
+        }}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500 hover:text-amber-700 hover:bg-amber-50">
+                    <Pencil className="h-4 w-4" />
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Editar {stockItem.productName}</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label>Quantidade Hoje</Label>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={quantity}
+                                onChange={e => setQuantity(e.target.value)}
+                                disabled={updateStock.isPending}
+                            />
+                        </div>
+                        <div>
+                            <Label>Custo Médio (R$)</Label>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={averageCost}
+                                onChange={e => setAverageCost(e.target.value)}
+                                disabled={updateStock.isPending}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <Label>Motivo da Correção *</Label>
+                        <Input
+                            placeholder="Ex: Quebra, erro de recontagem..."
+                            value={reason}
+                            onChange={e => setReason(e.target.value)}
+                            disabled={updateStock.isPending}
+                        />
+                    </div>
+
+                    <Button
+                        className="w-full bg-amber-600 hover:bg-amber-700 mt-4"
+                        onClick={() => updateStock.mutate()}
+                        disabled={updateStock.isPending || !quantity || !averageCost || !reason.trim()}
+                    >
+                        {updateStock.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                        Aplicar Correção
                     </Button>
                 </div>
             </DialogContent>

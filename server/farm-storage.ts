@@ -1,12 +1,13 @@
 import { db, dbReady } from "./db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import {
-    users, farmProperties, farmPlots, farmProductsCatalog,
+    users, farmProperties, farmPlots, farmEquipment, farmProductsCatalog,
     farmStock, farmInvoices, farmInvoiceItems, farmStockMovements,
     farmApplications, farmExpenses, farmPdvTerminals, farmSeasons,
     type InsertUser, type User,
     type InsertFarmProperty, type FarmProperty,
     type InsertFarmPlot, type FarmPlot,
+    type InsertFarmEquipment, type FarmEquipment,
     type InsertFarmProductCatalog, type FarmProductCatalog,
     type InsertFarmStock, type FarmStock,
     type InsertFarmInvoice, type FarmInvoice,
@@ -128,6 +129,31 @@ export class FarmStorage {
         await db.delete(farmPlots).where(eq(farmPlots.id, id));
     }
 
+    // ==================== Equipment (Frota) ====================
+    async getEquipment(farmerId: string): Promise<FarmEquipment[]> {
+        await dbReady;
+        return db.select().from(farmEquipment)
+            .where(eq(farmEquipment.farmerId, farmerId))
+            .orderBy(farmEquipment.name);
+    }
+
+    async createEquipment(data: InsertFarmEquipment): Promise<FarmEquipment> {
+        await dbReady;
+        const [equip] = await db.insert(farmEquipment).values(data).returning();
+        return equip;
+    }
+
+    async updateEquipment(id: string, data: Partial<InsertFarmEquipment>): Promise<FarmEquipment> {
+        await dbReady;
+        const [equip] = await db.update(farmEquipment).set(data).where(eq(farmEquipment.id, id)).returning();
+        return equip;
+    }
+
+    async deleteEquipment(id: string): Promise<void> {
+        await dbReady;
+        await db.delete(farmEquipment).where(eq(farmEquipment.id, id));
+    }
+
     // ==================== Products Catalog ====================
     async getAllProducts(): Promise<FarmProductCatalog[]> {
         await dbReady;
@@ -182,6 +208,42 @@ export class FarmStorage {
             .where(eq(farmStock.farmerId, farmerId))
             .orderBy(farmProductsCatalog.name);
         return result;
+    }
+
+    async updateStockManual(id: string, farmerId: string, data: { quantity: number; averageCost: number; reason: string }): Promise<FarmStock> {
+        await dbReady;
+        return await db.transaction(async (tx) => {
+            // Find stock to ensure it exists and belongs to farmer
+            const [stock] = await tx.select().from(farmStock)
+                .where(and(eq(farmStock.id, id), eq(farmStock.farmerId, farmerId)));
+
+            if (!stock) throw new Error("Estoque não encontrado");
+
+            // Register movement
+            const diff = Number(data.quantity) - Number(stock.quantity);
+
+            await tx.insert(farmStockMovements).values({
+                farmerId,
+                productId: stock.productId,
+                type: "adjustment", // A new robust internal type
+                quantity: diff.toString(),
+                unitCost: data.averageCost.toString(),
+                referenceType: "manual_adjustment",
+                notes: data.reason,
+            });
+
+            // Update stock
+            const [updatedStock] = await tx.update(farmStock)
+                .set({
+                    quantity: data.quantity.toString(),
+                    averageCost: data.averageCost.toString(),
+                    updatedAt: new Date()
+                })
+                .where(eq(farmStock.id, id))
+                .returning();
+
+            return updatedStock;
+        });
     }
 
     async upsertStock(farmerId: string, productId: string, quantityChange: number, unitCost: number): Promise<FarmStock> {
@@ -346,9 +408,18 @@ export class FarmStorage {
         const qty = parseFloat(data.quantity);
         await this.upsertStock(data.farmerId, data.productId, -qty, 0);
 
-        // 3. Record stock movement (fetch plot name for notes)
-        const [plot] = await db.select().from(farmPlots).where(eq(farmPlots.id, data.plotId));
-        const plotName = plot?.name || data.plotId;
+        // 3. Record stock movement (fetch plot or equipment name for notes)
+        let noteStr = "";
+
+        if (data.plotId) {
+            const [plot] = await db.select().from(farmPlots).where(eq(farmPlots.id, data.plotId));
+            noteStr = `Aplicação talhão: ${plot?.name || data.plotId}`;
+        } else if (data.equipmentId) {
+            const [equip] = await db.select().from(farmEquipment).where(eq(farmEquipment.id, data.equipmentId));
+            noteStr = `Abastecimento: ${equip?.name || data.equipmentId}`;
+        } else {
+            noteStr = `Saída genérica`;
+        }
 
         await db.insert(farmStockMovements).values({
             farmerId: data.farmerId,
@@ -357,13 +428,13 @@ export class FarmStorage {
             quantity: String(-qty),
             referenceType: "pdv",
             referenceId: app.id,
-            notes: `Aplicação talhão: ${plotName}`,
+            notes: noteStr,
         });
 
         return app;
     }
 
-    async getApplications(farmerId: string, plotId?: string): Promise<(FarmApplication & { productName: string; plotName: string; propertyName: string })[]> {
+    async getApplications(farmerId: string, plotId?: string): Promise<(FarmApplication & { productName: string; plotName: string | null; propertyName: string })[]> {
         await dbReady;
         let query = db.select({
             id: farmApplications.id,

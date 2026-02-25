@@ -1043,6 +1043,16 @@ export const farmPlots = pgTable("farm_plots", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// Equipamentos Agrícolas / Frota
+export const farmEquipment = pgTable("farm_equipment", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), // Ex: "Trator Valtra A950", "Caminhão MB 1620"
+  type: text("type").notNull(), // Trator, Implemento, Caminhao, Colheitadeira, Outros
+  status: text("status").default("Ativo"), // Ativo, Manutenção, Inativo
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // Catálogo Global de Produtos (dose, unidade, categoria)
 export const farmProductsCatalog = pgTable("farm_products_catalog", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1137,13 +1147,16 @@ export const farmStockMovements = pgTable("farm_stock_movements", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
-// Aplicações nos talhões (registradas pelo PDV)
+// Aplicações nos talhões (registradas pelo PDV) ou abastecimentos
 export const farmApplications = pgTable("farm_applications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
-  plotId: varchar("plot_id").notNull().references(() => farmPlots.id, { onDelete: "cascade" }),
+  plotId: varchar("plot_id").references(() => farmPlots.id, { onDelete: "cascade" }), // Opcional para suportar abastecimento
   propertyId: varchar("property_id").notNull().references(() => farmProperties.id, { onDelete: "cascade" }),
+  equipmentId: varchar("equipment_id").references(() => farmEquipment.id), // Veículo/Máquina abastecida
+  horimeter: integer("horimeter"), // Horímetro no momento (opcional)
+  odometer: integer("odometer"), // Hodômetro no momento (opcional)
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
   appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
   appliedBy: text("applied_by"), // Nome do funcionário (manual)
@@ -1173,6 +1186,7 @@ export const farmPdvTerminals = pgTable("farm_pdv_terminals", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   propertyId: varchar("property_id").references(() => farmProperties.id),
+  type: text("type", { enum: ["estoque", "diesel"] }).default("estoque").notNull(), // Permite dividir o tipo do PDV
   isOnline: boolean("is_online").default(false),
   lastHeartbeat: timestamp("last_heartbeat"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
@@ -1189,6 +1203,10 @@ export type FarmProperty = typeof farmProperties.$inferSelect;
 export const insertFarmPlotSchema = createInsertSchema(farmPlots).omit({ id: true, createdAt: true });
 export type InsertFarmPlot = z.infer<typeof insertFarmPlotSchema>;
 export type FarmPlot = typeof farmPlots.$inferSelect;
+
+export const insertFarmEquipmentSchema = createInsertSchema(farmEquipment).omit({ id: true, createdAt: true });
+export type InsertFarmEquipment = z.infer<typeof insertFarmEquipmentSchema>;
+export type FarmEquipment = typeof farmEquipment.$inferSelect;
 
 export const insertFarmProductCatalogSchema = createInsertSchema(farmProductsCatalog).omit({ id: true, createdAt: true });
 export type InsertFarmProductCatalog = z.infer<typeof insertFarmProductCatalogSchema>;

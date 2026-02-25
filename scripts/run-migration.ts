@@ -154,6 +154,16 @@ const runMigration = async () => {
             console.log('✅ Migração farm_manuals concluída!');
         }
 
+        // Migration 11: Add Equipment Table & Diesel PDV Support
+        const equipmentDieselPath = path.join(process.cwd(), 'migration_add_equipment_diesel.sql');
+        if (fs.existsSync(equipmentDieselPath)) {
+            const equipmentDieselSql = fs.readFileSync(equipmentDieselPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', equipmentDieselPath);
+            console.log('🚀 Executando SQL (equipment_diesel)...');
+            await sql.unsafe(equipmentDieselSql);
+            console.log('✅ Migração equipment_diesel concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

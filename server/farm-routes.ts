@@ -236,6 +236,61 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // ==================== EQUIPMENT ====================
+
+    app.get("/api/farm/equipment", requireFarmer, async (req, res) => {
+        try {
+            const equipment = await farmStorage.getEquipment((req.user as any).id);
+            res.json(equipment);
+        } catch (error) {
+            console.error("[FARM_EQUIPMENT_GET]", error);
+            res.status(500).json({ error: "Failed to get equipment list" });
+        }
+    });
+
+    app.post("/api/farm/equipment", requireFarmer, async (req, res) => {
+        try {
+            const { name, type, status } = req.body;
+            if (!name || !type) return res.status(400).json({ error: "Name and type required" });
+
+            const equip = await farmStorage.createEquipment({
+                farmerId: (req.user as any).id,
+                name,
+                type,
+                status: status || "Ativo",
+            });
+            res.status(201).json(equip);
+        } catch (error) {
+            console.error("[FARM_EQUIPMENT_CREATE]", error);
+            res.status(500).json({ error: "Failed to create equipment" });
+        }
+    });
+
+    app.put("/api/farm/equipment/:id", requireFarmer, async (req, res) => {
+        try {
+            const { name, type, status } = req.body;
+            const equip = await farmStorage.updateEquipment(req.params.id, {
+                name,
+                type,
+                status,
+            });
+            res.json(equip);
+        } catch (error) {
+            console.error("[FARM_EQUIPMENT_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update equipment" });
+        }
+    });
+
+    app.delete("/api/farm/equipment/:id", requireFarmer, async (req, res) => {
+        try {
+            await farmStorage.deleteEquipment(req.params.id);
+            res.sendStatus(204);
+        } catch (error) {
+            console.error("[FARM_EQUIPMENT_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete equipment" });
+        }
+    });
+
     // ==================== PRODUCTS CATALOG ====================
 
     app.get("/api/farm/products", requireFarmer, async (req, res) => {
@@ -334,6 +389,26 @@ export function registerFarmRoutes(app: Express) {
         } catch (error) {
             console.error("[FARM_MOVEMENTS_GET]", error);
             res.status(500).json({ error: "Failed to get stock movements" });
+        }
+    });
+
+    app.put("/api/farm/stock/:id", requireFarmer, async (req, res) => {
+        try {
+            const { quantity, averageCost, reason } = req.body;
+            if (quantity === undefined || averageCost === undefined || !reason) {
+                return res.status(400).json({ error: "Quantity, averageCost, and reason are required" });
+            }
+
+            const updatedStock = await farmStorage.updateStockManual(
+                req.params.id,
+                (req.user as any).id,
+                { quantity: Number(quantity), averageCost: Number(averageCost), reason }
+            );
+
+            res.json(updatedStock);
+        } catch (error) {
+            console.error("[FARM_STOCK_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update stock" });
         }
     });
 
@@ -941,13 +1016,15 @@ export function registerFarmRoutes(app: Express) {
             const stock = await farmStorage.getStock(terminal.farmerId);
             const plots = await farmStorage.getPlotsByFarmer(terminal.farmerId);
             const properties = await farmStorage.getProperties(terminal.farmerId);
+            const equipment = await farmStorage.getEquipment(terminal.farmerId);
 
             res.json({
-                terminal: { id: terminal.id, name: terminal.name, propertyId: terminal.propertyId },
+                terminal: { id: terminal.id, name: terminal.name, propertyId: terminal.propertyId, type: terminal.type },
                 products,
                 stock,
                 plots,
                 properties,
+                equipment,
             });
         } catch (error) {
             console.error("[PDV_LOGIN]", error);
@@ -958,9 +1035,9 @@ export function registerFarmRoutes(app: Express) {
     // PDV withdraw: register application + update stock
     app.post("/api/pdv/withdraw", requirePdv, async (req, res) => {
         try {
-            const { productId, quantity, plotId, propertyId, appliedBy, notes } = req.body;
-            if (!productId || !quantity || !plotId) {
-                return res.status(400).json({ error: "Product, quantity and plot required" });
+            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer } = req.body;
+            if (!productId || !quantity || (!plotId && !equipmentId)) {
+                return res.status(400).json({ error: "Product, quantity, and objective (plot or equipment) required" });
             }
 
             const farmerId = (req.session as any).pdvFarmerId;
@@ -991,8 +1068,11 @@ export function registerFarmRoutes(app: Express) {
             const application = await farmStorage.createApplication({
                 farmerId,
                 productId,
-                plotId: resolvedPlotId,
-                propertyId: resolvedPropertyId || plotId,
+                plotId: resolvedPlotId || null,
+                propertyId: resolvedPropertyId || plotId || null,
+                equipmentId: equipmentId || null,
+                horimeter: horimeter ? parseInt(horimeter, 10) : null,
+                odometer: odometer ? parseInt(odometer, 10) : null,
                 quantity: String(quantity),
                 appliedBy: appliedBy || "PDV",
                 notes,
@@ -1023,8 +1103,11 @@ export function registerFarmRoutes(app: Express) {
                     const application = await farmStorage.createApplication({
                         farmerId,
                         productId: app.productId,
-                        plotId: app.plotId,
-                        propertyId: app.propertyId,
+                        plotId: app.plotId || null,
+                        propertyId: app.propertyId || null,
+                        equipmentId: app.equipmentId || null,
+                        horimeter: app.horimeter ? parseInt(app.horimeter, 10) : null,
+                        odometer: app.odometer ? parseInt(app.odometer, 10) : null,
                         quantity: String(app.quantity),
                         appliedBy: app.appliedBy || "PDV (offline)",
                         notes: app.notes,
@@ -1073,7 +1156,9 @@ export function registerFarmRoutes(app: Express) {
 
             const plots = await farmStorage.getPlotsByFarmer(farmerId);
             const properties = await farmStorage.getProperties(farmerId);
-            res.json({ products, stock, plots, properties });
+            const equipment = await farmStorage.getEquipment(farmerId);
+
+            res.json({ products, stock, plots, properties, equipment });
         } catch (error) {
             console.error("[PDV_DATA]", error);
             res.status(500).json({ error: "Failed to get data" });
