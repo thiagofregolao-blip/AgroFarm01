@@ -416,6 +416,16 @@ export function registerFarmRoutes(app: Express) {
     });
 
 
+    app.delete("/api/farm/stock/:id", requireFarmer, async (req, res) => {
+        try {
+            await farmStorage.deleteStock(req.params.id, (req.user as any).id);
+            res.sendStatus(204);
+        } catch (error) {
+            console.error("[FARM_STOCK_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete from stock" });
+        }
+    });
+
     // ==================== INVOICES ====================
 
     app.get("/api/farm/invoices", requireFarmer, async (req, res) => {

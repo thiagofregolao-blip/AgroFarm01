@@ -222,6 +222,11 @@ export class FarmStorage {
         }
     }
 
+    async deleteStock(id: string, farmerId: string): Promise<void> {
+        await dbReady;
+        await db.delete(farmStock).where(and(eq(farmStock.id, id), eq(farmStock.farmerId, farmerId)));
+    }
+
     // ==================== Invoices ====================
     async getInvoices(farmerId: string): Promise<FarmInvoice[]> {
         await dbReady;

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2 } from "lucide-react";
 import { useState, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -18,6 +18,7 @@ export default function FarmStock() {
     const [, setLocation] = useLocation();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
+    const { toast } = useToast();
 
     const { user } = useAuth();
 
@@ -32,6 +33,25 @@ export default function FarmStock() {
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/stock/movements?limit=100"); return r.json(); },
         enabled: !!user,
     });
+
+    const deleteStock = useMutation({
+        mutationFn: async (id: string) => {
+            await apiRequest("DELETE", `/api/farm/stock/${id}`);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
+            toast({ title: "Produto excluído", description: "O item foi removido do estoque." });
+        },
+        onError: (err: any) => {
+            toast({ title: "Erro", description: err.message, variant: "destructive" });
+        }
+    });
+
+    const handleDelete = (id: string, name: string) => {
+        if (confirm(`Tem certeza que deseja excluir '${name}' do estoque?`)) {
+            deleteStock.mutate(id);
+        }
+    };
 
     const filtered = stock.filter((s: any) =>
         s.productName.toLowerCase().includes(search.toLowerCase()) ||
@@ -84,6 +104,7 @@ export default function FarmStock() {
                                             <th className="text-right p-3 font-semibold text-emerald-800">Quantidade</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Custo Médio</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Valor Total</th>
+                                            <th className="text-right p-3 font-semibold text-emerald-800">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -105,6 +126,11 @@ export default function FarmStock() {
                                                     </td>
                                                     <td className="text-right p-3 font-mono">${cost.toFixed(2)}</td>
                                                     <td className="text-right p-3 font-mono font-semibold">${(qty * cost).toFixed(2)}</td>
+                                                    <td className="text-right p-3">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
+                                                            {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                        </Button>
+                                                    </td>
                                                 </tr>
                                             );
                                         })}
