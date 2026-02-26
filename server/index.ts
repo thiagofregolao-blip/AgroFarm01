@@ -69,6 +69,28 @@ app.use((req, res, next) => {
     log(`⚠️  Migration check for type column: ${migErr.message}`);
   }
 
+  // Inline migration: ensure the `farm_price_history` table exists
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_price_history (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        purchase_date timestamp NOT NULL,
+        supplier text,
+        product_name text NOT NULL,
+        quantity numeric(15, 2) NOT NULL,
+        unit_price numeric(15, 2) NOT NULL,
+        active_ingredient text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    log("✅ Migration: farm_price_history table ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration check for farm_price_history table: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes

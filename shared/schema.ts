@@ -1178,6 +1178,19 @@ export const farmExpenses = pgTable("farm_expenses", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// Histórico simplificado de preços para consulta rápida no n8n/WhatsApp
+export const farmPriceHistory = pgTable("farm_price_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  purchaseDate: timestamp("purchase_date").notNull(),
+  supplier: text("supplier"),
+  productName: text("product_name").notNull(),
+  quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull(),
+  unitPrice: decimal("unit_price", { precision: 15, scale: 2 }).notNull(),
+  activeIngredient: text("active_ingredient"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 // Terminais PDV (login do tablet no depósito)
 export const farmPdvTerminals = pgTable("farm_pdv_terminals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1247,5 +1260,9 @@ export type FarmPdvTerminal = typeof farmPdvTerminals.$inferSelect;
 export const insertFarmSeasonSchema = createInsertSchema(farmSeasons).omit({ id: true, createdAt: true });
 export type InsertFarmSeason = z.infer<typeof insertFarmSeasonSchema>;
 export type FarmSeason = typeof farmSeasons.$inferSelect;
+
+export const insertFarmPriceHistorySchema = createInsertSchema(farmPriceHistory).omit({ id: true, createdAt: true });
+export type InsertFarmPriceHistory = z.infer<typeof insertFarmPriceHistorySchema>;
+export type FarmPriceHistory = typeof farmPriceHistory.$inferSelect;
 
 // Farm Farmers (Agricultores management separately from internal team)

@@ -1626,7 +1626,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
             const searchString = String(search).trim();
             console.log(`[WEBHOOK_N8N_PRICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number})`);
-            const { farmInvoiceItems, farmProductsCatalog } = await import("../shared/schema");
+            const { farmPriceHistory } = await import("../shared/schema");
 
             let searchCondition;
 
@@ -1637,36 +1637,33 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 const words = cleanSearch.split(" ").filter(w => w.length > 2);
 
                 const searchConditions = words.map(w => or(
-                    sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
-                    sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
-                    sql`regexp_replace(${farmProductsCatalog.category}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`
+                    sql`regexp_replace(${farmPriceHistory.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
+                    sql`regexp_replace(${farmPriceHistory.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`
                 ));
+
                 searchCondition = searchConditions.length > 0 ? or(...searchConditions) : or(
-                    sql`regexp_replace(${farmInvoiceItems.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
-                    sql`regexp_replace(${farmProductsCatalog.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
-                    sql`regexp_replace(${farmProductsCatalog.category}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`
+                    sql`regexp_replace(${farmPriceHistory.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
+                    sql`regexp_replace(${farmPriceHistory.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`
                 );
             }
 
-            // Deep search in invoice items
+            // Simple search in price history table
             const items = await db.select({
-                date: farmInvoices.createdAt,
-                supplier: farmInvoices.supplier,
-                productName: farmInvoiceItems.productName,
-                quantity: farmInvoiceItems.quantity,
-                unit: farmInvoiceItems.unit,
-                unitPrice: farmInvoiceItems.unitPrice,
+                date: farmPriceHistory.purchaseDate,
+                supplier: farmPriceHistory.supplier,
+                productName: farmPriceHistory.productName,
+                quantity: farmPriceHistory.quantity,
+                unitPrice: farmPriceHistory.unitPrice,
+                activeIngredient: farmPriceHistory.activeIngredient
             })
-                .from(farmInvoiceItems)
-                .innerJoin(farmInvoices, eq(farmInvoiceItems.invoiceId, farmInvoices.id))
-                .leftJoin(farmProductsCatalog, eq(farmInvoiceItems.productId, farmProductsCatalog.id))
+                .from(farmPriceHistory)
                 .where(
                     and(
-                        eq(farmInvoices.farmerId, farmers[0].id),
+                        eq(farmPriceHistory.farmerId, farmers[0].id),
                         searchCondition
                     )
                 )
-                .orderBy(desc(farmInvoices.createdAt))
+                .orderBy(desc(farmPriceHistory.purchaseDate))
                 .limit(Number(limit));
 
             console.log(`[WEBHOOK_N8N_PRICES] Found ${items.length} items for "${searchString}"`);
@@ -1676,7 +1673,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     dataCompra: new Date(i.date).toLocaleDateString("pt-BR"),
                     fornecedor: i.supplier,
                     produto: i.productName,
-                    quantidade: parseFloat(i.quantity).toFixed(2) + " " + i.unit,
+                    quantidade: parseFloat(i.quantity).toFixed(2),
                     precoUnitario: parseFloat(i.unitPrice).toFixed(2)
                 }))
             });

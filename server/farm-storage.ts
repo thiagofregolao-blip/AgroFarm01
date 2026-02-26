@@ -4,6 +4,7 @@ import {
     users, farmProperties, farmPlots, farmEquipment, farmProductsCatalog,
     farmStock, farmInvoices, farmInvoiceItems, farmStockMovements,
     farmApplications, farmExpenses, farmPdvTerminals, farmSeasons,
+    farmPriceHistory,
     type InsertUser, type User,
     type InsertFarmProperty, type FarmProperty,
     type InsertFarmPlot, type FarmPlot,
@@ -335,17 +336,45 @@ export class FarmStorage {
         return db.insert(farmInvoiceItems).values(items).returning();
     }
 
-    // Confirm invoice: create stock entries + movements (unless skipStockEntry is set)
+    // Confirm invoice: create stock entries + movements (unless skipStockEntry is set), and save price history
     async confirmInvoice(invoiceId: string, farmerId: string): Promise<void> {
         await dbReady;
 
-        // Check if this invoice should skip stock entry
+        // Fetch invoice details for price history
         const invoice = await this.getInvoiceById(invoiceId);
+        if (!invoice) return;
+
         const skipStock = invoice?.skipStockEntry === true;
+        const items = await this.getInvoiceItems(invoiceId);
+
+        // Always save price history regardless of stock entry
+        for (const item of items) {
+            if (!item.productId) continue;
+
+            const qty = parseFloat(item.quantity);
+            const cost = parseFloat(item.unitPrice);
+
+            if (qty > 0 && cost > 0) {
+                try {
+                    // Try to fetch active ingredient if available
+                    const [product] = await db.select().from(farmProductsCatalog).where(eq(farmProductsCatalog.id, item.productId));
+
+                    await db.insert(farmPriceHistory).values({
+                        farmerId,
+                        purchaseDate: invoice.issueDate || new Date(),
+                        supplier: invoice.supplier || "Fornecedor Local",
+                        productName: item.productName || product?.name || "Produto",
+                        quantity: String(qty),
+                        unitPrice: String(cost),
+                        activeIngredient: product?.activeIngredient || null
+                    });
+                } catch (phError) {
+                    console.error("[FARM_PRICE_HISTORY_INSERT]", phError);
+                }
+            }
+        }
 
         if (!skipStock) {
-            const items = await this.getInvoiceItems(invoiceId);
-
             for (const item of items) {
                 if (!item.productId) continue;
 
@@ -367,9 +396,9 @@ export class FarmStorage {
                     notes: `Fatura item: ${item.productName}`,
                 });
             }
-            console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITH stock entry.`);
+            console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITH stock entry and price history.`);
         } else {
-            console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITHOUT stock entry (skip_stock_entry=true).`);
+            console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITHOUT stock entry, but price history saved.`);
         }
 
         await this.updateInvoiceStatus(invoiceId, "confirmed");
