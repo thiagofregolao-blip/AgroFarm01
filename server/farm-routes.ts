@@ -967,7 +967,7 @@ export function registerFarmRoutes(app: Express) {
 
     app.post("/api/farm/pdv-terminals", requireFarmer, async (req, res) => {
         try {
-            const { name, username, password, propertyId } = req.body;
+            const { name, username, password, propertyId, type } = req.body;
             if (!name || !username || !password) {
                 return res.status(400).json({ error: "Name, username and password required" });
             }
@@ -978,6 +978,7 @@ export function registerFarmRoutes(app: Express) {
                 username,
                 password: await hashPassword(password),
                 propertyId: propertyId || null,
+                type: type || "estoque",
                 isOnline: false,
                 lastHeartbeat: null,
             });
