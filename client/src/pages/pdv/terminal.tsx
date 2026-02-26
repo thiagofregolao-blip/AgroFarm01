@@ -803,24 +803,33 @@ export default function PdvTerminal() {
                         </Button>
 
                         {/* === RECENT FUELING HISTORY === */}
-                        {withdrawalsHistory && withdrawalsHistory.length > 0 && (
-                            <div className="bg-gray-800/40 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-5">
-                                <p className="text-xs uppercase font-bold tracking-widest text-gray-400 mb-3">Últimos Abastecimentos</p>
-                                <div className="space-y-2 max-h-60 overflow-y-auto">
-                                    {withdrawalsHistory.slice(0, 10).map((batch: any, i: number) => (
-                                        <div key={i} className="flex items-center justify-between py-2 border-b border-gray-700/30 last:border-0">
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-300">{batch.applications?.[0]?.productName || "Diesel"}</p>
-                                                <p className="text-[10px] text-gray-500">{new Date(batch.appliedAt).toLocaleString("pt-BR")}</p>
+                        {(() => {
+                            // Filter history to only show diesel/combustível withdrawals
+                            const dieselHistory = (withdrawalsHistory || []).filter((batch: any) =>
+                                batch.applications?.some((a: any) => {
+                                    const name = (a.productName || "").toLowerCase();
+                                    return name.includes("diesel") || name.includes("combustível") || name.includes("combustivel") || (dieselProduct && a.productId === dieselProduct.id);
+                                })
+                            );
+                            return dieselHistory.length > 0 ? (
+                                <div className="bg-gray-800/40 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-5">
+                                    <p className="text-xs uppercase font-bold tracking-widest text-gray-400 mb-3">Últimos Abastecimentos</p>
+                                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                                        {dieselHistory.slice(0, 10).map((batch: any, i: number) => (
+                                            <div key={i} className="flex items-center justify-between py-2 border-b border-gray-700/30 last:border-0">
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-300">{batch.equipmentName || batch.applications?.[0]?.equipmentName || "Veículo"}</p>
+                                                    <p className="text-[10px] text-gray-500">{new Date(batch.appliedAt).toLocaleString("pt-BR")}</p>
+                                                </div>
+                                                <span className="text-amber-400 font-bold text-sm">
+                                                    {batch.applications?.reduce((s: number, a: any) => s + parseFloat(a.quantity || 0), 0).toFixed(0)}L
+                                                </span>
                                             </div>
-                                            <span className="text-amber-400 font-bold text-sm">
-                                                {batch.applications?.reduce((s: number, a: any) => s + parseFloat(a.quantity || 0), 0).toFixed(0)}L
-                                            </span>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            ) : null;
+                        })()}
                     </div>
                 </div>
             </div>
