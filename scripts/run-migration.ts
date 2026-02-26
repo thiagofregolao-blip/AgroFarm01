@@ -164,6 +164,16 @@ const runMigration = async () => {
             console.log('✅ Migração equipment_diesel concluída!');
         }
 
+        // Migration 12: Price History Table
+        const priceHistoryPath = path.join(process.cwd(), 'migration_add_price_history.sql');
+        if (fs.existsSync(priceHistoryPath)) {
+            const priceHistorySql = fs.readFileSync(priceHistoryPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', priceHistoryPath);
+            console.log('🚀 Executando SQL (price_history)...');
+            await sql.unsafe(priceHistorySql);
+            console.log('✅ Migração price_history concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
