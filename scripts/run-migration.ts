@@ -174,6 +174,16 @@ const runMigration = async () => {
             console.log('✅ Migração price_history concluída!');
         }
 
+        // Migration 13: Backfill Price History from existing confirmed invoices
+        const backfillPath = path.join(process.cwd(), 'migration_backfill_price_history.sql');
+        if (fs.existsSync(backfillPath)) {
+            const backfillSql = fs.readFileSync(backfillPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', backfillPath);
+            console.log('🚀 Executando SQL (backfill_price_history)...');
+            await sql.unsafe(backfillSql);
+            console.log('✅ Migração backfill_price_history concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

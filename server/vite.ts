@@ -69,10 +69,16 @@ export async function setupVite(app: Express, server: Server) {
       );
       let page = await vite.transformIndexHtml(url, template);
 
-      // Phase 3 PWA Fix: Dynamically strip the manifest link for /pdv routes 
-      // so iOS Safari correctly saves it as a regular website bookmark to the exact URL
+      // Phase 4 PWA Fix: Strip ALL PWA signals for /pdv routes
+      // iOS Safari uses meta tags + manifest + SW to decide "this is a web app"
+      // We must remove ALL of them so iOS treats /pdv as a plain website bookmark
       if (url.startsWith("/pdv")) {
-        page = page.replace(/<link\s+rel="manifest"[\s\S]*?>/i, "");
+        page = page.replace(/<link[^>]*rel=["']manifest["'][^>]*>/gi, "");
+        page = page.replace(/<meta[^>]*name=["']apple-mobile-web-app-capable["'][^>]*>/gi, "");
+        page = page.replace(/<meta[^>]*name=["']apple-mobile-web-app-status-bar-style["'][^>]*>/gi, "");
+        page = page.replace(/<meta[^>]*name=["']apple-mobile-web-app-title["'][^>]*>/gi, "");
+        // Remove the service worker registration script injected by vite-plugin-pwa
+        page = page.replace(/<script[^>]*>[\s\S]*?registerSW[\s\S]*?<\/script>/gi, "");
       }
 
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
@@ -99,9 +105,14 @@ export function serveStatic(app: Express) {
     try {
       let html = await fs.promises.readFile(path.resolve(distPath, "index.html"), "utf-8");
 
-      // Phase 3 PWA Fix: Dynamically strip the manifest link for /pdv routes in production
+      // Phase 4 PWA Fix: Strip ALL PWA signals for /pdv routes in production
       if (req.originalUrl.startsWith("/pdv")) {
-        html = html.replace(/<link\s+rel="manifest"[\s\S]*?>/i, "");
+        html = html.replace(/<link[^>]*rel=["']manifest["'][^>]*>/gi, "");
+        html = html.replace(/<meta[^>]*name=["']apple-mobile-web-app-capable["'][^>]*>/gi, "");
+        html = html.replace(/<meta[^>]*name=["']apple-mobile-web-app-status-bar-style["'][^>]*>/gi, "");
+        html = html.replace(/<meta[^>]*name=["']apple-mobile-web-app-title["'][^>]*>/gi, "");
+        // Remove the service worker registration script injected by vite-plugin-pwa
+        html = html.replace(/<script[^>]*>[\s\S]*?registerSW[\s\S]*?<\/script>/gi, "");
       }
 
       res.set("Content-Type", "text/html").send(html);

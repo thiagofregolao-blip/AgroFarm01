@@ -1601,7 +1601,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.get("/api/farm/webhook/n8n/prices", async (req, res) => {
         try {
-            const { whatsapp_number, limit = 5, search, date } = req.query;
+            const { whatsapp_number, limit = 20, search, date } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
 
             // Graceful fallback for missing search parameter
@@ -1693,7 +1693,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
         try {
-            const { whatsapp_number, limit = 5, date, supplier } = req.query;
+            const { whatsapp_number, limit = 20, date, supplier } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
 
             const { users, farmExpenses, farmInvoices } = await import("../shared/schema");
@@ -1716,16 +1716,16 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const invoiceConditions: any[] = [eq(farmInvoices.farmerId, farmers[0].id)];
 
             if (date) {
-                // If date is provided (e.g. '2025-12-23' or '23/12' or '23/12/2025')
+                // Use issueDate (actual invoice date) for invoices, createdAt for expenses
                 const dateStr = String(date);
-                expenseConditions.push(sql`to_char(${farmExpenses.createdAt}, 'DD/MM/YYYY') LIKE ${'%' + dateStr + '%'} OR to_char(${farmExpenses.createdAt}, 'YYYY-MM-DD') LIKE ${'%' + dateStr + '%'}`);
-                invoiceConditions.push(sql`to_char(${farmInvoices.createdAt}, 'DD/MM/YYYY') LIKE ${'%' + dateStr + '%'} OR to_char(${farmInvoices.createdAt}, 'YYYY-MM-DD') LIKE ${'%' + dateStr + '%'}`);
+                expenseConditions.push(sql`(to_char(${farmExpenses.createdAt}, 'DD/MM/YYYY') LIKE ${'%' + dateStr + '%'} OR to_char(${farmExpenses.createdAt}, 'YYYY-MM-DD') LIKE ${'%' + dateStr + '%'})`);
+                // For invoices, search BOTH issueDate AND createdAt to maximize matches
+                invoiceConditions.push(sql`(to_char(COALESCE(${farmInvoices.issueDate}, ${farmInvoices.createdAt}), 'DD/MM/YYYY') LIKE ${'%' + dateStr + '%'} OR to_char(COALESCE(${farmInvoices.issueDate}, ${farmInvoices.createdAt}), 'YYYY-MM-DD') LIKE ${'%' + dateStr + '%'})`);
             }
 
             if (supplier) {
                 const supplierStr = String(supplier);
                 invoiceConditions.push(sql`${farmInvoices.supplier} ILIKE ${'%' + supplierStr + '%'}`);
-                // Expenses don't have supplier strictly, but letting the query run fine
             }
 
             const expenses = await db.select().from(farmExpenses)
@@ -1749,7 +1749,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 faturas: invoices.map((i: any) => ({
                     fornecedor: i.supplier,
                     valorTotal: parseFloat(i.totalAmount || "0").toFixed(2),
-                    data: new Date(i.createdAt).toLocaleDateString("pt-BR"),
+                    data: i.issueDate ? new Date(i.issueDate).toLocaleDateString("pt-BR") : new Date(i.createdAt).toLocaleDateString("pt-BR"),
                     status: i.status
                 }))
             });
