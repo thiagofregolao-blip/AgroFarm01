@@ -96,7 +96,7 @@
       "parameters": {
         "text": "=Mensagem: {{ $json.body.text.message || $json.body.message }} | Celular Autorizado: {{ $json.body.phone }}",
         "options": {
-          "systemMessage": "=Você é o assistente virtual da AgroFarm. Você ajuda o agricultor tirando dúvidas sobre o estoque dele, sobre as aplicações no campo e sobre as despesas dele. Seja educado, use emojis agrícolas e responda sempre de forma curta no formato WhatsApp.\n\nIMPORTANTE PARA USO DE TOOLS:\nO número de WhatsApp do agricultor atual é: {{$json.body.phone}}.\n\nSEMPRE passe esse `whatsapp_number` como uma STRING (texto entre aspas, ex: \"0986123456\") quando for chamar qualquer tool. NUNCA envie como numeral, pois números iniciados com zero quebram o parser JSON do n8n.\n\nREGRA ABSOLUTA: Quando usar a ferramenta de estoque, você DEVE ler os dados e listar TODOS os itens integralmente na sua resposta do WhatsApp. Nunca resuma, nunca oculte e nunca agrupe itens!\n"
+          "systemMessage": "=Você é o assistente virtual da AgroFarm. Você ajuda o agricultor tirando dúvidas sobre o estoque dele, sobre as aplicações no campo, compras e despesas. Seja educado, use emojis agrícolas e responda sempre de forma curta no formato WhatsApp.\n\nIMPORTANTE PARA USO DE TOOLS:\nO número de WhatsApp do agricultor atual é: {{$json.body.phone}}.\n\nSEMPRE passe esse `whatsapp_number` como uma STRING (texto entre aspas, ex: \"0986123456\") quando for chamar qualquer tool. NUNCA envie como numeral.\n\nSEJA INTELIGENTE: Quando o usuário perguntar por uma data específica (ex: 23/12), envie a data no parâmetro `date` da Tool correta. Quando perguntar por um produto, envie o produto no parâmetro `search`."
         }
       },
       "id": "5f1cb8e3-71c2-4274-ac28-7f35e60477ad",
@@ -179,7 +179,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Esta ferramenta busca TOTALIZADORES de compras e faturas. Não use essa ferramenta para buscar preço unitário de produtos. Retorna data e fornecedor de faturas recentes.",
+        "toolDescription": "Esta ferramenta busca totais de despesas e faturas recentes. Se o usuário perguntar por uma data específica (ex: 'tem algo dia 23/12?'), envie a data no parâmetro 'date'. Se perguntar por fornecedor, envie no parâmetro 'supplier'.",
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/invoices",
         "sendQuery": true,
         "parametersQuery": {
@@ -188,6 +188,16 @@
               "name": "whatsapp_number",
               "valueProvider": "fieldValue",
               "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            },
+            {
+              "name": "date",
+              "valueProvider": "fromAI",
+              "description": "A data solicitada pelo usuário (ex: '2025-12-23' ou '23/12'). Deixe vazio se não foi informada."
+            },
+            {
+              "name": "supplier",
+              "valueProvider": "fromAI",
+              "description": "O nome do fornecedor, se o usuário citou."
             }
           ]
         },
@@ -315,7 +325,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "A ferramenta IDEAL E INSUPERÁVEL para consultar PREÇO, COMPRA OU FATURA DE UM PRODUTO ESPECÍFICO. Quando o usuário perguntar 'quanto paguei no glifosato?' use esta ferramenta e envie o nome do produto no parâmetro de busca.",
+        "toolDescription": "Ferramenta para consultar o PREÇO pago ou o HISTÓRICO DE COMPRAS de um produto específico (ex: glifosato, semente). O parâmetro 'search' é OBRIGATÓRIO com o nome do produto. Opcionalmente, envie 'date' se o usuário perguntou o preço em uma data.",
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/prices",
         "sendQuery": true,
         "parametersQuery": {
@@ -328,7 +338,12 @@
             {
               "name": "search",
               "valueProvider": "fromAI",
-              "description": "Nome exato do produto a ser pesquisado (ex: glifosato)"
+              "description": "Nome exato do produto a ser pesquisado (ex: glifosato). MÁXIMA IMPORTÂNCIA!"
+            },
+            {
+              "name": "date",
+              "valueProvider": "fromAI",
+              "description": "A data da compra se informada (ex: '2025-12-23' ou '23/12')"
             }
           ]
         },
