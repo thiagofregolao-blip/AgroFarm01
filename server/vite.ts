@@ -39,8 +39,7 @@ function stripPwaForPdv(html: string): string {
   // 4. Remove <meta name="apple-mobile-web-app-title" ...>
   html = html.replace(/<meta[^>]*name\s*=\s*["']apple-mobile-web-app-title["'][^>]*\/?>/gi, "");
 
-  // 5. Remove <link rel="apple-touch-icon" ...> (prevents iOS from using PWA icon)
-  html = html.replace(/<link[^>]*rel\s*=\s*["']apple-touch-icon["'][^>]*\/?>/gi, "");
+  // 5. KEEP <link rel="apple-touch-icon"> so iOS uses the AgroFarm icon for the shortcut
 
   // 6. Remove service worker registration script
   //    VitePWA generates: <script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script>
