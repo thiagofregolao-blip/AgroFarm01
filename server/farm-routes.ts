@@ -1141,7 +1141,14 @@ export function registerFarmRoutes(app: Express) {
     app.get("/api/pdv/data", requirePdv, async (req, res) => {
         try {
             const farmerId = (req.session as any).pdvFarmerId;
+            const terminalId = (req.session as any).pdvTerminalId;
             const stock = await farmStorage.getStock(farmerId);
+
+            // Fetch the current terminal to know its type (e.g. diesel)
+            const { farmPdvTerminals } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const [terminal] = await db.select().from(farmPdvTerminals).where(eq(farmPdvTerminals.id, terminalId));
 
             // Map the user's localized stock to a 'products' array that the frontend expects
             // This prevents the global catalog from leaking into the user's PDV
@@ -1158,7 +1165,7 @@ export function registerFarmRoutes(app: Express) {
             const properties = await farmStorage.getProperties(farmerId);
             const equipment = await farmStorage.getEquipment(farmerId);
 
-            res.json({ products, stock, plots, properties, equipment });
+            res.json({ products, stock, plots, properties, equipment, terminal });
         } catch (error) {
             console.error("[PDV_DATA]", error);
             res.status(500).json({ error: "Failed to get data" });
