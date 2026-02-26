@@ -434,7 +434,7 @@ export class FarmStorage {
         return app;
     }
 
-    async getApplications(farmerId: string, plotId?: string): Promise<(FarmApplication & { productName: string; plotName: string | null; propertyName: string })[]> {
+    async getApplications(farmerId: string, plotId?: string): Promise<(FarmApplication & { productName: string; plotName: string | null; propertyName: string; equipmentName: string | null })[]> {
         await dbReady;
         let query = db.select({
             id: farmApplications.id,
@@ -448,13 +448,18 @@ export class FarmStorage {
             notes: farmApplications.notes,
             syncedFromOffline: farmApplications.syncedFromOffline,
             createdAt: farmApplications.createdAt,
+            equipmentId: farmApplications.equipmentId,
+            horimeter: farmApplications.horimeter,
+            odometer: farmApplications.odometer,
             productName: farmProductsCatalog.name,
             plotName: farmPlots.name,
             propertyName: farmProperties.name,
+            equipmentName: farmEquipment.name,
         }).from(farmApplications)
             .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
-            .innerJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))
-            .innerJoin(farmProperties, eq(farmApplications.propertyId, farmProperties.id))
+            .leftJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))
+            .leftJoin(farmProperties, eq(farmApplications.propertyId, farmProperties.id))
+            .leftJoin(farmEquipment, eq(farmApplications.equipmentId, farmEquipment.id))
             .where(
                 plotId
                     ? and(eq(farmApplications.farmerId, farmerId), eq(farmApplications.plotId, plotId))
