@@ -32,7 +32,7 @@ export default function PdvLogin() {
         try {
             const res = await apiRequest("POST", "/api/pdv/login", { username, password });
             const data = await res.json();
-            sessionStorage.setItem("pdvData", JSON.stringify(data));
+            localStorage.setItem("pdvData", JSON.stringify(data));
             toast({ title: `Terminal ${data.terminal.name} conectado` });
             // Small delay to let the session persist before navigating
             setTimeout(() => {

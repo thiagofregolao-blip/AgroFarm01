@@ -59,6 +59,16 @@ app.use((req, res, next) => {
   // const { ensureSchema } = await import("./db");
   // await ensureSchema();
 
+  // Inline migration: ensure the `type` column exists on farm_pdv_terminals
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`ALTER TABLE farm_pdv_terminals ADD COLUMN IF NOT EXISTS type text NOT NULL DEFAULT 'estoque'`);
+    log("✅ Migration: farm_pdv_terminals.type column ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration check for type column: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes
