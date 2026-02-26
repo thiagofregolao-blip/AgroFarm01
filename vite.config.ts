@@ -37,22 +37,6 @@ export default defineConfig({
             purpose: "maskable",
           },
         ],
-        shortcuts: [
-          {
-            name: "PDV - Ponto de Venda",
-            short_name: "PDV",
-            description: "Acessar o terminal de vendas",
-            url: "/pdv/login",
-            icons: [{ src: "icon-192x192.png", sizes: "192x192" }],
-          },
-          {
-            name: "Painel Administrativo",
-            short_name: "Admin",
-            description: "Acessar o painel administrativo",
-            url: "/",
-            icons: [{ src: "icon-192x192.png", sizes: "192x192" }],
-          },
-        ],
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB

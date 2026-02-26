@@ -67,7 +67,14 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
-      const page = await vite.transformIndexHtml(url, template);
+      let page = await vite.transformIndexHtml(url, template);
+
+      // Phase 3 PWA Fix: Dynamically strip the manifest link for /pdv routes 
+      // so iOS Safari correctly saves it as a regular website bookmark to the exact URL
+      if (url.startsWith("/pdv")) {
+        page = page.replace(/<link\s+rel="manifest"[\s\S]*?>/i, "");
+      }
+
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
@@ -88,7 +95,18 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  app.use("*", async (req, res) => {
+    try {
+      let html = await fs.promises.readFile(path.resolve(distPath, "index.html"), "utf-8");
+
+      // Phase 3 PWA Fix: Dynamically strip the manifest link for /pdv routes in production
+      if (req.originalUrl.startsWith("/pdv")) {
+        html = html.replace(/<link\s+rel="manifest"[\s\S]*?>/i, "");
+      }
+
+      res.set("Content-Type", "text/html").send(html);
+    } catch (e) {
+      res.status(500).send("Error reading root index.html");
+    }
   });
 }
