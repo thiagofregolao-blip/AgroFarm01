@@ -1,5 +1,7 @@
 -- Backfill farm_price_history from existing confirmed invoice items
 -- This populates the price search table with data from all previously confirmed invoices
+-- Uses safe numeric conversion to handle dirty data (commas, text, empty strings)
+
 INSERT INTO farm_price_history (id, farmer_id, purchase_date, supplier, product_name, quantity, unit_price, active_ingredient, created_at)
 SELECT
     gen_random_uuid(),
@@ -7,15 +9,25 @@ SELECT
     COALESCE(fi.issue_date, fi.created_at),
     COALESCE(fi.supplier, 'Fornecedor Local'),
     COALESCE(fii.product_name, 'Produto'),
-    fii.quantity::numeric(15,2),
-    fii.unit_price::numeric(15,2),
+    CASE 
+        WHEN fii.quantity IS NOT NULL AND fii.quantity != '' 
+             AND fii.quantity ~ '^[0-9.,]+$'
+        THEN REPLACE(fii.quantity, ',', '.')::numeric(15,2)
+        ELSE 0
+    END,
+    CASE 
+        WHEN fii.unit_price IS NOT NULL AND fii.unit_price != '' 
+             AND fii.unit_price ~ '^[0-9.,]+$'
+        THEN REPLACE(fii.unit_price, ',', '.')::numeric(15,2)
+        ELSE 0
+    END,
     (SELECT fpc.active_ingredient FROM farm_products_catalog fpc WHERE fpc.id = fii.product_id LIMIT 1),
     NOW()
 FROM farm_invoice_items fii
 JOIN farm_invoices fi ON fi.id = fii.invoice_id
 WHERE fi.status = 'confirmed'
-  AND fii.quantity::numeric > 0
-  AND fii.unit_price::numeric > 0
+  AND fii.product_name IS NOT NULL
+  AND fii.product_name != ''
   AND NOT EXISTS (
     SELECT 1 FROM farm_price_history fph
     WHERE fph.farmer_id = fi.farmer_id
