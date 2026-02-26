@@ -1552,6 +1552,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+            console.log(`[WEBHOOK_N8N_PRICES] Phone lookup: raw="${whatsapp_number}" → formatted="${formattedPhone}"`);
 
             const farmers = await db.select().from(users).where(
                 or(
@@ -1560,7 +1561,10 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 )
             ).limit(1);
 
-            if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
+            if (farmers.length === 0) {
+                console.log(`[WEBHOOK_N8N_PRICES] ❌ Farmer NOT FOUND for phone "${formattedPhone}"`);
+                return res.status(404).json({ error: `Farmer not found for phone ${formattedPhone}. Ensure the user has their WhatsApp number registered in their profile.` });
+            }
 
             const searchString = String(search).trim();
             console.log(`[WEBHOOK_N8N_PRICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number})`);
