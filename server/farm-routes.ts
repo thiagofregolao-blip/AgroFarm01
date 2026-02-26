@@ -991,6 +991,57 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    app.put("/api/farm/pdv-terminals/:id", requireFarmer, async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { name, username, password, propertyId, type } = req.body;
+            const farmerId = (req.user as any).id;
+
+            const { farmPdvTerminals } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            // Ensure terminal belongs to this farmer
+            const [existing] = await db.select().from(farmPdvTerminals).where(and(eq(farmPdvTerminals.id, id), eq(farmPdvTerminals.farmerId, farmerId)));
+            if (!existing) return res.status(404).json({ error: "Terminal not found" });
+
+            const updateData: any = {};
+            if (name) updateData.name = name;
+            if (username) updateData.username = username;
+            if (password) updateData.password = await hashPassword(password);
+            if (propertyId !== undefined) updateData.propertyId = propertyId || null;
+            if (type) updateData.type = type;
+
+            const [updated] = await db.update(farmPdvTerminals).set(updateData).where(eq(farmPdvTerminals.id, id)).returning();
+            const { password: _, ...safe } = updated;
+            res.json(safe);
+        } catch (error) {
+            console.error("[FARM_PDV_TERMINAL_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update terminal" });
+        }
+    });
+
+    app.delete("/api/farm/pdv-terminals/:id", requireFarmer, async (req, res) => {
+        try {
+            const { id } = req.params;
+            const farmerId = (req.user as any).id;
+
+            const { farmPdvTerminals } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            // Ensure terminal belongs to this farmer
+            const [existing] = await db.select().from(farmPdvTerminals).where(and(eq(farmPdvTerminals.id, id), eq(farmPdvTerminals.farmerId, farmerId)));
+            if (!existing) return res.status(404).json({ error: "Terminal not found" });
+
+            await db.delete(farmPdvTerminals).where(eq(farmPdvTerminals.id, id));
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[FARM_PDV_TERMINAL_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete terminal" });
+        }
+    });
+
     // ==================== PDV API (used by tablet) ====================
 
     app.post("/api/pdv/login", async (req, res) => {
@@ -1012,9 +1063,16 @@ export function registerFarmRoutes(app: Express) {
             // Mark as online
             await farmStorage.updatePdvHeartbeat(terminal.id);
 
-            // Get all data the PDV needs
-            const products = await farmStorage.getAllProducts();
+            // Get all data the PDV needs — products are derived from farmer's stock only
             const stock = await farmStorage.getStock(terminal.farmerId);
+            const products = stock.map(s => ({
+                id: s.productId,
+                name: s.productName,
+                category: s.productCategory,
+                unit: s.productUnit,
+                imageUrl: s.productImageUrl || null,
+                dosePerHa: s.productDosePerHa || null,
+            }));
             const plots = await farmStorage.getPlotsByFarmer(terminal.farmerId);
             const properties = await farmStorage.getProperties(terminal.farmerId);
             const equipment = await farmStorage.getEquipment(terminal.farmerId);

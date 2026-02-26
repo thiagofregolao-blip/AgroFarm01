@@ -572,6 +572,261 @@ export default function PdvTerminal() {
         return null;
     }
 
+    // ==================== DIESEL PDV: DEDICATED FUEL PUMP INTERFACE ====================
+    if (isDiesel) {
+        const equipment = pdvData?.equipment || [];
+        // Find diesel stock: look for products with category "Combustível" or name containing "diesel"
+        const dieselProduct = products.find((p: any) =>
+            p.category?.toLowerCase() === "combustível" ||
+            p.name?.toLowerCase().includes("diesel") ||
+            p.name?.toLowerCase().includes("óleo diesel")
+        );
+        const dieselStock = dieselProduct ? getStockForProduct(dieselProduct.id) : 0;
+        const dieselUnit = dieselProduct?.unit || "LT";
+
+        const [dieselQty, setDieselQty] = useState<string>("");
+        const [dieselEquip, setDieselEquip] = useState<any>(null);
+        const [dieselKm, setDieselKm] = useState<string>("");
+        const [dieselHours, setDieselHours] = useState<string>("");
+        const [dieselNotes, setDieselNotes] = useState<string>("");
+        const [dieselSubmitting, setDieselSubmitting] = useState(false);
+
+        const parsedQty = parseFloat(dieselQty) || 0;
+        const stockAfter = dieselStock - parsedQty;
+        const stockPercent = dieselProduct ? Math.max(0, Math.min(100, (dieselStock / Math.max(dieselStock, 1)) * 100)) : 0;
+
+        const handleDieselSubmit = async () => {
+            if (!dieselEquip) { toast({ title: "Selecione o veículo/máquina", variant: "destructive" }); return; }
+            if (parsedQty <= 0) { toast({ title: "Informe a quantidade de diesel", variant: "destructive" }); return; }
+            if (parsedQty > dieselStock) { toast({ title: "Quantidade excede o estoque disponível", variant: "destructive" }); return; }
+            if (!dieselProduct) { toast({ title: "Nenhum produto diesel encontrado no estoque", variant: "destructive" }); return; }
+
+            setDieselSubmitting(true);
+            try {
+                const payload = {
+                    productId: dieselProduct.id,
+                    quantity: parsedQty,
+                    equipmentId: dieselEquip.id,
+                    horimeter: dieselHours || null,
+                    odometer: dieselKm || null,
+                    notes: dieselNotes || `Abastecimento ${dieselEquip.name} - ${parsedQty}L`,
+                };
+
+                if (isOnline) {
+                    await apiRequest("POST", "/api/pdv/withdraw", payload);
+                    toast({ title: `⛽ ${parsedQty}L abastecido em ${dieselEquip.name}!` });
+                } else {
+                    const queue = [...offlineQueue, { id: Date.now(), payload, timestamp: new Date().toISOString() }];
+                    setOfflineQueue(queue);
+                    localStorage.setItem("pdv_offline_queue", JSON.stringify(queue));
+                    toast({ title: `📴 Abastecimento salvo offline (${parsedQty}L)` });
+                }
+
+                // Reset form
+                setDieselQty("");
+                setDieselEquip(null);
+                setDieselKm("");
+                setDieselHours("");
+                setDieselNotes("");
+                queryClient.invalidateQueries({ queryKey: ["/api/pdv/data"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/pdv/withdrawals"] });
+            } catch (error) {
+                toast({ title: "Erro ao registrar abastecimento", variant: "destructive" });
+            } finally {
+                setDieselSubmitting(false);
+            }
+        };
+
+        return (
+            <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-amber-900/30 text-white flex flex-col">
+                {/* Header */}
+                <header className="flex items-center justify-between px-5 py-3 bg-gray-900/80 backdrop-blur-sm border-b border-amber-500/20 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                            <Droplets className="h-5 w-5 text-amber-400" />
+                        </div>
+                        <div>
+                            <span className="font-bold text-base leading-tight block text-amber-50">⛽ Bomba de Diesel</span>
+                            <span className="text-[10px] text-amber-300/60">{pdvData?.terminal?.name} • AgroFarm Digital</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {!isOnline && <span className="text-[10px] text-red-400 bg-red-900/30 px-2 py-1 rounded-full">📴 Offline</span>}
+                        {offlineQueue.length > 0 && (
+                            <button onClick={processOfflineQueue} className="text-[10px] text-amber-300 bg-amber-900/30 px-2 py-1 rounded-full">
+                                ♻️ {offlineQueue.length} pendentes
+                            </button>
+                        )}
+                        <button onClick={handleLogout} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20">
+                            <LogOut className="h-4 w-4 text-gray-400" />
+                        </button>
+                    </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                    <div className="max-w-2xl mx-auto space-y-6">
+
+                        {/* === DIESEL GAUGE === */}
+                        <div className="bg-gray-800/60 backdrop-blur-sm rounded-3xl border border-amber-500/20 p-6 text-center">
+                            <p className="text-xs uppercase font-bold tracking-widest text-amber-400/80 mb-2">Estoque Diesel Disponível</p>
+                            <div className="flex items-baseline justify-center gap-2 mb-4">
+                                <span className="text-6xl md:text-8xl font-black text-amber-400 tabular-nums leading-none">
+                                    {dieselStock.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                                </span>
+                                <span className="text-2xl font-semibold text-amber-400/60">{dieselUnit}</span>
+                            </div>
+                            {/* Gauge bar */}
+                            <div className="w-full h-3 bg-gray-700/50 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full transition-all duration-500 ${stockPercent > 30 ? "bg-gradient-to-r from-amber-500 to-amber-400" : stockPercent > 10 ? "bg-gradient-to-r from-orange-500 to-orange-400" : "bg-gradient-to-r from-red-500 to-red-400"}`}
+                                    style={{ width: `${stockPercent}%` }}
+                                />
+                            </div>
+                            {!dieselProduct && (
+                                <p className="text-red-400 text-xs mt-3">⚠️ Nenhum produto "diesel" ou "combustível" encontrado no estoque. Lance uma fatura com diesel primeiro.</p>
+                            )}
+                        </div>
+
+                        {/* === VEHICLE SELECTOR === */}
+                        <div className="bg-gray-800/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-5">
+                            <p className="text-xs uppercase font-bold tracking-widest text-gray-400 mb-3 flex items-center gap-2">
+                                <Tractor className="h-4 w-4 text-amber-400" /> Selecionar Veículo / Máquina
+                            </p>
+                            {equipment.length === 0 ? (
+                                <p className="text-gray-500 text-sm text-center py-4">Nenhum equipamento cadastrado. Adicione no painel da fazenda.</p>
+                            ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    {equipment.map((eq: any) => (
+                                        <button
+                                            key={eq.id}
+                                            onClick={() => setDieselEquip(dieselEquip?.id === eq.id ? null : eq)}
+                                            className={`p-3 rounded-xl text-left transition-all ${dieselEquip?.id === eq.id
+                                                ? "bg-amber-500/20 border-2 border-amber-400 ring-2 ring-amber-400/20"
+                                                : "bg-gray-700/50 border border-gray-600/50 hover:border-gray-500"}`}
+                                        >
+                                            <p className="font-bold text-sm truncate">{eq.name}</p>
+                                            <p className="text-[10px] text-gray-400 truncate">{eq.type || eq.licensePlate || "—"}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* === FUEL INPUT === */}
+                        <div className="bg-gray-800/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-5">
+                            <p className="text-xs uppercase font-bold tracking-widest text-gray-400 mb-3 flex items-center gap-2">
+                                <Droplets className="h-4 w-4 text-amber-400" /> Quantidade Abastecida
+                            </p>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setDieselQty(String(Math.max(0, parsedQty - 10)))}
+                                    className="w-12 h-12 rounded-xl bg-gray-700/50 border border-gray-600/50 text-amber-400 flex items-center justify-center text-xl font-bold active:scale-95"
+                                >
+                                    −
+                                </button>
+                                <div className="flex-1 relative">
+                                    <Input
+                                        type="number"
+                                        step="1"
+                                        value={dieselQty}
+                                        onChange={(e) => setDieselQty(e.target.value)}
+                                        onFocus={(e) => e.target.select()}
+                                        placeholder="0"
+                                        className="text-center text-3xl font-black h-16 bg-gray-700/50 border-gray-600/50 text-amber-400 rounded-xl focus:border-amber-400 focus:ring-amber-400/30 placeholder:text-gray-600"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">litros</span>
+                                </div>
+                                <button
+                                    onClick={() => setDieselQty(String(parsedQty + 10))}
+                                    className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xl font-bold active:scale-95"
+                                >
+                                    +
+                                </button>
+                            </div>
+                            {parsedQty > 0 && (
+                                <p className={`text-xs mt-2 text-center ${stockAfter < 0 ? "text-red-400" : "text-gray-500"}`}>
+                                    Estoque após: {stockAfter.toLocaleString("pt-BR")} {dieselUnit}
+                                    {stockAfter < 0 && " ⚠️ Excede o disponível!"}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* === TELEMETRY (KM / Hours) === */}
+                        <div className="bg-gray-800/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-5">
+                            <p className="text-xs uppercase font-bold tracking-widest text-gray-400 mb-3 flex items-center gap-2">
+                                <Gauge className="h-4 w-4 text-amber-400" /> Telemetria
+                            </p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label className="text-gray-400 text-xs mb-1 block">Hodômetro (Km)</Label>
+                                    <Input
+                                        type="number"
+                                        value={dieselKm}
+                                        onChange={(e) => setDieselKm(e.target.value)}
+                                        placeholder="Ex: 125000"
+                                        className="h-12 bg-gray-700/50 border-gray-600/50 text-white rounded-xl focus:border-amber-400 placeholder:text-gray-600"
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="text-gray-400 text-xs mb-1 block">Horímetro (Horas)</Label>
+                                    <Input
+                                        type="number"
+                                        value={dieselHours}
+                                        onChange={(e) => setDieselHours(e.target.value)}
+                                        placeholder="Ex: 4500"
+                                        className="h-12 bg-gray-700/50 border-gray-600/50 text-white rounded-xl focus:border-amber-400 placeholder:text-gray-600"
+                                    />
+                                </div>
+                            </div>
+                            <div className="mt-3">
+                                <Label className="text-gray-400 text-xs mb-1 block">Observação (opcional)</Label>
+                                <Input
+                                    value={dieselNotes}
+                                    onChange={(e) => setDieselNotes(e.target.value)}
+                                    placeholder="Ex: Motor quente, verificar filtro..."
+                                    className="h-10 bg-gray-700/50 border-gray-600/50 text-white rounded-xl focus:border-amber-400 placeholder:text-gray-600"
+                                />
+                            </div>
+                        </div>
+
+                        {/* === SUBMIT BUTTON === */}
+                        <Button
+                            onClick={handleDieselSubmit}
+                            disabled={dieselSubmitting || parsedQty <= 0 || !dieselEquip || !dieselProduct}
+                            className="w-full py-7 text-lg font-black rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-gray-900 shadow-lg shadow-amber-500/20 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            {dieselSubmitting ? (
+                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Registrando...</>
+                            ) : (
+                                <>⛽ Confirmar Abastecimento — {parsedQty > 0 ? `${parsedQty}L` : "..."}</>
+                            )}
+                        </Button>
+
+                        {/* === RECENT FUELING HISTORY === */}
+                        {withdrawalsHistory && withdrawalsHistory.length > 0 && (
+                            <div className="bg-gray-800/40 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-5">
+                                <p className="text-xs uppercase font-bold tracking-widest text-gray-400 mb-3">Últimos Abastecimentos</p>
+                                <div className="space-y-2 max-h-60 overflow-y-auto">
+                                    {withdrawalsHistory.slice(0, 10).map((batch: any, i: number) => (
+                                        <div key={i} className="flex items-center justify-between py-2 border-b border-gray-700/30 last:border-0">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-300">{batch.applications?.[0]?.productName || "Diesel"}</p>
+                                                <p className="text-[10px] text-gray-500">{new Date(batch.appliedAt).toLocaleString("pt-BR")}</p>
+                                            </div>
+                                            <span className="text-amber-400 font-bold text-sm">
+                                                {batch.applications?.reduce((s: number, a: any) => s + parseFloat(a.quantity || 0), 0).toFixed(0)}L
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // ==================== STEP: PLOT SELECTION ====================
     if (step === "plot") {
         const properties = pdvData?.properties || [];
