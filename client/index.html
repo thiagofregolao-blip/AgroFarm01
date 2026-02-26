@@ -22,14 +22,6 @@
 </head>
 
 <body>
-  <script>
-    if (window.location.pathname.startsWith('/pdv')) {
-      const manifestLink = document.querySelector('link[rel="manifest"]');
-      if (manifestLink) {
-        manifestLink.remove();
-      }
-    }
-  </script>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

@@ -41,6 +41,12 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // Ensure SPA deep-link navigation works correctly
+        navigateFallback: "index.html",
+        // CRITICAL: Exclude /pdv and /api routes from service worker navigation interception
+        // /pdv routes must go to the server so it can strip PWA signals from the HTML
+        // /api routes must always hit the network
+        navigateFallbackDenylist: [/^\/pdv/, /^\/api/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
