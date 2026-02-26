@@ -191,13 +191,13 @@
             },
             {
               "name": "date",
-              "valueProvider": "fromAI",
-              "description": "A data solicitada pelo usuário (ex: '2025-12-23' ou '23/12'). Deixe vazio se não foi informada."
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI('date', 'A data solicitada pelo usuário no formato DD/MM ou YYYY-MM-DD. Deixe vazio se nenhuma data foi mencionada.', 'string', '') }}"
             },
             {
               "name": "supplier",
-              "valueProvider": "fromAI",
-              "description": "O nome do fornecedor, se o usuário citou."
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI('supplier', 'O nome do fornecedor se o usuário mencionou algum. Deixe vazio se nenhum fornecedor foi citado.', 'string', '') }}"
             }
           ]
         },
@@ -337,13 +337,13 @@
             },
             {
               "name": "search",
-              "valueProvider": "fromAI",
-              "description": "Nome exato do produto a ser pesquisado (ex: glifosato). MÁXIMA IMPORTÂNCIA!"
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI('search', 'Nome do produto que o usuário quer saber o preço. Ex: glifosato, flumitop, semente. OBRIGATÓRIO.', 'string') }}"
             },
             {
               "name": "date",
-              "valueProvider": "fromAI",
-              "description": "A data da compra se informada (ex: '2025-12-23' ou '23/12')"
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI('date', 'Data da compra se o usuário mencionou. Formato DD/MM ou YYYY-MM-DD. Deixe vazio se não mencionou data.', 'string', '') }}"
             }
           ]
         },
