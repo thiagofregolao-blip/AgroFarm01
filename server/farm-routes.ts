@@ -1601,9 +1601,16 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.get("/api/farm/webhook/n8n/prices", async (req, res) => {
         try {
-            const { whatsapp_number, limit = 5, search } = req.query;
+            const { whatsapp_number, limit = 5, search, date } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
-            if (!search) return res.status(400).json({ error: "search parameter (product name) is required" });
+
+            // Graceful fallback for missing search parameter
+            if (!search || String(search).trim() === "") {
+                return res.json({
+                    mensagem: "Por favor, me informe o nome do produto que você quer consultar o preço! (Exemplo: 'qual o preço do glifosato?')",
+                    resultadosBusca: []
+                });
+            }
 
             const { users, farmInvoices } = await import("../shared/schema");
             const { eq, or, sql, desc, and } = await import("drizzle-orm");
@@ -1625,14 +1632,12 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             }
 
             const searchString = String(search).trim();
-            console.log(`[WEBHOOK_N8N_PRICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number})`);
+            console.log(`[WEBHOOK_N8N_PRICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number}, Date: ${date})`);
             const { farmPriceHistory } = await import("../shared/schema");
 
-            let searchCondition;
+            let conditions: any[] = [eq(farmPriceHistory.farmerId, farmers[0].id)];
 
-            if (searchString === "DEBUG_ALL_ITEMS") {
-                searchCondition = sql`1=1`;
-            } else {
+            if (searchString !== "DEBUG_ALL_ITEMS") {
                 const cleanSearch = searchString.replace(/[^a-zA-Z0-9 ]/g, "").trim();
                 const words = cleanSearch.split(" ").filter(w => w.length > 2);
 
@@ -1641,10 +1646,17 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     sql`regexp_replace(${farmPriceHistory.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`
                 ));
 
-                searchCondition = searchConditions.length > 0 ? or(...searchConditions) : or(
+                const finalSearchCondition = searchConditions.length > 0 ? or(...searchConditions) : or(
                     sql`regexp_replace(${farmPriceHistory.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
                     sql`regexp_replace(${farmPriceHistory.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`
                 );
+
+                conditions.push(finalSearchCondition);
+            }
+
+            if (date) {
+                const dateStr = String(date);
+                conditions.push(sql`to_char(${farmPriceHistory.purchaseDate}, 'DD/MM/YYYY') LIKE ${'%' + dateStr + '%'} OR to_char(${farmPriceHistory.purchaseDate}, 'YYYY-MM-DD') LIKE ${'%' + dateStr + '%'}`);
             }
 
             // Simple search in price history table
@@ -1657,12 +1669,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 activeIngredient: farmPriceHistory.activeIngredient
             })
                 .from(farmPriceHistory)
-                .where(
-                    and(
-                        eq(farmPriceHistory.farmerId, farmers[0].id),
-                        searchCondition
-                    )
-                )
+                .where(and(...conditions))
                 .orderBy(desc(farmPriceHistory.purchaseDate))
                 .limit(Number(limit));
 
@@ -1686,7 +1693,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
         try {
-            const { whatsapp_number, limit = 5 } = req.query;
+            const { whatsapp_number, limit = 5, date, supplier } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
 
             const { users, farmExpenses, farmInvoices } = await import("../shared/schema");
@@ -1704,14 +1711,30 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
-            // Default behavior if no search term: return recent totals
+            // Base conditions
+            const expenseConditions: any[] = [eq(farmExpenses.farmerId, farmers[0].id)];
+            const invoiceConditions: any[] = [eq(farmInvoices.farmerId, farmers[0].id)];
+
+            if (date) {
+                // If date is provided (e.g. '2025-12-23' or '23/12' or '23/12/2025')
+                const dateStr = String(date);
+                expenseConditions.push(sql`to_char(${farmExpenses.createdAt}, 'DD/MM/YYYY') LIKE ${'%' + dateStr + '%'} OR to_char(${farmExpenses.createdAt}, 'YYYY-MM-DD') LIKE ${'%' + dateStr + '%'}`);
+                invoiceConditions.push(sql`to_char(${farmInvoices.createdAt}, 'DD/MM/YYYY') LIKE ${'%' + dateStr + '%'} OR to_char(${farmInvoices.createdAt}, 'YYYY-MM-DD') LIKE ${'%' + dateStr + '%'}`);
+            }
+
+            if (supplier) {
+                const supplierStr = String(supplier);
+                invoiceConditions.push(sql`${farmInvoices.supplier} ILIKE ${'%' + supplierStr + '%'}`);
+                // Expenses don't have supplier strictly, but letting the query run fine
+            }
+
             const expenses = await db.select().from(farmExpenses)
-                .where(eq(farmExpenses.farmerId, farmers[0].id))
+                .where(and(...expenseConditions))
                 .orderBy(desc(farmExpenses.createdAt))
                 .limit(Number(limit));
 
             const invoices = await db.select().from(farmInvoices)
-                .where(eq(farmInvoices.farmerId, farmers[0].id))
+                .where(and(...invoiceConditions))
                 .orderBy(desc(farmInvoices.createdAt))
                 .limit(Number(limit));
 
