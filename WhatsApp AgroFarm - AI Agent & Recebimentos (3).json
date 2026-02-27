@@ -12,10 +12,61 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        -400,
+        -500,
         1536
       ],
       "webhookId": "c9cb34e7-772f-4587-9910-bb4c4b57570b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.body?.audio?.audioUrl }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-1111-2222-3333-444455556666",
+      "name": "É Áudio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        1536
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/transcribe-audio",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"audioUrl\": \"{{ $('Webhook Z-API').first().json.body.audio.audioUrl }}\" }",
+        "options": {}
+      },
+      "id": "a1b2c3d4-5555-6666-7777-888899990000",
+      "name": "Transcrever Áudio (Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -100,
+        1376
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta o payload como se fosse uma mensagem de texto normal\n// para o AI Agent processar a transcrição do áudio\nconst webhookData = $('Webhook Z-API').first().json;\nconst transcription = $input.first().json.transcription || 'Não consegui entender o áudio';\n\nreturn [{\n  json: {\n    body: {\n      phone: webhookData.body.phone,\n      text: { message: transcription },\n      message: transcription,\n      isAudioTranscription: true\n    }\n  }\n}];"
+      },
+      "id": "a1b2c3d4-aaaa-bbbb-cccc-ddddeeeeffff",
+      "name": "Montar Texto do Áudio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        100,
+        1376
+      ]
     },
     {
       "parameters": {
@@ -33,8 +84,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        -208,
-        1536
+        -100,
+        1680
       ]
     },
     {
@@ -51,8 +102,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        96,
-        1376
+        200,
+        1536
       ]
     },
     {
@@ -88,15 +139,15 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        352,
-        1376
+        500,
+        1536
       ]
     },
     {
       "parameters": {
         "text": "=Mensagem: {{ $json.body.text.message || $json.body.message }} | Celular Autorizado: {{ $json.body.phone }}",
         "options": {
-          "systemMessage": "=Você é o *AgroZap* �🤖, assistente virtual da AgroFarm Digital. Você é simpático, próximo e entende o dia a dia do agricultor. Fale como um parceiro de confiança — nunca robótico.\n\n## PERSONALIDADE\n- Seja caloroso e amigável, como alguém que trabalha junto no campo\n- Use linguagem natural do agro (safra, talhão, lavoura, aplicação, defensivo)\n- Use emojis com moderação: 🌾🚜💰📦🌿✅ (máximo 2-3 por mensagem)\n- Responda de forma CURTA (máximo 3-4 linhas), exceto quando listar dados\n- Trate o agricultor pelo nome se possível\n- Se não souber algo, diga \"não encontrei\" de forma gentil e sugira o que ele pode fazer\n\n## TOM DE VOZ\n- ❌ \"Não encontrei resultados para sua consulta\" → ❌ Robótico\n- ✅ \"Hmm, não achei esse produto no seu histórico 🤔 Tenta me dizer o nome completo?\" → ✅ Humano\n- ❌ \"Aqui estão os dados solicitados:\" → ❌ Formal demais\n- ✅ \"Achei! Olha só os preços que você pagou:\" → ✅ Natural\n\n## FORMATO DAS RESPOSTAS\n- Para LISTAS de produtos/preços/estoque: use formato de lista com quebras de linha\n  📦 *Produto:* nome\n  💰 *Preço:* R$ X,XX\n  📅 *Data:* DD/MM/YYYY\n  🏪 *Fornecedor:* nome\n- Para respostas SIMPLES: texto corrido natural\n- Use *negrito* para destaque (padrão WhatsApp)\n- NUNCA use markdown com # ou ```\n\n## INTELIGÊNCIA CONVERSACIONAL\n- Se o agricultor fizer uma saudação (oi, olá, bom dia), cumprimente de volta e pergunte como pode ajudar\n- Se perguntar algo vago como \"preço\", pergunte: \"De qual produto você quer saber o preço? 🌾\"\n- Se o dado retornado estiver vazio, sugira alternativas: \"Não encontrei esse produto. Quer que eu busque por outro nome?\"\n- SEMPRE interprete os dados retornados pelas ferramentas e responda de forma resumida e útil\n- Se houver vários resultados, destaque o mais recente como referência principal\n- Compare preços quando houver histórico: \"O Flumitop custou R$ 94,00 em setembro. Quer que eu veja se tem mais recente?\"\n\n## FERRAMENTAS DISPONÍVEIS\nVocê tem 5 ferramentas. Use a mais adequada para cada pergunta:\n1. *ConsultarEstoque* → \"quanto tenho de...\", \"tem X no estoque?\"\n2. *ConsultarAplicacoes* → \"últimas aplicações\", \"o que foi aplicado?\"\n3. *ConsultarPrecoProduto* → \"preço do glifosato\", \"quanto paguei por...\", \"histórico de compra\"\n4. *Tool_ConsultarFaturas* → \"faturas\", \"despesas\", \"notas fiscais\"\n5. *ConsultarManuaisAgronomicos* → \"como aplicar X?\", \"bula do produto\", \"dose recomendada\"\n\n## REGRAS TÉCNICAS\n- WhatsApp do agricultor: {{$json.body.phone}}\n- Passe sempre como STRING ao chamar tools\n- Para preços, envie o nome do produto no parâmetro 'search'\n- Se os dados retornados pela tool estiverem vazios, NÃO invente dados"
+          "systemMessage": "=Você é o *AgroZap* 🌾🤖, assistente virtual da AgroFarm Digital. Você é simpático, próximo e entende o dia a dia do agricultor. Fale como um parceiro de confiança — nunca robótico.\n\n## PERSONALIDADE\n- Seja caloroso e amigável, como alguém que trabalha junto no campo\n- Use linguagem natural do agro (safra, talhão, lavoura, aplicação, defensivo)\n- Use emojis com moderação: 🌾🚜💰📦🌿✅ (máximo 2-3 por mensagem)\n- Responda de forma CURTA (máximo 3-4 linhas), exceto quando listar dados\n- Trate o agricultor pelo nome se possível\n- Se não souber algo, diga \"não encontrei\" de forma gentil e sugira o que ele pode fazer\n\n## TOM DE VOZ\n- ❌ \"Não encontrei resultados para sua consulta\" → ❌ Robótico\n- ✅ \"Hmm, não achei esse produto no seu histórico 🤔 Tenta me dizer o nome completo?\" → ✅ Humano\n- ❌ \"Aqui estão os dados solicitados:\" → ❌ Formal demais\n- ✅ \"Achei! Olha só os preços que você pagou:\" → ✅ Natural\n\n## FORMATO DAS RESPOSTAS\n- Para LISTAS de produtos/preços/estoque: use formato de lista com quebras de linha\n  📦 *Produto:* nome\n  💰 *Preço:* R$ X,XX\n  📅 *Data:* DD/MM/YYYY\n  🏪 *Fornecedor:* nome\n- Para respostas SIMPLES: texto corrido natural\n- Use *negrito* para destaque (padrão WhatsApp)\n- NUNCA use markdown com # ou ```\n\n## INTELIGÊNCIA CONVERSACIONAL\n- Se o agricultor fizer uma saudação (oi, olá, bom dia), cumprimente de volta e pergunte como pode ajudar\n- Se perguntar algo vago como \"preço\", pergunte: \"De qual produto você quer saber o preço? 🌾\"\n- Se o dado retornado estiver vazio, sugira alternativas: \"Não encontrei esse produto. Quer que eu busque por outro nome?\"\n- SEMPRE interprete os dados retornados pelas ferramentas e responda de forma resumida e útil\n- Se houver vários resultados, destaque o mais recente como referência principal\n- Compare preços quando houver histórico: \"O Flumitop custou R$ 94,00 em setembro. Quer que eu veja se tem mais recente?\"\n\n## FERRAMENTAS DISPONÍVEIS\nVocê tem 5 ferramentas. Use a mais adequada para cada pergunta:\n1. *ConsultarEstoque* → \"quanto tenho de...\", \"tem X no estoque?\"\n2. *ConsultarAplicacoes* → \"últimas aplicações\", \"o que foi aplicado?\"\n3. *ConsultarPrecoProduto* → \"preço do glifosato\", \"quanto paguei por...\", \"histórico de compra\"\n4. *Tool_ConsultarFaturas* → \"faturas\", \"despesas\", \"notas fiscais\"\n5. *ConsultarManuaisAgronomicos* → \"como aplicar X?\", \"bula do produto\", \"dose recomendada\"\n\n## REGRAS TÉCNICAS\n- WhatsApp do agricultor: {{$json.body.phone}}\n- Passe sempre como STRING ao chamar tools\n- Para preços, envie o nome do produto no parâmetro 'search'\n- Se os dados retornados pela tool estiverem vazios, NÃO invente dados"
         }
       },
       "id": "5f1cb8e3-71c2-4274-ac28-7f35e60477ad",
@@ -104,8 +155,8 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1,
       "position": [
-        96,
-        1680
+        300,
+        1800
       ]
     },
     {
@@ -119,25 +170,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        -160,
-        1888
-      ],
-      "credentials": {
-        "googlePalmApi": {
-          "id": "kZk7EVTfZ0vJ6Gfu",
-          "name": "Google Gemini(PaLM) Api account"
-        }
-      }
-    },
-    {
-      "parameters": {},
-      "id": "d52b3b86-88cc-4e83-806c-d7377547b2b2",
-      "name": "Memória (Window Buffer)",
-      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
-      "typeVersion": 1.1,
-      "position": [
-        -48,
-        1952
+        100,
+        2064
       ]
     },
     {
@@ -148,7 +182,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "Client-Token",
+              "name": "client-token",
               "value": "F17220cd7efa3420282c5cc5f3f0746b9S"
             }
           ]
@@ -158,7 +192,7 @@
           "parameters": [
             {
               "name": "phone",
-              "value": "={{ $node[\"Webhook Z-API\"].json.body.phone }}"
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
             },
             {
               "name": "message",
@@ -168,13 +202,27 @@
         },
         "options": {}
       },
-      "id": "303c3e28-04f6-44dc-9aa0-7cff6f4a5d84",
+      "id": "dcb1f530-15a3-4e10-b5cb-0f9e7c0a7d3a",
       "name": "Responder (IA Agent Text)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        496,
-        1680
+        600,
+        1800
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook Z-API').first().json.body.phone }}"
+      },
+      "id": "c78b5b31-9c34-443e-b60d-b77ab6ad4a03",
+      "name": "Memória (Window Buffer)",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        300,
+        2064
       ]
     },
     {
@@ -202,13 +250,13 @@
           ]
         }
       },
-      "id": "e6e0dc69-727e-4b4e-8744-e09c57d29fce",
+      "id": "9c1fe4b2-e1cb-4f9c-8f7f-8d0f9b1c3e5a",
       "name": "Tool_ConsultarFaturas",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        624,
-        2032
+        -16,
+        2208
       ]
     },
     {
@@ -241,8 +289,8 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        384,
-        2064
+        184,
+        2208
       ]
     },
     {
@@ -268,28 +316,33 @@
             }
           ]
         },
-        "toolDescription": "Usa esta ferramenta para consultar o histórico recente de aplicações de produtos (defensivos agrícolas) na lavoura para o agricultor."
+        "toolDescription": "Usa esta ferramenta para consultar as aplicações de produtos realizadas no campo pelo agricultor."
       },
-      "id": "7d0c55a4-7bca-4b2c-b36b-26a35c6c3137",
+      "id": "b3a4c5d6-7e8f-9a0b-1c2d-3e4f5a6b7c8d",
       "name": "ConsultarAplicacoes",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        512,
-        2048
+        384,
+        2208
       ]
     },
     {
       "parameters": {
-        "toolDescription": "Sempre que o usuário perguntar sobre dosagem, carências, modos de aplicação ou pragas, envie a dúvida do usuário no parâmetro search para esta ferramenta e ela lerá os manuais oficias.",
+        "toolDescription": "Usa esta ferramenta para consultar manuais e bulas agronômicas dos produtos. Envie o nome do produto a ser pesquisado.",
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/manuals",
         "sendQuery": true,
         "parametersQuery": {
           "values": [
             {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            },
+            {
               "name": "search",
-              "valueProvider": "fromAI",
-              "description": "Envie a dúvida agronômica do usuário (ex: dosagem do produto, o que é, etc)"
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI('search', 'Nome do produto para buscar o manual/bula', 'string') }}"
             }
           ]
         },
@@ -299,18 +352,18 @@
             {
               "name": "User-Agent",
               "valueProvider": "fieldValue",
-              "value": "AgroFarm/1.0"
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
           ]
         }
       },
-      "id": "8b51d46b-8007-4e0d-b841-a1b7eabc7a1e",
+      "id": "d5e6f7a8-b9c0-1d2e-3f4a-5b6c7d8e9f0a",
       "name": "ConsultarManuaisAgronomicos",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        752,
-        2032
+        584,
+        2208
       ]
     },
     {
@@ -348,8 +401,8 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        752,
-        2032
+        784,
+        2208
       ]
     }
   ],
@@ -359,7 +412,47 @@
       "main": [
         [
           {
+            "node": "É Áudio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Áudio?": {
+      "main": [
+        [
+          {
+            "node": "Transcrever Áudio (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "É Imagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcrever Áudio (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Montar Texto do Áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Texto do Áudio": {
+      "main": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
             "type": "main",
             "index": 0
           }

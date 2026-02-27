@@ -1655,6 +1655,60 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
+    // ===== Audio Transcription for n8n =====
+    app.post("/api/farm/webhook/n8n/transcribe-audio", async (req, res) => {
+        try {
+            const { audioUrl } = req.body;
+            if (!audioUrl) return res.status(400).json({ error: "audioUrl is required" });
+
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+            console.log(`[TRANSCRIBE] Downloading audio: ${audioUrl}`);
+
+            // Download audio
+            const audioResponse = await fetch(audioUrl);
+            if (!audioResponse.ok) return res.status(400).json({ error: "Failed to download audio" });
+
+            const contentType = audioResponse.headers.get("content-type") || "audio/ogg";
+            const arrayBuffer = await audioResponse.arrayBuffer();
+            const base64Audio = Buffer.from(arrayBuffer).toString("base64");
+
+            console.log(`[TRANSCRIBE] Audio downloaded (${Math.round(arrayBuffer.byteLength / 1024)}KB, ${contentType}). Sending to Gemini...`);
+
+            // Send to Gemini for transcription
+            const geminiResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: "Transcreva este áudio fielmente em português. Retorne APENAS o texto falado, sem comentários." },
+                                { inline_data: { mime_type: contentType, data: base64Audio } }
+                            ]
+                        }]
+                    })
+                }
+            );
+
+            const data = await geminiResponse.json();
+            if (!geminiResponse.ok) {
+                console.error("[TRANSCRIBE] Gemini error:", data);
+                return res.status(500).json({ error: "Transcription failed" });
+            }
+
+            const transcription = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+            console.log(`[TRANSCRIBE] Result: "${transcription}"`);
+
+            res.json({ transcription });
+        } catch (error) {
+            console.error("[TRANSCRIBE]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
     app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
         try {
             const { whatsapp_number, limit = 20, date, supplier } = req.query;
