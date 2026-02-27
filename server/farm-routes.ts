@@ -56,6 +56,29 @@ export function registerFarmRoutes(app: Express) {
     app.get("/api/farm/me", requireFarmer, async (req, res) => {
         try {
             const user = req.user as any;
+            // Fetch location fields from DB (not in Drizzle schema)
+            let locationData: any = {};
+            try {
+                const { pool } = await import("./db");
+                const isNeon = (process.env.DATABASE_URL || "").includes("neon.tech");
+                let rows: any[];
+                if (isNeon) {
+                    const result = await pool.query(
+                        "SELECT farm_city, farm_latitude, farm_longitude, bulletin_enabled FROM users WHERE id = $1",
+                        [user.id]
+                    );
+                    rows = result.rows || [];
+                } else {
+                    rows = await pool.unsafe(
+                        "SELECT farm_city, farm_latitude, farm_longitude, bulletin_enabled FROM users WHERE id = $1",
+                        [user.id]
+                    );
+                }
+                if (rows.length > 0) locationData = rows[0];
+            } catch (e) {
+                console.error("[FARM_ME] Error fetching location:", e);
+            }
+
             res.json({
                 id: user.id,
                 name: user.name,
@@ -63,6 +86,10 @@ export function registerFarmRoutes(app: Express) {
                 role: user.role,
                 whatsapp_number: user.whatsapp_number,
                 whatsapp_extra_numbers: user.whatsapp_extra_numbers,
+                farm_city: locationData.farm_city || "",
+                farm_latitude: locationData.farm_latitude || "",
+                farm_longitude: locationData.farm_longitude || "",
+                bulletin_enabled: locationData.bulletin_enabled !== false,
             });
         } catch (error) {
             console.error("[FARM_ME]", error);
@@ -73,13 +100,13 @@ export function registerFarmRoutes(app: Express) {
     // Update user profile (name and whatsapp)
     app.put("/api/farm/me", requireFarmer, async (req, res) => {
         try {
-            const { name, whatsapp_number, whatsapp_extra_numbers } = req.body;
+            const { name, whatsapp_number, whatsapp_extra_numbers, farm_city, farm_latitude, farm_longitude, bulletin_enabled } = req.body;
             const userId = (req.user as any).id;
 
             // Dynamically import db to avoid circular dependency issues
             const { db } = await import("./db");
             const { users } = await import("../shared/schema");
-            const { eq } = await import("drizzle-orm");
+            const { eq, sql } = await import("drizzle-orm");
 
             const formattedPhone = whatsapp_number ? ZApiClient.formatPhoneNumber(whatsapp_number) : null;
             console.log(`[PROFILE_UPDATE] Updating user ${userId} with phone: Raw='${whatsapp_number}' -> Formatted='${formattedPhone}'`);
@@ -92,6 +119,24 @@ export function registerFarmRoutes(app: Express) {
                 })
                 .where(eq(users.id, userId))
                 .returning();
+
+            // Update location fields via raw SQL (not in Drizzle schema yet)
+            if (farm_city !== undefined || farm_latitude !== undefined || farm_longitude !== undefined || bulletin_enabled !== undefined) {
+                const { pool } = await import("./db");
+                const isNeon = (process.env.DATABASE_URL || "").includes("neon.tech");
+                const queryStr = `UPDATE users SET 
+                    farm_city = COALESCE($1, farm_city),
+                    farm_latitude = COALESCE($2, farm_latitude),
+                    farm_longitude = COALESCE($3, farm_longitude),
+                    bulletin_enabled = COALESCE($4, bulletin_enabled)
+                WHERE id = $5`;
+                const params = [farm_city || null, farm_latitude || null, farm_longitude || null, bulletin_enabled ?? true, userId];
+                if (isNeon) {
+                    await pool.query(queryStr, params);
+                } else {
+                    await pool.unsafe(queryStr, params);
+                }
+            }
 
             console.log(`[PROFILE_UPDATE] User updated in DB:`, updatedUser ? updatedUser.whatsapp_number : "failed");
 
