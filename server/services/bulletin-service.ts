@@ -6,6 +6,7 @@
 import { getWeatherForecast, formatWeatherMessage } from "./weather-service";
 import { getCommodityData, formatCommodityMessage } from "./commodity-service";
 import { getAgroNews, formatNewsMessage } from "./news-service";
+import { buildSmartAlertsMessage } from "./smart-alerts-service";
 
 const Z_API_INSTANCE = process.env.Z_API_INSTANCE_ID || "3EE9E067CA2DB1B055091AD735EF201A";
 const Z_API_TOKEN = process.env.Z_API_TOKEN || "9938EA066A5F1A693D48545A";
@@ -94,11 +95,21 @@ export async function sendDailyBulletins(): Promise<void> {
             if (!farmer.whatsappNumber) continue;
 
             try {
-                const message = await buildBulletinMessage(
+                let message = await buildBulletinMessage(
                     farmer.farmLatitude,
                     farmer.farmLongitude,
                     farmer.farmCity
                 );
+
+                // Add personalized smart alerts
+                try {
+                    const alertsMsg = await buildSmartAlertsMessage(farmer.id);
+                    if (alertsMsg) {
+                        message += "\n" + alertsMsg;
+                    }
+                } catch (alertErr) {
+                    console.error(`[BULLETIN] Smart alerts error for ${farmer.username}:`, alertErr);
+                }
 
                 const success = await sendWhatsAppMessage(farmer.whatsappNumber, message);
                 if (success) {
