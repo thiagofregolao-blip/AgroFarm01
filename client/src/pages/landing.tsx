@@ -78,20 +78,19 @@ export default function LandingPage() {
                                 {item.label}
                             </button>
                         ))}
-                        <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+                        <button onClick={() => navigate("/fazenda/login")}
                             style={{
                                 background: colors.green, color: colors.white,
                                 border: "none", borderRadius: 8, padding: "10px 24px",
                                 fontSize: 15, fontWeight: 600, cursor: "pointer",
                                 display: "flex", alignItems: "center", gap: 8,
-                                textDecoration: "none",
                                 transition: "transform 0.2s ease, box-shadow 0.2s ease",
                             }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.05)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(54,124,43,0.4)"; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
                         >
-                            <MessageCircle size={16} /> Solicite uma Visita
-                        </a>
+                            Acessar Sistema <ArrowRight size={16} />
+                        </button>
                     </div>
 
                     {/* Mobile hamburger */}
@@ -109,9 +108,9 @@ export default function LandingPage() {
                                 {id === "features" ? "Funcionalidades" : id === "resources" ? "Recursos" : "FAQ"}
                             </button>
                         ))}
-                        <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" style={{ marginTop: 12, display: "block", width: "100%", background: colors.green, color: colors.white, border: "none", borderRadius: 8, padding: "12px 20px", fontSize: 16, fontWeight: 600, cursor: "pointer", textDecoration: "none", textAlign: "center" as const }}>
-                            📲 Solicite uma Visita
-                        </a>
+                        <button onClick={() => navigate("/fazenda/login")} style={{ marginTop: 12, width: "100%", background: colors.green, color: colors.white, border: "none", borderRadius: 8, padding: "12px 20px", fontSize: 16, fontWeight: 600, cursor: "pointer" }}>
+                            Acessar Sistema
+                        </button>
                     </div>
                 )}
             </nav>
