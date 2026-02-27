@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Printer, FileBarChart, Package, ArrowDownUp, DollarSign, FileText, BarChart3, TrendingUp, Sprout, Tractor } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Printer, FileBarChart, Package, ArrowDownUp, DollarSign, FileText, BarChart3, TrendingUp, Sprout, Tractor, X } from "lucide-react";
 
 // ============================================================
 // HELPERS
@@ -59,30 +60,65 @@ type TabKey = typeof TABS[number]["key"];
 export default function FarmReports() {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<TabKey>("stock");
-    const [startDate, setStartDate] = useState("");
-    const [endDate, setEndDate] = useState("");
     const printRef = useRef<HTMLDivElement>(null);
 
-    const needsDateFilter = !["stock", "season-summary"].includes(activeTab);
+    // Filters state
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
+    const [category, setCategory] = useState("");
+    const [supplier, setSupplier] = useState("");
+    const [statusFilter, setStatusFilter] = useState("");
+    const [propertyId, setPropertyId] = useState("");
+    const [productName, setProductName] = useState("");
+    const [equipmentId, setEquipmentId] = useState("");
+    const [movementType, setMovementType] = useState("");
+    const [seasonId, setSeasonId] = useState("");
 
+    // Fetch dropdown options
+    const { data: filterOptions } = useQuery({
+        queryKey: ["farm-report-filter-options"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/reports/options/filters"); return r.json(); },
+        enabled: !!user,
+    });
+
+    // Build query URL with all active filters
     const queryUrl = (() => {
         let url = `/api/farm/reports/${activeTab}`;
         const params = new URLSearchParams();
         if (startDate) params.set("startDate", startDate);
         if (endDate) params.set("endDate", endDate);
+        if (category) params.set("category", category);
+        if (supplier) params.set("supplier", supplier);
+        if (statusFilter) params.set("status", statusFilter);
+        if (propertyId) params.set("propertyId", propertyId);
+        if (productName) params.set("productName", productName);
+        if (equipmentId) params.set("equipmentId", equipmentId);
+        if (movementType) params.set("movementType", movementType);
+        if (seasonId) params.set("seasonId", seasonId);
         const qs = params.toString();
         return qs ? `${url}?${qs}` : url;
     })();
 
     const { data, isLoading } = useQuery({
-        queryKey: ["farm-reports", activeTab, startDate, endDate],
+        queryKey: ["farm-reports", activeTab, startDate, endDate, category, supplier, statusFilter, propertyId, productName, equipmentId, movementType, seasonId],
         queryFn: async () => { const r = await apiRequest("GET", queryUrl); return r.json(); },
         enabled: !!user,
     });
 
-    const handlePrint = () => {
-        window.print();
+    const clearFilters = () => {
+        setStartDate(""); setEndDate(""); setCategory(""); setSupplier("");
+        setStatusFilter(""); setPropertyId(""); setProductName(""); setEquipmentId("");
+        setMovementType(""); setSeasonId("");
     };
+
+    const hasActiveFilters = startDate || endDate || category || supplier || statusFilter || propertyId || productName || equipmentId || movementType || seasonId;
+
+    const handleTabChange = (tab: TabKey) => {
+        clearFilters();
+        setActiveTab(tab);
+    };
+
+    const needsDateFilter = !["stock", "season-summary"].includes(activeTab);
 
     return (
         <FarmLayout>
@@ -106,7 +142,7 @@ export default function FarmReports() {
                         </h1>
                         <p className="text-sm text-emerald-600">Dados consolidados da sua fazenda</p>
                     </div>
-                    <Button onClick={handlePrint} variant="outline" className="gap-2">
+                    <Button onClick={() => window.print()} variant="outline" className="gap-2">
                         <Printer className="h-4 w-4" /> Imprimir PDF
                     </Button>
                 </div>
@@ -120,7 +156,7 @@ export default function FarmReports() {
                             return (
                                 <button
                                     key={tab.key}
-                                    onClick={() => setActiveTab(tab.key)}
+                                    onClick={() => handleTabChange(tab.key)}
                                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${isActive
                                         ? "bg-emerald-600 text-white shadow-md"
                                         : "text-gray-600 hover:bg-white hover:text-emerald-700"
@@ -134,26 +170,166 @@ export default function FarmReports() {
                     </div>
                 </div>
 
-                {/* Date filters */}
-                {needsDateFilter && (
-                    <Card className="no-print border-emerald-100">
-                        <CardContent className="py-3 flex flex-wrap items-end gap-3">
-                            <div>
-                                <Label className="text-xs text-gray-500">Data Início</Label>
-                                <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 w-40" />
-                            </div>
-                            <div>
-                                <Label className="text-xs text-gray-500">Data Fim</Label>
-                                <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9 w-40" />
-                            </div>
-                            {(startDate || endDate) && (
-                                <Button variant="ghost" size="sm" onClick={() => { setStartDate(""); setEndDate(""); }}>
-                                    Limpar filtros
+                {/* FILTERS */}
+                <Card className="no-print border-emerald-100">
+                    <CardContent className="py-3">
+                        <div className="flex flex-wrap items-end gap-3">
+                            {/* Date filters — for most tabs */}
+                            {needsDateFilter && (
+                                <>
+                                    <div className="min-w-[130px]">
+                                        <Label className="text-xs text-gray-500">Data Início</Label>
+                                        <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9" />
+                                    </div>
+                                    <div className="min-w-[130px]">
+                                        <Label className="text-xs text-gray-500">Data Fim</Label>
+                                        <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9" />
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Stock: filter by category */}
+                            {activeTab === "stock" && filterOptions?.categories?.length > 0 && (
+                                <div className="min-w-[160px]">
+                                    <Label className="text-xs text-gray-500">Categoria</Label>
+                                    <Select value={category} onValueChange={setCategory}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
+                                        <SelectContent>
+                                            {filterOptions.categories.map((c: string) => (
+                                                <SelectItem key={c} value={c}>{categoryLabel[c] || c}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Movements: filter by type */}
+                            {activeTab === "movements" && (
+                                <div className="min-w-[140px]">
+                                    <Label className="text-xs text-gray-500">Tipo</Label>
+                                    <Select value={movementType} onValueChange={setMovementType}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="entry">Entrada</SelectItem>
+                                            <SelectItem value="exit">Saída</SelectItem>
+                                            <SelectItem value="adjustment">Ajuste</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Expenses: filter by category */}
+                            {activeTab === "expenses" && filterOptions?.expenseCategories?.length > 0 && (
+                                <div className="min-w-[160px]">
+                                    <Label className="text-xs text-gray-500">Categoria</Label>
+                                    <Select value={category} onValueChange={setCategory}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
+                                        <SelectContent>
+                                            {filterOptions.expenseCategories.map((c: string) => (
+                                                <SelectItem key={c} value={c}>{categoryLabel[c] || c}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Invoices: filter by supplier + status + season */}
+                            {activeTab === "invoices" && (
+                                <>
+                                    {filterOptions?.suppliers?.length > 0 && (
+                                        <div className="min-w-[180px]">
+                                            <Label className="text-xs text-gray-500">Fornecedor</Label>
+                                            <Select value={supplier} onValueChange={setSupplier}>
+                                                <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {filterOptions.suppliers.map((s: string) => (
+                                                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+                                    <div className="min-w-[140px]">
+                                        <Label className="text-xs text-gray-500">Status</Label>
+                                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                            <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="pending">Pendente</SelectItem>
+                                                <SelectItem value="confirmed">Confirmada</SelectItem>
+                                                <SelectItem value="cancelled">Cancelada</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {filterOptions?.seasons?.length > 0 && (
+                                        <div className="min-w-[160px]">
+                                            <Label className="text-xs text-gray-500">Safra</Label>
+                                            <Select value={seasonId} onValueChange={setSeasonId}>
+                                                <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
+                                                <SelectContent>
+                                                    {filterOptions.seasons.map((s: any) => (
+                                                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Cost/ha + Applications: filter by property */}
+                            {(activeTab === "cost-per-ha" || activeTab === "applications") && filterOptions?.properties?.length > 0 && (
+                                <div className="min-w-[180px]">
+                                    <Label className="text-xs text-gray-500">Propriedade</Label>
+                                    <Select value={propertyId} onValueChange={setPropertyId}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
+                                        <SelectContent>
+                                            {filterOptions.properties.map((p: any) => (
+                                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Price history: filter by product */}
+                            {activeTab === "price-history" && filterOptions?.productNames?.length > 0 && (
+                                <div className="min-w-[200px]">
+                                    <Label className="text-xs text-gray-500">Produto</Label>
+                                    <Select value={productName} onValueChange={setProductName}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            {filterOptions.productNames.map((p: string) => (
+                                                <SelectItem key={p} value={p}>{p}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Fleet: filter by equipment */}
+                            {activeTab === "fleet" && filterOptions?.equipment?.length > 0 && (
+                                <div className="min-w-[180px]">
+                                    <Label className="text-xs text-gray-500">Equipamento</Label>
+                                    <Select value={equipmentId} onValueChange={setEquipmentId}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            {filterOptions.equipment.map((e: any) => (
+                                                <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Clear button */}
+                            {hasActiveFilters && (
+                                <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-red-500 hover:text-red-700 gap-1">
+                                    <X className="h-3.5 w-3.5" /> Limpar
                                 </Button>
                             )}
-                        </CardContent>
-                    </Card>
-                )}
+                        </div>
+                    </CardContent>
+                </Card>
 
                 {/* Loading */}
                 {isLoading && (
@@ -189,7 +365,7 @@ export default function FarmReports() {
 // ============================================================
 // SUMMARY CARDS
 // ============================================================
-function SummaryCards({ items }: { items: { label: string; value: string; icon?: any; color?: string }[] }) {
+function SummaryCards({ items }: { items: { label: string; value: string; color?: string }[] }) {
     return (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {items.map((item, i) => (
@@ -248,8 +424,6 @@ function StockReport({ data }: { data: any[] }) {
                 { label: "Categorias", value: String(Object.keys(byCategory).length) },
                 { label: "Média/Item", value: `R$ ${fmt(totalItems > 0 ? totalValue / totalItems : 0)}` },
             ]} />
-
-            {/* Mini bar chart */}
             {Object.keys(byCategory).length > 0 && (
                 <Card className="border-gray-100 mb-4">
                     <CardContent className="py-4">
@@ -268,7 +442,6 @@ function StockReport({ data }: { data: any[] }) {
                     </CardContent>
                 </Card>
             )}
-
             <ReportTable headers={["Produto", "Categoria", "Qtd", "Unidade", "Custo Médio", "Valor Total"]}>
                 {data.map((d: any) => (
                     <tr key={d.id} className="hover:bg-gray-50">
@@ -292,7 +465,6 @@ function StockReport({ data }: { data: any[] }) {
 function MovementsReport({ data }: { data: any[] }) {
     const entries = data.filter((d: any) => d.type === "entry" || parseFloat(d.quantity) > 0);
     const exits = data.filter((d: any) => d.type === "exit" || parseFloat(d.quantity) < 0);
-
     return (
         <>
             <SummaryCards items={[
@@ -301,7 +473,6 @@ function MovementsReport({ data }: { data: any[] }) {
                 { label: "Saídas", value: String(exits.length), color: "text-red-600" },
                 { label: "Ajustes", value: String(data.filter((d: any) => d.type === "adjustment").length), color: "text-amber-600" },
             ]} />
-
             <ReportTable headers={["Data", "Produto", "Tipo", "Qtd", "Custo Unit.", "Referência", "Notas"]}>
                 {data.map((d: any) => (
                     <tr key={d.id} className="hover:bg-gray-50">
@@ -330,11 +501,7 @@ function MovementsReport({ data }: { data: any[] }) {
 function ExpensesReport({ data }: { data: any[] }) {
     const totalAmount = data.reduce((s: number, d: any) => s + parseFloat(d.amount || 0), 0);
     const byCategory: Record<string, number> = {};
-    data.forEach((d: any) => {
-        const cat = d.category || "outro";
-        byCategory[cat] = (byCategory[cat] || 0) + parseFloat(d.amount || 0);
-    });
-
+    data.forEach((d: any) => { const cat = d.category || "outro"; byCategory[cat] = (byCategory[cat] || 0) + parseFloat(d.amount || 0); });
     return (
         <>
             <SummaryCards items={[
@@ -343,7 +510,6 @@ function ExpensesReport({ data }: { data: any[] }) {
                 { label: "Categorias", value: String(Object.keys(byCategory).length) },
                 { label: "Média", value: `R$ ${fmt(data.length > 0 ? totalAmount / data.length : 0)}` },
             ]} />
-
             {Object.keys(byCategory).length > 0 && (
                 <Card className="border-gray-100 mb-4">
                     <CardContent className="py-4">
@@ -362,7 +528,6 @@ function ExpensesReport({ data }: { data: any[] }) {
                     </CardContent>
                 </Card>
             )}
-
             <ReportTable headers={["Data", "Descrição", "Categoria", "Valor"]}>
                 {data.map((d: any) => (
                     <tr key={d.id} className="hover:bg-gray-50">
@@ -384,7 +549,6 @@ function ExpensesReport({ data }: { data: any[] }) {
 function InvoicesReport({ data }: { data: any[] }) {
     const totalAmount = data.reduce((s: number, d: any) => s + parseFloat(d.totalAmount || 0), 0);
     const confirmed = data.filter((d: any) => d.status === "confirmed").length;
-
     return (
         <>
             <SummaryCards items={[
@@ -393,7 +557,6 @@ function InvoicesReport({ data }: { data: any[] }) {
                 { label: "Confirmadas", value: String(confirmed), color: "text-green-600" },
                 { label: "Pendentes", value: String(data.length - confirmed), color: "text-amber-600" },
             ]} />
-
             <ReportTable headers={["Data", "Nº Fatura", "Fornecedor", "Status", "Itens", "Valor"]}>
                 {data.map((d: any) => (
                     <tr key={d.id} className="hover:bg-gray-50">
@@ -421,7 +584,6 @@ function InvoicesReport({ data }: { data: any[] }) {
 function CostPerHaReport({ data }: { data: any[] }) {
     const totalCost = data.reduce((s: number, d: any) => s + parseFloat(d.totalCost || 0), 0);
     const totalArea = data.reduce((s: number, d: any) => s + parseFloat(d.areaHa || 0), 0);
-
     return (
         <>
             <SummaryCards items={[
@@ -430,7 +592,6 @@ function CostPerHaReport({ data }: { data: any[] }) {
                 { label: "Custo Médio/ha", value: `R$ ${fmt(totalArea > 0 ? totalCost / totalArea : 0)}` },
                 { label: "Talhões", value: String(data.length) },
             ]} />
-
             <ReportTable headers={["Propriedade", "Talhão", "Cultura", "Área (ha)", "Custo Total", "Custo/ha", "Aplicações"]}>
                 {data.map((d: any, i: number) => (
                     <tr key={i} className="hover:bg-gray-50">
@@ -454,7 +615,6 @@ function CostPerHaReport({ data }: { data: any[] }) {
 // ============================================================
 function PriceHistoryReport({ data }: { data: any[] }) {
     const products = Array.from(new Set(data.map((d: any) => d.productName)));
-
     return (
         <>
             <SummaryCards items={[
@@ -463,7 +623,6 @@ function PriceHistoryReport({ data }: { data: any[] }) {
                 { label: "Fornecedores", value: String(new Set(data.map((d: any) => d.supplier)).size) },
                 { label: "Período", value: data.length > 0 ? `${fmtDate(data[data.length - 1]?.purchaseDate)} – ${fmtDate(data[0]?.purchaseDate)}` : "—" },
             ]} />
-
             <ReportTable headers={["Data", "Produto", "Fornecedor", "Preço Unit.", "Qtd", "Princípio Ativo"]}>
                 {data.map((d: any) => (
                     <tr key={d.id} className="hover:bg-gray-50">
@@ -493,7 +652,6 @@ function ApplicationsReport({ data }: { data: any[] }) {
                 { label: "Talhões", value: String(new Set(data.filter((d: any) => d.plotName).map((d: any) => d.plotName)).size) },
                 { label: "Operadores", value: String(new Set(data.filter((d: any) => d.appliedBy).map((d: any) => d.appliedBy)).size) },
             ]} />
-
             <ReportTable headers={["Data", "Produto", "Talhão", "Propriedade", "Qtd", "Operador", "Notas"]}>
                 {data.map((d: any) => (
                     <tr key={d.id} className="hover:bg-gray-50">
@@ -518,7 +676,6 @@ function ApplicationsReport({ data }: { data: any[] }) {
 function FleetReport({ data }: { data: any[] }) {
     const totalQty = data.reduce((s: number, d: any) => s + parseFloat(d.quantity || 0), 0);
     const equipments = Array.from(new Set(data.map((d: any) => d.equipmentName)));
-
     return (
         <>
             <SummaryCards items={[
@@ -527,7 +684,6 @@ function FleetReport({ data }: { data: any[] }) {
                 { label: "Equipamentos", value: String(equipments.length) },
                 { label: "Média/Abast.", value: fmt(data.length > 0 ? totalQty / data.length : 0) },
             ]} />
-
             <ReportTable headers={["Data", "Equipamento", "Tipo", "Produto", "Qtd", "Horímetro", "Odômetro", "Operador"]}>
                 {data.map((d: any) => (
                     <tr key={d.id} className="hover:bg-gray-50">
@@ -555,7 +711,6 @@ function SeasonSummaryReport({ data }: { data: any }) {
     const costPerHa = parseFloat(data.totalArea) > 0
         ? (parseFloat(data.totalExpenses || 0) + parseFloat(data.totalInvoices || 0)) / parseFloat(data.totalArea)
         : 0;
-
     return (
         <>
             <SummaryCards items={[
@@ -564,7 +719,6 @@ function SeasonSummaryReport({ data }: { data: any }) {
                 { label: "Valor Estoque", value: `R$ ${fmt(data.stockValue)}` },
                 { label: "Itens Estoque", value: String(data.stockItems) },
             ]} />
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 <Card className="border-emerald-100 bg-gradient-to-br from-emerald-50 to-white">
                     <CardContent className="py-4 text-center">
@@ -588,7 +742,6 @@ function SeasonSummaryReport({ data }: { data: any }) {
                     </CardContent>
                 </Card>
             </div>
-
             {data.seasons?.length > 0 && (
                 <Card className="border-gray-100">
                     <CardContent className="py-4">

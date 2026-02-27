@@ -4,7 +4,7 @@
  */
 import { Express, Request, Response, NextFunction } from "express";
 import { db, dbReady } from "./db";
-import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql, like, ilike } from "drizzle-orm";
 import {
     farmStock, farmProductsCatalog, farmStockMovements,
     farmExpenses, farmInvoices, farmInvoiceItems,
@@ -26,16 +26,88 @@ function requireFarmer(req: Request, res: Response, next: NextFunction) {
 
 export function registerReportRoutes(app: Express) {
 
+    // ===== FILTER OPTIONS — dropdown data for frontend =====
+    app.get("/api/farm/reports/options/filters", requireFarmer, async (req, res) => {
+        await dbReady;
+        const farmerId = (req.user as any).id;
+
+        try {
+            // Categories from stock products
+            const categories = await db.selectDistinct({ category: farmProductsCatalog.category })
+                .from(farmProductsCatalog)
+                .innerJoin(farmStock, eq(farmStock.productId, farmProductsCatalog.id))
+                .where(eq(farmStock.farmerId, farmerId));
+
+            // Suppliers from invoices
+            const suppliers = await db.selectDistinct({ supplier: farmInvoices.supplier })
+                .from(farmInvoices)
+                .where(eq(farmInvoices.farmerId, farmerId));
+
+            // Properties
+            const properties = await db.select({ id: farmProperties.id, name: farmProperties.name })
+                .from(farmProperties)
+                .where(eq(farmProperties.farmerId, farmerId))
+                .orderBy(farmProperties.name);
+
+            // Equipment
+            const equipment = await db.select({ id: farmEquipment.id, name: farmEquipment.name })
+                .from(farmEquipment)
+                .where(eq(farmEquipment.farmerId, farmerId))
+                .orderBy(farmEquipment.name);
+
+            // Product names from price history
+            const productNames = await db.selectDistinct({ productName: farmPriceHistory.productName })
+                .from(farmPriceHistory)
+                .where(eq(farmPriceHistory.farmerId, farmerId));
+
+            // Seasons
+            const seasons = await db.select({ id: farmSeasons.id, name: farmSeasons.name })
+                .from(farmSeasons)
+                .where(eq(farmSeasons.farmerId, farmerId))
+                .orderBy(desc(farmSeasons.createdAt));
+
+            // Expense categories
+            const expenseCategories = await db.selectDistinct({ category: farmExpenses.category })
+                .from(farmExpenses)
+                .where(eq(farmExpenses.farmerId, farmerId));
+
+            res.json({
+                categories: categories.map(c => c.category).filter(Boolean),
+                suppliers: suppliers.map(s => s.supplier).filter(Boolean),
+                properties,
+                equipment,
+                productNames: productNames.map(p => p.productName).filter(Boolean),
+                seasons,
+                expenseCategories: expenseCategories.map(c => c.category).filter(Boolean),
+            });
+        } catch (error) {
+            console.error("[REPORT_OPTIONS]", error);
+            res.status(500).json({ error: "Failed to get filter options" });
+        }
+    });
+
+    // ===== REPORT DATA =====
     app.get("/api/farm/reports/:type", requireFarmer, async (req, res) => {
         await dbReady;
         const farmerId = (req.user as any).id;
         const type = req.params.type;
         const startDate = req.query.startDate ? new Date(String(req.query.startDate)) : undefined;
         const endDate = req.query.endDate ? new Date(String(req.query.endDate)) : undefined;
+        const category = req.query.category ? String(req.query.category) : undefined;
+        const supplier = req.query.supplier ? String(req.query.supplier) : undefined;
+        const status = req.query.status ? String(req.query.status) : undefined;
+        const propertyId = req.query.propertyId ? String(req.query.propertyId) : undefined;
+        const productName = req.query.productName ? String(req.query.productName) : undefined;
+        const equipmentId = req.query.equipmentId ? String(req.query.equipmentId) : undefined;
+        const movementType = req.query.movementType ? String(req.query.movementType) : undefined;
+        const seasonId = req.query.seasonId ? String(req.query.seasonId) : undefined;
 
         try {
             switch (type) {
                 case "stock": {
+                    const conditions: any[] = [eq(farmStock.farmerId, farmerId)];
+                    if (category) conditions.push(eq(farmProductsCatalog.category, category));
+
                     const data = await db.select({
                         id: farmStock.id,
                         productName: farmProductsCatalog.name,
@@ -45,15 +117,17 @@ export function registerReportRoutes(app: Express) {
                         averageCost: farmStock.averageCost,
                     }).from(farmStock)
                         .innerJoin(farmProductsCatalog, eq(farmStock.productId, farmProductsCatalog.id))
-                        .where(eq(farmStock.farmerId, farmerId))
+                        .where(and(...conditions))
                         .orderBy(farmProductsCatalog.name);
                     return res.json(data);
                 }
 
                 case "movements": {
-                    const conditions = [eq(farmStockMovements.farmerId, farmerId)];
+                    const conditions: any[] = [eq(farmStockMovements.farmerId, farmerId)];
                     if (startDate) conditions.push(gte(farmStockMovements.createdAt, startDate));
                     if (endDate) conditions.push(lte(farmStockMovements.createdAt, endDate));
+                    if (movementType) conditions.push(eq(farmStockMovements.type, movementType));
+                    if (productName) conditions.push(ilike(farmProductsCatalog.name, `%${productName}%`));
 
                     const data = await db.select({
                         id: farmStockMovements.id,
@@ -73,9 +147,10 @@ export function registerReportRoutes(app: Express) {
                 }
 
                 case "expenses": {
-                    const conditions = [eq(farmExpenses.farmerId, farmerId)];
+                    const conditions: any[] = [eq(farmExpenses.farmerId, farmerId)];
                     if (startDate) conditions.push(gte(farmExpenses.expenseDate, startDate));
                     if (endDate) conditions.push(lte(farmExpenses.expenseDate, endDate));
+                    if (category) conditions.push(eq(farmExpenses.category, category));
 
                     const data = await db.select().from(farmExpenses)
                         .where(and(...conditions))
@@ -85,16 +160,18 @@ export function registerReportRoutes(app: Express) {
                 }
 
                 case "invoices": {
-                    const conditions = [eq(farmInvoices.farmerId, farmerId)];
+                    const conditions: any[] = [eq(farmInvoices.farmerId, farmerId)];
                     if (startDate) conditions.push(gte(farmInvoices.createdAt, startDate));
                     if (endDate) conditions.push(lte(farmInvoices.createdAt, endDate));
+                    if (supplier) conditions.push(eq(farmInvoices.supplier, supplier));
+                    if (status) conditions.push(eq(farmInvoices.status, status));
+                    if (seasonId) conditions.push(eq(farmInvoices.seasonId, seasonId));
 
                     const invoices = await db.select().from(farmInvoices)
                         .where(and(...conditions))
                         .orderBy(desc(farmInvoices.createdAt))
                         .limit(200);
 
-                    // Get item counts per invoice
                     const result = [];
                     for (const inv of invoices) {
                         const items = await db.select().from(farmInvoiceItems)
@@ -105,9 +182,11 @@ export function registerReportRoutes(app: Express) {
                 }
 
                 case "cost-per-ha": {
-                    // Get all properties + plots + application costs
+                    const propConditions: any[] = [eq(farmProperties.farmerId, farmerId)];
+                    if (propertyId) propConditions.push(eq(farmProperties.id, propertyId));
+
                     const properties = await db.select().from(farmProperties)
-                        .where(eq(farmProperties.farmerId, farmerId));
+                        .where(and(...propConditions));
 
                     const result = [];
                     for (const prop of properties) {
@@ -115,7 +194,7 @@ export function registerReportRoutes(app: Express) {
                             .where(eq(farmPlots.propertyId, prop.id));
 
                         for (const plot of plots) {
-                            const conditions = [
+                            const conditions: any[] = [
                                 eq(farmApplications.farmerId, farmerId),
                                 eq(farmApplications.plotId, plot.id),
                             ];
@@ -142,6 +221,7 @@ export function registerReportRoutes(app: Express) {
 
                             result.push({
                                 propertyName: prop.name,
+                                propertyId: prop.id,
                                 plotName: plot.name,
                                 areaHa: plot.areaHa,
                                 crop: plot.crop,
@@ -155,9 +235,11 @@ export function registerReportRoutes(app: Express) {
                 }
 
                 case "price-history": {
-                    const conditions = [eq(farmPriceHistory.farmerId, farmerId)];
+                    const conditions: any[] = [eq(farmPriceHistory.farmerId, farmerId)];
                     if (startDate) conditions.push(gte(farmPriceHistory.purchaseDate, startDate));
                     if (endDate) conditions.push(lte(farmPriceHistory.purchaseDate, endDate));
+                    if (productName) conditions.push(eq(farmPriceHistory.productName, productName));
+                    if (supplier) conditions.push(eq(farmPriceHistory.supplier, supplier));
 
                     const data = await db.select().from(farmPriceHistory)
                         .where(and(...conditions))
@@ -167,9 +249,11 @@ export function registerReportRoutes(app: Express) {
                 }
 
                 case "applications": {
-                    const conditions = [eq(farmApplications.farmerId, farmerId)];
+                    const conditions: any[] = [eq(farmApplications.farmerId, farmerId)];
                     if (startDate) conditions.push(gte(farmApplications.appliedAt, startDate));
                     if (endDate) conditions.push(lte(farmApplications.appliedAt, endDate));
+                    if (propertyId) conditions.push(eq(farmApplications.propertyId, propertyId));
+                    if (productName) conditions.push(ilike(farmProductsCatalog.name, `%${productName}%`));
 
                     const data = await db.select({
                         id: farmApplications.id,
@@ -195,10 +279,10 @@ export function registerReportRoutes(app: Express) {
                 }
 
                 case "fleet": {
-                    // Get fuel/diesel applications (applications linked to equipment)
-                    const conditions = [eq(farmApplications.farmerId, farmerId)];
+                    const conditions: any[] = [eq(farmApplications.farmerId, farmerId)];
                     if (startDate) conditions.push(gte(farmApplications.appliedAt, startDate));
                     if (endDate) conditions.push(lte(farmApplications.appliedAt, endDate));
+                    if (equipmentId) conditions.push(eq(farmApplications.equipmentId, equipmentId));
 
                     const data = await db.select({
                         id: farmApplications.id,
@@ -221,12 +305,10 @@ export function registerReportRoutes(app: Express) {
                 }
 
                 case "season-summary": {
-                    // Build consolidated season data
                     const seasons = await db.select().from(farmSeasons)
                         .where(eq(farmSeasons.farmerId, farmerId))
                         .orderBy(desc(farmSeasons.createdAt));
 
-                    // Get totals
                     const stockData = await db.select({
                         totalValue: sql<string>`SUM(CAST(${farmStock.quantity} AS numeric) * CAST(${farmStock.averageCost} AS numeric))`,
                         itemCount: sql<number>`COUNT(*)`,
