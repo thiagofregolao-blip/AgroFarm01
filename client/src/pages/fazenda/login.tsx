@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 
 export default function FarmLogin() {
     useEffect(() => {
-        window.location.href = "/auth";
+        window.location.replace("/auth");
     }, []);
 
     return (

@@ -33,12 +33,28 @@ export default function LandingPage() {
     const [, navigate] = useLocation();
     const [mobileMenu, setMobileMenu] = useState(false);
     const [scrolled, setScrolled] = useState(false);
+    const [heroSlide, setHeroSlide] = useState(0);
+
+    const heroSlides = [
+        { image: "/landing-hero.png", label: "Gestão Completa", sublabel: "Controle total da sua fazenda", icon: "🌾" },
+        { image: "/hero-drone.png", label: "Drone Multiespectral", sublabel: "DJI Mavic 3M com NDVI", icon: "🛩️" },
+        { image: "/hero-dashboard.png", label: "Dashboard Inteligente", sublabel: "Relatórios e gráficos em tempo real", icon: "📊" },
+        { image: "/hero-warehouse.png", label: "Controle de Estoque", sublabel: "Insumos sempre sob controle", icon: "📦" },
+    ];
 
     useEffect(() => {
         const onScroll = () => setScrolled(window.scrollY > 50);
         window.addEventListener("scroll", onScroll);
         return () => window.removeEventListener("scroll", onScroll);
     }, []);
+
+    // Auto-rotate hero carousel
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setHeroSlide(prev => (prev + 1) % heroSlides.length);
+        }, 5000);
+        return () => clearInterval(timer);
+    }, [heroSlides.length]);
 
     const WHATSAPP_URL = "https://wa.me/595986848326?text=Olá! Gostaria de saber mais sobre o AgroFarm.";
 
@@ -178,7 +194,7 @@ export default function LandingPage() {
                         </div>
                     </div>
 
-                    {/* Hero image */}
+                    {/* Hero Carousel */}
                     <div style={{ flex: 1, minWidth: 320, display: "flex", justifyContent: "center" }}>
                         <div style={{ position: "relative" }}>
                             <div style={{
@@ -186,22 +202,49 @@ export default function LandingPage() {
                                 borderRadius: 24, overflow: "hidden",
                                 boxShadow: "0 40px 80px rgba(0,0,0,0.3)",
                                 border: `3px solid rgba(255,222,0,0.3)`,
+                                position: "relative",
                             }}>
-                                <img src="/landing-hero.png" alt="AgroFarm" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                {heroSlides.map((slide, i) => (
+                                    <img key={i} src={slide.image} alt={slide.label}
+                                        style={{
+                                            position: "absolute", top: 0, left: 0,
+                                            width: "100%", height: "100%", objectFit: "cover",
+                                            opacity: heroSlide === i ? 1 : 0,
+                                            transition: "opacity 0.8s ease-in-out",
+                                        }}
+                                    />
+                                ))}
+                                {/* Carousel dots */}
+                                <div style={{
+                                    position: "absolute", bottom: 16, left: 0, right: 0,
+                                    display: "flex", justifyContent: "center", gap: 8, zIndex: 5,
+                                }}>
+                                    {heroSlides.map((_, i) => (
+                                        <button key={i} onClick={() => setHeroSlide(i)}
+                                            style={{
+                                                width: heroSlide === i ? 24 : 10, height: 10,
+                                                borderRadius: 5, border: "none", cursor: "pointer",
+                                                background: heroSlide === i ? colors.yellow : "rgba(255,255,255,0.5)",
+                                                transition: "all 0.3s ease",
+                                            }}
+                                        />
+                                    ))}
+                                </div>
                             </div>
-                            {/* Floating card */}
+                            {/* Floating card — changes with slide */}
                             <div style={{
                                 position: "absolute", bottom: -20, left: -30,
                                 background: colors.white, borderRadius: 16, padding: "16px 20px",
                                 boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
                                 display: "flex", alignItems: "center", gap: 12,
+                                transition: "all 0.5s ease",
                             }}>
-                                <div style={{ background: `${colors.green}15`, borderRadius: 12, padding: 10 }}>
-                                    <Satellite size={24} color={colors.green} />
+                                <div style={{ background: `${colors.green}15`, borderRadius: 12, padding: 10, fontSize: 22 }}>
+                                    {heroSlides[heroSlide].icon}
                                 </div>
                                 <div>
-                                    <div style={{ fontSize: 12, color: colors.gray500 }}>Monitoramento</div>
-                                    <div style={{ fontSize: 16, fontWeight: 700, color: colors.green }}>NDVI Satélite</div>
+                                    <div style={{ fontSize: 12, color: colors.gray500 }}>{heroSlides[heroSlide].sublabel}</div>
+                                    <div style={{ fontSize: 16, fontWeight: 700, color: colors.green }}>{heroSlides[heroSlide].label}</div>
                                 </div>
                             </div>
                         </div>
@@ -231,9 +274,9 @@ export default function LandingPage() {
                             color: colors.green, image: "/feature-estoque.png",
                         },
                         {
-                            icon: Satellite, title: "Monitoramento por Satélite (NDVI)",
-                            desc: "Veja a saúde da sua lavoura direto no sistema, sem sair de casa.",
-                            items: ["Imagens Sentinel-2 atualizadas", "Índice de vegetação por talhão", "Evolução temporal da lavoura", "Detecção precoce de estresse", "Mapa colorido de saúde"],
+                            icon: Satellite, title: "Monitoramento com Drone DJI Mavic 3M",
+                            desc: "Imagens multiespectrais de alta precisão com o DJI Mavic 3 Multispectral.",
+                            items: ["Câmera RGB 20MP + 4 câmeras multiespectrais 5MP", "Bandas: Verde, Vermelho, Red Edge e Infravermelho Próximo (NIR)", "Até 200 hectares por voo (43 min de autonomia)", "Posicionamento RTK centimétrico sem pontos de controle", "Índices NDVI, NDRE e GNDVI em tempo real"],
                             color: colors.greenLight, reverse: true, image: "/feature-ndvi.png",
                         },
                         {
