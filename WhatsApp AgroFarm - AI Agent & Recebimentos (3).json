@@ -179,7 +179,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Esta ferramenta busca totais de despesas e faturas recentes. Se o usuário perguntar por uma data específica (ex: 'tem algo dia 23/12?'), envie a data no parâmetro 'date'. Se perguntar por fornecedor, envie no parâmetro 'supplier'.",
+        "toolDescription": "Usa esta ferramenta para consultar despesas e faturas recentes do agricultor. Retorna fornecedor, valor total, data e status de cada fatura.",
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/invoices",
         "sendQuery": true,
         "parametersQuery": {
@@ -188,16 +188,6 @@
               "name": "whatsapp_number",
               "valueProvider": "fieldValue",
               "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
-            },
-            {
-              "name": "date",
-              "valueProvider": "fieldValue",
-              "value": "={{ $fromAI('date', 'A data solicitada pelo usuário no formato DD/MM ou YYYY-MM-DD. Deixe vazio se nenhuma data foi mencionada.', 'string', '') }}"
-            },
-            {
-              "name": "supplier",
-              "valueProvider": "fieldValue",
-              "value": "={{ $fromAI('supplier', 'O nome do fornecedor se o usuário mencionou algum. Deixe vazio se nenhum fornecedor foi citado.', 'string', '') }}"
             }
           ]
         },
@@ -325,7 +315,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Ferramenta para consultar o PREÇO pago ou o HISTÓRICO DE COMPRAS de um produto específico (ex: glifosato, semente). O parâmetro 'search' é OBRIGATÓRIO com o nome do produto. Opcionalmente, envie 'date' se o usuário perguntou o preço em uma data.",
+        "toolDescription": "Usa esta ferramenta para consultar o histórico de PREÇOS de produtos comprados pelo agricultor. Retorna data da compra, fornecedor, produto, quantidade e preço unitário de todas as compras registradas.",
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/prices",
         "sendQuery": true,
         "parametersQuery": {
@@ -334,16 +324,6 @@
               "name": "whatsapp_number",
               "valueProvider": "fieldValue",
               "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
-            },
-            {
-              "name": "search",
-              "valueProvider": "fieldValue",
-              "value": "={{ $fromAI('search', 'Nome do produto que o usuário quer saber o preço. Ex: glifosato, flumitop, semente. OBRIGATÓRIO.', 'string') }}"
-            },
-            {
-              "name": "date",
-              "valueProvider": "fieldValue",
-              "value": "={{ $fromAI('date', 'Data da compra se o usuário mencionou. Formato DD/MM ou YYYY-MM-DD. Deixe vazio se não mencionou data.', 'string', '') }}"
             }
           ]
         },

@@ -1601,23 +1601,14 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.get("/api/farm/webhook/n8n/prices", async (req, res) => {
         try {
-            const { whatsapp_number, limit = 20, search, date } = req.query;
+            const { whatsapp_number } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
 
-            // Graceful fallback for missing search parameter
-            if (!search || String(search).trim() === "") {
-                return res.json({
-                    mensagem: "Por favor, me informe o nome do produto que você quer consultar o preço! (Exemplo: 'qual o preço do glifosato?')",
-                    resultadosBusca: []
-                });
-            }
-
-            const { users, farmInvoices } = await import("../shared/schema");
-            const { eq, or, sql, desc, and } = await import("drizzle-orm");
+            const { users, farmPriceHistory } = await import("../shared/schema");
+            const { eq, or, sql, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
-            console.log(`[WEBHOOK_N8N_PRICES] Phone lookup: raw="${whatsapp_number}" → formatted="${formattedPhone}"`);
 
             const farmers = await db.select().from(users).where(
                 or(
@@ -1626,40 +1617,9 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 )
             ).limit(1);
 
-            if (farmers.length === 0) {
-                console.log(`[WEBHOOK_N8N_PRICES] ❌ Farmer NOT FOUND for phone "${formattedPhone}"`);
-                return res.status(404).json({ error: `Farmer not found for phone ${formattedPhone}. Ensure the user has their WhatsApp number registered in their profile.` });
-            }
+            if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
-            const searchString = String(search).trim();
-            console.log(`[WEBHOOK_N8N_PRICES] AI searching for product: "${searchString}" (Phone: ${whatsapp_number}, Date: ${date})`);
-            const { farmPriceHistory } = await import("../shared/schema");
-
-            let conditions: any[] = [eq(farmPriceHistory.farmerId, farmers[0].id)];
-
-            if (searchString !== "DEBUG_ALL_ITEMS") {
-                const cleanSearch = searchString.replace(/[^a-zA-Z0-9 ]/g, "").trim();
-                const words = cleanSearch.split(" ").filter(w => w.length > 2);
-
-                const searchConditions = words.map(w => or(
-                    sql`regexp_replace(${farmPriceHistory.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`,
-                    sql`regexp_replace(${farmPriceHistory.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${w}%`}`
-                ));
-
-                const finalSearchCondition = searchConditions.length > 0 ? or(...searchConditions) : or(
-                    sql`regexp_replace(${farmPriceHistory.productName}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`,
-                    sql`regexp_replace(${farmPriceHistory.activeIngredient}, '[^a-zA-Z0-9]', '', 'g') ILIKE ${`%${cleanSearch.replace(/\s/g, '')}%`}`
-                );
-
-                conditions.push(finalSearchCondition);
-            }
-
-            if (date) {
-                const dateStr = String(date);
-                conditions.push(sql`to_char(${farmPriceHistory.purchaseDate}, 'DD/MM/YYYY') LIKE ${'%' + dateStr + '%'} OR to_char(${farmPriceHistory.purchaseDate}, 'YYYY-MM-DD') LIKE ${'%' + dateStr + '%'}`);
-            }
-
-            // Simple search in price history table
+            // Return ALL price history for this farmer (same pattern as stock endpoint)
             const items = await db.select({
                 date: farmPriceHistory.purchaseDate,
                 supplier: farmPriceHistory.supplier,
@@ -1669,22 +1629,18 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 activeIngredient: farmPriceHistory.activeIngredient
             })
                 .from(farmPriceHistory)
-                .where(and(...conditions))
+                .where(eq(farmPriceHistory.farmerId, farmers[0].id))
                 .orderBy(desc(farmPriceHistory.purchaseDate))
-                .limit(Number(limit));
+                .limit(50);
 
-            console.log(`[WEBHOOK_N8N_PRICES] Found ${items.length} items for "${searchString}"`);
-
-            return res.json({
-                resultadosBusca: items.map((i: any) => ({
-                    dataCompra: new Date(i.date).toLocaleDateString("pt-BR"),
-                    fornecedor: i.supplier,
-                    produto: i.productName,
-                    quantidade: parseFloat(i.quantity).toFixed(2),
-                    precoUnitario: parseFloat(i.unitPrice).toFixed(2)
-                }))
-            });
-
+            res.json(items.map((i: any) => ({
+                dataCompra: i.date ? new Date(i.date).toLocaleDateString("pt-BR") : "N/A",
+                fornecedor: i.supplier,
+                produto: i.productName,
+                quantidade: parseFloat(i.quantity || "0").toFixed(2),
+                precoUnitario: parseFloat(i.unitPrice || "0").toFixed(2),
+                principioAtivo: i.activeIngredient || ""
+            })));
         } catch (error) {
             console.error("[WEBHOOK_N8N_PRICES]", error);
             res.status(500).json({ error: "Internal server error" });
