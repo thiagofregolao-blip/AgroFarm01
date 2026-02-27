@@ -389,6 +389,9 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
     const { toast } = useToast();
 
     // Default values fetched from current stockItem
+    const [productName, setProductName] = useState(stockItem.productName || "");
+    const [productCategory, setProductCategory] = useState(stockItem.productCategory || "");
+    const [productUnit, setProductUnit] = useState(stockItem.productUnit || "");
     const [quantity, setQuantity] = useState(stockItem.quantity.toString());
     const [averageCost, setAverageCost] = useState(stockItem.averageCost.toString());
     const [reason, setReason] = useState("");
@@ -399,6 +402,9 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
                 quantity: parseFloat(quantity),
                 averageCost: parseFloat(averageCost),
                 reason,
+                productName,
+                productCategory,
+                productUnit,
             });
         },
         onSuccess: () => {
@@ -412,6 +418,9 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
     });
 
     const resetForm = () => {
+        setProductName(stockItem.productName || "");
+        setProductCategory(stockItem.productCategory || "");
+        setProductUnit(stockItem.productUnit || "");
         setQuantity(stockItem.quantity.toString());
         setAverageCost(stockItem.averageCost.toString());
         setReason("");
@@ -427,12 +436,50 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
                     <Pencil className="h-4 w-4" />
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Editar {stockItem.productName}</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
+                    {/* Product info fields */}
+                    <div>
+                        <Label>Nome do Produto</Label>
+                        <Input
+                            value={productName}
+                            onChange={e => setProductName(e.target.value)}
+                            placeholder="Nome do produto"
+                            disabled={updateStock.isPending}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <Label>Categoria</Label>
+                            <Select value={productCategory} onValueChange={setProductCategory}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label>Unidade</Label>
+                            <Select value={productUnit} onValueChange={setProductUnit}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <hr className="border-gray-200" />
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <Label>Quantidade Hoje</Label>
