@@ -138,7 +138,17 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '3000', 10);
-  server.listen(port, () => {
+  server.listen(port, async () => {
     log(`serving on port ${port}`);
+
+    // Start daily bulletin scheduler (production only)
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        const { scheduleDailyBulletin } = await import("./services/bulletin-service");
+        scheduleDailyBulletin();
+      } catch (e) {
+        console.error("Failed to start bulletin scheduler:", e);
+      }
+    }
   });
 })();

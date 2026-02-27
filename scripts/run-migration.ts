@@ -183,6 +183,15 @@ const runMigration = async () => {
             await sql.unsafe(backfillSql);
             console.log('✅ Migração backfill_price_history concluída!');
         }
+        // Migration 14: Farm Location Fields
+        const farmLocationPath = path.join(process.cwd(), 'migration_add_farm_location.sql');
+        if (fs.existsSync(farmLocationPath)) {
+            const farmLocationSql = fs.readFileSync(farmLocationPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', farmLocationPath);
+            console.log('🚀 Executando SQL (farm_location)...');
+            await sql.unsafe(farmLocationSql);
+            console.log('✅ Migração farm_location concluída!');
+        }
 
         console.log('✅ Todas as migrações concluídas com sucesso!');
 

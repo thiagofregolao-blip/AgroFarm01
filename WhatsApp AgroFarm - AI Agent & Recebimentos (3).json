@@ -404,6 +404,64 @@
         784,
         2208
       ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta quando o agricultor perguntar sobre o TEMPO, CLIMA ou PREVISÃO. Retorna temperatura máxima/mínima, condição do tempo e previsão para os próximos dias.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/weather",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "f7f8a9b0-1c2d-3e4f-5a6b-7c8d9e0f1a2b",
+      "name": "ConsultarClima",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        984,
+        2208
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta quando o agricultor perguntar sobre COTAÇÃO, PREÇO DA SOJA, CÂMBIO ou DÓLAR. Retorna cotação da soja na CBOT em bushel e câmbio USD/BRL e USD/PYG.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/commodity",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "a8b9c0d1-2e3f-4a5b-6c7d-8e9f0a1b2c3d",
+      "name": "ConsultarCotacao",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        2208
+      ]
     }
   ],
   "pinData": {},
@@ -571,6 +629,28 @@
       ]
     },
     "ConsultarPrecoProduto": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarClima": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarCotacao": {
       "ai_tool": [
         [
           {

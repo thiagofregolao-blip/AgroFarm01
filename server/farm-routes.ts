@@ -1709,6 +1709,61 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
+    // ===== Weather Forecast for n8n =====
+    app.get("/api/farm/webhook/n8n/weather", async (req, res) => {
+        try {
+            const { whatsapp_number } = req.query;
+            if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
+
+            const { users } = await import("../shared/schema");
+            const { eq, or, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+
+            const farmers = await db.select().from(users).where(
+                or(
+                    eq(users.whatsapp_number, formattedPhone),
+                    sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
+                )
+            ).limit(1);
+
+            if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
+
+            const farmer = farmers[0] as any;
+            const lat = farmer.farm_latitude || farmer.farmLatitude || -25.2637;
+            const lon = farmer.farm_longitude || farmer.farmLongitude || -57.5759;
+            const city = farmer.farm_city || farmer.farmCity || "Região";
+
+            const { getWeatherForecast, formatWeatherMessage } = await import("./services/weather-service");
+            const forecasts = await getWeatherForecast(lat, lon, 3);
+
+            res.json({
+                previsao: formatWeatherMessage(forecasts, city),
+                dados: forecasts
+            });
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_WEATHER]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
+    // ===== Commodity Prices for n8n =====
+    app.get("/api/farm/webhook/n8n/commodity", async (_req, res) => {
+        try {
+            const { getCommodityData, formatCommodityMessage } = await import("./services/commodity-service");
+            const data = await getCommodityData();
+
+            res.json({
+                cotacao: formatCommodityMessage(data),
+                dados: data
+            });
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_COMMODITY]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
     app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
         try {
             const { whatsapp_number, limit = 20, date, supplier } = req.query;
