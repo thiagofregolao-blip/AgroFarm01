@@ -72,7 +72,7 @@ import PdvTerminal from "@/pages/pdv/terminal";
 function Router() {
   return (
     <Switch>
-      <Route path="/landing" component={LandingPage} />
+      <Route path="/" component={LandingPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password/:token" component={ResetPassword} />
@@ -141,7 +141,6 @@ function Router() {
       <Route path="/pdv/login" component={PdvLogin} />
       <Route path="/pdv" component={PdvTerminal} />
 
-      <ConsultorRoute path="/" component={Dashboard} />
       <ConsultorRoute path="/dashboard" component={Dashboard} />
       <ConsultorRoute path="/vendas" component={Vendas} />
       <ConsultorRoute path="/comissoes" component={Comissoes} />
