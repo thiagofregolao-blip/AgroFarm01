@@ -40,6 +40,8 @@ export default function LandingPage() {
         return () => window.removeEventListener("scroll", onScroll);
     }, []);
 
+    const WHATSAPP_URL = "https://wa.me/595986848326?text=Olá! Gostaria de saber mais sobre o AgroFarm.";
+
     const scrollTo = (id: string) => {
         setMobileMenu(false);
         document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -52,9 +54,9 @@ export default function LandingPage() {
             {/* ========== NAVBAR ========== */}
             <nav style={{
                 position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
-                background: scrolled ? "rgba(255,255,255,0.97)" : "transparent",
-                backdropFilter: scrolled ? "blur(12px)" : "none",
-                boxShadow: scrolled ? "0 2px 20px rgba(0,0,0,0.08)" : "none",
+                background: "rgba(255,255,255,0.97)",
+                backdropFilter: "blur(12px)",
+                boxShadow: "0 2px 20px rgba(0,0,0,0.08)",
                 transition: "all 0.3s ease",
                 padding: "0 24px",
             }}>
@@ -72,23 +74,24 @@ export default function LandingPage() {
                             { label: "FAQ", id: "faq" },
                         ].map(item => (
                             <button key={item.id} onClick={() => scrollTo(item.id)}
-                                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, fontWeight: 500, color: scrolled ? colors.gray700 : colors.gray700 }}>
+                                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, fontWeight: 500, color: colors.gray700 }}>
                                 {item.label}
                             </button>
                         ))}
-                        <button onClick={() => navigate("/fazenda/login")}
+                        <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
                             style={{
                                 background: colors.green, color: colors.white,
                                 border: "none", borderRadius: 8, padding: "10px 24px",
                                 fontSize: 15, fontWeight: 600, cursor: "pointer",
                                 display: "flex", alignItems: "center", gap: 8,
+                                textDecoration: "none",
                                 transition: "transform 0.2s ease, box-shadow 0.2s ease",
                             }}
-                            onMouseEnter={e => { (e.target as HTMLElement).style.transform = "scale(1.05)"; (e.target as HTMLElement).style.boxShadow = "0 4px 15px rgba(54,124,43,0.4)"; }}
-                            onMouseLeave={e => { (e.target as HTMLElement).style.transform = "scale(1)"; (e.target as HTMLElement).style.boxShadow = "none"; }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.05)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(54,124,43,0.4)"; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
                         >
-                            Acessar Sistema <ArrowRight size={16} />
-                        </button>
+                            <MessageCircle size={16} /> Solicite uma Visita
+                        </a>
                     </div>
 
                     {/* Mobile hamburger */}
@@ -106,9 +109,9 @@ export default function LandingPage() {
                                 {id === "features" ? "Funcionalidades" : id === "resources" ? "Recursos" : "FAQ"}
                             </button>
                         ))}
-                        <button onClick={() => navigate("/fazenda/login")} style={{ marginTop: 12, width: "100%", background: colors.green, color: colors.white, border: "none", borderRadius: 8, padding: "12px 20px", fontSize: 16, fontWeight: 600, cursor: "pointer" }}>
-                            Acessar Sistema
-                        </button>
+                        <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" style={{ marginTop: 12, display: "block", width: "100%", background: colors.green, color: colors.white, border: "none", borderRadius: 8, padding: "12px 20px", fontSize: 16, fontWeight: 600, cursor: "pointer", textDecoration: "none", textAlign: "center" as const }}>
+                            📲 Solicite uma Visita
+                        </a>
                     </div>
                 )}
             </nav>
@@ -149,15 +152,16 @@ export default function LandingPage() {
                             >
                                 Conhecer Funcionalidades <ChevronDown size={18} />
                             </button>
-                            <button onClick={() => navigate("/fazenda/login")}
+                            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
                                 style={{
                                     background: "transparent", color: colors.white,
                                     border: `2px solid rgba(255,255,255,0.4)`, borderRadius: 10,
                                     padding: "14px 32px", fontSize: 16, fontWeight: 600, cursor: "pointer",
+                                    textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8,
                                 }}
                             >
-                                Acessar Sistema
-                            </button>
+                                <MessageCircle size={18} /> Solicite uma Visita
+                            </a>
                         </div>
 
                         {/* Stats */}
@@ -225,31 +229,31 @@ export default function LandingPage() {
                             icon: Package, title: "Controle de Estoque & Insumos",
                             desc: "Saiba exatamente o que tem, quanto custou e quando comprar mais.",
                             items: ["Custo médio automático por produto", "Alertas de estoque baixo via WhatsApp", "Movimentações com rastreabilidade", "Integração com faturas de compra", "Histórico completo de preços"],
-                            color: colors.green,
+                            color: colors.green, image: "/feature-estoque.png",
                         },
                         {
                             icon: Satellite, title: "Monitoramento por Satélite (NDVI)",
                             desc: "Veja a saúde da sua lavoura direto no sistema, sem sair de casa.",
                             items: ["Imagens Sentinel-2 atualizadas", "Índice de vegetação por talhão", "Evolução temporal da lavoura", "Detecção precoce de estresse", "Mapa colorido de saúde"],
-                            color: colors.greenLight, reverse: true,
+                            color: colors.greenLight, reverse: true, image: "/feature-ndvi.png",
                         },
                         {
                             icon: BookOpen, title: "Caderno de Campo Automático",
                             desc: "Rastreabilidade total sem trabalho manual. 100% automático.",
                             items: ["Gerado a partir das aplicações registradas", "Mapa dos talhões com áreas aplicadas", "Linha do tempo completa da safra", "Exportação em PDF profissional", "Atende exigências de exportação"],
-                            color: colors.green,
+                            color: colors.green, image: "/feature-caderno.png",
                         },
                         {
                             icon: Bell, title: "Alertas Inteligentes via WhatsApp",
                             desc: "Receba avisos importantes sem precisar abrir o sistema.",
                             items: ["Estoque baixo? Avisamos no WhatsApp", "Fatura vencendo em 5 dias", "Variação de preço de insumos", "Boletim diário com clima e cotações", "Notícias do mercado agrícola"],
-                            color: colors.greenLight, reverse: true,
+                            color: colors.greenLight, reverse: true, image: "/feature-alertas.png",
                         },
                         {
                             icon: Users, title: "Rede de Cotação Anônima",
                             desc: "Compare seus preços com outros agricultores. Negocie melhor.",
                             items: ["Comparativo anônimo de preços", "Média, menor e maior preço pago", "Ranking: você está acima ou abaixo?", "Privacidade garantida", "Poder de negociação na compra"],
-                            color: colors.green,
+                            color: colors.green, image: "/feature-cotacoes.png",
                         },
                     ].map((feature, idx) => {
                         const Icon = feature.icon;
@@ -285,15 +289,14 @@ export default function LandingPage() {
                                 <div style={{ flex: 1, minWidth: 300, display: "flex", justifyContent: "center" }}>
                                     <div style={{
                                         width: "100%", maxWidth: 420, aspectRatio: "4/3", borderRadius: 20,
-                                        background: `linear-gradient(135deg, ${feature.color}10, ${feature.color}05)`,
-                                        border: `1px solid ${feature.color}20`,
-                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                        position: "relative", overflow: "hidden",
+                                        overflow: "hidden",
+                                        boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+                                        position: "relative",
                                     }}>
-                                        <Icon size={120} color={`${feature.color}20`} strokeWidth={1} />
-                                        <div style={{ position: "absolute", bottom: 20, left: 20, right: 20, background: colors.white, borderRadius: 12, padding: "12px 16px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
-                                            <div style={{ fontSize: 12, color: colors.gray500 }}>AgroFarm</div>
-                                            <div style={{ fontSize: 15, fontWeight: 700, color: colors.green }}>{feature.title}</div>
+                                        <img src={(feature as any).image} alt={feature.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.7))", padding: "40px 20px 16px" }}>
+                                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>AgroFarm</div>
+                                            <div style={{ fontSize: 15, fontWeight: 700, color: colors.white }}>{feature.title}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -429,7 +432,7 @@ export default function LandingPage() {
                     <p style={{ fontSize: 18, color: colors.greenDark, opacity: 0.8, marginBottom: 32 }}>
                         Comece agora a usar o sistema mais completo de gestão agrícola.
                     </p>
-                    <button onClick={() => navigate("/fazenda/login")}
+                    <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
                         style={{
                             background: colors.green, color: colors.white,
                             border: "none", borderRadius: 12, padding: "16px 40px",
@@ -437,12 +440,13 @@ export default function LandingPage() {
                             display: "inline-flex", alignItems: "center", gap: 10,
                             boxShadow: "0 8px 30px rgba(54,124,43,0.3)",
                             transition: "transform 0.2s ease",
+                            textDecoration: "none",
                         }}
-                        onMouseEnter={e => { (e.target as HTMLElement).style.transform = "scale(1.05)"; }}
-                        onMouseLeave={e => { (e.target as HTMLElement).style.transform = "scale(1)"; }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.05)"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
                     >
-                        Acessar o AgroFarm <ArrowRight size={20} />
-                    </button>
+                        <MessageCircle size={20} /> Solicite uma Visita
+                    </a>
                 </div>
             </section>
 
@@ -470,15 +474,16 @@ export default function LandingPage() {
                 <span style={{ color: colors.yellow, fontWeight: 700, fontSize: 14, letterSpacing: 1 }}>
                     🌾 DOMINE SUA LAVOURA
                 </span>
-                <button onClick={() => navigate("/fazenda/login")}
+                <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
                     style={{
                         background: colors.yellow, color: colors.greenDark,
                         border: "none", borderRadius: 8, padding: "10px 24px",
                         fontSize: 14, fontWeight: 700, cursor: "pointer",
                         animation: "pulse-btn 2s infinite",
+                        textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6,
                     }}>
-                    Acessar Sistema →
-                </button>
+                    <MessageCircle size={14} /> Solicite uma Visita
+                </a>
             </div>
 
             {/* Responsive + animation styles */}
