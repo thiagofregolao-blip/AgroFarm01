@@ -97,6 +97,10 @@ app.use((req, res, next) => {
   const { registerFarmRoutes } = await import("./farm-routes");
   registerFarmRoutes(app);
 
+  // Register Farm Report routes
+  const { registerReportRoutes } = await import("./report-routes");
+  registerReportRoutes(app);
+
   // Register WhatsApp routes (if configured)
   if (process.env.ZAPI_INSTANCE_ID && process.env.ZAPI_TOKEN && process.env.GEMINI_API_KEY) {
     const { WhatsAppService } = await import("./whatsapp/whatsapp-service");

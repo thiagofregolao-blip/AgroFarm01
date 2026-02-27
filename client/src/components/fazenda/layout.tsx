@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, Package, FileText, BarChart3,
-    LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor
+    LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -17,6 +17,7 @@ const navItems = [
     { label: "Custo/Talhão", href: "/fazenda/custos", icon: TrendingUp },
     { label: "Despesas", href: "/fazenda/despesas", icon: DollarSign },
     { label: "Terminais PDV", href: "/fazenda/terminais", icon: Monitor },
+    { label: "Relatórios", href: "/fazenda/relatorios", icon: FileBarChart },
     { label: "Perfil", href: "/fazenda/perfil", icon: User },
 ];
 
