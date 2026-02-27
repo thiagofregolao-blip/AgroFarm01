@@ -109,6 +109,10 @@ app.use((req, res, next) => {
   const { registerQuotationNetworkRoutes } = await import("./quotation-network-routes");
   registerQuotationNetworkRoutes(app);
 
+  // Register NDVI satellite routes
+  const { registerNdviRoutes } = await import("./ndvi-routes");
+  registerNdviRoutes(app);
+
   // Register WhatsApp routes (if configured)
   if (process.env.ZAPI_INSTANCE_ID && process.env.ZAPI_TOKEN && process.env.GEMINI_API_KEY) {
     const { WhatsAppService } = await import("./whatsapp/whatsapp-service");

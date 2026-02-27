@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, Package, FileText, BarChart3,
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
-    BookOpen, ArrowDownUp
+    BookOpen, ArrowDownUp, Satellite
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -20,6 +20,7 @@ const navItems = [
     { label: "Terminais PDV", href: "/fazenda/terminais", icon: Monitor },
     { label: "Caderno de Campo", href: "/fazenda/caderno-campo", icon: BookOpen },
     { label: "Cotações", href: "/fazenda/cotacoes", icon: ArrowDownUp },
+    { label: "NDVI Satélite", href: "/fazenda/ndvi", icon: Satellite },
     { label: "Relatórios", href: "/fazenda/relatorios", icon: FileBarChart },
     { label: "Perfil", href: "/fazenda/perfil", icon: User },
 ];
