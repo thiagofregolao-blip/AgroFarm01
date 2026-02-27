@@ -1601,11 +1601,11 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.get("/api/farm/webhook/n8n/prices", async (req, res) => {
         try {
-            const { whatsapp_number } = req.query;
+            const { whatsapp_number, search } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
 
             const { users, farmPriceHistory } = await import("../shared/schema");
-            const { eq, or, sql, desc } = await import("drizzle-orm");
+            const { eq, or, sql, desc, and } = await import("drizzle-orm");
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
@@ -1619,7 +1619,15 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
-            // Return ALL price history for this farmer (same pattern as stock endpoint)
+            // Build conditions
+            const conditions: any[] = [eq(farmPriceHistory.farmerId, farmers[0].id)];
+
+            // If search is provided, filter by product name
+            if (search && String(search).trim() !== "") {
+                const term = String(search).trim();
+                conditions.push(sql`${farmPriceHistory.productName} ILIKE ${'%' + term + '%'}`);
+            }
+
             const items = await db.select({
                 date: farmPriceHistory.purchaseDate,
                 supplier: farmPriceHistory.supplier,
@@ -1629,7 +1637,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 activeIngredient: farmPriceHistory.activeIngredient
             })
                 .from(farmPriceHistory)
-                .where(eq(farmPriceHistory.farmerId, farmers[0].id))
+                .where(and(...conditions))
                 .orderBy(desc(farmPriceHistory.purchaseDate))
                 .limit(50);
 

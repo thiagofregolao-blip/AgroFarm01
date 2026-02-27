@@ -315,7 +315,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Usa esta ferramenta para consultar o histórico de PREÇOS de produtos comprados pelo agricultor. Retorna data da compra, fornecedor, produto, quantidade e preço unitário de todas as compras registradas.",
+        "toolDescription": "Usa esta ferramenta para consultar o PREÇO de um produto específico comprado pelo agricultor. Envie o nome do produto no parâmetro 'search'. Retorna data da compra, fornecedor, produto, quantidade e preço unitário.",
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/prices",
         "sendQuery": true,
         "parametersQuery": {
@@ -324,6 +324,11 @@
               "name": "whatsapp_number",
               "valueProvider": "fieldValue",
               "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            },
+            {
+              "name": "search",
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI('search', 'Nome do produto a buscar. Ex: glifosato, flumitop, semente', 'string') }}"
             }
           ]
         },
