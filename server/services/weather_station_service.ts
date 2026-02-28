@@ -120,8 +120,20 @@ export class WeatherStationService {
 
         const data = await response.json();
 
-        const hourlyData = data.list.slice(0, 8); // Pega as próximas 24h (8 entradas de 3h)
-        const dailyForecasts = Array.from(new Set(data.list.map((i: any) => new Date(i.dt * 1000).toDateString()))).slice(0, 5); // Simplificando para 5 dias
+        // AgroMonitoring returns the array directly, OpenWeather wraps it in { list: [] }
+        const forecastList = Array.isArray(data) ? data : (data.list || []);
+
+        if (!forecastList || forecastList.length === 0) {
+            console.warn("Forecast data is empty or invalid format.");
+            return {
+                charts: { temperatures: [], precipitation: [], wind: [], humidity: [] },
+                sprayWindow: [],
+                forecast: []
+            };
+        }
+
+        const hourlyData = forecastList.slice(0, 8); // Pega as próximas 24h (8 entradas de 3h)
+        const dailyForecasts = Array.from(new Set(forecastList.map((i: any) => new Date(i.dt * 1000).toDateString()))).slice(0, 5); // Simplificando para 5 dias
 
         const charts = {
             temperatures: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), value: Math.round(d.main.temp) })),
