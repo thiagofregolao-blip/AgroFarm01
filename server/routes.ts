@@ -9364,7 +9364,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
 
       const [rainResult] = await db
         .select({
-          totalRain: sql<number>`sum(NULLIF(${weatherHistoryLogs.precipitation}, '')::numeric)`
+          totalRain: sql<number>`sum(COALESCE(NULLIF(TRIM(${weatherHistoryLogs.precipitation}), ''), '0')::numeric)`
         })
         .from(weatherHistoryLogs)
         .where(
