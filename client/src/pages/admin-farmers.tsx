@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -37,87 +37,87 @@ import { ManualsManagement } from "./admin-manuals";
 import { FileText } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
+const NAV_ITEMS = [
+    { value: "dashboard", icon: BarChart3, label: "Dashboard" },
+    { value: "mapa", icon: Map, label: "Mapa" },
+    { value: "farmers", icon: Users, label: "Agricultores" },
+    { value: "products", icon: Sprout, label: "Catálogo" },
+    { value: "manuals", icon: FileText, label: "Manuais" },
+    { value: "modules", icon: Layers, label: "Módulos" },
+];
+
 export default function AdminFarmersPage() {
     const { user, logoutMutation } = useAuth();
     const [activeTab, setActiveTab] = useState("dashboard");
 
     return (
         <div className="flex flex-col h-screen bg-gray-50">
-            {/* Header / Navbar specially for Farmer Admin */}
-            <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="bg-green-100 p-2 rounded-lg">
-                        <Sprout className="h-6 w-6 text-green-700" />
+            {/* ===== GREEN HEADER WITH TABS ===== */}
+            <header className="bg-gradient-to-r from-green-800 via-green-700 to-green-600 shadow-lg">
+                {/* Top row */}
+                <div className="px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white/15 backdrop-blur p-2 rounded-xl">
+                            <Sprout className="h-6 w-6 text-yellow-300" />
+                        </div>
+                        <div>
+                            <h1 className="text-lg font-bold text-white">AgroFarm Admin</h1>
+                            <p className="text-[11px] text-green-200">Gestão de Agricultores</p>
+                        </div>
                     </div>
-                    <div>
-                        <h1 className="text-xl font-bold text-gray-900">Gestão de Agricultores</h1>
-                        <p className="text-xs text-gray-500">Painel Administrativo Exclusivo</p>
+                    <div className="flex items-center gap-3">
+                        <div className="text-right hidden md:block">
+                            <p className="text-sm font-medium text-white">{user?.name}</p>
+                            <p className="text-[11px] text-green-200 capitalize">{user?.role?.replace('_', ' ')}</p>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-white hover:bg-white/15 border border-white/20"
+                            onClick={() => logoutMutation.mutate()}
+                        >
+                            <LogOut className="h-4 w-4" />
+                        </Button>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="text-right hidden md:block">
-                        <p className="text-sm font-medium">{user?.name}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{user?.role?.replace('_', ' ')}</p>
-                    </div>
-                    <Button variant="outline" size="icon" onClick={() => logoutMutation.mutate()}>
-                        <LogOut className="h-4 w-4" />
-                    </Button>
+
+                {/* Tab Navigation Row */}
+                <div className="px-4 pb-0">
+                    <nav className="flex gap-1 overflow-x-auto scrollbar-hide">
+                        {NAV_ITEMS.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = activeTab === item.value;
+                            return (
+                                <button
+                                    key={item.value}
+                                    onClick={() => setActiveTab(item.value)}
+                                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-all whitespace-nowrap
+                                        ${isActive
+                                            ? "bg-gray-50 text-green-800 shadow-sm"
+                                            : "text-green-100 hover:bg-white/10 hover:text-white"
+                                        }`}
+                                >
+                                    <Icon className="h-4 w-4" />
+                                    {item.label}
+                                </button>
+                            );
+                        })}
+                    </nav>
                 </div>
             </header>
 
+            {/* ===== CONTENT ===== */}
             <main className="flex-1 overflow-auto p-6 max-w-7xl mx-auto w-full">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-6 max-w-5xl">
-                        <TabsTrigger value="dashboard" className="flex items-center gap-2">
-                            <BarChart3 className="h-4 w-4" />
-                            Dashboard
-                        </TabsTrigger>
-                        <TabsTrigger value="mapa" className="flex items-center gap-2">
-                            <Map className="h-4 w-4" />
-                            Mapa
-                        </TabsTrigger>
-                        <TabsTrigger value="farmers" className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            Agricultores
-                        </TabsTrigger>
-                        <TabsTrigger value="products" className="flex items-center gap-2">
-                            <Sprout className="h-4 w-4" />
-                            Catálogo
-                        </TabsTrigger>
-                        <TabsTrigger value="manuals" className="flex items-center gap-2">
-                            <FileText className="h-4 w-4" />
-                            Manuais RAG
-                        </TabsTrigger>
-                        <TabsTrigger value="modules" className="flex items-center gap-2">
-                            <Layers className="h-4 w-4" />
-                            Módulos
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="dashboard" className="space-y-6">
-                        <FarmersDashboard />
-                    </TabsContent>
-
-                    <TabsContent value="mapa" className="space-y-6">
+                {activeTab === "dashboard" && <FarmersDashboard />}
+                {activeTab === "mapa" && (
+                    <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-green-600" /></div>}>
                         <GlobalMapView />
-                    </TabsContent>
-
-                    <TabsContent value="farmers" className="space-y-6">
-                        <FarmersManagement />
-                    </TabsContent>
-
-                    <TabsContent value="products" className="space-y-6">
-                        <ProductsManagement />
-                    </TabsContent>
-
-                    <TabsContent value="manuals" className="space-y-6">
-                        <ManualsManagement />
-                    </TabsContent>
-
-                    <TabsContent value="modules" className="space-y-6">
-                        <ModulesManagement />
-                    </TabsContent>
-                </Tabs>
+                    </Suspense>
+                )}
+                {activeTab === "farmers" && <FarmersManagement />}
+                {activeTab === "products" && <ProductsManagement />}
+                {activeTab === "manuals" && <ManualsManagement />}
+                {activeTab === "modules" && <ModulesManagement />}
             </main>
         </div>
     );
@@ -173,15 +173,6 @@ function FarmersDashboard() {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-green-800 to-green-600 rounded-2xl p-6 text-white shadow-xl">
-                <div className="flex items-center gap-3 mb-1">
-                    <BarChart3 className="h-7 w-7 text-yellow-300" />
-                    <h2 className="text-2xl font-bold">Dashboard Agro</h2>
-                </div>
-                <p className="text-green-100 text-sm">Visão geral de todos os clientes e operações do campo.</p>
-            </div>
-
             {/* Metric Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {metricCards.map((m) => {
@@ -327,9 +318,9 @@ function FarmersDashboard() {
 // ==========================================
 function GlobalMapView() {
     const { toast } = useToast();
-    const [filterProduct, setFilterProduct] = useState<string>("");
-    const [filterCategory, setFilterCategory] = useState<string>("");
-    const [filterFarmer, setFilterFarmer] = useState<string>("");
+    const [filterProduct, setFilterProduct] = useState<string>("__all__");
+    const [filterCategory, setFilterCategory] = useState<string>("__all__");
+    const [filterFarmer, setFilterFarmer] = useState<string>("__all__");
 
     const { data: mapData, isLoading } = useQuery<any>({
         queryKey: ["/api/admin/farmers/map-data"],
@@ -351,9 +342,9 @@ function GlobalMapView() {
     const categories = Array.from(new Set(allProducts.map((p: any) => p.category).filter(Boolean)));
 
     const filteredPlots = allPlots.filter((plot: any) => {
-        const matchesFarmer = !filterFarmer || plot.farmerId === filterFarmer;
-        const matchesCategory = !filterCategory || plot.applications.some((a: any) => a.category === filterCategory);
-        const matchesProduct = !filterProduct || plot.applications.some((a: any) => a.productId === filterProduct);
+        const matchesFarmer = filterFarmer === "__all__" || plot.farmerId === filterFarmer;
+        const matchesCategory = filterCategory === "__all__" || plot.applications.some((a: any) => a.category === filterCategory);
+        const matchesProduct = filterProduct === "__all__" || plot.applications.some((a: any) => a.productId === filterProduct);
         return matchesFarmer && matchesCategory && matchesProduct;
     });
 
@@ -399,7 +390,7 @@ function GlobalMapView() {
                                 <SelectValue placeholder="Todos os agricultores" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">Todos os agricultores</SelectItem>
+                                <SelectItem value="__all__">Todos os agricultores</SelectItem>
                                 {farmers?.map((f: any) => (
                                     <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
                                 ))}
@@ -411,7 +402,7 @@ function GlobalMapView() {
                                 <SelectValue placeholder="Todas categorias" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">Todas categorias</SelectItem>
+                                <SelectItem value="__all__">Todas categorias</SelectItem>
                                 {categories.map((cat: any) => (
                                     <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
                                 ))}
@@ -423,16 +414,16 @@ function GlobalMapView() {
                                 <SelectValue placeholder="Todos os produtos" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">Todos os produtos</SelectItem>
+                                <SelectItem value="__all__">Todos os produtos</SelectItem>
                                 {allProducts.map((p: any) => (
                                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
 
-                        {(filterFarmer || filterCategory || filterProduct) && (
+                        {(filterFarmer !== "__all__" || filterCategory !== "__all__" || filterProduct !== "__all__") && (
                             <button
-                                onClick={() => { setFilterFarmer(""); setFilterCategory(""); setFilterProduct(""); }}
+                                onClick={() => { setFilterFarmer("__all__"); setFilterCategory("__all__"); setFilterProduct("__all__"); }}
                                 className="text-xs text-red-500 underline self-center"
                             >
                                 Limpar filtros
