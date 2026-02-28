@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -31,6 +31,7 @@ interface Station {
         temperature: string;
         windSpeed: string;
         precipitation: string;
+        humidity: number;
         clouds: number;
         ts: Date;
     };
@@ -43,6 +44,34 @@ export default function FazendaClima() {
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [newStationName, setNewStationName] = useState("");
     const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+    const [mapCenter, setMapCenter] = useState<[number, number]>([-15.793889, -47.882778]); // Default Brazil
+
+    // Geolocation hook to center the user automatically on mount
+    useEffect(() => {
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setMapCenter([position.coords.latitude, position.coords.longitude]);
+                },
+                (error) => {
+                    console.error("Erro ao obter localização do usuário:", error);
+                },
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
+        }
+    }, []);
+
+    // Helper component to smoothly center the map when mapCenter state changes
+    function MapUpdater({ center }: { center: [number, number] }) {
+        const map = useMap();
+        useEffect(() => {
+            // Only fly to if it is an actual GPS coordinate update
+            if (center[0] !== -15.793889) {
+                map.flyTo(center, 14, { animate: true, duration: 1.5 });
+            }
+        }, [center, map]);
+        return null;
+    }
 
     const { data: stations = [], isLoading } = useQuery<Station[]>({
         queryKey: ["/api/farm/weather/stations"],
@@ -218,15 +247,21 @@ export default function FazendaClima() {
             {/* Main Map Area */}
             <div className="flex-1 relative z-0">
                 <MapContainer
-                    center={[-15.793889, -47.882778]} // Brazil center
-                    zoom={4}
+                    center={mapCenter}
+                    zoom={6}
                     style={{ height: '100%', width: '100%' }}
                     zoomControl={false}
                 >
+                    {/* Imagem de Satélite base */}
                     <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                        attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
                         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                     />
+                    {/* Layer de Labels Híbrido (Somente Fronteiras e Nomes de Cidades principais, sem poluir com estradas) */}
+                    <TileLayer
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+                    />
+                    <MapUpdater center={mapCenter} />
                     <MapEvents />
 
                     {selectedLocation && (
@@ -321,8 +356,8 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                                 <div
                                     key={idx}
                                     className={`p-2 rounded-lg border text-center relative group cursor-help transition-colors ${item.status === 'GREEN' ? 'bg-green-100 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' :
-                                            item.status === 'YELLOW' ? 'bg-yellow-100 border-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-800 dark:text-yellow-300' :
-                                                'bg-red-100 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
+                                        item.status === 'YELLOW' ? 'bg-yellow-100 border-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-800 dark:text-yellow-300' :
+                                            'bg-red-100 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
                                         }`}
                                 >
                                     <div className="text-xs font-bold">{item.time}</div>
