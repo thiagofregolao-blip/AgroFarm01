@@ -102,6 +102,27 @@ export async function registerPolygon(name: string, coordinates: { lat: number; 
 
         if (!response.ok) {
             const errText = await response.text();
+
+            // Handle duplicated polygon error (422)
+            // Example message: "Your polygon is duplicated your already created polygon '69a2202df...'."
+            if (response.status === 422 && errText.includes("is duplicated")) {
+                try {
+                    const errData = JSON.parse(errText);
+                    const match = errData.message.match(/'([^']+)'/);
+                    if (match && match[1]) {
+                        console.log(`[NDVI] ⚠️ Recovered duplicated polygon "${name}" → ${match[1]}`);
+                        return match[1]; // Return the existing polygon ID
+                    }
+                } catch (e) {
+                    // Fallback to text parsing if JSON fails
+                    const match = errText.match(/'([^']+)'/);
+                    if (match && match[1]) {
+                        console.log(`[NDVI] ⚠️ Recovered duplicated polygon (text) "${name}" → ${match[1]}`);
+                        return match[1];
+                    }
+                }
+            }
+
             console.error(`[NDVI] Failed to register polygon: ${response.status} - ${errText}`);
             return null;
         }

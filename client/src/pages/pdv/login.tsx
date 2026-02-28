@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,10 @@ export default function PdvLogin() {
             const res = await apiRequest("POST", "/api/pdv/login", { username, password });
             const data = await res.json();
             localStorage.setItem("pdvData", JSON.stringify(data));
+            if (data.token) {
+                localStorage.setItem("pdvToken", data.token);
+                localStorage.setItem("pdvTerminalId", data.terminal.id);
+            }
             toast({ title: `Terminal ${data.terminal.name} conectado` });
             // Small delay to let the session persist before navigating
             setTimeout(() => {
@@ -49,6 +53,40 @@ export default function PdvLogin() {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        const checkAutoLogin = async () => {
+            const token = localStorage.getItem("pdvToken");
+            const terminalId = localStorage.getItem("pdvTerminalId");
+            if (token && terminalId) {
+                setLoading(true);
+                try {
+                    const res = await apiRequest("POST", "/api/pdv/auto-login", { token, terminalId });
+                    if (res.ok) {
+                        const data = await res.json();
+                        localStorage.setItem("pdvData", JSON.stringify(data));
+                        toast({ title: `Sessão restaurada: ${data.terminal.name}` });
+                        setTimeout(() => {
+                            enterFullscreen();
+                            setLocation("/pdv");
+                        }, 200);
+                    } else {
+                        // Token invalid/expired, clear it
+                        localStorage.removeItem("pdvToken");
+                        localStorage.removeItem("pdvTerminalId");
+                    }
+                } catch (e) {
+                    // Could be completely offline, fallback to cached data in terminal.tsx
+                    // terminal.tsx handles offline gracefully
+                    setLocation("/pdv");
+                } finally {
+                    setLoading(false);
+                }
+            }
+        };
+
+        checkAutoLogin();
+    }, []);
 
     return (
         <div className="min-h-screen flex">

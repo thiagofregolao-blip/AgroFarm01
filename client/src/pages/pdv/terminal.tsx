@@ -115,6 +115,21 @@ export default function PdvTerminal() {
         }
     }, [pdvData]);
 
+    // Redirect to login if totally unauthenticated (unless offline and cached)
+    useEffect(() => {
+        if (pdvError && !localStorage.getItem("pdvData")) {
+            setLocation("/pdv/login");
+        }
+    }, [pdvError, setLocation]);
+
+    const handleLogout = async () => {
+        localStorage.removeItem("pdvData");
+        localStorage.removeItem("pdvToken");
+        localStorage.removeItem("pdvTerminalId");
+        await apiRequest("POST", "/api/logout"); // End global session just in case
+        setLocation("/pdv/login");
+    };
+
     // Query para histórico de saídas (Moved to top level to avoid Hook rules violation)
     const { data: withdrawalsHistory } = useQuery({
         queryKey: ["/api/pdv/withdrawals"],
@@ -553,11 +568,6 @@ export default function PdvTerminal() {
     };
 
     const totalCartQty = cart.reduce((sum, c) => sum + c.quantity, 0);
-
-    const handleLogout = () => {
-        exitFullscreen();
-        setLocation("/pdv/login");
-    };
 
     if (pdvLoading) {
         return (
@@ -1629,7 +1639,7 @@ export default function PdvTerminal() {
                                                         <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha ({item.product.unit})</Label>
                                                         <Input
                                                             type="number"
-                                                            step="0.1"
+                                                            step="0.001"
                                                             value={item.dosePerHa || ""}
                                                             placeholder="N/A"
                                                             onChange={(e) => updateDose(item.product.id, parseFloat(e.target.value) || 0)}
@@ -1750,7 +1760,7 @@ export default function PdvTerminal() {
                                                             <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha ({item.product.unit})</Label>
                                                             <Input
                                                                 type="number"
-                                                                step="0.1"
+                                                                step="0.001"
                                                                 value={item.dosePerHa || ""}
                                                                 placeholder="N/A"
                                                                 onChange={(e) => updateDose(item.product.id, parseFloat(e.target.value) || 0)}

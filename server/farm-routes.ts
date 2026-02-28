@@ -1155,8 +1155,17 @@ export function registerFarmRoutes(app: Express) {
             const properties = await farmStorage.getProperties(terminal.farmerId);
             const equipment = await farmStorage.getEquipment(terminal.farmerId);
 
+            // Create a persistent token to store in localStorage for reliable reconnects (especially iOS offline)
+            const crypto = await import("crypto");
+            const tokenSeed = `${terminal.id}:${terminal.farmerId}:${terminal.propertyId}:${process.env.SESSION_SECRET || 'secret'}`;
+            const token = crypto.createHash('sha256').update(tokenSeed).digest('hex');
+
+            // Atrela o token à sessão tbm ou banco, pra validar no `/api/pdv/data`
+            (req.session as any).pdvToken = token;
+
             res.json({
                 terminal: { id: terminal.id, name: terminal.name, propertyId: terminal.propertyId, type: terminal.type },
+                token,
                 products,
                 stock,
                 plots,
@@ -1166,6 +1175,65 @@ export function registerFarmRoutes(app: Express) {
         } catch (error) {
             console.error("[PDV_LOGIN]", error);
             res.status(500).json({ error: "Login failed" });
+        }
+    });
+
+    app.post("/api/pdv/auto-login", async (req, res) => {
+        try {
+            const { token, terminalId } = req.body;
+            if (!token || !terminalId) {
+                return res.status(400).json({ error: "Token and terminalId required" });
+            }
+
+            const { db } = await import("./db");
+            const { farmPdvTerminals } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+
+            const [terminal] = await db.select().from(farmPdvTerminals).where(eq(farmPdvTerminals.id, terminalId));
+            if (!terminal) {
+                return res.status(401).json({ error: "Terminal not found" });
+            }
+
+            const crypto = await import("crypto");
+            const expectedTokenSeed = `${terminal.id}:${terminal.farmerId}:${terminal.propertyId}:${process.env.SESSION_SECRET || 'secret'}`;
+            const expectedToken = crypto.createHash('sha256').update(expectedTokenSeed).digest('hex');
+
+            if (token !== expectedToken) {
+                return res.status(401).json({ error: "Invalid token" });
+            }
+
+            (req.session as any).pdvTerminalId = terminal.id;
+            (req.session as any).pdvFarmerId = terminal.farmerId;
+            (req.session as any).pdvPropertyId = terminal.propertyId;
+            (req.session as any).pdvToken = token;
+
+            await farmStorage.updatePdvHeartbeat(terminal.id);
+
+            const stock = await farmStorage.getStock(terminal.farmerId);
+            const products = stock.map(s => ({
+                id: s.productId,
+                name: s.productName,
+                category: s.productCategory,
+                unit: s.productUnit,
+                imageUrl: s.productImageUrl || null,
+                dosePerHa: s.productDosePerHa || null,
+            }));
+            const plots = await farmStorage.getPlotsByFarmer(terminal.farmerId);
+            const properties = await farmStorage.getProperties(terminal.farmerId);
+            const equipment = await farmStorage.getEquipment(terminal.farmerId);
+
+            res.json({
+                terminal: { id: terminal.id, name: terminal.name, propertyId: terminal.propertyId, type: terminal.type },
+                token,
+                products,
+                stock,
+                plots,
+                properties,
+                equipment,
+            });
+        } catch (error) {
+            console.error("[PDV_AUTO_LOGIN]", error);
+            res.status(500).json({ error: "Auto-login failed" });
         }
     });
 
