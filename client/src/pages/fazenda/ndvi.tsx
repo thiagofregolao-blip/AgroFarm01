@@ -1,7 +1,20 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import FarmLayout from "@/components/fazenda/layout";
-import { Satellite, MapPin, Leaf, TrendingUp, Cloud, AlertTriangle, RefreshCw } from "lucide-react";
+import { Satellite, MapPin, Leaf, Cloud, AlertTriangle, RefreshCw, ChevronLeft } from "lucide-react";
+import { MapContainer, TileLayer, Polygon, ImageOverlay, useMap } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Helper component to auto-zoom the map to the polygon bounds
+function MapUpdater({ bounds }: { bounds: [[number, number], [number, number]] | null }) {
+    const map = useMap();
+    useEffect(() => {
+        if (bounds) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }, [bounds, map]);
+    return null;
+}
 
 // NDVI color scale
 const ndviColors = [
@@ -70,215 +83,279 @@ export default function NdviPage() {
 
     const latestNdvi = ndviHistory.length > 0 ? ndviHistory[ndviHistory.length - 1] : null;
 
-    return (
-        <FarmLayout>
-            <div style={{ padding: 24 }}>
-                {/* Header */}
-                <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div>
-                        <h1 style={{ fontSize: 24, fontWeight: 700, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                            <Leaf size={28} color="#367C2B" />
-                            Campos NDVI
-                        </h1>
-                        <p style={{ color: "#6B7280", margin: "4px 0 0", fontSize: 14 }}>
-                            Monitoramento de vegetação via Sentinel-2
-                        </p>
+    // Filter cloud-free days state
+    const [hideClouds, setHideClouds] = useState(false);
+
+    // Selected historic date state (if null, will default to latest)
+    const [selectedHistoryDate, setSelectedHistoryDate] = useState<string | null>(null);
+
+    // Get the currently active NDVI data block based on selection or fallback to latest
+    const activeData = useMemo(() => {
+        if (!selectedHistoryDate) return latestNdvi;
+        return ndviHistory.find((d: any) => d.dt === selectedHistoryDate) || latestNdvi;
+    }, [selectedHistoryDate, latestNdvi, ndviHistory]);
+
+    // Active Image Overlay 
+    const activeImage = useMemo(() => {
+        if (!activeData || ndviImages.length === 0) return null;
+        // The images logic assumes dt matches dateFormatted or something similar
+        // Agromonitoring groups images by dt. We can match by dateFormatted or dt.
+        // Assuming ndviImages uses the exact same timestamp logic or date string:
+        return ndviImages.find((img: any) => img.dateFormatted === activeData.dateFormatted) || ndviImages[0];
+    }, [activeData, ndviImages]);
+
+    // Calculate Polygon and Bounds for Map
+    const { positions, bounds } = useMemo(() => {
+        if (!selectedPlot || !selectedPlot.coordinates || selectedPlot.coordinates.length < 3) {
+            return { positions: [], bounds: null };
+        }
+        const coords = selectedPlot.coordinates;
+        const pts: [number, number][] = coords.map((c: any) => [c.lat, c.lng]);
+
+        const lats = pts.map(p => p[0]);
+        const lngs = pts.map(p => p[1]);
+        const b: [[number, number], [number, number]] = [
+            [Math.min(...lats), Math.min(...lngs)],
+            [Math.max(...lats), Math.max(...lngs)]
+        ];
+        return { positions: pts, bounds: b };
+    }, [selectedPlot]);
+
+
+    // ========== RENDER: LIST VIEW (MASTER) ==========
+    if (!selectedPlot) {
+        return (
+            <FarmLayout>
+                <div className="max-w-3xl mx-auto space-y-4">
+                    {/* Header Limpo */}
+                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                                <Leaf size={20} />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-bold text-gray-900 leading-tight">Campos</h1>
+                                <p className="text-xs text-gray-500">{plots.length} áreas cadastradas</p>
+                            </div>
+                        </div>
+                        {/* Botão sutil para Legenda ou Opções (Mocape) */}
+                        <div className="text-emerald-700 font-medium text-sm flex gap-2">
+                            <span>{plots.reduce((acc: number, p: any) => acc + (p.areaHa || 0), 0).toFixed(0)} ha Totais</span>
+                        </div>
                     </div>
-                </div>
 
-                {/* Main Content Area - Split View on Desktop, Stack on Mobile */}
-                <div className="flex flex-col lg:flex-row gap-6">
-
-                    {/* Left List: Plot Selection */}
-                    <div className="w-full lg:w-1/3 flex flex-col gap-3">
+                    {/* Lista Contínua de Talhões */}
+                    <div className="space-y-3">
                         {loadingPlots ? (
-                            <div style={{ padding: 40, color: "#6B7280", textAlign: "center" }}>Carregando talhões...</div>
+                            <div className="py-12 text-center text-gray-500 animate-pulse">Carregando talhões...</div>
                         ) : plots.length === 0 ? (
-                            <div style={{ padding: 40, color: "#6B7280", textAlign: "center", background: "#fff", borderRadius: 16 }}>
-                                <MapPin size={48} color="#D1D5DB" style={{ margin: "0 auto 12px" }} />
-                                <div>Nenhum talhão cadastrado com coordenadas</div>
-                            </div>
-                        ) : plots.map((plot: any) => (
-                            <div key={plot.id}
-                                onClick={() => {
-                                    setSelectedPlot(plot);
-                                    if (plot.hasCoordinates && (!activePolygonId || activePolygonId !== plot.ndviPolygonId)) {
-                                        registerMutation.mutate(plot.id);
-                                    }
-                                }}
-                                className={`flex items-center justify-between p-3 cursor-pointer rounded-2xl transition-all duration-200 border-2 ${selectedPlot?.id === plot.id ? "bg-emerald-50 border-emerald-500 shadow-sm" : "bg-white border-transparent hover:border-gray-200 shadow-sm"
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    {/* Icon / Mini map placeholder */}
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${plot.hasCoordinates ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
-                                        {plot.hasCoordinates ? <MapPin size={20} /> : <AlertTriangle size={20} />}
-                                    </div>
-
-                                    <div className="flex flex-col">
-                                        <span className="font-semibold text-gray-900 text-[15px]">{plot.name}</span>
-                                        <span className="text-sm text-gray-500">{plot.areaHa} ha {plot.crop ? `• ${plot.crop}` : ''}</span>
-                                    </div>
-                                </div>
-
-                                {/* Status / NDVI indicator */}
-                                <div className="flex flex-col items-end gap-1">
-                                    {!plot.hasCoordinates && (
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Sem GPS</span>
-                                    )}
-                                    {plot.hasCoordinates && selectedPlot?.id === plot.id && registerMutation.isPending && (
-                                        <RefreshCw size={16} className="animate-spin text-emerald-600" />
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Right Panel: Selected Plot Details */}
-                    <div className="w-full lg:w-2/3">
-                        {!selectedPlot ? (
-                            <div className="hidden lg:flex flex-col items-center justify-center h-full min-h-[400px] text-gray-400 bg-white rounded-3xl border border-gray-100">
-                                <Leaf size={64} className="mb-4 text-emerald-100" />
-                                <span className="text-lg font-medium text-gray-600">Selecione um campo</span>
-                                <span className="text-sm">Clique em um talhão na lista para analisar a vegetação</span>
+                            <div className="py-16 text-center bg-white rounded-3xl border border-gray-100 text-gray-400">
+                                <MapPin size={48} className="mx-auto mb-4 text-gray-200" />
+                                <p>Nenhum talhão cadastrado</p>
                             </div>
                         ) : (
-                            <div className="flex flex-col gap-4">
-                                {registerMutation.isError && (
-                                    <div className="p-4 bg-red-50 rounded-2xl text-red-600 flex items-center gap-3 text-sm font-medium border border-red-100">
-                                        <AlertTriangle size={18} />
-                                        <span>Erro ao registrar polígono. Verifique a chave API ou as coordenadas.</span>
-                                    </div>
-                                )}
-
-                                {/* NDVI Results */}
-                                {activePolygonId && (
-                                    <>
-                                        {/* Summary card */}
-                                        {latestNdvi && (
-                                            <div style={{
-                                                background: "#fff", borderRadius: 12, border: "1px solid #E5E7EB",
-                                                padding: 24, marginBottom: 24,
-                                                display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap",
-                                            }}>
-                                                <div style={{
-                                                    width: 80, height: 80, borderRadius: "50%",
-                                                    background: latestNdvi.healthColor,
-                                                    display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center",
-                                                    color: "#fff",
-                                                }}>
-                                                    <div style={{ fontSize: 22, fontWeight: 800 }}>{latestNdvi.mean.toFixed(2)}</div>
-                                                    <div style={{ fontSize: 9, fontWeight: 600 }}>NDVI</div>
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontSize: 20, fontWeight: 700, color: latestNdvi.healthColor }}>
-                                                        {latestNdvi.healthLabel}
-                                                    </div>
-                                                    <div style={{ fontSize: 13, color: "#6B7280" }}>
-                                                        Última leitura: {latestNdvi.dateFormatted} • Fonte: {latestNdvi.source}
-                                                    </div>
-                                                    <div style={{ fontSize: 12, color: "#9CA3AF", display: "flex", gap: 12, marginTop: 4 }}>
-                                                        <span>Min: {latestNdvi.min.toFixed(3)}</span>
-                                                        <span>Mediana: {latestNdvi.median.toFixed(3)}</span>
-                                                        <span>Max: {latestNdvi.max.toFixed(3)}</span>
-                                                        <span><Cloud size={12} style={{ verticalAlign: "text-bottom" }} /> {latestNdvi.cloudCover}% nuvens</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* NDVI History Chart (simple bar chart) */}
-                                        {loadingHistory ? (
-                                            <div style={{ padding: 40, textAlign: "center", color: "#6B7280" }}>Carregando histórico NDVI...</div>
-                                        ) : ndviHistory.length > 0 && (
-                                            <div style={{
-                                                background: "#fff", borderRadius: 12, border: "1px solid #E5E7EB",
-                                                padding: 24, marginBottom: 24,
-                                            }}>
-                                                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-                                                    <TrendingUp size={18} color="#367C2B" />
-                                                    Evolução NDVI
-                                                </h3>
-                                                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 200, overflow: "auto" }}>
-                                                    {ndviHistory.map((d: any, i: number) => {
-                                                        const heightPct = Math.max(d.mean * 100, 5);
-                                                        const info = getNdviInfo(d.mean);
-                                                        return (
-                                                            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "0 0 auto", minWidth: 32 }}>
-                                                                <div style={{ fontSize: 9, color: "#6B7280", marginBottom: 4 }}>{d.mean.toFixed(2)}</div>
-                                                                <div style={{
-                                                                    width: 24, height: `${heightPct * 2}px`, maxHeight: 180,
-                                                                    background: info.color, borderRadius: "4px 4px 0 0",
-                                                                    transition: "height 0.3s ease",
-                                                                }} />
-                                                                <div style={{ fontSize: 8, color: "#9CA3AF", marginTop: 4, transform: "rotate(-45deg)", transformOrigin: "center", whiteSpace: "nowrap" }}>
-                                                                    {d.dateFormatted}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Satellite Images */}
-                                        {loadingImages ? (
-                                            <div style={{ padding: 40, textAlign: "center", color: "#6B7280" }}>Carregando imagens...</div>
-                                        ) : ndviImages.length > 0 && (
-                                            <div style={{
-                                                background: "#fff", borderRadius: 12, border: "1px solid #E5E7EB",
-                                                padding: 24,
-                                            }}>
-                                                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-                                                    <Satellite size={18} color="#367C2B" />
-                                                    Imagens do Satélite
-                                                </h3>
-                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 16 }}>
-                                                    {ndviImages.slice(0, 6).map((img: any, i: number) => (
-                                                        <div key={i} style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #E5E7EB" }}>
-                                                            {img.ndviUrl ? (
-                                                                <img src={img.ndviUrl} alt={`NDVI ${img.dateFormatted}`}
-                                                                    style={{ width: "100%", height: 180, objectFit: "cover" }} />
-                                                            ) : img.truecolorUrl ? (
-                                                                <img src={img.truecolorUrl} alt={`Satélite ${img.dateFormatted}`}
-                                                                    style={{ width: "100%", height: 180, objectFit: "cover" }} />
-                                                            ) : (
-                                                                <div style={{ height: 180, background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF" }}>
-                                                                    Sem imagem
-                                                                </div>
-                                                            )}
-                                                            <div style={{ padding: "8px 12px", fontSize: 12 }}>
-                                                                <div style={{ fontWeight: 600, color: "#111827" }}>{img.dateFormatted}</div>
-                                                                <div style={{ color: "#6B7280" }}>
-                                                                    <Cloud size={11} style={{ verticalAlign: "text-bottom" }} /> {img.cloudCover}% nuvens
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-
-                                {/* No polygon selected info */}
-                                {!activePolygonId && !selectedPlot && plots.length > 0 && (
-                                    <div style={{
-                                        textAlign: "center", padding: 60, color: "#6B7280",
-                                        background: "#F9FAFB", borderRadius: 12,
-                                    }}>
-                                        <Satellite size={48} color="#D1D5DB" style={{ marginBottom: 12 }} />
-                                        <div style={{ fontSize: 16, fontWeight: 600 }}>Selecione um talhão</div>
-                                        <div style={{ fontSize: 13, marginTop: 4 }}>
-                                            Clique em um talhão acima para analisar o índice NDVI via satélite
+                            plots.map((plot: any) => (
+                                <div
+                                    key={plot.id}
+                                    onClick={() => {
+                                        setSelectedPlot(plot);
+                                        // Auto-trigger registration/fetch if missing or mismatch
+                                        if (plot.hasCoordinates && (!activePolygonId || activePolygonId !== plot.ndviPolygonId)) {
+                                            registerMutation.mutate(plot.id);
+                                        }
+                                        setSelectedHistoryDate(null); // Reset history selection
+                                    }}
+                                    className="flex items-center justify-between bg-white p-4 rounded-3xl shadow-sm border border-gray-100 hover:border-emerald-200 hover:shadow-md transition-all cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-14 h-14 rounded-2xl shrink-0 flex items-center justify-center shadow-inner
+                                            ${plot.hasCoordinates ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
+                                            {plot.hasCoordinates ? <MapPin size={24} /> : <AlertTriangle size={24} />}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-gray-900 text-lg leading-tight">{plot.name}</h3>
+                                            <p className="text-sm text-gray-500 mt-0.5">{plot.areaHa} ha {plot.propertyName ? `• ${plot.propertyName}` : ''}</p>
                                         </div>
                                     </div>
-                                )}
-                            </div>
+
+                                    {/* Indicador de Status Direita */}
+                                    <div className="flex flex-col items-end">
+                                        {!plot.hasCoordinates ? (
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Sem GPS</span>
+                                        ) : (
+                                            /* Mockup de Espaço para última leitura NDVI na lista (OneSoil tem isso) */
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-semibold text-gray-700">Analise</span>
+                                                <div className="w-16 h-2 rounded-full overflow-hidden bg-gradient-to-r from-red-500 via-yellow-400 to-green-600 relative">
+                                                    {/* This is a visual representation since we don't have the last NDVI value prefetched for all plots */}
+                                                    <div className="absolute top-0 bottom-0 w-1 bg-black/60 shadow-sm" style={{ left: '50%' }}></div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
                         )}
                     </div>
                 </div>
+            </FarmLayout>
+        );
+    }
+
+    // ========== RENDER: DETAIL VIEW (FULLSCREEN MODAL) ==========
+    return (
+        <div className="fixed inset-0 z-50 bg-gray-50 flex flex-col pt-safe">
+            {/* Nav Header Flutuante */}
+            <div className="absolute top-4 left-4 right-4 z-40 flex items-center justify-between">
+                <button
+                    onClick={() => { setSelectedPlot(null); setActivePolygonId(""); }}
+                    className="w-10 h-10 bg-white/90 backdrop-blur rounded-full flex items-center justify-center shadow-lg border border-gray-100/50 hover:bg-white transition-colors"
+                >
+                    <ChevronLeft size={24} className="text-gray-800 -ml-1" />
+                </button>
+                <div className="bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-gray-100/50 flex flex-col items-center">
+                    <span className="font-bold text-sm text-gray-900 leading-tight">{selectedPlot.name}</span>
+                    <span className="text-[10px] text-gray-500">{selectedPlot.areaHa} ha</span>
+                </div>
+                <div className="w-10 h-10" /> {/* Spacer */}
             </div>
-        </FarmLayout>
+
+            {/* ERROR STATE */}
+            {registerMutation.isError && (
+                <div className="absolute top-20 left-4 right-4 z-40 p-4 bg-red-50 text-red-600 border border-red-200 rounded-2xl shadow-lg flex items-center gap-3 text-sm font-bold">
+                    <AlertTriangle size={20} /> Falha ao registrar na API Meteorológica.
+                </div>
+            )}
+
+            {/* MAP AREA (Takes most of the screen) */}
+            <div className="flex-1 relative bg-blue-50/50">
+                {(registerMutation.isPending || loadingImages || loadingHistory) ? (
+                    <div className="absolute inset-0 z-30 bg-gray-100/50 backdrop-blur-sm flex flex-col items-center justify-center">
+                        <RefreshCw className="w-10 h-10 text-emerald-600 animate-spin mb-4" />
+                        <span className="text-sm font-medium text-emerald-800">Processando satélite...</span>
+                    </div>
+                ) : null}
+
+                {bounds ? (
+                    <MapContainer
+                        center={bounds[0]}
+                        zoom={15}
+                        zoomControl={false}
+                        className="w-full h-full"
+                    >
+                        {/* Satellite Base Layer */}
+                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" maxNativeZoom={19} maxZoom={22} />
+
+                        {/* Always draw polygon bounds */}
+                        <Polygon
+                            positions={positions}
+                            pathOptions={{ color: '#000', weight: 2, fillOpacity: activeImage?.ndviUrl ? 0 : 0.1, fillColor: '#367C2B' }}
+                        />
+
+                        {/* Overlay the dynamic Image over the bounds */}
+                        {activeImage?.ndviUrl && (
+                            <ImageOverlay
+                                url={activeImage.ndviUrl}
+                                bounds={bounds}
+                                opacity={0.8}
+                            />
+                        )}
+
+                        <MapUpdater bounds={bounds} />
+                    </MapContainer>
+                ) : (
+                    <div className="h-full w-full flex items-center justify-center text-gray-500">
+                        Map bounds not found
+                    </div>
+                )}
+
+                {/* Floating Legend Bottom Left */}
+                <div className="absolute bottom-6 left-4 z-30 bg-white/90 backdrop-blur py-2 px-1.5 rounded-full shadow-xl border border-white/50 flex flex-col items-center gap-1">
+                    <span className="text-[9px] font-bold text-gray-700 mb-1">NDVI</span>
+                    <div className="w-3 h-24 rounded-full bg-gradient-to-t from-red-600 via-yellow-400 to-green-700"></div>
+                </div>
+
+                {/* Optional floating data pill Right Bottom */}
+                {activeData && (
+                    <div className="absolute bottom-6 right-4 z-30 bg-white/90 backdrop-blur px-3 py-2 rounded-2xl shadow-xl border border-white/50 flex flex-col items-end">
+                        <span className="text-[10px] text-gray-500">Média {activeData.dateFormatted}</span>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-black" style={{ color: activeData.healthColor }}>{activeData.mean.toFixed(2)}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md text-white font-bold" style={{ backgroundColor: activeData.healthColor }}>
+                                {activeData.healthLabel}
+                            </span>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* HISTORY CAROUSEL (Bottom Panel) */}
+            <div className="h-44 bg-white rounded-t-3xl -mt-6 z-40 shadow-[0_-4px_24px_rgba(0,0,0,0.05)] flex flex-col">
+                <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+                    <h3 className="font-bold text-lg text-gray-900">Histórico NDVI</h3>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                            type="checkbox"
+                            className="bg-gray-100 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                            checked={hideClouds}
+                            onChange={(e) => setHideClouds(e.target.checked)}
+                        />
+                        <span className="text-gray-600">Ocultar nuvens</span>
+                    </label>
+                </div>
+
+                {/* Scrollable Horizontal Layout */}
+                <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 pb-4 scrollbar-hide flex gap-3 snap-x snap-mandatory items-end">
+                    {ndviHistory.length === 0 && !loadingHistory ? (
+                        <div className="w-full text-center text-gray-400 text-sm mt-4">Nenhum histórico disponível para esta área.</div>
+                    ) : (
+                        ndviHistory
+                            .filter((d: any) => hideClouds ? d.cloudCover <= 20 : true)
+                            .map((dataObj: any) => {
+                                const isSelected = (selectedHistoryDate === dataObj.dt) || (!selectedHistoryDate && dataObj.dt === latestNdvi?.dt);
+                                // A mock bar height based on the mean
+                                const heightPct = Math.max(dataObj.mean * 100, 15);
+
+                                return (
+                                    <button
+                                        key={dataObj.dt}
+                                        onClick={() => setSelectedHistoryDate(dataObj.dt)}
+                                        className={`snap-center shrink-0 w-24 flex flex-col items-center justify-end rounded-2xl pt-2 pb-3 transition-all
+                                            ${isSelected ? 'bg-gray-900 shadow-xl border border-gray-800 transform -translate-y-1' : 'bg-gray-50 hover:bg-gray-100 border border-gray-100/50'}`}
+                                    >
+                                        <div className="flex flex-col items-center gap-1 w-full">
+                                            {/* Visual representation of data quality/clouds */}
+                                            {dataObj.cloudCover > 20 && !isSelected && (
+                                                <Cloud size={14} className="text-gray-300 absolute top-2 right-2" />
+                                            )}
+
+                                            {/* Dynamic Bar */}
+                                            <div className="w-10 rounded-full flex flex-col justify-end items-center bg-gray-200/50 overflow-hidden" style={{ height: '60px' }}>
+                                                <div
+                                                    style={{ height: `${heightPct}%`, backgroundColor: dataObj.healthColor }}
+                                                    className="w-full rounded-full transition-all duration-500"
+                                                />
+                                            </div>
+
+                                            {/* Text Data */}
+                                            <span className={`text-[11px] font-bold mt-2 ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                                                {dataObj.dateFormatted.replace(' de ', '/').split('/')[0]} {dataObj.dateFormatted.replace(' de ', '/').split('/')[1]?.substring(0, 3)}
+                                            </span>
+
+                                            {isSelected ? (
+                                                <span className="text-[14px] font-black" style={{ color: dataObj.healthColor }}>
+                                                    {dataObj.mean.toFixed(2)}
+                                                </span>
+                                            ) : (
+                                                <div className="w-4 h-1 rounded-full bg-gray-300 mt-1"></div>
+                                            )}
+                                        </div>
+                                    </button>
+                                )
+                            })
+                    )}
+                </div>
+            </div>
+        </div>
     );
 }
