@@ -81,13 +81,14 @@ export function registerInvoiceEmailRoutes(app: Express) {
 
                     console.log(`[Invoice Webhook] Extracted: ${extracted.supplier}, ${extracted.items.length} items, ${extracted.currency} ${extracted.totalAmount}`);
 
-                    // Create draft invoice
+                    // Create draft invoice (includes PDF storage)
                     const result = await createDraftInvoice(
                         farmer.id,
                         extracted,
                         `${messageId}-${pdf.originalname}`,
                         sender,
-                        `Subject: ${subject}\nFrom: ${sender}\nFile: ${pdf.originalname}`
+                        `Subject: ${subject}\nFrom: ${sender}\nFile: ${pdf.originalname}`,
+                        pdfBase64
                     );
 
                     if (result) {
@@ -133,10 +134,84 @@ export function registerInvoiceEmailRoutes(app: Express) {
 
             res.status(200).json({ status: "processed", results });
 
+            // After responding to Mailgun, forward to accountant (async, non-blocking)
+            try {
+                if (farmer.accountantEmail) {
+                    console.log(`[Invoice Webhook] Forwarding invoice to accountant: ${farmer.accountantEmail}`);
+                    const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY;
+                    const MAILGUN_DOMAIN = "mail.agrofarmdigital.com";
+                    if (MAILGUN_API_KEY) {
+                        for (const pdf of pdfFiles) {
+                            const formData = new FormData();
+                            formData.append("from", `AgroFarm Digital <noreply@${MAILGUN_DOMAIN}>`);
+                            formData.append("to", farmer.accountantEmail);
+                            formData.append("subject", `Fatura recebida - ${subject || "Sem assunto"}`);
+                            formData.append("text", `Olá,\n\nSegue em anexo a fatura recebida para o produtor ${farmer.name}.\n\nRemetente original: ${sender}\n\nEsta é uma cópia automática enviada pelo sistema AgroFarm Digital.`);
+                            formData.append("attachment", new Blob([new Uint8Array(pdf.buffer)], { type: "application/pdf" }), pdf.originalname);
+
+                            await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+                                method: "POST",
+                                headers: {
+                                    "Authorization": `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}`,
+                                },
+                                body: formData,
+                            });
+                            console.log(`[Invoice Webhook] Forwarded to accountant: ${farmer.accountantEmail}`);
+                        }
+                    } else {
+                        console.log(`[Invoice Webhook] MAILGUN_API_KEY not set, skipping accountant forwarding`);
+                    }
+                }
+            } catch (fwdError) {
+                console.error("[Invoice Webhook] Error forwarding to accountant:", fwdError);
+            }
+
         } catch (error) {
             console.error("[Invoice Webhook] Fatal error:", error);
             // Always return 200 to Mailgun to prevent retries
             res.status(200).json({ status: "error", message: (error as Error).message });
+        }
+    });
+
+    /**
+     * Download invoice PDF
+     */
+    app.get("/api/farm/invoices/:id/pdf", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const { id } = req.params;
+
+            const [invoice] = await db.select({
+                id: farmInvoices.id,
+                pdfBase64: farmInvoices.pdfBase64,
+                invoiceNumber: farmInvoices.invoiceNumber,
+                supplier: farmInvoices.supplier,
+                farmerId: farmInvoices.farmerId,
+            } as any).from(farmInvoices)
+                .where(and(
+                    eq(farmInvoices.id, id),
+                    eq(farmInvoices.farmerId, user.id)
+                ));
+
+            if (!invoice) {
+                return res.status(404).json({ error: "Fatura não encontrada" });
+            }
+
+            if (!(invoice as any).pdfBase64) {
+                return res.status(404).json({ error: "PDF não disponível para esta fatura" });
+            }
+
+            const pdfBuffer = Buffer.from((invoice as any).pdfBase64, "base64");
+            const filename = `fatura-${(invoice as any).invoiceNumber || id}.pdf`;
+
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+            res.setHeader("Content-Length", pdfBuffer.length);
+            res.send(pdfBuffer);
+        } catch (error) {
+            console.error("[Invoice PDF] Error:", error);
+            res.status(500).json({ error: "Erro ao baixar PDF" });
         }
     });
 

@@ -179,6 +179,7 @@ export async function createDraftInvoice(
     emailId: string,
     emailFrom: string,
     rawPdfText?: string,
+    pdfBase64?: string,
 ) {
     // Check if this email was already processed (avoid duplicates)
     const existing = await db.select().from(farmInvoices)
@@ -232,6 +233,7 @@ export async function createDraftInvoice(
         sourceEmailId: emailId,
         sourceEmailFrom: emailFrom,
         rawPdfData: rawPdfText || "PDF processado via Gemini AI",
+        pdfBase64: pdfBase64 || null,
     } as any).returning();
 
     // Create invoice items

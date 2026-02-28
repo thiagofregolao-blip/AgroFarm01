@@ -26,6 +26,7 @@ export const users = pgTable("users", {
   mainCulture: text("main_culture"), // Cultura principal (Soja, Milho, etc.)
   region: text("region"), // Região/Cidade/Estado
   invoiceEmail: text("invoice_email"), // Email para receber faturas por email
+  accountantEmail: text("accountant_email"), // Email do contador para encaminhamento
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
@@ -1117,6 +1118,7 @@ export const farmInvoices = pgTable("farm_invoices", {
   source: text("source").notNull().default("manual"), // "manual" | "email_import"
   sourceEmailId: text("source_email_id"), // Message-ID do email original (evita duplicatas)
   sourceEmailFrom: text("source_email_from"), // Remetente do email
+  pdfBase64: text("pdf_base64"), // PDF original em base64 para download
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

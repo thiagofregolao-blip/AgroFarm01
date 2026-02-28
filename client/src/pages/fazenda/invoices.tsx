@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function FarmInvoices() {
@@ -164,8 +164,8 @@ export default function FarmInvoices() {
                             {/* Toggle: Importar sem dar entrada no estoque */}
                             <div
                                 className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${skipStockEntry
-                                        ? 'border-amber-400 bg-amber-50'
-                                        : 'border-gray-200 bg-white hover:border-gray-300'
+                                    ? 'border-amber-400 bg-amber-50'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
                                     }`}
                                 onClick={() => setSkipStockEntry(!skipStockEntry)}
                             >
@@ -222,7 +222,17 @@ export default function FarmInvoices() {
                                         {invoiceDetail.status === "confirmed" ? "Confirmada" : "Pendente"}
                                     </Badge>
                                 </CardTitle>
-                                <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null)}>Fechar</Button>
+                                <div className="flex items-center gap-2">
+                                    {invoiceDetail.source === "email_import" && (
+                                        <Button variant="outline" size="sm" onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open(`/api/farm/invoices/${selectedInvoice}/pdf`, '_blank');
+                                        }}>
+                                            <Download className="mr-1 h-3 w-3" /> PDF
+                                        </Button>
+                                    )}
+                                    <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null)}>Fechar</Button>
+                                </div>
                             </div>
                             <div className="flex gap-4 text-sm text-gray-600 mt-1">
                                 <span>Fornecedor: <strong>{invoiceDetail.supplier || "—"}</strong></span>
@@ -336,6 +346,18 @@ export default function FarmInvoices() {
                                             >
                                                 <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
                                             </button>
+                                            {inv.source === "email_import" && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        window.open(`/api/farm/invoices/${inv.id}/pdf`, '_blank');
+                                                    }}
+                                                    className="p-1 rounded hover:bg-blue-100 transition-colors shrink-0"
+                                                    title="Baixar PDF"
+                                                >
+                                                    <Download className="h-4 w-4 text-blue-400 hover:text-blue-600" />
+                                                </button>
+                                            )}
                                         </div>
                                         {/* Row 2: Date + Badge + Price */}
                                         <div className="flex items-center justify-between gap-2">

@@ -201,6 +201,15 @@ const runMigration = async () => {
             await sql.unsafe(invoiceEmailSql);
             console.log('✅ Migração invoice_email concluída!');
         }
+        // Migration 16: Accountant Email + PDF Storage
+        const accountantPdfPath = path.join(process.cwd(), 'migration_accountant_pdf.sql');
+        if (fs.existsSync(accountantPdfPath)) {
+            const accountantPdfSql = fs.readFileSync(accountantPdfPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', accountantPdfPath);
+            console.log('🚀 Executando SQL (accountant_pdf)...');
+            await sql.unsafe(accountantPdfSql);
+            console.log('✅ Migração accountant_pdf concluída!');
+        }
 
         console.log('✅ Todas as migrações concluídas com sucesso!');
 

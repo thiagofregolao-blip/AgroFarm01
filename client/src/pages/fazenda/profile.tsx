@@ -41,6 +41,7 @@ export default function FarmProfile() {
     const [extraNumbers, setExtraNumbers] = useState<string[]>([]);
     const [bulletinEnabled, setBulletinEnabled] = useState(true);
     const [invoiceEmail, setInvoiceEmail] = useState("");
+    const [accountantEmail, setAccountantEmail] = useState("");
 
     const form = useForm<ProfileFormData>({
         resolver: zodResolver(profileSchema),
@@ -80,6 +81,7 @@ export default function FarmProfile() {
             }
             setBulletinEnabled(profile.bulletin_enabled !== false);
             setInvoiceEmail(profile.invoice_email || "");
+            setAccountantEmail(profile.accountant_email || "");
         }
     }, [profile, form]);
 
@@ -107,6 +109,7 @@ export default function FarmProfile() {
                 farm_longitude: data.farm_longitude ? parseFloat(data.farm_longitude) : null,
                 bulletin_enabled: bulletinEnabled,
                 invoice_email: invoiceEmail || null,
+                accountant_email: accountantEmail || null,
             });
             return res.json();
         },
@@ -313,6 +316,26 @@ export default function FarmProfile() {
                                 />
                                 <p className="text-xs text-purple-600 font-medium">
                                     💡 Forneça este email apenas para empresas agrícolas de confiança.
+                                </p>
+                            </div>
+
+                            {/* Accountant Email */}
+                            <div className="border border-blue-200 rounded-lg p-4 bg-blue-50/30 space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-blue-600" />
+                                    <h3 className="font-semibold text-sm text-gray-700">Email do Contador</h3>
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                    Ao receber uma fatura, o sistema enviará automaticamente uma cópia para o seu contador.
+                                </p>
+                                <Input
+                                    value={accountantEmail}
+                                    onChange={(e) => setAccountantEmail(e.target.value)}
+                                    placeholder="Ex: contador@escritorio.com"
+                                    type="email"
+                                />
+                                <p className="text-xs text-blue-600 font-medium">
+                                    📨 Seu contador receberá uma cópia de cada fatura importada.
                                 </p>
                             </div>
 
