@@ -9017,10 +9017,11 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     try {
       const { users, farmProperties, farmApplications, farmProductsCatalog, farmInvoiceItems, farmInvoices } = await import("@shared/schema");
 
-      // 1. Total area (sum of all properties totalAreaHa)
+      // 1. Total area (sum of all farm plots areaHa)
+      const { farmPlots } = await import("@shared/schema");
       const totalAreaResult = await db
-        .select({ totalArea: sum(farmProperties.totalAreaHa) })
-        .from(farmProperties);
+        .select({ totalArea: sum(farmPlots.areaHa) })
+        .from(farmPlots);
       const totalArea = parseFloat(totalAreaResult[0]?.totalArea || "0") || 0;
 
       // 2. Total farmers count
