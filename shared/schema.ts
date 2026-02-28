@@ -27,6 +27,11 @@ export const users = pgTable("users", {
   region: text("region"), // Região/Cidade/Estado
   invoiceEmail: text("invoice_email"), // Email para receber faturas por email
   accountantEmail: text("accountant_email"), // Email do contador para encaminhamento
+  // Location and preferences
+  farmLatitude: decimal("farm_latitude", { precision: 10, scale: 7 }),
+  farmLongitude: decimal("farm_longitude", { precision: 10, scale: 7 }),
+  farmCity: text("farm_city"),
+  bulletinEnabled: boolean("bulletin_enabled").default(false),
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
@@ -1042,6 +1047,7 @@ export const farmPlots = pgTable("farm_plots", {
   areaHa: decimal("area_ha", { precision: 12, scale: 2 }).notNull(),
   crop: text("crop"), // Cultura atual (soja, milho, etc.)
   coordinates: text("coordinates"), // JSON array of {lat, lng} polygon vertices
+  centroid: text("centroid"), // Geometry column in DB, mapped as Text here to prevent deletion
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -1208,6 +1214,34 @@ export const farmPdvTerminals = pgTable("farm_pdv_terminals", {
   type: text("type", { enum: ["estoque", "diesel"] }).default("estoque").notNull(), // Permite dividir o tipo do PDV
   isOnline: boolean("is_online").default(false),
   lastHeartbeat: timestamp("last_heartbeat"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// ============================================================================
+// VIRTUAL WEATHER STATIONS & AGRONOMIC INTELLIGENCE
+// ============================================================================
+
+export const virtualWeatherStations = pgTable("virtual_weather_stations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  farmId: varchar("farm_id").references(() => farmProperties.id, { onDelete: "cascade" }), // Opcional: Atrelar a uma propriedade específica
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lat: decimal("lat", { precision: 10, scale: 7 }).notNull(),
+  lng: decimal("lng", { precision: 10, scale: 7 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const weatherHistoryLogs = pgTable("weather_history_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stationId: varchar("station_id").notNull().references(() => virtualWeatherStations.id, { onDelete: "cascade" }),
+  ts: timestamp("ts").notNull(), // Timestamp do dado climático
+  temperature: decimal("temperature", { precision: 5, scale: 2 }), // Celsius
+  precipitation: decimal("precipitation", { precision: 8, scale: 2 }), // mm
+  windSpeed: decimal("wind_speed", { precision: 5, scale: 2 }), // m/s ou km/h
+  humidity: integer("humidity"), // %
+  clouds: integer("clouds"), // %
+  rawData: jsonb("raw_data"), // Resposta completa da API caso precisemos de outros dados no futuro (ex: pressão, Dew Point)
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

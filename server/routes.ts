@@ -9274,6 +9274,103 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
+  // ============ VIRTUAL WEATHER STATIONS LOGIC ============
+
+  // POST /api/farm/weather/stations - Criar nova estação
+  app.post("/api/farm/weather/stations", requireAuth, async (req, res) => {
+    try {
+      const { virtualWeatherStations } = await import("@shared/schema");
+      const { name, lat, lng, farmId } = req.body;
+
+      if (!name || lat === undefined || lng === undefined) {
+        return res.status(400).json({ error: "Nome, latitude e longitude são obrigatórios." });
+      }
+
+      const [newStation] = await db.insert(virtualWeatherStations).values({
+        name,
+        lat: String(lat),
+        lng: String(lng),
+        farmId: farmId || null,
+        userId: req.user!.id,
+      }).returning();
+
+      // Força uma busca imediata do clima para popular o histórico inicial
+      const { WeatherStationService } = await import("./services/weather_station_service");
+      await WeatherStationService.fetchAndLogWeather(newStation.id);
+
+      res.status(201).json(newStation);
+    } catch (error) {
+      console.error("Erro ao criar estação meteorológica:", error);
+      res.status(500).json({ error: "Falha ao criar estação" });
+    }
+  });
+
+  // GET /api/farm/weather/stations - Listar estações do usuário (com o clima mais recente)
+  app.get("/api/farm/weather/stations", requireAuth, async (req, res) => {
+    try {
+      const { virtualWeatherStations, weatherHistoryLogs } = await import("@shared/schema");
+
+      const stations = await db
+        .select()
+        .from(virtualWeatherStations)
+        .where(eq(virtualWeatherStations.userId, req.user!.id));
+
+      // Pegar o último log de cada estação
+      const stationsWithWeather = await Promise.all(stations.map(async (station) => {
+        const [latestLog] = await db
+          .select()
+          .from(weatherHistoryLogs)
+          .where(eq(weatherHistoryLogs.stationId, station.id))
+          .orderBy(desc(weatherHistoryLogs.ts))
+          .limit(1);
+
+        return {
+          ...station,
+          currentWeather: latestLog || null
+        };
+      }));
+
+      res.json(stationsWithWeather);
+    } catch (error) {
+      console.error("Erro ao listar estações:", error);
+      res.status(500).json({ error: "Falha ao listar estações" });
+    }
+  });
+
+  // GET /api/farm/weather/stations/:id/dashboard - Dashboard completo (Gráficos, Previsão, Janela)
+  app.get("/api/farm/weather/stations/:id/dashboard", requireAuth, async (req, res) => {
+    try {
+      const { virtualWeatherStations, weatherHistoryLogs } = await import("@shared/schema");
+      const { WeatherStationService } = await import("./services/weather_station_service");
+      const stationId = req.params.id;
+
+      // Pegar a estação
+      const [station] = await db
+        .select()
+        .from(virtualWeatherStations)
+        .where(and(eq(virtualWeatherStations.id, stationId), eq(virtualWeatherStations.userId, req.user!.id)));
+
+      if (!station) {
+        return res.status(404).json({ error: "Estação não encontrada" });
+      }
+
+      // Buscar inteligência agronômica e previsão baseada na localização da estação
+      const intelligence = await WeatherStationService.getForecastWithIntelligence(station.lat?.toString(), station.lng?.toString());
+
+      // (Futuro) Buscar logs históricos para calcular o GDD da safra
+      // const gdd = await WeatherStationService.calculateGDD(station.id, new Date('2023-09-01'));
+
+      res.json({
+        station,
+        ...intelligence,
+        gdd: 450, // Stub placeholder for UI
+      });
+
+    } catch (error) {
+      console.error("Erro no dashboard da estação:", error);
+      res.status(500).json({ error: "Falha ao carregar dashboard" });
+    }
+  });
+
   return httpServer;
 }
-

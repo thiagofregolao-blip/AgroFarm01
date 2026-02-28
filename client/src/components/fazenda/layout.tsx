@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, Package, FileText, BarChart3,
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
-    BookOpen, ArrowDownUp, Satellite, Menu, X
+    BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -22,6 +22,7 @@ const navItems = [
     { label: "Caderno de Campo", href: "/fazenda/caderno-campo", icon: BookOpen, moduleKey: "field_notebook" },
     { label: "Cotações", href: "/fazenda/cotacoes", icon: ArrowDownUp, moduleKey: "quotations" },
     { label: "NDVI Satélite", href: "/fazenda/ndvi", icon: Satellite, moduleKey: "ndvi" },
+    { label: "Clima", href: "/fazenda/clima", icon: CloudRain, moduleKey: "weather", alwaysOn: true },
     { label: "Relatórios", href: "/fazenda/relatorios", icon: FileBarChart, moduleKey: "reports" },
     { label: "Perfil", href: "/fazenda/perfil", icon: User, moduleKey: "profile", alwaysOn: true },
 ];

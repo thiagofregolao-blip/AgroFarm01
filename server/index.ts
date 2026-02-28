@@ -3,6 +3,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import cron from "node-cron";
+import { WeatherStationService } from "./services/weather_station_service";
 
 const app = express();
 
@@ -159,8 +161,17 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '3000', 10);
-  server.listen(port, async () => {
+  server.listen(port, "0.0.0.0", async () => {
     log(`serving on port ${port}`);
+
+    // Schedule weather background updates every 3 hours
+    cron.schedule('0 */3 * * *', async () => {
+      try {
+        await WeatherStationService.pollAllActiveStations();
+      } catch (err) {
+        console.error("Error running weather polling cron:", err);
+      }
+    });
 
     // Start daily bulletin scheduler (production only)
     if (process.env.NODE_ENV === 'production') {

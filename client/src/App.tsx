@@ -61,6 +61,7 @@ import FarmProfile from "@/pages/fazenda/profile";
 import FarmEquipment from "@/pages/fazenda/equipment";
 import FarmLogin from "@/pages/fazenda/login";
 import FarmReports from "@/pages/fazenda/reports";
+import FazendaClima from "@/pages/fazenda/clima";
 import LandingPage from "@/pages/landing";
 import FieldNotebook from "@/pages/fazenda/field-notebook";
 import QuotationNetwork from "@/pages/fazenda/quotation-network";
@@ -137,6 +138,7 @@ function Router() {
       <Route path="/fazenda/caderno-campo" component={FieldNotebook} />
       <Route path="/fazenda/cotacoes" component={QuotationNetwork} />
       <Route path="/fazenda/ndvi" component={NdviPage} />
+      <Route path="/fazenda/clima" component={FazendaClima} />
       <Route path="/fazenda/perfil" component={FarmProfile} />
 
       {/* PDV Routes (Tablet) */}
