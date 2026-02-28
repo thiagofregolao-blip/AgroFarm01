@@ -94,8 +94,11 @@ export function registerInvoiceEmailRoutes(app: Express) {
                         results.push(result);
 
                         // Send WhatsApp notification
+                        console.log(`[Invoice Webhook] Attempting WhatsApp notification...`);
+                        console.log(`[Invoice Webhook] Farmer WhatsApp: ${farmer.whatsapp_number || 'NOT SET'}`);
+                        console.log(`[Invoice Webhook] ZAPI_INSTANCE_ID: ${process.env.ZAPI_INSTANCE_ID ? 'SET' : 'NOT SET'}`);
+                        console.log(`[Invoice Webhook] ZAPI_TOKEN: ${process.env.ZAPI_TOKEN ? 'SET' : 'NOT SET'}`);
                         try {
-                            // Send WhatsApp notification directly
                             if (farmer.whatsapp_number && process.env.ZAPI_INSTANCE_ID) {
                                 const zapiUrl = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}/token/${process.env.ZAPI_TOKEN}/send-text`;
                                 const currencySymbol = extracted.currency === "PYG" ? "₲" : extracted.currency === "BRL" ? "R$" : "$";
@@ -107,12 +110,15 @@ export function registerInvoiceEmailRoutes(app: Express) {
                                     `${result.matchedCount > 0 ? `✅ *${result.matchedCount}* já encontrados no catálogo\n` : ""}` +
                                     `\n👉 Acesse o sistema para *revisar e aprovar* esta fatura.`;
 
-                                await fetch(zapiUrl, {
+                                const zapiResponse = await fetch(zapiUrl, {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json", "Client-Token": process.env.ZAPI_CLIENT_TOKEN || "" },
                                     body: JSON.stringify({ phone: farmer.whatsapp_number, message }),
                                 });
-                                console.log(`[Invoice Webhook] WhatsApp notification sent to ${farmer.whatsapp_number}`);
+                                const zapiResult = await zapiResponse.json();
+                                console.log(`[Invoice Webhook] WhatsApp notification sent to ${farmer.whatsapp_number}, response:`, JSON.stringify(zapiResult));
+                            } else {
+                                console.log(`[Invoice Webhook] WhatsApp notification SKIPPED - missing phone or ZAPI config`);
                             }
                         } catch (whatsAppError) {
                             console.error("[Invoice Webhook] WhatsApp notification failed:", whatsAppError);
