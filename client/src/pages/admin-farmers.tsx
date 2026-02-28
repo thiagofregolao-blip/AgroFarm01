@@ -107,24 +107,27 @@ export default function AdminFarmersPage() {
             </header>
 
             {/* ===== CONTENT ===== */}
-            <main className="flex-1 overflow-auto p-6 max-w-7xl mx-auto w-full">
-                {activeTab === "dashboard" && <FarmersDashboard />}
-                {activeTab === "mapa" && (
-                    <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-green-600" /></div>}>
+            {activeTab === "mapa" ? (
+                <div className="flex-1 overflow-hidden">
+                    <Suspense fallback={<div className="flex justify-center items-center h-full"><Loader2 className="h-10 w-10 animate-spin text-green-600" /></div>}>
                         <GlobalMapView />
                     </Suspense>
-                )}
-                {activeTab === "farmers" && <FarmersManagement />}
-                {activeTab === "products" && <ProductsManagement />}
-                {activeTab === "manuals" && <ManualsManagement />}
-                {activeTab === "modules" && <ModulesManagement />}
-            </main>
+                </div>
+            ) : (
+                <main className="flex-1 overflow-auto p-6 max-w-7xl mx-auto w-full">
+                    {activeTab === "dashboard" && <FarmersDashboard />}
+                    {activeTab === "farmers" && <FarmersManagement />}
+                    {activeTab === "products" && <ProductsManagement />}
+                    {activeTab === "manuals" && <ManualsManagement />}
+                    {activeTab === "modules" && <ModulesManagement />}
+                </main>
+            )}
         </div>
     );
 }
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, AreaChart, Area, ResponsiveContainer, Legend } from "recharts";
-import { MapContainer, TileLayer, Polygon, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Polygon, Popup, LayersControl } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 // ==========================================
@@ -136,16 +139,19 @@ const CATEGORY_COLORS: Record<string, string> = {
     inseticida: "#ef4444",
     fertilizante: "#3b82f6",
     semente: "#eab308",
+    especialidades: "#06b6d4",
     adjuvante: "#06b6d4",
-    default: "#22c55e",
+    nematicida: "#06b6d4",
+    "oleo mineral": "#06b6d4",
+    none: "#9ca3af",
 };
 
 const CHART_COLORS = ["#22c55e", "#16a34a", "#15803d", "#f97316", "#a855f7", "#3b82f6", "#eab308"];
 
 function getCategoryColor(category: string | null) {
-    if (!category) return CATEGORY_COLORS.default;
+    if (!category) return CATEGORY_COLORS.none;
     const key = category.toLowerCase();
-    return CATEGORY_COLORS[key] || CATEGORY_COLORS.default;
+    return CATEGORY_COLORS[key] || CATEGORY_COLORS.especialidades;
 }
 
 // ==========================================
@@ -331,9 +337,9 @@ function GlobalMapView() {
     });
 
     if (isLoading) return (
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="flex flex-col items-center justify-center h-full gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-green-600" />
-            <p className="text-muted-foreground text-sm">Carregando talhões de todos os clientes...</p>
+            <p className="text-muted-foreground text-sm">Carregando talhões...</p>
         </div>
     );
 
@@ -348,46 +354,61 @@ function GlobalMapView() {
         return matchesFarmer && matchesCategory && matchesProduct;
     });
 
-    // Find center from first available plot
     const firstPlot = filteredPlots.find((p: any) => p.coordinates?.length > 0);
     const center: [number, number] = firstPlot
         ? [firstPlot.coordinates[0].lat, firstPlot.coordinates[0].lng]
-        : [-23.5, -52.0]; // Default: Paraná/Brasil
+        : [-23.5, -52.0];
 
     const getPlotColor = (plot: any) => {
         const lastApp = plot.applications[0];
-        if (!lastApp) return "#22c55e";
+        if (!lastApp) return CATEGORY_COLORS.none;
         return getCategoryColor(lastApp.category);
     };
 
-    const activeCategories = [
-        { key: "herbicida", label: "Herbicida", color: CATEGORY_COLORS.herbicida },
-        { key: "fungicida", label: "Fungicida", color: CATEGORY_COLORS.fungicida },
-        { key: "inseticida", label: "Inseticida", color: CATEGORY_COLORS.inseticida },
-        { key: "fertilizante", label: "Fertilizante", color: CATEGORY_COLORS.fertilizante },
-        { key: "semente", label: "Semente", color: CATEGORY_COLORS.semente },
-        { key: "default", label: "Sem aplicação", color: CATEGORY_COLORS.default },
+    const legendItems = [
+        { label: "Herbicida", color: "#f97316" },
+        { label: "Fungicida", color: "#a855f7" },
+        { label: "Inseticida", color: "#ef4444" },
+        { label: "Fertilizante", color: "#3b82f6" },
+        { label: "Semente", color: "#eab308" },
+        { label: "Especialidades", color: "#06b6d4" },
+        { label: "Sem aplicação", color: "#9ca3af" },
     ];
 
-    return (
-        <Card className="border-0 shadow-md overflow-hidden">
-            <CardHeader className="bg-white border-b sticky top-0 z-10">
-                <div className="flex flex-col gap-4">
-                    <div>
-                        <CardTitle className="text-xl text-green-900 flex items-center gap-2">
-                            <Map className="h-5 w-5" />
-                            Mapa Global de Talhões
-                        </CardTitle>
-                        <CardDescription>
-                            {filteredPlots.length} talhão(ões) exibido(s) — coloridos pela última categoria de produto aplicado
-                        </CardDescription>
-                    </div>
+    if (allPlots.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <Map className="h-16 w-16 mb-4 text-gray-300" />
+                <p className="text-lg font-medium">Nenhum talhão com coordenadas</p>
+                <p className="text-sm mt-1">Os agricultores precisam desenhar os talhões no mapa.</p>
+            </div>
+        );
+    }
 
-                    {/* Filters */}
-                    <div className="flex flex-wrap gap-3">
+    return (
+        <div className="flex h-full">
+            {/* ===== LEFT SIDEBAR ===== */}
+            <div className="w-[280px] shrink-0 bg-white border-r flex flex-col overflow-y-auto">
+                {/* Title */}
+                <div className="p-4 border-b bg-green-50">
+                    <h3 className="text-base font-bold text-green-900 flex items-center gap-2">
+                        <Map className="h-4 w-4" />
+                        Mapa Global
+                    </h3>
+                    <p className="text-xs text-green-700 mt-0.5">
+                        {filteredPlots.length} de {allPlots.length} talhões
+                    </p>
+                </div>
+
+                {/* Filters */}
+                <div className="p-4 space-y-3 border-b">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filtros</p>
+
+                    <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Agricultor</label>
                         <Select value={filterFarmer} onValueChange={setFilterFarmer}>
-                            <SelectTrigger className="w-[200px]">
-                                <SelectValue placeholder="Todos os agricultores" />
+                            <SelectTrigger className="w-full h-8 text-xs">
+                                <SelectValue placeholder="Todos" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__all__">Todos os agricultores</SelectItem>
@@ -396,10 +417,13 @@ function GlobalMapView() {
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
 
+                    <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Categoria</label>
                         <Select value={filterCategory} onValueChange={setFilterCategory}>
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Todas categorias" />
+                            <SelectTrigger className="w-full h-8 text-xs">
+                                <SelectValue placeholder="Todas" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__all__">Todas categorias</SelectItem>
@@ -408,10 +432,13 @@ function GlobalMapView() {
                                 ))}
                             </SelectContent>
                         </Select>
+                    </div>
 
+                    <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Produto</label>
                         <Select value={filterProduct} onValueChange={setFilterProduct}>
-                            <SelectTrigger className="w-[220px]">
-                                <SelectValue placeholder="Todos os produtos" />
+                            <SelectTrigger className="w-full h-8 text-xs">
+                                <SelectValue placeholder="Todos" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__all__">Todos os produtos</SelectItem>
@@ -420,87 +447,94 @@ function GlobalMapView() {
                                 ))}
                             </SelectContent>
                         </Select>
-
-                        {(filterFarmer !== "__all__" || filterCategory !== "__all__" || filterProduct !== "__all__") && (
-                            <button
-                                onClick={() => { setFilterFarmer("__all__"); setFilterCategory("__all__"); setFilterProduct("__all__"); }}
-                                className="text-xs text-red-500 underline self-center"
-                            >
-                                Limpar filtros
-                            </button>
-                        )}
                     </div>
 
-                    {/* Legend */}
-                    <div className="flex flex-wrap gap-3">
-                        {activeCategories.map(cat => (
-                            <div key={cat.key} className="flex items-center gap-1.5 text-xs text-gray-600">
-                                <div className="w-3 h-3 rounded-sm" style={{ background: cat.color }} />
-                                {cat.label}
+                    {(filterFarmer !== "__all__" || filterCategory !== "__all__" || filterProduct !== "__all__") && (
+                        <button
+                            onClick={() => { setFilterFarmer("__all__"); setFilterCategory("__all__"); setFilterProduct("__all__"); }}
+                            className="text-xs text-red-500 underline w-full text-left"
+                        >
+                            ✕ Limpar filtros
+                        </button>
+                    )}
+                </div>
+
+                {/* Legend */}
+                <div className="p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Legenda</p>
+                    <div className="space-y-1.5">
+                        {legendItems.map(item => (
+                            <div key={item.label} className="flex items-center gap-2 text-xs text-gray-700">
+                                <div className="w-4 h-3 rounded-sm border border-gray-200" style={{ background: item.color }} />
+                                {item.label}
                             </div>
                         ))}
                     </div>
                 </div>
-            </CardHeader>
-            <CardContent className="p-0">
-                {allPlots.length === 0 ? (
-                    <div className="text-center py-16 text-muted-foreground">
-                        <Map className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                        <p>Nenhum talhão com coordenadas cadastrado ainda.</p>
-                        <p className="text-xs mt-1">Os agricultores precisam desenhar os talhões no mapa do sistema.</p>
-                    </div>
-                ) : (
-                    <MapContainer center={center} zoom={12} style={{ height: "600px", width: "100%" }}>
-                        <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
-                        {filteredPlots.map((plot: any) => {
-                            if (!plot.coordinates || plot.coordinates.length < 3) return null;
-                            const positions: [number, number][] = plot.coordinates.map((c: any) => [c.lat, c.lng]);
-                            const color = getPlotColor(plot);
-                            return (
-                                <Polygon
-                                    key={plot.plotId}
-                                    positions={positions}
-                                    pathOptions={{ color, weight: 2, fillColor: color, fillOpacity: 0.4 }}
-                                >
-                                    <Popup>
-                                        <div className="min-w-[220px]">
-                                            <div className="font-bold text-green-800 text-base mb-0.5">{plot.plotName}</div>
-                                            <div className="text-xs text-gray-500 mb-2">{plot.propertyName} — {plot.farmerName}</div>
-                                            <div className="text-xs mb-3 bg-gray-50 px-2 py-1 rounded">
-                                                🌾 {plot.crop || "Cultura não informada"} · {plot.areaHa.toFixed(1)} ha
-                                            </div>
-                                            {plot.applications.length > 0 ? (
-                                                <div>
-                                                    <p className="text-xs font-semibold text-gray-700 mb-1">Últimas aplicações:</p>
-                                                    <ul className="space-y-1">
-                                                        {plot.applications.map((app: any, i: number) => (
-                                                            <li key={i} className="text-xs flex items-start gap-1.5">
-                                                                <span className="w-2 h-2 rounded-full mt-0.5 shrink-0" style={{ background: getCategoryColor(app.category), display: "inline-block" }} />
-                                                                <span>
-                                                                    <b>{app.productName}</b> — {parseFloat(app.quantity).toFixed(2)}
-                                                                    <span className="text-gray-400 ml-1">
-                                                                        {new Date(app.appliedAt).toLocaleDateString('pt-BR')}
-                                                                    </span>
-                                                                </span>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            ) : (
-                                                <p className="text-xs text-gray-400 italic">Sem aplicações registradas</p>
-                                            )}
+            </div>
+
+            {/* ===== MAP ===== */}
+            <div className="flex-1">
+                <MapContainer center={center} zoom={12} style={{ height: "100%", width: "100%" }}>
+                    <LayersControl position="topright">
+                        <LayersControl.BaseLayer checked name="Ruas">
+                            <TileLayer
+                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            />
+                        </LayersControl.BaseLayer>
+                        <LayersControl.BaseLayer name="Satélite">
+                            <TileLayer
+                                attribution='&copy; Esri'
+                                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            />
+                        </LayersControl.BaseLayer>
+                    </LayersControl>
+                    {filteredPlots.map((plot: any) => {
+                        if (!plot.coordinates || plot.coordinates.length < 3) return null;
+                        const positions: [number, number][] = plot.coordinates.map((c: any) => [c.lat, c.lng]);
+                        const color = getPlotColor(plot);
+                        return (
+                            <Polygon
+                                key={plot.plotId}
+                                positions={positions}
+                                pathOptions={{ color, weight: 2, fillColor: color, fillOpacity: 0.4 }}
+                            >
+                                <Popup>
+                                    <div className="min-w-[220px]">
+                                        <div className="font-bold text-green-800 text-base mb-0.5">{plot.plotName}</div>
+                                        <div className="text-xs text-gray-500 mb-2">{plot.propertyName} — {plot.farmerName}</div>
+                                        <div className="text-xs mb-3 bg-gray-50 px-2 py-1 rounded">
+                                            🌾 {plot.crop || "Cultura não informada"} · {plot.areaHa.toFixed(1)} ha
                                         </div>
-                                    </Popup>
-                                </Polygon>
-                            );
-                        })}
-                    </MapContainer>
-                )}
-            </CardContent>
-        </Card>
+                                        {plot.applications.length > 0 ? (
+                                            <div>
+                                                <p className="text-xs font-semibold text-gray-700 mb-1">Últimas aplicações:</p>
+                                                <ul className="space-y-1">
+                                                    {plot.applications.map((app: any, i: number) => (
+                                                        <li key={i} className="text-xs flex items-start gap-1.5">
+                                                            <span className="w-2 h-2 rounded-full mt-0.5 shrink-0" style={{ background: getCategoryColor(app.category), display: "inline-block" }} />
+                                                            <span>
+                                                                <b>{app.productName}</b> — {parseFloat(app.quantity).toFixed(2)}
+                                                                <span className="text-gray-400 ml-1">
+                                                                    {new Date(app.appliedAt).toLocaleDateString('pt-BR')}
+                                                                </span>
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-gray-400 italic">Sem aplicações registradas</p>
+                                        )}
+                                    </div>
+                                </Popup>
+                            </Polygon>
+                        );
+                    })}
+                </MapContainer>
+            </div>
+        </div>
     );
 }
 
