@@ -96,7 +96,14 @@ export class WeatherStationService {
     static async getForecastWithIntelligence(lat: string | undefined, lng: string | undefined) {
         const openWeatherKey = process.env.OPENWEATHER_API_KEY;
         if (!lat || !lng) throw new Error("Missing coordinates.");
-        if (!openWeatherKey) throw new Error("OPENWEATHER_API_KEY is not configured.");
+        if (!openWeatherKey) {
+            console.warn("OPENWEATHER_API_KEY is not configured. Returning empty forecast data.");
+            return {
+                charts: { temperatures: [], precipitation: [], wind: [], humidity: [] },
+                sprayWindow: [],
+                forecast: []
+            };
+        }
 
         const response = await fetch(
             `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${openWeatherKey}&units=metric`
