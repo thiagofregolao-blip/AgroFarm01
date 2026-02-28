@@ -192,6 +192,15 @@ const runMigration = async () => {
             await sql.unsafe(farmLocationSql);
             console.log('✅ Migração farm_location concluída!');
         }
+        // Migration 15: Invoice Email Import columns
+        const invoiceEmailPath = path.join(process.cwd(), 'migration_invoice_email.sql');
+        if (fs.existsSync(invoiceEmailPath)) {
+            const invoiceEmailSql = fs.readFileSync(invoiceEmailPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', invoiceEmailPath);
+            console.log('🚀 Executando SQL (invoice_email)...');
+            await sql.unsafe(invoiceEmailSql);
+            console.log('✅ Migração invoice_email concluída!');
+        }
 
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
