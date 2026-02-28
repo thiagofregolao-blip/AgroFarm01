@@ -3,7 +3,7 @@ import { virtualWeatherStations, weatherHistoryLogs } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
+
 
 export interface WeatherData {
     temperature: number;
@@ -33,13 +33,14 @@ export class WeatherStationService {
         if (!station || !station.isActive) return false;
 
         try {
-            if (!OPENWEATHER_API_KEY) {
+            const openWeatherKey = process.env.OPENWEATHER_API_KEY;
+            if (!openWeatherKey) {
                 throw new Error("OPENWEATHER_API_KEY is not configured.");
             }
 
             // Using OpenWeather API to get current weather
             const response = await fetch(
-                `https://api.openweathermap.org/data/2.5/weather?lat=${station.lat}&lon=${station.lng}&appid=${OPENWEATHER_API_KEY}&units=metric`
+                `https://api.openweathermap.org/data/2.5/weather?lat=${station.lat}&lon=${station.lng}&appid=${openWeatherKey}&units=metric`
             );
 
             if (!response.ok) {
@@ -93,11 +94,12 @@ export class WeatherStationService {
      * Gets the 5-Day/3-Hour forecast for a given station to generate charts and the Spray Window
      */
     static async getForecastWithIntelligence(lat: string | undefined, lng: string | undefined) {
+        const openWeatherKey = process.env.OPENWEATHER_API_KEY;
         if (!lat || !lng) throw new Error("Missing coordinates.");
-        if (!OPENWEATHER_API_KEY) throw new Error("OPENWEATHER_API_KEY is not configured.");
+        if (!openWeatherKey) throw new Error("OPENWEATHER_API_KEY is not configured.");
 
         const response = await fetch(
-            `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric`
+            `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${openWeatherKey}&units=metric`
         );
 
         if (!response.ok) {
