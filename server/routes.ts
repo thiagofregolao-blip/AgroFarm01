@@ -8,7 +8,7 @@ import multer from "multer";
 import { importExcelFile, importClientsFromExcel, importPlanningProducts } from "./import-excel";
 import { setupAuth, requireAuth, requireSuperAdmin, requireManager, requireFarmAdmin } from "./auth";
 import { db } from "./db";
-import { eq, sql, and, gt, desc, inArray, or, sum, count } from "drizzle-orm";
+import { eq, sql, and, gt, gte, desc, inArray, or, sum, count } from "drizzle-orm";
 import { parseCVALEPDF } from "./parse-cvale-pdf";
 import { emailService } from "./email";
 import { scrypt, randomBytes } from "crypto";
@@ -9077,6 +9077,43 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
         .from(farmProperties);
       const totalProperties = propertiesCountResult[0]?.count || 0;
 
+      // 6. Applications by month (last 6 months)
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+      const applicationsByMonthRaw = await db
+        .select({
+          month: sql<string>`to_char(${farmApplications.appliedAt}, 'YYYY-MM')`,
+          count: count(),
+        })
+        .from(farmApplications)
+        .where(gte(farmApplications.appliedAt, sixMonthsAgo))
+        .groupBy(sql`to_char(${farmApplications.appliedAt}, 'YYYY-MM')`)
+        .orderBy(sql`to_char(${farmApplications.appliedAt}, 'YYYY-MM')`);
+
+      // 7. Culture distribution (main_culture field on users)
+      const cultureDistributionRaw = await db
+        .select({
+          culture: users.mainCulture,
+          count: count(),
+        })
+        .from(users)
+        .where(inArray(users.role, ['agricultor', 'admin_agricultor']))
+        .groupBy(users.mainCulture);
+
+      // 8. Stock movements by month (last 6 months)
+      const { farmStockMovements } = await import("@shared/schema");
+      const stockByMonthRaw = await db
+        .select({
+          month: sql<string>`to_char(${farmStockMovements.createdAt}, 'YYYY-MM')`,
+          entries: sql<string>`SUM(CASE WHEN ${farmStockMovements.type} = 'entry' THEN CAST(${farmStockMovements.quantity} AS NUMERIC) ELSE 0 END)`,
+          exits: sql<string>`SUM(CASE WHEN ${farmStockMovements.type} = 'exit' THEN ABS(CAST(${farmStockMovements.quantity} AS NUMERIC)) ELSE 0 END)`,
+        })
+        .from(farmStockMovements)
+        .where(gte(farmStockMovements.createdAt, sixMonthsAgo))
+        .groupBy(sql`to_char(${farmStockMovements.createdAt}, 'YYYY-MM')`)
+        .orderBy(sql`to_char(${farmStockMovements.createdAt}, 'YYYY-MM')`);
+
       res.json({
         totalArea: totalArea,
         totalFarmers: totalFarmers,
@@ -9095,6 +9132,18 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
           lastInvoiceDate: p.invoiceDate,
           supplier: p.supplier,
         })),
+        applicationsByMonth: applicationsByMonthRaw.map(r => ({
+          month: r.month,
+          count: Number(r.count),
+        })),
+        cultureDistribution: cultureDistributionRaw
+          .filter(r => r.culture)
+          .map(r => ({ name: r.culture || "Outros", value: Number(r.count) })),
+        stockByMonth: stockByMonthRaw.map(r => ({
+          month: r.month,
+          entries: parseFloat(r.entries || "0"),
+          exits: parseFloat(r.exits || "0"),
+        })),
       });
     } catch (error) {
       console.error("Failed to fetch farmers dashboard stats:", error);
@@ -9102,5 +9151,87 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
+  // GET /api/admin/farmers/map-data — All plots with coordinates + their most recent applications
+  app.get("/api/admin/farmers/map-data", requireFarmAdmin, async (req, res) => {
+    try {
+      const { farmPlots, farmProperties, farmApplications, farmProductsCatalog, users } = await import("@shared/schema");
+
+      // Get all plots that have coordinates
+      const plots = await db
+        .select({
+          plotId: farmPlots.id,
+          plotName: farmPlots.name,
+          areaHa: farmPlots.areaHa,
+          crop: farmPlots.crop,
+          coordinates: farmPlots.coordinates,
+          propertyId: farmProperties.id,
+          propertyName: farmProperties.name,
+          farmerId: users.id,
+          farmerName: users.name,
+        })
+        .from(farmPlots)
+        .innerJoin(farmProperties, eq(farmPlots.propertyId, farmProperties.id))
+        .innerJoin(users, eq(farmProperties.farmerId, users.id))
+        .where(sql`${farmPlots.coordinates} IS NOT NULL AND ${farmPlots.coordinates} != '[]' AND ${farmPlots.coordinates} != ''`);
+
+      // For each plot, get the last 5 applications
+      const plotIds = plots.map(p => p.plotId);
+
+      let applications: any[] = [];
+      if (plotIds.length > 0) {
+        applications = await db
+          .select({
+            plotId: farmApplications.plotId,
+            productId: farmApplications.productId,
+            productName: farmProductsCatalog.name,
+            category: farmProductsCatalog.category,
+            quantity: farmApplications.quantity,
+            appliedAt: farmApplications.appliedAt,
+            appliedBy: farmApplications.appliedBy,
+          })
+          .from(farmApplications)
+          .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
+          .where(inArray(farmApplications.plotId, plotIds))
+          .orderBy(desc(farmApplications.appliedAt));
+      }
+
+      // Group applications by plotId
+      const appsByPlot = new Map<string, any[]>();
+      for (const app of applications) {
+        if (!app.plotId) continue;
+        if (!appsByPlot.has(app.plotId)) appsByPlot.set(app.plotId, []);
+        const list = appsByPlot.get(app.plotId)!;
+        if (list.length < 5) list.push(app);
+      }
+
+      // Get unique products list for filters
+      const allProducts = await db
+        .select({ id: farmProductsCatalog.id, name: farmProductsCatalog.name, category: farmProductsCatalog.category })
+        .from(farmProductsCatalog)
+        .where(eq(farmProductsCatalog.status, "active"))
+        .orderBy(farmProductsCatalog.name);
+
+      res.json({
+        plots: plots.map(p => ({
+          plotId: p.plotId,
+          plotName: p.plotName,
+          areaHa: parseFloat(p.areaHa || "0"),
+          crop: p.crop,
+          coordinates: (() => { try { return JSON.parse(p.coordinates || "[]"); } catch { return []; } })(),
+          propertyId: p.propertyId,
+          propertyName: p.propertyName,
+          farmerId: p.farmerId,
+          farmerName: p.farmerName,
+          applications: appsByPlot.get(p.plotId) || [],
+        })),
+        products: allProducts,
+      });
+    } catch (error) {
+      console.error("Failed to fetch map data:", error);
+      res.status(500).json({ error: "Failed to fetch map data" });
+    }
+  });
+
   return httpServer;
 }
+

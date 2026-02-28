@@ -30,7 +30,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers, Map } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProductsManagement } from "./admin-products";
 import { ManualsManagement } from "./admin-manuals";
@@ -67,10 +67,14 @@ export default function AdminFarmersPage() {
 
             <main className="flex-1 overflow-auto p-6 max-w-7xl mx-auto w-full">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-5 max-w-4xl">
+                    <TabsList className="grid w-full grid-cols-6 max-w-5xl">
                         <TabsTrigger value="dashboard" className="flex items-center gap-2">
                             <BarChart3 className="h-4 w-4" />
                             Dashboard
+                        </TabsTrigger>
+                        <TabsTrigger value="mapa" className="flex items-center gap-2">
+                            <Map className="h-4 w-4" />
+                            Mapa
                         </TabsTrigger>
                         <TabsTrigger value="farmers" className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
@@ -94,6 +98,10 @@ export default function AdminFarmersPage() {
                         <FarmersDashboard />
                     </TabsContent>
 
+                    <TabsContent value="mapa" className="space-y-6">
+                        <GlobalMapView />
+                    </TabsContent>
+
                     <TabsContent value="farmers" className="space-y-6">
                         <FarmersManagement />
                     </TabsContent>
@@ -115,82 +123,168 @@ export default function AdminFarmersPage() {
     );
 }
 
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, AreaChart, Area, ResponsiveContainer, Legend } from "recharts";
+import { MapContainer, TileLayer, Polygon, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+
+// ==========================================
+// COLOR CONFIG FOR PRODUCT CATEGORIES
+// ==========================================
+const CATEGORY_COLORS: Record<string, string> = {
+    herbicida: "#f97316",
+    fungicida: "#a855f7",
+    inseticida: "#ef4444",
+    fertilizante: "#3b82f6",
+    semente: "#eab308",
+    adjuvante: "#06b6d4",
+    default: "#22c55e",
+};
+
+const CHART_COLORS = ["#22c55e", "#16a34a", "#15803d", "#f97316", "#a855f7", "#3b82f6", "#eab308"];
+
+function getCategoryColor(category: string | null) {
+    if (!category) return CATEGORY_COLORS.default;
+    const key = category.toLowerCase();
+    return CATEGORY_COLORS[key] || CATEGORY_COLORS.default;
+}
+
+// ==========================================
+// FARMERS DASHBOARD — PREMIUM
+// ==========================================
 function FarmersDashboard() {
     const { data: stats, isLoading } = useQuery<any>({
         queryKey: ['/api/admin/farmers/dashboard/stats'],
     });
 
-    if (isLoading) {
-        return (
-            <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-green-600" />
-            </div>
-        );
-    }
+    if (isLoading) return (
+        <div className="flex justify-center py-20">
+            <Loader2 className="h-10 w-10 animate-spin text-green-600" />
+        </div>
+    );
 
-    const formatNumber = (num: number) => {
-        return new Intl.NumberFormat('pt-BR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(num);
-    };
+    const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+
+    const metricCards = [
+        { label: "Área Total", value: `${fmt(stats?.totalArea || 0)} ha`, icon: TrendingUp, color: "#16a34a", bg: "#dcfce7" },
+        { label: "Agricultores", value: stats?.totalFarmers || 0, icon: Users, color: "#2563eb", bg: "#dbeafe" },
+        { label: "Propriedades", value: stats?.totalProperties || 0, icon: Sprout, color: "#f97316", bg: "#ffedd5" },
+        { label: "Produtos", value: stats?.productPrices?.length || 0, icon: BarChart3, color: "#a855f7", bg: "#f3e8ff" },
+    ];
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-bold tracking-tight">Dashboard de Agricultores</h2>
-                <p className="text-muted-foreground">Visão geral das métricas e estatísticas dos agricultores</p>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-800 to-green-600 rounded-2xl p-6 text-white shadow-xl">
+                <div className="flex items-center gap-3 mb-1">
+                    <BarChart3 className="h-7 w-7 text-yellow-300" />
+                    <h2 className="text-2xl font-bold">Dashboard Agro</h2>
+                </div>
+                <p className="text-green-100 text-sm">Visão geral de todos os clientes e operações do campo.</p>
             </div>
 
-            {/* Cards de Métricas */}
+            {/* Metric Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Área Total</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                {metricCards.map((m) => {
+                    const Icon = m.icon;
+                    return (
+                        <Card key={m.label} className="border-0 shadow-md">
+                            <CardContent className="pt-6">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{m.label}</p>
+                                        <p className="text-3xl font-bold mt-1" style={{ color: m.color }}>{m.value}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: m.bg }}>
+                                        <Icon className="h-6 w-6" style={{ color: m.color }} />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+            </div>
+
+            {/* Charts Row */}
+            <div className="grid gap-6 lg:grid-cols-3">
+                {/* Bar Chart — Applications by Month */}
+                <Card className="border-0 shadow-md lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle className="text-base font-semibold">Aplicações por Mês</CardTitle>
+                        <CardDescription>Últimos 6 meses — total de aplicações nos talhões</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{formatNumber(stats?.totalArea || 0)} ha</div>
-                        <p className="text-xs text-muted-foreground">Soma de todas as propriedades</p>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart data={stats?.applicationsByMonth || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                                <YAxis tick={{ fontSize: 12 }} />
+                                <Tooltip />
+                                <Bar dataKey="count" name="Aplicações" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total de Agricultores</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
+                {/* Pie Chart — Culture Distribution */}
+                <Card className="border-0 shadow-md">
+                    <CardHeader>
+                        <CardTitle className="text-base font-semibold">Culturas Principais</CardTitle>
+                        <CardDescription>Distribuição por cultura dos agricultores</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats?.totalFarmers || 0}</div>
-                        <p className="text-xs text-muted-foreground">Agricultores cadastrados</p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total de Propriedades</CardTitle>
-                        <Sprout className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats?.totalProperties || 0}</div>
-                        <p className="text-xs text-muted-foreground">Propriedades registradas</p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Produtos Únicos</CardTitle>
-                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats?.productPrices?.length || 0}</div>
-                        <p className="text-xs text-muted-foreground">Produtos com preços registrados</p>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <PieChart>
+                                <Pie
+                                    data={stats?.cultureDistribution?.length > 0 ? stats.cultureDistribution : [{ name: "Sem dados", value: 1 }]}
+                                    cx="50%" cy="50%"
+                                    innerRadius={50} outerRadius={80}
+                                    dataKey="value" nameKey="name"
+                                >
+                                    {(stats?.cultureDistribution || [{ name: "Sem dados", value: 1 }]).map((_: any, i: number) => (
+                                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                                <Legend iconType="circle" iconSize={10} />
+                            </PieChart>
+                        </ResponsiveContainer>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Produtos Mais Usados */}
-            <Card>
+            {/* Area Chart — Stock Movements */}
+            <Card className="border-0 shadow-md">
+                <CardHeader>
+                    <CardTitle className="text-base font-semibold">Movimentações de Estoque</CardTitle>
+                    <CardDescription>Entradas e saídas dos últimos 6 meses</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={stats?.stockByMonth || []}>
+                            <defs>
+                                <linearGradient id="colorEntries" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                                </linearGradient>
+                                <linearGradient id="colorExits" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Area type="monotone" dataKey="entries" name="Entradas" stroke="#22c55e" fill="url(#colorEntries)" strokeWidth={2} />
+                            <Area type="monotone" dataKey="exits" name="Saídas" stroke="#f97316" fill="url(#colorExits)" strokeWidth={2} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+
+            {/* Top Products Table */}
+            <Card className="border-0 shadow-md">
                 <CardHeader>
                     <CardTitle>Produtos Mais Utilizados</CardTitle>
                     <CardDescription>Top 10 produtos mais aplicados pelos agricultores</CardDescription>
@@ -200,78 +294,222 @@ function FarmersDashboard() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>#</TableHead>
                                     <TableHead>Produto</TableHead>
                                     <TableHead className="text-right">Aplicações</TableHead>
-                                    <TableHead className="text-right">Quantidade Total</TableHead>
+                                    <TableHead className="text-right">Qtd. Total</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {stats.mostUsedProducts.map((product: any, index: number) => (
                                     <TableRow key={product.productId || index}>
+                                        <TableCell className="text-muted-foreground text-sm">{index + 1}</TableCell>
                                         <TableCell className="font-medium">{product.productName || "N/A"}</TableCell>
-                                        <TableCell className="text-right">{product.applicationCount}</TableCell>
-                                        <TableCell className="text-right">{formatNumber(product.totalQuantity)}</TableCell>
+                                        <TableCell className="text-right">
+                                            <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">{product.applicationCount}</span>
+                                        </TableCell>
+                                        <TableCell className="text-right">{fmt(product.totalQuantity)}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
                     ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                            Nenhum produto utilizado ainda.
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Preços dos Produtos das Faturas */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Preços dos Produtos (Faturas)</CardTitle>
-                    <CardDescription>Últimos preços importados das faturas dos agricultores</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {stats?.productPrices && stats.productPrices.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Produto</TableHead>
-                                        <TableHead>Fornecedor</TableHead>
-                                        <TableHead className="text-right">Preço Unitário</TableHead>
-                                        <TableHead>Unidade</TableHead>
-                                        <TableHead>Última Atualização</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {stats.productPrices.map((price: any, index: number) => (
-                                        <TableRow key={price.productId || index}>
-                                            <TableCell className="font-medium">{price.productName || "N/A"}</TableCell>
-                                            <TableCell>{price.supplier || "N/A"}</TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <DollarSign className="h-3 w-3 text-muted-foreground" />
-                                                    {formatNumber(price.unitPrice)}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>{price.unit || "N/A"}</TableCell>
-                                            <TableCell>
-                                                {price.lastInvoiceDate
-                                                    ? new Date(price.lastInvoiceDate).toLocaleDateString('pt-BR')
-                                                    : "N/A"}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                            Nenhum preço de produto registrado ainda.
-                        </div>
+                        <div className="text-center py-8 text-muted-foreground">Nenhum produto utilizado ainda.</div>
                     )}
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+// ==========================================
+// GLOBAL MAP VIEW
+// ==========================================
+function GlobalMapView() {
+    const { toast } = useToast();
+    const [filterProduct, setFilterProduct] = useState<string>("");
+    const [filterCategory, setFilterCategory] = useState<string>("");
+    const [filterFarmer, setFilterFarmer] = useState<string>("");
+
+    const { data: mapData, isLoading } = useQuery<any>({
+        queryKey: ["/api/admin/farmers/map-data"],
+    });
+
+    const { data: farmers } = useQuery<any[]>({
+        queryKey: ["/api/admin/farmers"],
+    });
+
+    if (isLoading) return (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <Loader2 className="h-10 w-10 animate-spin text-green-600" />
+            <p className="text-muted-foreground text-sm">Carregando talhões de todos os clientes...</p>
+        </div>
+    );
+
+    const allPlots: any[] = mapData?.plots || [];
+    const allProducts: any[] = mapData?.products || [];
+    const categories = Array.from(new Set(allProducts.map((p: any) => p.category).filter(Boolean)));
+
+    const filteredPlots = allPlots.filter((plot: any) => {
+        const matchesFarmer = !filterFarmer || plot.farmerId === filterFarmer;
+        const matchesCategory = !filterCategory || plot.applications.some((a: any) => a.category === filterCategory);
+        const matchesProduct = !filterProduct || plot.applications.some((a: any) => a.productId === filterProduct);
+        return matchesFarmer && matchesCategory && matchesProduct;
+    });
+
+    // Find center from first available plot
+    const firstPlot = filteredPlots.find((p: any) => p.coordinates?.length > 0);
+    const center: [number, number] = firstPlot
+        ? [firstPlot.coordinates[0].lat, firstPlot.coordinates[0].lng]
+        : [-23.5, -52.0]; // Default: Paraná/Brasil
+
+    const getPlotColor = (plot: any) => {
+        const lastApp = plot.applications[0];
+        if (!lastApp) return "#22c55e";
+        return getCategoryColor(lastApp.category);
+    };
+
+    const activeCategories = [
+        { key: "herbicida", label: "Herbicida", color: CATEGORY_COLORS.herbicida },
+        { key: "fungicida", label: "Fungicida", color: CATEGORY_COLORS.fungicida },
+        { key: "inseticida", label: "Inseticida", color: CATEGORY_COLORS.inseticida },
+        { key: "fertilizante", label: "Fertilizante", color: CATEGORY_COLORS.fertilizante },
+        { key: "semente", label: "Semente", color: CATEGORY_COLORS.semente },
+        { key: "default", label: "Sem aplicação", color: CATEGORY_COLORS.default },
+    ];
+
+    return (
+        <Card className="border-0 shadow-md overflow-hidden">
+            <CardHeader className="bg-white border-b sticky top-0 z-10">
+                <div className="flex flex-col gap-4">
+                    <div>
+                        <CardTitle className="text-xl text-green-900 flex items-center gap-2">
+                            <Map className="h-5 w-5" />
+                            Mapa Global de Talhões
+                        </CardTitle>
+                        <CardDescription>
+                            {filteredPlots.length} talhão(ões) exibido(s) — coloridos pela última categoria de produto aplicado
+                        </CardDescription>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex flex-wrap gap-3">
+                        <Select value={filterFarmer} onValueChange={setFilterFarmer}>
+                            <SelectTrigger className="w-[200px]">
+                                <SelectValue placeholder="Todos os agricultores" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="">Todos os agricultores</SelectItem>
+                                {farmers?.map((f: any) => (
+                                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={filterCategory} onValueChange={setFilterCategory}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Todas categorias" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="">Todas categorias</SelectItem>
+                                {categories.map((cat: any) => (
+                                    <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={filterProduct} onValueChange={setFilterProduct}>
+                            <SelectTrigger className="w-[220px]">
+                                <SelectValue placeholder="Todos os produtos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="">Todos os produtos</SelectItem>
+                                {allProducts.map((p: any) => (
+                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        {(filterFarmer || filterCategory || filterProduct) && (
+                            <button
+                                onClick={() => { setFilterFarmer(""); setFilterCategory(""); setFilterProduct(""); }}
+                                className="text-xs text-red-500 underline self-center"
+                            >
+                                Limpar filtros
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-3">
+                        {activeCategories.map(cat => (
+                            <div key={cat.key} className="flex items-center gap-1.5 text-xs text-gray-600">
+                                <div className="w-3 h-3 rounded-sm" style={{ background: cat.color }} />
+                                {cat.label}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="p-0">
+                {allPlots.length === 0 ? (
+                    <div className="text-center py-16 text-muted-foreground">
+                        <Map className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                        <p>Nenhum talhão com coordenadas cadastrado ainda.</p>
+                        <p className="text-xs mt-1">Os agricultores precisam desenhar os talhões no mapa do sistema.</p>
+                    </div>
+                ) : (
+                    <MapContainer center={center} zoom={12} style={{ height: "600px", width: "100%" }}>
+                        <TileLayer
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        {filteredPlots.map((plot: any) => {
+                            if (!plot.coordinates || plot.coordinates.length < 3) return null;
+                            const positions: [number, number][] = plot.coordinates.map((c: any) => [c.lat, c.lng]);
+                            const color = getPlotColor(plot);
+                            return (
+                                <Polygon
+                                    key={plot.plotId}
+                                    positions={positions}
+                                    pathOptions={{ color, weight: 2, fillColor: color, fillOpacity: 0.4 }}
+                                >
+                                    <Popup>
+                                        <div className="min-w-[220px]">
+                                            <div className="font-bold text-green-800 text-base mb-0.5">{plot.plotName}</div>
+                                            <div className="text-xs text-gray-500 mb-2">{plot.propertyName} — {plot.farmerName}</div>
+                                            <div className="text-xs mb-3 bg-gray-50 px-2 py-1 rounded">
+                                                🌾 {plot.crop || "Cultura não informada"} · {plot.areaHa.toFixed(1)} ha
+                                            </div>
+                                            {plot.applications.length > 0 ? (
+                                                <div>
+                                                    <p className="text-xs font-semibold text-gray-700 mb-1">Últimas aplicações:</p>
+                                                    <ul className="space-y-1">
+                                                        {plot.applications.map((app: any, i: number) => (
+                                                            <li key={i} className="text-xs flex items-start gap-1.5">
+                                                                <span className="w-2 h-2 rounded-full mt-0.5 shrink-0" style={{ background: getCategoryColor(app.category), display: "inline-block" }} />
+                                                                <span>
+                                                                    <b>{app.productName}</b> — {parseFloat(app.quantity).toFixed(2)}
+                                                                    <span className="text-gray-400 ml-1">
+                                                                        {new Date(app.appliedAt).toLocaleDateString('pt-BR')}
+                                                                    </span>
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-gray-400 italic">Sem aplicações registradas</p>
+                                            )}
+                                        </div>
+                                    </Popup>
+                                </Polygon>
+                            );
+                        })}
+                    </MapContainer>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 
