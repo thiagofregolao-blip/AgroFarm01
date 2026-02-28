@@ -142,11 +142,10 @@ export async function findFarmerByInvoiceEmail(email: string) {
  * Try to match extracted product names with existing catalog products
  */
 async function matchProducts(farmerId: string, items: ExtractedInvoice["items"]) {
-    // Get all products in the farmer's catalog
+    // Get all products in global catalog
     const catalogProducts = await db
         .select()
-        .from(farmProductsCatalog)
-        .where(eq(farmProductsCatalog.farmerId, farmerId));
+        .from(farmProductsCatalog);
 
     return items.map(item => {
         // Try exact match first
@@ -194,10 +193,27 @@ export async function createDraftInvoice(
     }
 
     // Get active season
-    const seasonResult = await db.execute(
-        sql`SELECT id FROM farm_seasons WHERE farmer_id = ${farmerId} AND is_active = true LIMIT 1`
-    );
-    const seasonId = (seasonResult.rows as any[])[0]?.id || null;
+    let seasonId: string | null = null;
+    try {
+        const { pool } = await import("../db");
+        const isNeon = (process.env.DATABASE_URL || "").includes("neon.tech");
+        let rows: any[];
+        if (isNeon) {
+            const result = await pool.query(
+                "SELECT id FROM farm_seasons WHERE farmer_id = $1 AND is_active = true LIMIT 1",
+                [farmerId]
+            );
+            rows = result.rows || [];
+        } else {
+            rows = await pool.unsafe(
+                "SELECT id FROM farm_seasons WHERE farmer_id = $1 AND is_active = true LIMIT 1",
+                [farmerId]
+            );
+        }
+        seasonId = rows[0]?.id || null;
+    } catch (e) {
+        console.error("[Invoice Email] Error getting season:", e);
+    }
 
     // Match products with catalog
     const matchedItems = await matchProducts(farmerId, extracted.items);
