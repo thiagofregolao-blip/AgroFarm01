@@ -33,14 +33,14 @@ export class WeatherStationService {
         if (!station || !station.isActive) return false;
 
         try {
-            const openWeatherKey = process.env.OPENWEATHER_API_KEY;
-            if (!openWeatherKey) {
-                throw new Error("OPENWEATHER_API_KEY is not configured.");
+            const api_key = process.env.AGROMONITORING_API_KEY;
+            if (!api_key) {
+                throw new Error("AGROMONITORING_API_KEY is not configured.");
             }
 
-            // Using OpenWeather API to get current weather
+            // Using AgroMonitoring API to get current weather
             const response = await fetch(
-                `https://api.openweathermap.org/data/2.5/weather?lat=${station.lat}&lon=${station.lng}&appid=${openWeatherKey}&units=metric`
+                `https://api.agromonitoring.com/agro/1.0/weather?lat=${station.lat}&lon=${station.lng}&appid=${api_key}&units=metric`
             );
 
             if (!response.ok) {
@@ -94,10 +94,10 @@ export class WeatherStationService {
      * Gets the 5-Day/3-Hour forecast for a given station to generate charts and the Spray Window
      */
     static async getForecastWithIntelligence(lat: string | undefined, lng: string | undefined) {
-        const openWeatherKey = process.env.OPENWEATHER_API_KEY;
+        const api_key = process.env.AGROMONITORING_API_KEY;
         if (!lat || !lng) throw new Error("Missing coordinates.");
-        if (!openWeatherKey) {
-            console.warn("OPENWEATHER_API_KEY is not configured. Returning empty forecast data.");
+        if (!api_key) {
+            console.warn("AGROMONITORING_API_KEY is not configured. Returning empty forecast data.");
             return {
                 charts: { temperatures: [], precipitation: [], wind: [], humidity: [] },
                 sprayWindow: [],
@@ -106,11 +106,11 @@ export class WeatherStationService {
         }
 
         const response = await fetch(
-            `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${openWeatherKey}&units=metric`
+            `https://api.agromonitoring.com/agro/1.0/weather/forecast?lat=${lat}&lon=${lng}&appid=${api_key}&units=metric`
         );
 
         if (!response.ok) {
-            console.warn(`OpenWeather Forecast API error: ${response.statusText}. Returning empty forecast data so Dashboard opens normally while API key activates.`);
+            console.warn(`AgroMonitoring Forecast API error: ${response.statusText}. Returning empty forecast data so Dashboard opens normally while API key activates.`);
             return {
                 charts: { temperatures: [], precipitation: [], wind: [], humidity: [] },
                 sprayWindow: [],
