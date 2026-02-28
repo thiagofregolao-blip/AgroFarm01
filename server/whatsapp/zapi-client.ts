@@ -138,10 +138,14 @@ export class ZApiClient {
     let cleaned = phone.replace(/\D/g, "");
 
     // Regra para Paraguai (595)
+    // Se começar com 5950 e ter 13 dígitos (código país + zero local), remove o 0 extra
+    if (cleaned.startsWith("5950") && cleaned.length === 13) {
+      cleaned = "595" + cleaned.substring(4);
+    }
     // Se começar com 595 e ter 12 dígitos, mantém.
     // Se começar com 09 e ter 10 dígitos (ex: 0982...), remove o 0 e adiciona 595.
     // Se começar com 9 e ter 9 dígitos (ex: 982...), adiciona 595.
-    if (cleaned.startsWith("09") && cleaned.length === 10) {
+    else if (cleaned.startsWith("09") && cleaned.length === 10) {
       cleaned = "595" + cleaned.substring(1);
     } else if (cleaned.startsWith("9") && cleaned.length === 9) {
       cleaned = "595" + cleaned;

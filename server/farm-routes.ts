@@ -1600,13 +1600,25 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+            // Extract last 9 digits for fallback matching
+            const last9 = formattedPhone.slice(-9);
 
-            const farmers = await db.select().from(users).where(
+            let farmers = await db.select().from(users).where(
                 or(
                     eq(users.whatsapp_number, formattedPhone),
                     sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
                 )
             ).limit(1);
+
+            // Fallback: try matching by last 9 digits (handles country code variations)
+            if (farmers.length === 0 && last9.length === 9) {
+                farmers = await db.select().from(users).where(
+                    or(
+                        sql`${users.whatsapp_number} LIKE ${'%' + last9}`,
+                        sql`${users.whatsapp_extra_numbers} LIKE ${'%' + last9 + '%'}`
+                    )
+                ).limit(1);
+            }
 
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
@@ -1633,13 +1645,23 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+            const last9 = formattedPhone.slice(-9);
 
-            const farmers = await db.select().from(users).where(
+            let farmers = await db.select().from(users).where(
                 or(
                     eq(users.whatsapp_number, formattedPhone),
                     sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
                 )
             ).limit(1);
+
+            if (farmers.length === 0 && last9.length === 9) {
+                farmers = await db.select().from(users).where(
+                    or(
+                        sql`${users.whatsapp_number} LIKE ${'%' + last9}`,
+                        sql`${users.whatsapp_extra_numbers} LIKE ${'%' + last9 + '%'}`
+                    )
+                ).limit(1);
+            }
 
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
@@ -1668,14 +1690,23 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+            const last9 = formattedPhone.slice(-9);
 
-            const farmers = await db.select().from(users).where(
+            let farmers = await db.select().from(users).where(
                 or(
                     eq(users.whatsapp_number, formattedPhone),
                     sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
                 )
             ).limit(1);
 
+            if (farmers.length === 0 && last9.length === 9) {
+                farmers = await db.select().from(users).where(
+                    or(
+                        sql`${users.whatsapp_number} LIKE ${'%' + last9}`,
+                        sql`${users.whatsapp_extra_numbers} LIKE ${'%' + last9 + '%'}`
+                    )
+                ).limit(1);
+            }
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
             // Build conditions
@@ -1779,13 +1810,23 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+            const last9 = formattedPhone.slice(-9);
 
-            const farmers = await db.select().from(users).where(
+            let farmers = await db.select().from(users).where(
                 or(
                     eq(users.whatsapp_number, formattedPhone),
                     sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
                 )
             ).limit(1);
+
+            if (farmers.length === 0 && last9.length === 9) {
+                farmers = await db.select().from(users).where(
+                    or(
+                        sql`${users.whatsapp_number} LIKE ${'%' + last9}`,
+                        sql`${users.whatsapp_extra_numbers} LIKE ${'%' + last9 + '%'}`
+                    )
+                ).limit(1);
+            }
 
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
@@ -1833,13 +1874,23 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number as string);
+            const last9 = formattedPhone.slice(-9);
 
-            const farmers = await db.select().from(users).where(
+            let farmers = await db.select().from(users).where(
                 or(
                     eq(users.whatsapp_number, formattedPhone),
                     sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
                 )
             ).limit(1);
+
+            if (farmers.length === 0 && last9.length === 9) {
+                farmers = await db.select().from(users).where(
+                    or(
+                        sql`${users.whatsapp_number} LIKE ${'%' + last9}`,
+                        sql`${users.whatsapp_extra_numbers} LIKE ${'%' + last9 + '%'}`
+                    )
+                ).limit(1);
+            }
 
             if (farmers.length === 0) return res.status(404).json({ error: "Farmer not found" });
 
