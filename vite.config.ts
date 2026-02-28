@@ -19,6 +19,8 @@ export default defineConfig({
         background_color: "#ffffff",
         display: "standalone",
         orientation: "portrait",
+        start_url: "/auth",
+        scope: "/",
         icons: [
           {
             src: "icon-192x192.png",

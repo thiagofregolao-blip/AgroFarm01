@@ -42,6 +42,21 @@ export default function LandingPage() {
         { image: "/hero-warehouse.png", label: "Controle de Estoque", sublabel: "Insumos sempre sob controle", icon: "📦" },
     ];
 
+    // ==========================================
+    // PWA STANDALONE DETECTION
+    // Se o app está instalado como PWA, redireciona para o login
+    // Em browser normal, continua exibindo a Landing Page
+    // ==========================================
+    useEffect(() => {
+        const isPWA =
+            window.matchMedia("(display-mode: standalone)").matches ||
+            (window.navigator as any).standalone === true;
+
+        if (isPWA) {
+            navigate("/auth");
+        }
+    }, [navigate]);
+
     useEffect(() => {
         const onScroll = () => setScrolled(window.scrollY > 50);
         window.addEventListener("scroll", onScroll);
