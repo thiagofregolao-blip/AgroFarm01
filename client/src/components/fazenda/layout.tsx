@@ -5,29 +5,44 @@ import {
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 
 const navItems = [
-    { label: "Início", href: "/fazenda", icon: Home },
-    { label: "Propriedades", href: "/fazenda/propriedades", icon: Map },
-    { label: "Safras", href: "/fazenda/safras", icon: Sprout },
-    { label: "Faturas", href: "/fazenda/faturas", icon: FileText },
-    { label: "Estoque", href: "/fazenda/estoque", icon: Warehouse },
-    { label: "Frota", href: "/fazenda/equipamentos", icon: Tractor },
-    { label: "Aplicações", href: "/fazenda/aplicacoes", icon: BarChart3 },
-    { label: "Custo/Talhão", href: "/fazenda/custos", icon: TrendingUp },
-    { label: "Despesas", href: "/fazenda/despesas", icon: DollarSign },
-    { label: "Terminais PDV", href: "/fazenda/terminais", icon: Monitor },
-    { label: "Caderno de Campo", href: "/fazenda/caderno-campo", icon: BookOpen },
-    { label: "Cotações", href: "/fazenda/cotacoes", icon: ArrowDownUp },
-    { label: "NDVI Satélite", href: "/fazenda/ndvi", icon: Satellite },
-    { label: "Relatórios", href: "/fazenda/relatorios", icon: FileBarChart },
-    { label: "Perfil", href: "/fazenda/perfil", icon: User },
+    { label: "Início", href: "/fazenda", icon: Home, moduleKey: "dashboard", alwaysOn: true },
+    { label: "Propriedades", href: "/fazenda/propriedades", icon: Map, moduleKey: "properties" },
+    { label: "Safras", href: "/fazenda/safras", icon: Sprout, moduleKey: "seasons" },
+    { label: "Faturas", href: "/fazenda/faturas", icon: FileText, moduleKey: "invoices" },
+    { label: "Estoque", href: "/fazenda/estoque", icon: Warehouse, moduleKey: "stock" },
+    { label: "Frota", href: "/fazenda/equipamentos", icon: Tractor, moduleKey: "fleet" },
+    { label: "Aplicações", href: "/fazenda/aplicacoes", icon: BarChart3, moduleKey: "applications" },
+    { label: "Custo/Talhão", href: "/fazenda/custos", icon: TrendingUp, moduleKey: "plot_costs" },
+    { label: "Despesas", href: "/fazenda/despesas", icon: DollarSign, moduleKey: "expenses" },
+    { label: "Terminais PDV", href: "/fazenda/terminais", icon: Monitor, moduleKey: "terminals" },
+    { label: "Caderno de Campo", href: "/fazenda/caderno-campo", icon: BookOpen, moduleKey: "field_notebook" },
+    { label: "Cotações", href: "/fazenda/cotacoes", icon: ArrowDownUp, moduleKey: "quotations" },
+    { label: "NDVI Satélite", href: "/fazenda/ndvi", icon: Satellite, moduleKey: "ndvi" },
+    { label: "Relatórios", href: "/fazenda/relatorios", icon: FileBarChart, moduleKey: "reports" },
+    { label: "Perfil", href: "/fazenda/perfil", icon: User, moduleKey: "profile", alwaysOn: true },
 ];
 
 export default function FarmLayout({ children }: { children: ReactNode }) {
     const [location, setLocation] = useLocation();
     const { user, logoutMutation } = useAuth();
+
+    const { data: myModules = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/my-modules"],
+        enabled: !!user,
+    });
+
+    // Filter nav items based on modules
+    const visibleNavItems = navItems.filter(item => {
+        if (item.alwaysOn) return true;
+        // If the module is not in the db, it defaults to true according to our spec
+        const dbModule = myModules.find(m => m.moduleKey === item.moduleKey);
+        if (dbModule) return dbModule.enabled;
+        return true; // default behavior for new modules
+    });
 
     const handleLogout = () => {
         logoutMutation.mutate(undefined, {
@@ -59,7 +74,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
                 {/* Nav items */}
                 <nav className="flex-1 overflow-y-auto py-2 px-1 md:px-1.5 space-y-0.5">
-                    {navItems.map((item) => {
+                    {visibleNavItems.map((item) => {
                         const isActive = location === item.href ||
                             (item.href !== "/fazenda" && location.startsWith(item.href));
                         const Icon = item.icon;
@@ -104,7 +119,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                 <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/60 shadow-sm sticky top-0 z-30">
                     <div className="px-3 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
                         <h1 className="text-lg font-bold text-gray-800">
-                            {navItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.label || "AgroFarm"}
+                            {visibleNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.label || "AgroFarm"}
                         </h1>
                         <span className="text-xs text-gray-400 hidden sm:block">{user.name || user.username}</span>
                     </div>

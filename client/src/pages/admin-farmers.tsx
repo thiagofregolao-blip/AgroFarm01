@@ -30,11 +30,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProductsManagement } from "./admin-products";
 import { ManualsManagement } from "./admin-manuals";
 import { FileText } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export default function AdminFarmersPage() {
     const { user, logoutMutation } = useAuth();
@@ -66,7 +67,7 @@ export default function AdminFarmersPage() {
 
             <main className="flex-1 overflow-auto p-6 max-w-7xl mx-auto w-full">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <TabsList className="grid w-full grid-cols-4 max-w-3xl">
+                    <TabsList className="grid w-full grid-cols-5 max-w-4xl">
                         <TabsTrigger value="dashboard" className="flex items-center gap-2">
                             <BarChart3 className="h-4 w-4" />
                             Dashboard
@@ -82,6 +83,10 @@ export default function AdminFarmersPage() {
                         <TabsTrigger value="manuals" className="flex items-center gap-2">
                             <FileText className="h-4 w-4" />
                             Manuais RAG
+                        </TabsTrigger>
+                        <TabsTrigger value="modules" className="flex items-center gap-2">
+                            <Layers className="h-4 w-4" />
+                            Módulos
                         </TabsTrigger>
                     </TabsList>
 
@@ -99,6 +104,10 @@ export default function AdminFarmersPage() {
 
                     <TabsContent value="manuals" className="space-y-6">
                         <ManualsManagement />
+                    </TabsContent>
+
+                    <TabsContent value="modules" className="space-y-6">
+                        <ModulesManagement />
                     </TabsContent>
                 </Tabs>
             </main>
@@ -594,5 +603,128 @@ function FarmersManagement() {
                 </DialogContent>
             </Dialog>
         </div>
+    );
+}
+
+// ==================== MODULOS MANAGEMENT ====================
+
+const AVAILABLE_MODULES = [
+    { key: "dashboard", label: "Início/Dashboard", defaultEnabled: true, alwaysOn: true },
+    { key: "properties", label: "Propriedades", defaultEnabled: true },
+    { key: "seasons", label: "Safras", defaultEnabled: true },
+    { key: "invoices", label: "Faturas", defaultEnabled: true },
+    { key: "stock", label: "Estoque", defaultEnabled: true },
+    { key: "fleet", label: "Frota", defaultEnabled: true },
+    { key: "applications", label: "Aplicações", defaultEnabled: true },
+    { key: "plot_costs", label: "Custo/Talhão", defaultEnabled: true },
+    { key: "expenses", label: "Despesas", defaultEnabled: true },
+    { key: "terminals", label: "Terminais PDV", defaultEnabled: true },
+    { key: "field_notebook", label: "Caderno de Campo", defaultEnabled: true },
+    { key: "quotations", label: "Cotações", defaultEnabled: true },
+    { key: "ndvi", label: "NDVI Satélite", defaultEnabled: true },
+    { key: "reports", label: "Relatórios", defaultEnabled: true },
+    { key: "profile", label: "Perfil", defaultEnabled: true, alwaysOn: true },
+];
+
+function ModulesManagement() {
+    const { toast } = useToast();
+    const [selectedFarmerId, setSelectedFarmerId] = useState<string | null>(null);
+
+    const { data: farmers, isLoading: isLoadingFarmers } = useQuery<any[]>({
+        queryKey: ["/api/admin/farmers"],
+    });
+
+    const { data: farmerModules, isLoading: isLoadingModules } = useQuery<any[]>({
+        queryKey: [`/api/admin/farmers/${selectedFarmerId}/modules`],
+        enabled: !!selectedFarmerId,
+    });
+
+    const updateModuleMutation = useMutation({
+        mutationFn: async ({ moduleKey, enabled }: { moduleKey: string, enabled: boolean }) => {
+            if (!selectedFarmerId) return;
+            const res = await apiRequest("PUT", `/api/admin/farmers/${selectedFarmerId}/modules`, {
+                moduleKey,
+                enabled
+            });
+            if (!res.ok) throw new Error("Falha ao atualizar módulo");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [`/api/admin/farmers/${selectedFarmerId}/modules`] });
+            toast({ title: "Módulo atualizado", description: "Configuração do cliente alterada." });
+        },
+        onError: () => {
+            toast({ title: "Erro", description: "Não foi possível atualizar o módulo.", variant: "destructive" });
+        }
+    });
+
+    if (isLoadingFarmers) return <div className="p-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-green-600" /></div>;
+
+    const handleToggle = (moduleKey: string, currentEnabled: boolean) => {
+        updateModuleMutation.mutate({ moduleKey, enabled: !currentEnabled });
+    };
+
+    return (
+        <Card className="border-0 shadow-md">
+            <CardHeader className="bg-white border-b sticky top-0 z-10">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <CardTitle className="text-2xl text-green-900 flex items-center gap-2">
+                            <Layers className="h-6 w-6" />
+                            Gestão de Módulos por Cliente
+                        </CardTitle>
+                        <CardDescription>Ative ou desative funcionalidades para cada agricultor de forma individual</CardDescription>
+                    </div>
+
+                    <Select value={selectedFarmerId || ""} onValueChange={setSelectedFarmerId}>
+                        <SelectTrigger className="w-full md:w-[300px]">
+                            <SelectValue placeholder="Selecione um agricultor..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {farmers?.map((f: any) => (
+                                <SelectItem key={f.id} value={f.id}>
+                                    {f.name} - {f.document || "Sem doc"}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </CardHeader>
+            <CardContent className="p-6">
+                {!selectedFarmerId ? (
+                    <div className="text-center py-12 text-gray-500">
+                        Selecione um agricultor no topo para visualizar e editar seus módulos.
+                    </div>
+                ) : isLoadingModules ? (
+                    <div className="py-12 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-green-600" /></div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {AVAILABLE_MODULES.map((mod) => {
+                            // Find current status from DB, fallback to defaultEnabled
+                            const dbModule = farmerModules?.find((m: any) => m.moduleKey === mod.key);
+                            const isEnabled = dbModule ? dbModule.enabled : mod.defaultEnabled;
+
+                            return (
+                                <div key={mod.key} className="flex items-center justify-between p-4 border rounded-xl bg-white shadow-sm">
+                                    <div className="flex flex-col space-y-1">
+                                        <Label className={`text-base font-semibold ${mod.alwaysOn ? 'text-gray-400' : 'text-gray-800'}`}>
+                                            {mod.label}
+                                        </Label>
+                                        <span className="text-xs text-muted-foreground font-mono bg-gray-100 flex-none self-start px-2 py-0.5 rounded">
+                                            {mod.key}
+                                        </span>
+                                    </div>
+                                    <Switch
+                                        checked={isEnabled || mod.alwaysOn}
+                                        onCheckedChange={() => handleToggle(mod.key, isEnabled)}
+                                        disabled={mod.alwaysOn || updateModuleMutation.isPending}
+                                    />
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }

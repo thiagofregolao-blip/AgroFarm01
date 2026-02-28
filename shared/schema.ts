@@ -1272,3 +1272,15 @@ export type InsertFarmPriceHistory = z.infer<typeof insertFarmPriceHistorySchema
 export type FarmPriceHistory = typeof farmPriceHistory.$inferSelect;
 
 // Farm Farmers (Agricultores management separately from internal team)
+
+// User Modules (per-client module access control)
+export const userModules = pgTable("user_modules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  moduleKey: text("module_key").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+}, (table) => ({
+  uniqueUserModule: unique().on(table.userId, table.moduleKey),
+}));

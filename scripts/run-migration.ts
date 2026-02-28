@@ -210,6 +210,15 @@ const runMigration = async () => {
             await sql.unsafe(accountantPdfSql);
             console.log('✅ Migração accountant_pdf concluída!');
         }
+        // Migration 17: User Modules (per-client module access control)
+        const userModulesPath = path.join(process.cwd(), 'migration_user_modules.sql');
+        if (fs.existsSync(userModulesPath)) {
+            const userModulesSql = fs.readFileSync(userModulesPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', userModulesPath);
+            console.log('🚀 Executando SQL (user_modules)...');
+            await sql.unsafe(userModulesSql);
+            console.log('✅ Migração user_modules concluída!');
+        }
 
         console.log('✅ Todas as migrações concluídas com sucesso!');
 

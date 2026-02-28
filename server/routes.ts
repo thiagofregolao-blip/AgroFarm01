@@ -8963,6 +8963,54 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
+  // ==================== FARMER MODULES MANAGEMENT ====================
+
+  app.get("/api/admin/farmers/:id/modules", requireFarmAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { userModules } = await import("@shared/schema");
+
+      const modules = await db
+        .select()
+        .from(userModules)
+        .where(eq(userModules.userId, id));
+
+      res.json(modules);
+    } catch (error) {
+      console.error("Failed to fetch farmer modules:", error);
+      res.status(500).json({ error: "Failed to fetch modules" });
+    }
+  });
+
+  app.put("/api/admin/farmers/:id/modules", requireFarmAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { moduleKey, enabled } = req.body;
+      const { userModules } = await import("@shared/schema");
+
+      if (!moduleKey || typeof enabled !== "boolean") {
+        return res.status(400).json({ error: "moduleKey and enabled are required" });
+      }
+
+      // Upsert the module state for this user
+      await db.insert(userModules)
+        .values({
+          userId: id,
+          moduleKey,
+          enabled
+        })
+        .onConflictDoUpdate({
+          target: [userModules.userId, userModules.moduleKey],
+          set: { enabled, updatedAt: new Date() }
+        });
+
+      res.json({ message: "Module status updated successfully" });
+    } catch (error) {
+      console.error("Failed to update farmer module:", error);
+      res.status(500).json({ error: "Failed to update module" });
+    }
+  });
+
   // ==================== FARMERS DASHBOARD STATISTICS ====================
 
   app.get("/api/admin/farmers/dashboard/stats", requireFarmAdmin, async (req, res) => {

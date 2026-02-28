@@ -52,6 +52,25 @@ function requirePdv(req: Request, res: Response, next: NextFunction) {
 export function registerFarmRoutes(app: Express) {
     // ==================== FARMER AUTH (uses existing passport auth) ====================
 
+    // /api/farm/my-modules → returns enabled modules for current user
+    app.get("/api/farm/my-modules", requireFarmer, async (req, res) => {
+        try {
+            const { userModules } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const modules = await db
+                .select()
+                .from(userModules)
+                .where(eq(userModules.userId, req.user!.id));
+
+            res.json(modules);
+        } catch (error) {
+            console.error("Failed to fetch my modules:", error);
+            res.status(500).json({ error: "Failed to fetch modules" });
+        }
+    });
+
     // /api/farm/me → returns current user info (no separate login needed)
     app.get("/api/farm/me", requireFarmer, async (req, res) => {
         try {
