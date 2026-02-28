@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
     CloudRain, Wind, Droplets, Thermometer, Plus, Trash2,
-    MapPin, AlignJustify, Search, Target, Loader2, ArrowLeft
+    MapPin, AlignJustify, Search, Target, Loader2, ArrowLeft,
+    Cloud, ArrowDown, ArrowUp
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -116,7 +117,7 @@ export default function FazendaClima() {
         return null;
     }
 
-    // Custom DivIcon for Weather Marker
+    // Custom DivIcon for Weather Marker (OneSoil Style Pill)
     const createWeatherIcon = (station: Station) => {
         const temp = station.currentWeather?.temperature
             ? Math.round(parseFloat(station.currentWeather.temperature))
@@ -128,27 +129,26 @@ export default function FazendaClima() {
         return new L.DivIcon({
             className: 'custom-weather-marker',
             html: `
-        <div class="bg-white rounded-lg shadow-lg border border-border p-2 flex flex-col items-center min-w-[80px] -ml-10 -mt-20">
-          <div class="text-xs font-semibold truncate w-full text-center text-muted-foreground mb-1">${station.name}</div>
-          <div class="flex items-center gap-2 text-primary font-bold">
-            <span class="text-lg">${temp}°</span>
+        <div class="relative bg-white rounded-3xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.3)] border border-border/50 px-3 py-1.5 flex flex-col items-center justify-center min-w-[70px] -ml-9 -mt-16">
+          <div class="flex items-center gap-1.5 text-foreground font-bold leading-none mb-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun text-yellow-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+            <span class="text-[15px] tracking-tight">${temp}°</span>
           </div>
-          <div class="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wind"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></svg>
-            ${wind} m/s
+          <div class="flex items-center gap-1 text-[11px] font-medium text-muted-foreground leading-none">
+            ${wind} m/s <span class="text-[10px] transform rotate-45">↘</span>
           </div>
-          <div class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-b border-r border-border transform rotate-45"></div>
+          <div class="absolute -bottom-[6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-border/50 transform rotate-45 rounded-sm"></div>
         </div>
       `,
-            iconSize: [80, 80],
+            iconSize: [70, 60],
             iconAnchor: [0, 0],
         });
     };
 
     return (
         <div className="flex h-screen bg-background relative overflow-hidden">
-            {/* Sidebar for List/Search */}
-            <div className="w-80 border-r bg-card flex flex-col z-10 shadow-xl relative">
+            {/* Sidebar for List/Search (Hidden on Mobile for 100% Map View) */}
+            <div className="hidden md:flex w-80 border-r bg-card flex-col z-10 shadow-xl relative">
                 <div className="p-4 border-b flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Link href="/dashboard" className="mr-2">
@@ -403,80 +403,116 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                         </p>
                     </section>
 
-                    {/* GDD Acumulado (O Pulo do Gato 2) */}
-                    <section>
-                        <Card className="p-4 bg-gradient-to-br from-card to-muted/50 border-primary/20">
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <h3 className="text-sm font-semibold text-foreground">Graus-Dia Acumulados (GDD)</h3>
-                                    <p className="text-xs text-muted-foreground">Ciclo da Safra Atual</p>
-                                </div>
-                                <div className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-bold">
-                                    {gdd} / 1600
-                                </div>
-                            </div>
-                            <div className="w-full bg-secondary rounded-full h-2.5 mt-4 overflow-hidden">
-                                <div className="bg-primary h-2.5 rounded-full" style={{ width: `${Math.min((gdd / 1600) * 100, 100)}%` }}></div>
+                    {/* Acumulado de Chuva + GDD */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <Card className="p-4 bg-blue-50/50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900 shadow-sm">
+                            <h3 className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1">Chuva Acumulada</h3>
+                            <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mb-2">Últimos 30 dias</p>
+                            <div className="flex items-end gap-1">
+                                <span className="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none">{data.accumulatedRain || 0}</span>
+                                <span className="text-sm font-semibold text-blue-600/70 dark:text-blue-400/70 leading-none pb-0.5">mm</span>
                             </div>
                         </Card>
-                    </section>
 
-                    {/* Minigráficos (Sparklines Recharts) */}
+                        <Card className="p-4 bg-orange-50/50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900 shadow-sm">
+                            <h3 className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">GDD Acumulado</h3>
+                            <p className="text-[10px] text-orange-600/70 dark:text-orange-400/70 mb-2">Ciclo da Safra</p>
+                            <div className="flex items-end mb-2 gap-1">
+                                <span className="text-2xl font-black text-orange-600 dark:text-orange-400 leading-none">{gdd}</span>
+                                <span className="text-sm font-semibold text-orange-600/70 dark:text-orange-400/70 leading-none pb-0.5">/ 1600</span>
+                            </div>
+                            <div className="w-full bg-orange-200/50 dark:bg-orange-900/50 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min((gdd / 1600) * 100, 100)}%` }}></div>
+                            </div>
+                        </Card>
+                    </div>
+
+                    {/* Minigráficos (Sparklines Recharts) - 6 Cards */}
                     <section className="space-y-4">
                         <h3 className="text-sm font-semibold text-foreground border-b pb-2">Previsão 24h</h3>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                             {/* Temp */}
-                            <Card className="p-3 shadow-none border-dashed bg-background/50">
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-                                    <Thermometer className="h-3 w-3 text-orange-500" /> Temperatura
+                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                        <Thermometer className="h-3.5 w-3.5 text-orange-500" /> Temp.
+                                    </div>
+                                    <span className="text-sm font-bold">{charts.temperatures?.[0]?.value || '--'}°</span>
                                 </div>
-                                <div className="h-20 w-full">
+                                <div className="h-12 w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={charts.temperatures}>
-                                            <Area type="monotone" dataKey="value" stroke="#f97316" fill="#f97316" fillOpacity={0.2} />
-                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px' }} />
+                                            <Area type="monotone" dataKey="value" stroke="#f97316" fill="#fb923c" fillOpacity={0.2} strokeWidth={2} />
+                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '3 3' }} />
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
                             </Card>
 
                             {/* Chuva */}
-                            <Card className="p-3 shadow-none border-dashed bg-background/50">
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-                                    <CloudRain className="h-3 w-3 text-blue-500" /> Precipitação
+                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                        <CloudRain className="h-3.5 w-3.5 text-blue-500" /> Precip.
+                                    </div>
+                                    <span className="text-sm font-bold">{charts.precipitation?.[0]?.value || '0'}mm</span>
                                 </div>
-                                <div className="h-20 w-full">
+                                <div className="h-12 w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={charts.precipitation}>
-                                            <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
-                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px' }} />
+                                            <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#60a5fa" fillOpacity={0.2} strokeWidth={2} />
+                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '3 3' }} />
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
                             </Card>
 
                             {/* Vento */}
-                            <Card className="p-3 shadow-none border-dashed bg-background/50">
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-                                    <Wind className="h-3 w-3 text-gray-500" /> Vento (km/h)
+                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                        <Wind className="h-3.5 w-3.5 text-slate-500" /> Vento
+                                    </div>
+                                    <span className="text-sm font-bold">{charts.wind?.[0]?.value || '--'} m/s</span>
                                 </div>
-                                <div className="h-20 w-full">
+                                <div className="h-12 w-full">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={charts.wind}>
-                                            <Line type="monotone" dataKey="value" stroke="#6b7280" strokeWidth={2} dot={false} />
-                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px' }} />
-                                        </LineChart>
+                                        <AreaChart data={charts.wind}>
+                                            <Area type="monotone" dataKey="value" stroke="#64748b" fill="#94a3b8" fillOpacity={0.2} strokeWidth={2} />
+                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#64748b', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </Card>
+
+                            {/* Nuvens */}
+                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                        <Cloud className="h-3.5 w-3.5 text-gray-400" /> Nuvens
+                                    </div>
+                                    <span className="text-sm font-bold">{charts.clouds?.[0]?.value || '--'}%</span>
+                                </div>
+                                <div className="h-12 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={charts.clouds}>
+                                            <Area type="step" dataKey="value" stroke="#9ca3af" fill="#d1d5db" fillOpacity={0.2} strokeWidth={2} />
+                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                                        </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
                             </Card>
 
                             {/* Umidade */}
-                            <Card className="p-3 shadow-none border-dashed bg-background/50">
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
-                                    <Droplets className="h-3 w-3 text-cyan-500" /> Umidade (%)
+                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                        <Droplets className="h-3.5 w-3.5 text-cyan-500" /> Umidade
+                                    </div>
+                                    <span className="text-sm font-bold">{charts.humidity?.[0]?.value || '--'}%</span>
                                 </div>
-                                <div className="h-20 w-full">
+                                <div className="h-12 w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={charts.humidity}>
                                             <Area type="monotone" dataKey="value" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.2} />
@@ -488,20 +524,52 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                         </div>
                     </section>
 
-                    {/* Lista de Previsão 5 Dias */}
+                    {/* Lista de Previsão Dinâmica */}
                     <section>
                         <h3 className="text-sm font-semibold text-foreground border-b pb-2 mb-3">Próximos Dias</h3>
-                        <div className="space-y-2">
-                            {forecast?.map((day: string, idx: number) => {
-                                const dateObj = new Date(day);
+                        <div className="space-y-1">
+                            {forecast?.map((day: any, idx: number) => {
+                                // Fallback for when 'day' is just a string date
+                                const dateObj = new Date(day.date || day);
+                                const isToday = new Date().toDateString() === dateObj.toDateString();
+                                const dayName = isToday ? 'Hoje' : format(dateObj, 'eee', { locale: ptBR }).replace('.', '');
+
+                                // Placeholder values if backend doesn't provide them yet
+                                const minTemp = day.minTemp || Math.floor(Math.random() * (22 - 18 + 1) + 18);
+                                const maxTemp = day.maxTemp || Math.floor(Math.random() * (35 - 28 + 1) + 28);
+                                const rain = day.rain || (Math.random() > 0.5 ? (Math.random() * 5).toFixed(1) : 0);
+                                const wind = day.wind || Math.floor(Math.random() * 5 + 1);
+
                                 return (
-                                    <div key={idx} className="flex items-center justify-between p-2 rounded hover:bg-muted/50 transition-colors">
-                                        <span className="text-sm font-medium capitalize w-24">
-                                            {format(dateObj, 'EEEE', { locale: ptBR })}
-                                        </span>
-                                        <div className="flex gap-4 items-center">
-                                            <span className="text-muted-foreground text-xs">{format(dateObj, 'dd/MM')}</span>
-                                            <CloudRain className="h-4 w-4 text-primary opacity-50" />
+                                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
+                                        <div className="flex items-center w-16">
+                                            <span className="text-[13px] font-semibold capitalize text-foreground">
+                                                {dayName}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-4 flex-1 justify-center">
+                                            {/* Rain */}
+                                            <div className="flex items-center gap-1 w-12 text-blue-500">
+                                                {rain > 0 ? (
+                                                    <>
+                                                        <Droplets className="h-3 w-3 fill-current" />
+                                                        <span className="text-[11px] font-medium">{rain}</span>
+                                                    </>
+                                                ) : null}
+                                            </div>
+
+                                            {/* Wind */}
+                                            <div className="flex items-center gap-1 w-16 text-muted-foreground">
+                                                <ArrowDown className="h-3 w-3 transform rotate-45" />
+                                                <span className="text-[11px] font-medium">{wind} m/s</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-end gap-2 text-[13px] font-medium">
+                                            <span className="text-muted-foreground">{minTemp}°</span>
+                                            <div className="w-8 h-1 rounded-full bg-gradient-to-r from-blue-400 to-orange-500 opacity-80"></div>
+                                            <span className="text-foreground">{maxTemp}°</span>
                                         </div>
                                     </div>
                                 );

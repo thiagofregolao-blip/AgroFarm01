@@ -9357,12 +9357,27 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
       // Buscar inteligência agronômica e previsão baseada na localização da estação
       const intelligence = await WeatherStationService.getForecastWithIntelligence(station.lat?.toString(), station.lng?.toString());
 
-      // (Futuro) Buscar logs históricos para calcular o GDD da safra
-      // const gdd = await WeatherStationService.calculateGDD(station.id, new Date('2023-09-01'));
+      // Buscar logs históricos para calcular o volume de chuva acumulado (últimos 30 dias)
+      const { sql, gte } = await import("drizzle-orm");
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const [rainResult] = await db
+        .select({
+          totalRain: sql<number>`sum(NULLIF(${weatherHistoryLogs.precipitation}, '')::numeric)`
+        })
+        .from(weatherHistoryLogs)
+        .where(
+          and(
+            eq(weatherHistoryLogs.stationId, stationId),
+            gte(weatherHistoryLogs.ts, thirtyDaysAgo)
+          )
+        );
 
       res.json({
         station,
         ...intelligence,
+        accumulatedRain: rainResult?.totalRain ? Math.round(Number(rainResult.totalRain) * 10) / 10 : 0,
         gdd: 450, // Stub placeholder for UI
       });
 
