@@ -220,6 +220,16 @@ const runMigration = async () => {
             console.log('✅ Migração user_modules concluída!');
         }
 
+        // Migration 18: Weather Stations
+        const weatherStationsPath = path.join(process.cwd(), 'migration_weather_stations.sql');
+        if (fs.existsSync(weatherStationsPath)) {
+            const weatherStationsSql = fs.readFileSync(weatherStationsPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', weatherStationsPath);
+            console.log('🚀 Executando SQL (weather_stations)...');
+            await sql.unsafe(weatherStationsSql);
+            console.log('✅ Migração weather_stations concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

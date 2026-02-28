@@ -22,6 +22,13 @@
       "when": 1772051965684,
       "tag": "0002_uneven_vargas",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772310998585,
+      "tag": "0003_curly_impossible_man",
+      "breakpoints": true
     }
   ]
 }
