@@ -140,7 +140,7 @@ export default function NdviPage() {
                         </div>
                         {/* Botão sutil para Legenda ou Opções (Mocape) */}
                         <div className="text-emerald-700 font-medium text-sm flex gap-2">
-                            <span>{plots.reduce((acc: number, p: any) => acc + (p.areaHa || 0), 0).toFixed(0)} ha Totais</span>
+                            <span>{plots.reduce((acc: number, p: any) => acc + (Number(p.areaHa) || 0), 0).toFixed(0)} ha Totais</span>
                         </div>
                     </div>
 
