@@ -102,13 +102,14 @@ export function registerInvoiceEmailRoutes(app: Express) {
                             if (farmer.whatsapp_number && process.env.ZAPI_INSTANCE_ID) {
                                 const zapiUrl = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}/token/${process.env.ZAPI_TOKEN}/send-text`;
                                 const currencySymbol = extracted.currency === "PYG" ? "₲" : extracted.currency === "BRL" ? "R$" : "$";
+                                const formattedTotal = extracted.totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+                                const farmerName = farmer.name || "Produtor";
 
-                                const message = `📧 *Nova Fatura Importada Automaticamente!*\n\n` +
-                                    `📄 *Fornecedor:* ${extracted.supplier}\n` +
-                                    `💰 *Total:* ${currencySymbol} ${extracted.totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n` +
-                                    `📋 *Itens:* ${extracted.items.length} produtos identificados\n` +
-                                    `${result.matchedCount > 0 ? `✅ *${result.matchedCount}* já encontrados no catálogo\n` : ""}` +
-                                    `\n👉 Acesse o sistema para *revisar e aprovar* esta fatura.`;
+                                const message = `👋 *${farmerName}*, tudo bem?\n\n` +
+                                    `Recebemos uma fatura em seu nome do fornecedor *${extracted.supplier}* no valor de *${currencySymbol} ${formattedTotal}* com ${extracted.items.length} produtos.\n\n` +
+                                    `${result.matchedCount > 0 ? `✅ ${result.matchedCount} produto${result.matchedCount > 1 ? "s" : ""} já ${result.matchedCount > 1 ? "foram identificados" : "foi identificado"} no seu catálogo.\n\n` : ""}` +
+                                    `Acesse o sistema para *revisar os dados* e aprovar a entrada no estoque.\n\n` +
+                                    `🌱 _AgroFarm Digital — Gestão inteligente para o campo._`;
 
                                 const zapiResponse = await fetch(zapiUrl, {
                                     method: "POST",
