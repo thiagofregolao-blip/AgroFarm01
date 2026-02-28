@@ -110,7 +110,12 @@ export class WeatherStationService {
         );
 
         if (!response.ok) {
-            throw new Error(`OpenWeather Forecast API error: ${response.statusText}`);
+            console.warn(`OpenWeather Forecast API error: ${response.statusText}. Returning empty forecast data so Dashboard opens normally while API key activates.`);
+            return {
+                charts: { temperatures: [], precipitation: [], wind: [], humidity: [] },
+                sprayWindow: [],
+                forecast: []
+            };
         }
 
         const data = await response.json();
