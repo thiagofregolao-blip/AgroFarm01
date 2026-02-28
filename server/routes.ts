@@ -8343,9 +8343,50 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
+  // ============ AI ENRICHMENT ROUTE ============
+  app.post("/api/admin/farmers/products/ai-enrich", requireFarmAdmin, async (req: any, res) => {
+    try {
+      const { productName, productId } = req.body;
+      if (!productName) {
+        return res.status(400).json({ error: "Nome do produto é obrigatório para enriquecimento" });
+      }
+
+      const { enrichProductData } = await import("./services/ai-enrichment.service");
+      const { farmStockMovements, farmProductsCatalog } = await import("@shared/schema");
+
+      // Build context: check if any farmer has stock movements for this product ID to get clues about units
+      let stockContext: { quantity: string; unit: string; date: string }[] = [];
+      if (productId) {
+        const movements = await db
+          .select({
+            quantity: farmStockMovements.quantity,
+            unit: farmProductsCatalog.unit,
+            date: farmStockMovements.createdAt
+          })
+          .from(farmStockMovements)
+          .leftJoin(farmProductsCatalog, eq(farmStockMovements.productId, farmProductsCatalog.id))
+          .where(eq(farmStockMovements.productId, productId))
+          .limit(5);
+
+        stockContext = movements.map(m => ({
+          quantity: m.quantity || "1",
+          unit: m.unit || "L",
+          date: m.date ? m.date.toISOString().split('T')[0] : ""
+        }));
+      }
+
+      const aiData = await enrichProductData(productName, stockContext);
+      res.json(aiData);
+    } catch (error: any) {
+      console.error("Erro no enriquecimento por IA:", error);
+      res.status(500).json({ error: error.message || "Falha no enriquecimento." });
+    }
+  });
+
   // ============ CRM MOBILE ROUTES ============
   const { CRMStorage } = await import("./storage-crm");
   const { parseAgenda } = await import("./services/nlp.service");
+
 
   // VISITS
   app.get("/api/visits", requireAuth, async (req: any, res) => {

@@ -222,6 +222,45 @@ export function ProductsManagement() {
         setActiveIngredient(product.activeIngredient || "");
     };
 
+    const enrichProductMutation = useMutation({
+        mutationFn: async (productId?: string) => {
+            return apiRequest("POST", "/api/admin/farmers/products/ai-enrich", { productName: name, productId });
+        },
+        onSuccess: (data: any) => {
+            // Map common agronomic terms to our dropdown values
+            if (data.category) {
+                const catLower = data.category.toLowerCase();
+                if (catLower.includes('herbicida') || catLower.includes('dessecação')) setCategory('Herbicida');
+                else if (catLower.includes('fungicida')) setCategory('Fungicida');
+                else if (catLower.includes('inseticida')) setCategory('Inseticida');
+                else if (catLower.includes('nematicida')) setCategory('Nematicida');
+                else if (catLower.includes('adjuvante') || catLower.includes('óleo')) setCategory('Óleo / Espalhante Adesivo');
+                else if (catLower.includes('fertilizante') && catLower.includes('foliar')) setCategory('Foliar');
+                else if (catLower.includes('fertilizante') && catLower.includes('base')) setCategory('Fertilizante De Base');
+                else if (catLower.includes('fertilizante') && catLower.includes('cobertura')) setCategory('Fertilizante De Cobertura');
+                else if (catLower.includes('semente')) setCategory('Sementes');
+                else if (catLower.includes('inoculante') || catLower.includes('biologico')) setCategory('Inoculante');
+            }
+
+            if (data.activeIngredient) setActiveIngredient(data.activeIngredient);
+            if (data.unit) {
+                const u = data.unit.toUpperCase();
+                if (u.includes('L') || u === 'LT') setUnit('LT');
+                else if (u.includes('KG')) setUnit('KG');
+                else if (u.includes('SC')) setUnit('SC');
+                else if (u.includes('TO')) setUnit('TO');
+            }
+            if (data.dosage && !isNaN(parseFloat(data.dosage))) {
+                setDosePerHa(parseFloat(data.dosage).toString());
+            }
+
+            toast({ title: "Dados enriquecidos com sucesso", description: "Verifique os dados preenchidos pela IA antes de salvar." });
+        },
+        onError: (error: any) => {
+            toast({ title: "Erro na IA", description: error.message, variant: "destructive" });
+        }
+    });
+
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
         const targetProduct = editingProduct || approvingProduct;
@@ -437,7 +476,23 @@ export function ProductsManagement() {
                             category={category} setCategory={setCategory}
                             activeIngredient={activeIngredient} setActiveIngredient={setActiveIngredient}
                         />
-                        <DialogFooter>
+                        <div className="flex justify-start w-full mb-4">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 w-full"
+                                onClick={() => enrichProductMutation.mutate((editingProduct || approvingProduct)?.id)}
+                                disabled={enrichProductMutation.isPending || !name}
+                            >
+                                {enrichProductMutation.isPending ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <span className="mr-2">✨</span>
+                                )}
+                                Auto-preencher agronômico com Inteligência Artificial
+                            </Button>
+                        </div>
+                        <DialogFooter className="gap-2 sm:gap-0">
                             <Button type="button" variant="outline" onClick={() => { setEditingProduct(null); setApprovingProduct(null); }}>Cancelar</Button>
                             <Button type="submit" className={approvingProduct ? "bg-orange-600 hover:bg-orange-700 text-white" : "bg-blue-600 hover:bg-blue-700"} disabled={updateProductMutation.isPending}>
                                 {updateProductMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
