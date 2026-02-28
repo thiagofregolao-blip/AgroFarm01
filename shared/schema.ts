@@ -25,6 +25,7 @@ export const users = pgTable("users", {
   propertySize: decimal("property_size", { precision: 12, scale: 2 }), // Tamanho da propriedade em ha
   mainCulture: text("main_culture"), // Cultura principal (Soja, Milho, etc.)
   region: text("region"), // Região/Cidade/Estado
+  invoiceEmail: text("invoice_email"), // Email para receber faturas por email
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
@@ -1113,6 +1114,9 @@ export const farmInvoices = pgTable("farm_invoices", {
   status: text("status").notNull().default("pending"), // pending, confirmed, cancelled
   skipStockEntry: boolean("skip_stock_entry").notNull().default(false), // Se true, não dá entrada no estoque ao confirmar
   rawPdfData: text("raw_pdf_data"), // Texto extraído do PDF para debug
+  source: text("source").notNull().default("manual"), // "manual" | "email_import"
+  sourceEmailId: text("source_email_id"), // Message-ID do email original (evita duplicatas)
+  sourceEmailFrom: text("source_email_from"), // Remetente do email
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

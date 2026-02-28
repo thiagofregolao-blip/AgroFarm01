@@ -113,6 +113,11 @@ app.use((req, res, next) => {
   const { registerNdviRoutes } = await import("./ndvi-routes");
   registerNdviRoutes(app);
 
+  // Register Invoice Email Import routes (Mailgun webhook)
+  const { registerInvoiceEmailRoutes } = await import("./invoice-email-routes");
+  registerInvoiceEmailRoutes(app);
+  log("✅ Invoice Email Import routes registered (/api/webhooks/mailgun/*)");
+
   // Register WhatsApp routes (if configured)
   if (process.env.ZAPI_INSTANCE_ID && process.env.ZAPI_TOKEN && process.env.GEMINI_API_KEY) {
     const { WhatsAppService } = await import("./whatsapp/whatsapp-service");

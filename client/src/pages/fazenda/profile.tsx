@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, User, Plus, Trash2, Users, MapPin, Bell } from "lucide-react";
+import { Loader2, Save, User, Plus, Trash2, Users, MapPin, Bell, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const profileSchema = z.object({
@@ -40,6 +40,7 @@ export default function FarmProfile() {
     const { toast } = useToast();
     const [extraNumbers, setExtraNumbers] = useState<string[]>([]);
     const [bulletinEnabled, setBulletinEnabled] = useState(true);
+    const [invoiceEmail, setInvoiceEmail] = useState("");
 
     const form = useForm<ProfileFormData>({
         resolver: zodResolver(profileSchema),
@@ -78,6 +79,7 @@ export default function FarmProfile() {
                 setExtraNumbers([]);
             }
             setBulletinEnabled(profile.bulletin_enabled !== false);
+            setInvoiceEmail(profile.invoice_email || "");
         }
     }, [profile, form]);
 
@@ -104,6 +106,7 @@ export default function FarmProfile() {
                 farm_latitude: data.farm_latitude ? parseFloat(data.farm_latitude) : null,
                 farm_longitude: data.farm_longitude ? parseFloat(data.farm_longitude) : null,
                 bulletin_enabled: bulletinEnabled,
+                invoice_email: invoiceEmail || null,
             });
             return res.json();
         },
@@ -290,6 +293,27 @@ export default function FarmProfile() {
                                             }`} />
                                     </button>
                                 </div>
+                            </div>
+
+                            {/* Invoice Email */}
+                            <div className="border border-purple-200 rounded-lg p-4 bg-purple-50/30 space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-purple-600" />
+                                    <h3 className="font-semibold text-sm text-gray-700">Email para Faturas Automáticas</h3>
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                    Configure um email para receber faturas automaticamente. Quando um fornecedor enviar um PDF de fatura para este email,
+                                    o sistema irá ler e importar os dados automaticamente, aguardando sua aprovação.
+                                </p>
+                                <Input
+                                    value={invoiceEmail}
+                                    onChange={(e) => setInvoiceEmail(e.target.value)}
+                                    placeholder="Ex: meunome.faturas@mail.agrofarmdigital.com"
+                                    type="email"
+                                />
+                                <p className="text-xs text-purple-600 font-medium">
+                                    💡 Forneça este email apenas para empresas agrícolas de confiança.
+                                </p>
                             </div>
 
                             <div className="flex justify-end pt-4">
