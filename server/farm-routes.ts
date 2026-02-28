@@ -64,13 +64,13 @@ export function registerFarmRoutes(app: Express) {
                 let rows: any[];
                 if (isNeon) {
                     const result = await pool.query(
-                        "SELECT farm_city, farm_latitude, farm_longitude, bulletin_enabled FROM users WHERE id = $1",
+                        "SELECT farm_city, farm_latitude, farm_longitude, bulletin_enabled, invoice_email FROM users WHERE id = $1",
                         [user.id]
                     );
                     rows = result.rows || [];
                 } else {
                     rows = await pool.unsafe(
-                        "SELECT farm_city, farm_latitude, farm_longitude, bulletin_enabled FROM users WHERE id = $1",
+                        "SELECT farm_city, farm_latitude, farm_longitude, bulletin_enabled, invoice_email FROM users WHERE id = $1",
                         [user.id]
                     );
                 }
@@ -90,6 +90,7 @@ export function registerFarmRoutes(app: Express) {
                 farm_latitude: locationData.farm_latitude || "",
                 farm_longitude: locationData.farm_longitude || "",
                 bulletin_enabled: locationData.bulletin_enabled !== false,
+                invoice_email: locationData.invoice_email || "",
             });
         } catch (error) {
             console.error("[FARM_ME]", error);
@@ -100,7 +101,7 @@ export function registerFarmRoutes(app: Express) {
     // Update user profile (name and whatsapp)
     app.put("/api/farm/me", requireFarmer, async (req, res) => {
         try {
-            const { name, whatsapp_number, whatsapp_extra_numbers, farm_city, farm_latitude, farm_longitude, bulletin_enabled } = req.body;
+            const { name, whatsapp_number, whatsapp_extra_numbers, farm_city, farm_latitude, farm_longitude, bulletin_enabled, invoice_email } = req.body;
             const userId = (req.user as any).id;
 
             // Dynamically import db to avoid circular dependency issues
@@ -121,16 +122,17 @@ export function registerFarmRoutes(app: Express) {
                 .returning();
 
             // Update location fields via raw SQL (not in Drizzle schema yet)
-            if (farm_city !== undefined || farm_latitude !== undefined || farm_longitude !== undefined || bulletin_enabled !== undefined) {
+            if (farm_city !== undefined || farm_latitude !== undefined || farm_longitude !== undefined || bulletin_enabled !== undefined || invoice_email !== undefined) {
                 const { pool } = await import("./db");
                 const isNeon = (process.env.DATABASE_URL || "").includes("neon.tech");
                 const queryStr = `UPDATE users SET 
                     farm_city = COALESCE($1, farm_city),
                     farm_latitude = COALESCE($2, farm_latitude),
                     farm_longitude = COALESCE($3, farm_longitude),
-                    bulletin_enabled = COALESCE($4, bulletin_enabled)
+                    bulletin_enabled = COALESCE($4, bulletin_enabled),
+                    invoice_email = $6
                 WHERE id = $5`;
-                const params = [farm_city || null, farm_latitude || null, farm_longitude || null, bulletin_enabled ?? true, userId];
+                const params = [farm_city || null, farm_latitude || null, farm_longitude || null, bulletin_enabled ?? true, userId, invoice_email || null];
                 if (isNeon) {
                     await pool.query(queryStr, params);
                 } else {
