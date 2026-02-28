@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
-    CloudRain, Wind, Droplets, Thermometer, Plus,
+    CloudRain, Wind, Droplets, Thermometer, Plus, Trash2,
     MapPin, AlignJustify, Search, Target, Loader2, ArrowLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -314,6 +314,22 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
         queryKey: [`/api/farm/weather/stations/${stationId}/dashboard`],
     });
 
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+
+    const deleteMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch(`/api/farm/weather/stations/${stationId}`, { method: "DELETE" });
+            if (!res.ok) throw new Error("Falha ao deletar estação");
+            return res.json();
+        },
+        onSuccess: () => {
+            toast({ title: "Estação virtual excluída com sucesso." });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/weather/stations"] });
+            onClose();
+        }
+    });
+
     if (isLoading) {
         return (
             <div className="absolute inset-y-0 right-0 w-96 bg-card border-l shadow-2xl z-50 flex items-center justify-center">
@@ -338,9 +354,24 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                         Lat: {parseFloat(station.lat).toFixed(4)}, Lng: {parseFloat(station.lng).toFixed(4)}
                     </p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full bg-muted/50 hover:bg-muted">
-                    <ArrowLeft className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="destructive"
+                        size="icon"
+                        onClick={() => {
+                            if (window.confirm("Deseja realmente excluir esta estação virtual?")) {
+                                deleteMutation.mutate();
+                            }
+                        }}
+                        className="rounded-full shadow-sm"
+                        disabled={deleteMutation.isPending}
+                    >
+                        {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full bg-muted/50 hover:bg-muted">
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
 
             <ScrollArea className="flex-1 p-4">

@@ -9372,5 +9372,35 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
+  // DELETE /api/farm/weather/stations/:id - Deletar estação
+  app.delete("/api/farm/weather/stations/:id", requireAuth, async (req, res) => {
+    try {
+      const { virtualWeatherStations, weatherHistoryLogs } = await import("@shared/schema");
+
+      const stationId = req.params.id;
+
+      // Verificar se a estação existe e pertence ao usuário (ou à fazenda dele)
+      const [station] = await db
+        .select()
+        .from(virtualWeatherStations)
+        .where(eq(virtualWeatherStations.id, stationId));
+
+      if (!station) {
+        return res.status(404).json({ error: "Estação não encontrada" });
+      }
+
+      // Opcional: deletar histórico associado (caso o foreign key cascade não esteja cobrindo).
+      await db.delete(weatherHistoryLogs).where(eq(weatherHistoryLogs.stationId, stationId));
+
+      // Deletar estação
+      await db.delete(virtualWeatherStations).where(eq(virtualWeatherStations.id, stationId));
+
+      res.status(200).json({ success: true, message: "Estação deletada" });
+    } catch (error) {
+      console.error("Erro ao deletar estação:", error);
+      res.status(500).json({ error: "Falha ao deletar estação" });
+    }
+  });
+
   return httpServer;
 }
