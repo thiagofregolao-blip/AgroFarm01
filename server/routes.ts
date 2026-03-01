@@ -9417,5 +9417,60 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
+  // GET /api/farm/weather/stations/:id/history - Histórico de Chuva
+  app.get("/api/farm/weather/stations/:id/history", requireAuth, async (req, res) => {
+    try {
+      const { virtualWeatherStations, weatherHistoryLogs } = await import("@shared/schema");
+      const stationId = req.params.id;
+      const days = Number(req.query.days) || 30;
+
+      // Verificar se a estação existe
+      const [station] = await db
+        .select()
+        .from(virtualWeatherStations)
+        .where(eq(virtualWeatherStations.id, stationId));
+
+      if (!station) {
+        return res.status(404).json({ error: "Estação não encontrada" });
+      }
+
+      // Calculate start date
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+
+      // We need to aggregate precipitation by day (DATE(ts))
+      const history = await db
+        .select({
+          // Format date as string 'YYYY-MM-DD'
+          date: sql<string>`DATE(${weatherHistoryLogs.ts})::text`,
+          precipitation: sql<number>`sum(COALESCE(${weatherHistoryLogs.precipitation}, 0))`
+        })
+        .from(weatherHistoryLogs)
+        .where(
+          and(
+            eq(weatherHistoryLogs.stationId, stationId),
+            gte(weatherHistoryLogs.ts, startDate)
+          )
+        )
+        // Group by the date portion
+        .groupBy(sql`DATE(${weatherHistoryLogs.ts})`)
+        .orderBy(sql`DATE(${weatherHistoryLogs.ts}) ASC`);
+
+      // Format the output specifically for Recharts BarChart
+      // we might have days with 0 rain missing from the DB if the cron didn't run, 
+      // but for V1 returning the existing DB rows is enough.
+      const formattedHistory = history.map((row: { date: string | null, precipitation: number | null }) => ({
+        date: row.date,
+        precipitation: Math.round(Number(row.precipitation) * 10) / 10
+      }));
+
+      res.status(200).json(formattedHistory);
+    } catch (error) {
+      console.error("Erro ao buscar histórico de chuva:", error);
+      res.status(500).json({ error: "Falha ao buscar histórico" });
+    }
+  });
+
   return httpServer;
 }

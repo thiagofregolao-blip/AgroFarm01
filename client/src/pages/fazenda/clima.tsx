@@ -4,13 +4,16 @@ import { Link } from "wouter";
 import {
     CloudRain, Wind, Droplets, Thermometer, Plus, Trash2,
     MapPin, AlignJustify, Search, Target, Loader2, ArrowLeft,
-    Cloud, ArrowDown, ArrowUp
+    Cloud, ArrowDown, ArrowUp, History, Calendar, CalendarDays
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { format as formatFns } from "date-fns";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -304,7 +307,8 @@ export default function FazendaClima() {
 
 // Subcomponente do Dashboard da Estação
 import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area,
+    BarChart, Bar
 } from "recharts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -316,6 +320,16 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
 
     const queryClient = useQueryClient();
     const { toast } = useToast();
+
+    // Historico de chuva local state
+    const [historyDays, setHistoryDays] = useState("30");
+    const { data: rainHistory, isLoading: isLoadingHistory } = useQuery<any[]>({
+        queryKey: [`/api/farm/weather/stations/${stationId}/history`, historyDays],
+        queryFn: async () => {
+            const res = await fetch(`/api/farm/weather/stations/${stationId}/history?days=${historyDays}`);
+            return res.json();
+        }
+    });
 
     const deleteMutation = useMutation({
         mutationFn: async () => {
@@ -405,14 +419,97 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
 
                     {/* Acumulado de Chuva + GDD */}
                     <div className="grid grid-cols-2 gap-4">
-                        <Card className="p-4 bg-blue-50/50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900 shadow-sm">
-                            <h3 className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1">Chuva Acumulada</h3>
-                            <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mb-2">Últimos 30 dias</p>
-                            <div className="flex items-end gap-1">
-                                <span className="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none">{data.accumulatedRain || 0}</span>
-                                <span className="text-sm font-semibold text-blue-600/70 dark:text-blue-400/70 leading-none pb-0.5">mm</span>
-                            </div>
-                        </Card>
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Card className="p-4 bg-blue-50/50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900 shadow-sm cursor-pointer hover:bg-blue-100/50 transition-colors group relative overflow-hidden">
+                                    <div className="absolute top-2 right-2 p-1.5 bg-blue-100 dark:bg-blue-900 rounded-full text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <History className="h-3 w-3" />
+                                    </div>
+                                    <h3 className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1">Chuva Acumulada</h3>
+                                    <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mb-2">Últimos 30 dias</p>
+                                    <div className="flex items-end gap-1">
+                                        <span className="text-2xl font-black text-blue-600 dark:text-blue-400 leading-none">{data.accumulatedRain || 0}</span>
+                                        <span className="text-sm font-semibold text-blue-600/70 dark:text-blue-400/70 leading-none pb-0.5">mm</span>
+                                    </div>
+                                </Card>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[600px]">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2">
+                                        <CalendarDays className="h-5 w-5 text-blue-500" /> Histórico de Chuvas (Estação)
+                                    </DialogTitle>
+                                    <DialogDescription>
+                                        Consulte os dados de precipitação capturados por esta estação.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium">Período de Análise</span>
+                                        <Select value={historyDays} onValueChange={setHistoryDays}>
+                                            <SelectTrigger className="w-[180px]">
+                                                <SelectValue placeholder="Selecione..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="7">Últimos 7 dias</SelectItem>
+                                                <SelectItem value="15">Últimos 15 dias</SelectItem>
+                                                <SelectItem value="30">Últimos 30 dias</SelectItem>
+                                                <SelectItem value="90">Últimos 90 dias</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Gráfico */}
+                                    <div className="h-[300px] w-full mt-4 border rounded-xl p-4 bg-slate-50/50 dark:bg-slate-900/50">
+                                        {isLoadingHistory ? (
+                                            <div className="h-full w-full flex items-center justify-center">
+                                                <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                                            </div>
+                                        ) : rainHistory && rainHistory.length > 0 ? (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={rainHistory}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                                                    <XAxis
+                                                        dataKey="date"
+                                                        tickFormatter={(val) => {
+                                                            const parts = val.split('-');
+                                                            if (parts.length !== 3) return val;
+                                                            return `${parts[2]}/${parts[1]}`;
+                                                        }}
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                        tick={{ fontSize: 11 }}
+                                                        dy={10}
+                                                    />
+                                                    <YAxis
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                        tick={{ fontSize: 11 }}
+                                                        dx={-10}
+                                                        tickFormatter={(val) => `${val}mm`}
+                                                    />
+                                                    <RechartsTooltip
+                                                        cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
+                                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+                                                        labelFormatter={(label) => {
+                                                            const parts = String(label).split('-');
+                                                            if (parts.length !== 3) return label;
+                                                            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                                                        }}
+                                                        formatter={(value: number) => [`${value} mm`, 'Chuva']}
+                                                    />
+                                                    <Bar dataKey="precipitation" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        ) : (
+                                            <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground">
+                                                <CloudRain className="h-8 w-8 mb-2 opacity-20" />
+                                                <p className="text-sm">Nenhum registro de chuva encontrado neste período.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
 
                         <Card className="p-4 bg-orange-50/50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900 shadow-sm">
                             <h3 className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">GDD Acumulado</h3>
