@@ -146,8 +146,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
             {/* ===== MAIN CONTENT ===== */}
             <main className="flex-1 flex flex-col min-h-screen max-w-full md:ml-[200px]">
-                {/* Top bar with page title and hamburger */}
-                <header className="bg-gradient-to-r from-emerald-700 to-emerald-800 text-white shadow-md sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+                <header className="bg-gradient-to-r from-emerald-700 to-emerald-800 text-white shadow-md sticky top-0 z-[1000] px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
                     <button
                         onClick={() => setIsMobileMenuOpen(true)}
                         className="md:hidden p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors"
