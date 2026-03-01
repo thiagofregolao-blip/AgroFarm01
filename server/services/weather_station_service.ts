@@ -136,10 +136,10 @@ export class WeatherStationService {
         const dailyForecasts = Array.from(new Set(forecastList.map((i: any) => new Date(i.dt * 1000).toDateString()))).slice(0, 5); // Simplificando para 5 dias
 
         const charts = {
-            temperatures: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), value: Math.round(d.main.temp) })),
-            precipitation: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), value: d.rain ? d.rain['3h'] || 0 : 0 })),
-            wind: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), value: Math.round((d.wind.speed * 3.6) * 10) / 10 })), // m/s to km/h
-            humidity: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), value: Math.round(d.main.humidity) })),
+            temperatures: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), value: Math.round(d.main.temp) })),
+            precipitation: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), value: d.rain ? d.rain['3h'] || 0 : 0 })),
+            wind: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), value: Math.round((d.wind.speed * 3.6) * 10) / 10 })), // m/s to km/h
+            humidity: hourlyData.map((d: any) => ({ time: new Date(d.dt * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), value: Math.round(d.main.humidity) })),
         };
 
         // Calculate Spray Window Status using simple heuristics
@@ -165,7 +165,7 @@ export class WeatherStationService {
             }
 
             return {
-                time: new Date(d.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                time: new Date(d.dt * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                 status,
                 reason
             };
