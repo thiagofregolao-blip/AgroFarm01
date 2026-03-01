@@ -139,6 +139,26 @@ app.use((req, res, next) => {
     log("⚠️  WhatsApp not configured (missing ZAPI_INSTANCE_ID, ZAPI_TOKEN, or GEMINI_API_KEY)");
   }
 
+  // Dynamic Multi-tenant Manifest for the POS (PDV) PWA setup
+  app.get("/manifest-pdv.json", (_req, res) => {
+    res.json({
+      name: "AgroFarm PDV",
+      short_name: "PDV",
+      description: "Ponto de Venda do AgroFarm",
+      theme_color: "#16A249",
+      background_color: "#ffffff",
+      display: "standalone",
+      orientation: "portrait",
+      start_url: "/pdv/login",
+      scope: "/pdv/",
+      icons: [
+        { src: "icon-192x192.png", sizes: "192x192", type: "image/png" },
+        { src: "icon-512x512.png", sizes: "512x512", type: "image/png" },
+        { src: "icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
+      ]
+    });
+  });
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

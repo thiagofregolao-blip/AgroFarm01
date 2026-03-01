@@ -70,6 +70,21 @@ export async function setupVite(app: Express, server: Server) {
       );
       let page = await vite.transformIndexHtml(url, template);
 
+      // Change manifest and title for PDV to implement proper separate PWA Installation
+      if (url.startsWith("/pdv")) {
+        page = page.replace(
+          /href="[^"]*\/manifest\.(json|webmanifest)"/gi,
+          'href="/manifest-pdv.json"'
+        );
+        page = page.replace(
+          /content="AgroFarm"/gi,
+          'content="PDV AgroFarm"'
+        );
+        page = page.replace(
+          /<title>AgroFarm Digital<\/title>/i,
+          '<title>PDV AgroFarm</title>'
+        );
+      }
 
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
@@ -95,6 +110,21 @@ export function serveStatic(app: Express) {
     try {
       let html = await fs.promises.readFile(path.resolve(distPath, "index.html"), "utf-8");
 
+      // Change manifest and title for PDV to implement proper separate PWA Installation
+      if (req.originalUrl.startsWith("/pdv")) {
+        html = html.replace(
+          /href="[^"]*\/manifest\.(json|webmanifest)"/gi,
+          'href="/manifest-pdv.json"'
+        );
+        html = html.replace(
+          /content="AgroFarm"/gi,
+          'content="PDV AgroFarm"'
+        );
+        html = html.replace(
+          /<title>AgroFarm Digital<\/title>/i,
+          '<title>PDV AgroFarm</title>'
+        );
+      }
 
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
