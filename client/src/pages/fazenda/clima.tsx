@@ -44,15 +44,20 @@ interface Station {
 export default function FazendaClima() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { data: farms } = useQuery<any[]>({ queryKey: ["/api/farms"] });
     const [isCreatingMode, setIsCreatingMode] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [newStationName, setNewStationName] = useState("");
     const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
     const [mapCenter, setMapCenter] = useState<[number, number]>([-15.793889, -47.882778]); // Default Brazil
 
-    // Geolocation hook to center the user automatically on mount
+    // Geolocation hook to center the user automatically on mount or when the farm API loads
     useEffect(() => {
-        if ("geolocation" in navigator) {
+        if (farms && farms.length > 0 && farms[0].lat && farms[0].lng) {
+            // First priority: User's registered farm location
+            setMapCenter([parseFloat(String(farms[0].lat)), parseFloat(String(farms[0].lng))]);
+        } else if ("geolocation" in navigator) {
+            // Fallback: Browser geolocation
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     setMapCenter([position.coords.latitude, position.coords.longitude]);
@@ -63,7 +68,7 @@ export default function FazendaClima() {
                 { enableHighAccuracy: true, timeout: 5000 }
             );
         }
-    }, []);
+    }, [farms]);
 
     // Removed MapUpdater component since it forced centering on state changes
 
