@@ -180,16 +180,16 @@ export default function PdvTerminal() {
     };
 
     const updateQuantity = (productId: string, qty: number | string) => {
-        let numericQty = typeof qty === 'string' ? parseFloat(qty) : qty;
+        let numericQty = typeof qty === 'string' ? parseFloat(qty.replace(',', '.')) : qty;
         if (isNaN(numericQty) || numericQty < 0) numericQty = 0;
         const stockQty = getStockForProduct(productId);
-        if (numericQty > stockQty) qty = stockQty; // Cap at available stock but allow string holding
+        if (numericQty > stockQty) qty = stockQty.toString(); // Cap at available stock but allow string holding
         setCart(cart.map(c => c.product.id === productId ? { ...c, quantity: qty } : c));
     };
 
     const updateDose = (productId: string, dose: number | string) => {
-        let numericDose = typeof dose === 'string' ? parseFloat(dose) : dose;
-        if (isNaN(numericDose) || numericDose < 0) dose = 0;
+        let numericDose = typeof dose === 'string' ? parseFloat(dose.replace(',', '.')) : dose;
+        if (isNaN(numericDose) || numericDose < 0) numericDose = 0;
         setCart(cart.map(c => c.product.id === productId ? { ...c, dosePerHa: dose } : c));
     };
 
@@ -1620,10 +1620,9 @@ export default function PdvTerminal() {
                                                             <Input type="text" inputMode="decimal"
                                                                 value={item.quantity === 0 ? "" : item.quantity}
                                                                 onChange={(e) => {
-                                                                    let val = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
-                                                                    const parts = val.split(".");
-                                                                    if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
-                                                                    updateQuantity(item.product.id, val as any);
+                                                                    let val = e.target.value.replace(/[^0-9.,]/g, "");
+                                                                    if (val.startsWith(",") || val.startsWith(".")) val = "0" + val;
+                                                                    updateQuantity(item.product.id, val);
                                                                 }}
                                                                 onFocus={(e) => e.target.select()}
                                                                 className="text-center text-base font-bold flex-1 h-9 bg-white border-gray-200 text-gray-800 rounded-lg" />
@@ -1639,13 +1638,12 @@ export default function PdvTerminal() {
                                                         <Input
                                                             type="text"
                                                             inputMode="decimal"
-                                                            value={item.dosePerHa || ""}
+                                                            value={item.dosePerHa === 0 ? "" : (item.dosePerHa || "")}
                                                             placeholder="N/A"
                                                             onChange={(e) => {
-                                                                let val = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
-                                                                const parts = val.split(".");
-                                                                if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
-                                                                updateDose(item.product.id, val === '' ? 0 : val as any);
+                                                                let val = e.target.value.replace(/[^0-9.,]/g, "");
+                                                                if (val.startsWith(",") || val.startsWith(".")) val = "0" + val;
+                                                                updateDose(item.product.id, val);
                                                             }}
                                                             className="text-center text-sm font-medium h-9 bg-blue-50/50 border-blue-100 text-blue-700 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                                         />
@@ -1743,10 +1741,9 @@ export default function PdvTerminal() {
                                                                 <Input type="text" inputMode="decimal"
                                                                     value={item.quantity === 0 ? "" : item.quantity}
                                                                     onChange={(e) => {
-                                                                        let val = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
-                                                                        const parts = val.split(".");
-                                                                        if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
-                                                                        updateQuantity(item.product.id, val as any);
+                                                                        let val = e.target.value.replace(/[^0-9.,]/g, "");
+                                                                        if (val.startsWith(",") || val.startsWith(".")) val = "0" + val;
+                                                                        updateQuantity(item.product.id, val);
                                                                     }}
                                                                     onFocus={(e) => e.target.select()}
                                                                     className="text-center text-base font-bold flex-1 h-9 bg-gray-50 border-transparent text-gray-800 rounded-lg focus:bg-white focus:border-[#16A249]" />
@@ -1765,10 +1762,9 @@ export default function PdvTerminal() {
                                                                 value={item.dosePerHa || ""}
                                                                 placeholder="N/A"
                                                                 onChange={(e) => {
-                                                                    let val = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
-                                                                    const parts = val.split(".");
-                                                                    if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
-                                                                    updateDose(item.product.id, val === '' ? 0 : val as any);
+                                                                    let val = e.target.value.replace(/[^0-9.,]/g, "");
+                                                                    if (val.startsWith(",") || val.startsWith(".")) val = "0" + val;
+                                                                    updateDose(item.product.id, val);
                                                                 }}
                                                                 className="text-center text-sm font-medium h-9 bg-blue-50/50 border-blue-100 text-blue-700 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                                             />

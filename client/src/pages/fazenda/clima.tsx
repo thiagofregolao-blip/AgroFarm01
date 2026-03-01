@@ -173,7 +173,15 @@ export default function FazendaClima() {
     };
 
     return (
-        <div className="flex flex-1 w-full h-full bg-background relative overflow-hidden">
+        <div className="flex flex-col md:flex-row w-full h-[100dvh] bg-background relative overflow-hidden">
+            {/* Mobile Back Button */}
+            <div className="md:hidden absolute top-4 left-4 z-[1000]">
+                <Link href="/dashboard">
+                    <Button variant="secondary" size="icon" className="h-10 w-10 rounded-full shadow-lg bg-white hover:bg-white text-emerald-800 pointer-events-auto">
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                </Link>
+            </div>
             {/* Sidebar for List/Search (Hidden on Mobile for 100% Map View) */}
             <div className="hidden md:flex w-80 border-r bg-card flex-col z-10 shadow-xl relative">
                 <div className="p-4 border-b flex items-center justify-between">
