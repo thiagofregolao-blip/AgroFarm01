@@ -466,7 +466,7 @@ export default function PdvTerminal() {
                         propertyId: plot?.propertyId,
                         plotName: d.plotName,
                         productName: item.product.name,
-                        dosePerHa: appliedDose,
+                        dosePerHa: appliedDose ? Number(appliedDose) : undefined,
                         unit: item.product.unit,
                     });
                     count++;
@@ -1287,7 +1287,7 @@ export default function PdvTerminal() {
                     {/* Cart badge */}
                     <button
                         onClick={() => setStep("product")}
-                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all relative ${step === "product" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
+                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all relative ${(step as any) === "product" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Produtos"
                     >
                         <ShoppingCart className="h-5 w-5" />
@@ -1299,7 +1299,7 @@ export default function PdvTerminal() {
 
                     <button
                         onClick={() => { if (step === "confirm") setStep("plot" as any); }}
-                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${step === "plot" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
+                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${(step as any) === "plot" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Talhões"
                     >
                         <MapPin className="h-5 w-5" />
@@ -1308,7 +1308,7 @@ export default function PdvTerminal() {
 
                     <button
                         onClick={() => { }}
-                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${step === "confirm" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
+                        className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${(step as any) === "confirm" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Confirmar"
                     >
                         <Check className="h-5 w-5" />
@@ -1617,10 +1617,12 @@ export default function PdvTerminal() {
                                                                 onClick={() => updateQuantity(item.product.id, Number(item.quantity) - 1)}>
                                                                 <Minus className="h-3.5 w-3.5" />
                                                             </button>
-                                                            <Input type="number" step="any"
+                                                            <Input type="text" inputMode="decimal"
                                                                 value={item.quantity === 0 ? "" : item.quantity}
                                                                 onChange={(e) => {
-                                                                    const val = e.target.value;
+                                                                    let val = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+                                                                    const parts = val.split(".");
+                                                                    if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
                                                                     updateQuantity(item.product.id, val as any);
                                                                 }}
                                                                 onFocus={(e) => e.target.select()}
@@ -1635,11 +1637,16 @@ export default function PdvTerminal() {
                                                     <div>
                                                         <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha ({item.product.unit})</Label>
                                                         <Input
-                                                            type="number"
-                                                            step="0.001"
+                                                            type="text"
+                                                            inputMode="decimal"
                                                             value={item.dosePerHa || ""}
                                                             placeholder="N/A"
-                                                            onChange={(e) => updateDose(item.product.id, parseFloat(e.target.value) || 0)}
+                                                            onChange={(e) => {
+                                                                let val = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+                                                                const parts = val.split(".");
+                                                                if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
+                                                                updateDose(item.product.id, val === '' ? 0 : val as any);
+                                                            }}
                                                             className="text-center text-sm font-medium h-9 bg-blue-50/50 border-blue-100 text-blue-700 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                                         />
                                                     </div>
@@ -1733,10 +1740,12 @@ export default function PdvTerminal() {
                                                                     onClick={() => updateQuantity(item.product.id, Number(item.quantity) - 1)}>
                                                                     <Minus className="h-3.5 w-3.5" />
                                                                 </button>
-                                                                <Input type="number" step="any"
+                                                                <Input type="text" inputMode="decimal"
                                                                     value={item.quantity === 0 ? "" : item.quantity}
                                                                     onChange={(e) => {
-                                                                        const val = e.target.value;
+                                                                        let val = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+                                                                        const parts = val.split(".");
+                                                                        if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
                                                                         updateQuantity(item.product.id, val as any);
                                                                     }}
                                                                     onFocus={(e) => e.target.select()}
@@ -1751,11 +1760,16 @@ export default function PdvTerminal() {
                                                         <div>
                                                             <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha ({item.product.unit})</Label>
                                                             <Input
-                                                                type="number"
-                                                                step="any"
+                                                                type="text"
+                                                                inputMode="decimal"
                                                                 value={item.dosePerHa || ""}
                                                                 placeholder="N/A"
-                                                                onChange={(e) => updateDose(item.product.id, e.target.value === '' ? 0 : e.target.value as any)}
+                                                                onChange={(e) => {
+                                                                    let val = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+                                                                    const parts = val.split(".");
+                                                                    if (parts.length > 2) val = parts[0] + "." + parts.slice(1).join("");
+                                                                    updateDose(item.product.id, val === '' ? 0 : val as any);
+                                                                }}
                                                                 className="text-center text-sm font-medium h-9 bg-blue-50/50 border-blue-100 text-blue-700 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                                             />
                                                         </div>

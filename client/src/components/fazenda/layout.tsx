@@ -161,7 +161,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                         <span className="text-xs font-medium text-emerald-100 hidden sm:block truncate ml-4 max-w-[200px]">{user.name || user.username}</span>
                     </div>
                 </header>
-                <div className={`flex-1 w-full overflow-x-hidden ${location === '/fazenda/clima' ? 'p-0' : 'px-2 sm:px-6 lg:px-8 py-4 sm:py-6'}`}>
+                <div className={`flex-1 flex flex-col w-full overflow-x-hidden ${location === '/fazenda/clima' ? 'p-0' : 'px-2 sm:px-6 lg:px-8 py-4 sm:py-6'}`}>
                     {children}
                 </div>
             </main>
