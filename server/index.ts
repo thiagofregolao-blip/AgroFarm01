@@ -141,6 +141,7 @@ app.use((req, res, next) => {
 
   // Dynamic Multi-tenant Manifest for the POS (PDV) PWA setup
   app.get("/manifest-pdv.json", (_req, res) => {
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
     res.json({
       name: "AgroFarm PDV",
       short_name: "PDV",

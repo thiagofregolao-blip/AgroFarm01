@@ -85,8 +85,10 @@ export async function setupVite(app: Express, server: Server) {
           '<title>PDV AgroFarm</title>'
         );
       }
-
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      res.status(200).set({
+        "Content-Type": "text/html",
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
@@ -125,8 +127,10 @@ export function serveStatic(app: Express) {
           '<title>PDV AgroFarm</title>'
         );
       }
-
-      res.set("Content-Type", "text/html").send(html);
+      res.set({
+        "Content-Type": "text/html",
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }).send(html);
     } catch (e) {
       res.status(500).send("Error reading root index.html");
     }
