@@ -149,13 +149,22 @@ export default function FazendaClima() {
         );
     }
 
+    // Component to handle dynamic map centering
+    function MapUpdater({ center }: { center: [number, number] }) {
+        const map = useMap();
+        useEffect(() => {
+            map.flyTo(center, 13, { animate: true, duration: 2 });
+        }, [center, map]);
+        return null;
+    }
+
     // Custom DivIcon for Weather Marker (OneSoil Style Pill)
     const createWeatherIcon = (station: Station) => {
         const temp = station.currentWeather?.temperature
             ? Math.round(parseFloat(station.currentWeather.temperature))
             : '--';
         const wind = station.currentWeather?.windSpeed
-            ? parseFloat(station.currentWeather.windSpeed).toFixed(1)
+            ? (parseFloat(station.currentWeather.windSpeed) * 3.6).toFixed(1)
             : '--';
 
         return new L.DivIcon({
@@ -166,8 +175,8 @@ export default function FazendaClima() {
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun text-yellow-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
             <span class="text-[15px] tracking-tight">${temp}°</span>
           </div>
-          <div class="flex items-center gap-1 text-[11px] font-medium text-muted-foreground leading-none">
-            ${wind} m/s <span class="text-[10px] transform rotate-45">↘</span>
+          <div class="flex items-center gap-1 text-[11px] font-medium text-muted-foreground leading-none whitespace-nowrap">
+            ${wind} km/h <span class="text-[10px] transform rotate-45">↘</span>
           </div>
           <div class="absolute -bottom-[6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-b border-r border-border/50 transform rotate-45 rounded-sm"></div>
         </div>
@@ -273,7 +282,7 @@ export default function FazendaClima() {
                                     </div>
                                     {station.currentWeather && (
                                         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
-                                            <div className="flex items-center gap-1"><Wind className="h-3 w-3" /> {parseFloat(station.currentWeather.windSpeed).toFixed(1)} m/s</div>
+                                            <div className="flex items-center gap-1"><Wind className="h-3 w-3" /> {(parseFloat(station.currentWeather.windSpeed) * 3.6).toFixed(1)} km/h</div>
                                             <div className="flex items-center gap-1"><Droplets className="h-3 w-3" /> {station.currentWeather.humidity}%</div>
                                         </div>
                                     )}
@@ -292,6 +301,7 @@ export default function FazendaClima() {
                     style={{ height: '100%', width: '100%' }}
                     zoomControl={false}
                 >
+                    <MapUpdater center={mapCenter} />
                     {/* Imagem de Satélite base */}
                     <TileLayer
                         attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
@@ -608,7 +618,7 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                                     <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                                         <Wind className="h-3.5 w-3.5 text-slate-500" /> Vento
                                     </div>
-                                    <span className="text-sm font-bold">{charts.wind?.[0]?.value || '--'} m/s</span>
+                                    <span className="text-sm font-bold">{charts.wind?.[0]?.value || '--'} km/h</span>
                                 </div>
                                 <div className="h-12 w-full">
                                     <ResponsiveContainer width="100%" height="100%">
