@@ -1195,9 +1195,9 @@ export default function PdvTerminal() {
                                                         </button>
                                                         <Input
                                                             type="number"
-                                                            step="1"
+                                                            step="any"
                                                             value={d.allocatedQty}
-                                                            onChange={(e) => setOverride(p.id, d.plotId, parseFloat(e.target.value) || 0)}
+                                                            onChange={(e) => setOverride(p.id, d.plotId, e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
                                                             className="text-center text-sm font-bold w-16 h-7 bg-transparent border-none p-0 focus-visible:ring-0 text-gray-800"
                                                         />
                                                         <button
@@ -1615,16 +1615,11 @@ export default function PdvTerminal() {
                                                                 onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
                                                                 <Minus className="h-3.5 w-3.5" />
                                                             </button>
-                                                            <Input type="text" inputMode="numeric"
+                                                            <Input type="number" step="any"
                                                                 value={item.quantity === 0 ? "" : item.quantity}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
-                                                                    if (val === "" || val === "0") {
-                                                                        updateQuantity(item.product.id, 0);
-                                                                    } else {
-                                                                        const num = parseFloat(val);
-                                                                        if (!isNaN(num)) updateQuantity(item.product.id, num);
-                                                                    }
+                                                                    updateQuantity(item.product.id, val as any);
                                                                 }}
                                                                 onFocus={(e) => e.target.select()}
                                                                 className="text-center text-base font-bold flex-1 h-9 bg-white border-gray-200 text-gray-800 rounded-lg" />
@@ -1736,16 +1731,11 @@ export default function PdvTerminal() {
                                                                     onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
                                                                     <Minus className="h-3.5 w-3.5" />
                                                                 </button>
-                                                                <Input type="text" inputMode="numeric"
+                                                                <Input type="number" step="any"
                                                                     value={item.quantity === 0 ? "" : item.quantity}
                                                                     onChange={(e) => {
                                                                         const val = e.target.value;
-                                                                        if (val === "" || val === "0") {
-                                                                            updateQuantity(item.product.id, 0);
-                                                                        } else {
-                                                                            const num = parseFloat(val);
-                                                                            if (!isNaN(num)) updateQuantity(item.product.id, num);
-                                                                        }
+                                                                        updateQuantity(item.product.id, val as any);
                                                                     }}
                                                                     onFocus={(e) => e.target.select()}
                                                                     className="text-center text-base font-bold flex-1 h-9 bg-gray-50 border-transparent text-gray-800 rounded-lg focus:bg-white focus:border-[#16A249]" />
@@ -1760,10 +1750,10 @@ export default function PdvTerminal() {
                                                             <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Dose/ha ({item.product.unit})</Label>
                                                             <Input
                                                                 type="number"
-                                                                step="0.001"
+                                                                step="any"
                                                                 value={item.dosePerHa || ""}
                                                                 placeholder="N/A"
-                                                                onChange={(e) => updateDose(item.product.id, parseFloat(e.target.value) || 0)}
+                                                                onChange={(e) => updateDose(item.product.id, e.target.value === '' ? 0 : e.target.value as any)}
                                                                 className="text-center text-sm font-medium h-9 bg-blue-50/50 border-blue-100 text-blue-700 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                                                             />
                                                         </div>
