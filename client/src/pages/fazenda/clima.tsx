@@ -173,7 +173,7 @@ export default function FazendaClima() {
     };
 
     return (
-        <div className="flex w-full bg-background relative overflow-hidden h-[calc(100vh-64px)] min-[100dvh]:h-[calc(100dvh-64px)]">
+        <div className="flex flex-1 w-full h-full bg-background relative overflow-hidden">
             {/* Sidebar for List/Search (Hidden on Mobile for 100% Map View) */}
             <div className="hidden md:flex w-80 border-r bg-card flex-col z-10 shadow-xl relative">
                 <div className="p-4 border-b flex items-center justify-between">

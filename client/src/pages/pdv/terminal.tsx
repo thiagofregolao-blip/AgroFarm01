@@ -13,8 +13,8 @@ import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type Re
 
 interface CartItem {
     product: any;
-    quantity: number;
-    dosePerHa?: number;
+    quantity: number | string;
+    dosePerHa?: number | string;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -179,15 +179,17 @@ export default function PdvTerminal() {
         }]);
     };
 
-    const updateQuantity = (productId: string, qty: number) => {
-        if (qty < 0) qty = 0;
+    const updateQuantity = (productId: string, qty: number | string) => {
+        let numericQty = typeof qty === 'string' ? parseFloat(qty) : qty;
+        if (isNaN(numericQty) || numericQty < 0) numericQty = 0;
         const stockQty = getStockForProduct(productId);
-        if (qty > stockQty) qty = stockQty; // Cap at available stock
+        if (numericQty > stockQty) qty = stockQty; // Cap at available stock but allow string holding
         setCart(cart.map(c => c.product.id === productId ? { ...c, quantity: qty } : c));
     };
 
-    const updateDose = (productId: string, dose: number) => {
-        if (dose < 0) dose = 0;
+    const updateDose = (productId: string, dose: number | string) => {
+        let numericDose = typeof dose === 'string' ? parseFloat(dose) : dose;
+        if (isNaN(numericDose) || numericDose < 0) dose = 0;
         setCart(cart.map(c => c.product.id === productId ? { ...c, dosePerHa: dose } : c));
     };
 
@@ -210,8 +212,8 @@ export default function PdvTerminal() {
     }, [selectedPlots]);
 
     const getDistribution = (item: CartItem) => {
-        const dose = item.dosePerHa !== undefined ? item.dosePerHa : parseFloat(item.product.dosePerHa);
-        const totalQty = item.quantity;
+        const dose = item.dosePerHa !== undefined ? (typeof item.dosePerHa === 'string' ? parseFloat(item.dosePerHa) : item.dosePerHa) : parseFloat(item.product.dosePerHa);
+        const totalQty = typeof item.quantity === 'string' ? (parseFloat(item.quantity) || 0) : item.quantity;
 
         if (dose && !isNaN(dose) && selectedPlots.length > 0) {
             let totalIdeal = 0;
@@ -287,7 +289,7 @@ export default function PdvTerminal() {
             toast({ title: "Selecione pelo menos um produto", variant: "destructive" });
             return;
         }
-        const invalid = cart.filter(c => c.quantity <= 0);
+        const invalid = cart.filter(c => Number(c.quantity) <= 0);
         if (invalid.length > 0) {
             toast({ title: "Informe a quantidade para todos os produtos", variant: "destructive" });
             return;
@@ -567,7 +569,7 @@ export default function PdvTerminal() {
         }
     };
 
-    const totalCartQty = cart.reduce((sum, c) => sum + c.quantity, 0);
+    const totalCartQty = cart.reduce((sum, c) => sum + (Number(c.quantity) || 0), 0);
 
     if (pdvLoading) {
         return (
@@ -1138,8 +1140,8 @@ export default function PdvTerminal() {
                                 // We should access the dose from the cart item associated with this product.
                                 const cartItem = cart.find(c => c.product.id === p.id);
                                 const dose = cartItem?.dosePerHa;
-                                const hasDose = dose !== undefined && dose !== null && !isNaN(dose);
-                                const diff = item.totalQty - item.totalAllocated;
+                                const hasDose = dose !== undefined && dose !== null && !isNaN(Number(dose));
+                                const diff = Number(item.totalQty) - Number(item.totalAllocated);
 
                                 return (
                                     <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden transition-all hover:shadow-lg">
@@ -1159,7 +1161,7 @@ export default function PdvTerminal() {
                                                     {hasDose && (
                                                         <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                                                             <Droplets className="h-3 w-3" />
-                                                            {dose.toFixed(1)} {p.unit}/ha
+                                                            {Number(dose).toFixed(1)} {p.unit}/ha
                                                         </span>
                                                     )}
                                                 </div>
@@ -1182,7 +1184,7 @@ export default function PdvTerminal() {
                                                         <p className="text-sm font-bold text-gray-700 truncate">{d.plotName}</p>
                                                         <p className="text-[10px] text-gray-400">
                                                             {d.areaHa.toFixed(1)} ha
-                                                            {hasDose && <span className="text-blue-400 ml-1">• Ideal: {(d.areaHa * dose).toFixed(0)}</span>}
+                                                            {hasDose && <span className="text-blue-400 ml-1">• Ideal: {(d.areaHa * Number(dose)).toFixed(0)}</span>}
                                                         </p>
                                                     </div>
                                                     {/* Quantity Input */}
@@ -1296,7 +1298,7 @@ export default function PdvTerminal() {
                     </button>
 
                     <button
-                        onClick={() => { if (step === "confirm") setStep("plot"); }}
+                        onClick={() => { if (step === "confirm") setStep("plot" as any); }}
                         className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-xl transition-all ${step === "plot" ? "bg-white/20 text-white shadow-md" : "text-emerald-200/60 hover:bg-white/10 hover:text-white"}`}
                         title="Talhões"
                     >
@@ -1580,7 +1582,7 @@ export default function PdvTerminal() {
                                 <div className="p-3 space-y-2">
                                     {cart.map((item) => {
                                         const stk = getStockForProduct(item.product.id);
-                                        const overStock = item.quantity > stk;
+                                        const overStock = Number(item.quantity) > stk;
                                         return (
                                             <div key={item.product.id} className={`rounded-xl border p-3 transition-all ${overStock ? "border-red-200 bg-red-50/50" : "border-gray-100 bg-gray-50/50 hover:bg-gray-50"}`}>
                                                 <div className="flex items-start gap-2.5 mb-2.5">
@@ -1612,7 +1614,7 @@ export default function PdvTerminal() {
                                                         <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Quantidade</Label>
                                                         <div className="flex items-center gap-1.5">
                                                             <button className="w-9 h-9 rounded-lg bg-[#16A249] hover:bg-[#15803d] flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
-                                                                onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                                                                onClick={() => updateQuantity(item.product.id, Number(item.quantity) - 1)}>
                                                                 <Minus className="h-3.5 w-3.5" />
                                                             </button>
                                                             <Input type="number" step="any"
@@ -1624,7 +1626,7 @@ export default function PdvTerminal() {
                                                                 onFocus={(e) => e.target.select()}
                                                                 className="text-center text-base font-bold flex-1 h-9 bg-white border-gray-200 text-gray-800 rounded-lg" />
                                                             <button className="w-9 h-9 rounded-lg bg-[#16A249] hover:bg-[#15803d] flex items-center justify-center shadow-sm transition-colors active:scale-95 text-white"
-                                                                onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                                                                onClick={() => updateQuantity(item.product.id, Number(item.quantity) + 1)}>
                                                                 <Plus className="h-3.5 w-3.5" />
                                                             </button>
                                                         </div>
@@ -1728,7 +1730,7 @@ export default function PdvTerminal() {
                                                             <Label className="text-[10px] text-gray-400 uppercase font-bold tracking-wide mb-1 block pl-1">Quantidade</Label>
                                                             <div className="flex items-center gap-1.5">
                                                                 <button className="w-9 h-9 rounded-lg bg-white border border-gray-200 text-[#16A249] flex items-center justify-center shadow-sm active:scale-95 touch-manipulation"
-                                                                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                                                                    onClick={() => updateQuantity(item.product.id, Number(item.quantity) - 1)}>
                                                                     <Minus className="h-3.5 w-3.5" />
                                                                 </button>
                                                                 <Input type="number" step="any"
@@ -1740,7 +1742,7 @@ export default function PdvTerminal() {
                                                                     onFocus={(e) => e.target.select()}
                                                                     className="text-center text-base font-bold flex-1 h-9 bg-gray-50 border-transparent text-gray-800 rounded-lg focus:bg-white focus:border-[#16A249]" />
                                                                 <button className="w-9 h-9 rounded-lg bg-[#16A249] text-white flex items-center justify-center shadow-sm shadow-green-200 active:scale-95 touch-manipulation"
-                                                                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                                                                    onClick={() => updateQuantity(item.product.id, Number(item.quantity) + 1)}>
                                                                     <Plus className="h-3.5 w-3.5" />
                                                                 </button>
                                                             </div>
