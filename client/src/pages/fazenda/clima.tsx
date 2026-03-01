@@ -65,17 +65,8 @@ export default function FazendaClima() {
         }
     }, []);
 
-    // Helper component to smoothly center the map when mapCenter state changes
-    function MapUpdater({ center }: { center: [number, number] }) {
-        const map = useMap();
-        useEffect(() => {
-            // Only fly to if it is an actual GPS coordinate update
-            if (center[0] !== -15.793889) {
-                map.flyTo(center, 14, { animate: true, duration: 1.5 });
-            }
-        }, [center, map]);
-        return null;
-    }
+    // Removed MapUpdater component since it forced centering on state changes
+
 
     const { data: stations = [], isLoading } = useQuery<Station[]>({
         queryKey: ["/api/farm/weather/stations"],
@@ -120,6 +111,39 @@ export default function FazendaClima() {
         return null;
     }
 
+    // Custom Component for My Location Button
+    function LocateControl() {
+        const map = useMap();
+        return (
+            <div className="leaflet-top leaflet-right" style={{ zIndex: 1000, position: 'absolute', top: 10, right: 10 }}>
+                <div className="leaflet-control leaflet-bar">
+                    <button
+                        className="bg-white flex items-center justify-center w-10 h-10 hover:bg-gray-100 transition-colors cursor-pointer"
+                        title="Minha Localização"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            if ("geolocation" in navigator) {
+                                navigator.geolocation.getCurrentPosition(
+                                    (position) => {
+                                        const latlng: [number, number] = [position.coords.latitude, position.coords.longitude];
+                                        map.flyTo(latlng, 14, { animate: true, duration: 1.5 });
+                                        toast({ title: "Localização atualizada!" });
+                                    },
+                                    (error) => {
+                                        console.error("Erro GPS:", error);
+                                        toast({ title: "Erro", description: "Não foi possível obter a localização", variant: "destructive" });
+                                    }
+                                );
+                            }
+                        }}
+                    >
+                        <Target className="h-5 w-5 text-blue-600" />
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     // Custom DivIcon for Weather Marker (OneSoil Style Pill)
     const createWeatherIcon = (station: Station) => {
         const temp = station.currentWeather?.temperature
@@ -149,7 +173,7 @@ export default function FazendaClima() {
     };
 
     return (
-        <div className="flex h-screen bg-background relative overflow-hidden">
+        <div className="flex w-full bg-background relative overflow-hidden" style={{ height: "calc(100vh - 60px)" }}>
             {/* Sidebar for List/Search (Hidden on Mobile for 100% Map View) */}
             <div className="hidden md:flex w-80 border-r bg-card flex-col z-10 shadow-xl relative">
                 <div className="p-4 border-b flex items-center justify-between">
@@ -264,7 +288,7 @@ export default function FazendaClima() {
                     <TileLayer
                         url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
                     />
-                    <MapUpdater center={mapCenter} />
+                    <LocateControl />
                     <MapEvents />
 
                     {selectedLocation && (

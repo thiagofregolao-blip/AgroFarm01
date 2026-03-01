@@ -147,19 +147,19 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
             {/* ===== MAIN CONTENT ===== */}
             <main className="flex-1 flex flex-col min-h-screen max-w-full md:ml-[200px]">
                 {/* Top bar with page title and hamburger */}
-                <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/60 shadow-sm sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+                <header className="bg-gradient-to-r from-emerald-700 to-emerald-800 text-white shadow-md sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
                     <button
                         onClick={() => setIsMobileMenuOpen(true)}
-                        className="md:hidden p-2 -ml-2 rounded-lg text-gray-600 hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                        className="md:hidden p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors"
                         aria-label="Abrir menu"
                     >
                         <Menu className="w-6 h-6" />
                     </button>
                     <div className="flex-1 flex items-center justify-between min-w-0">
-                        <h1 className="text-lg font-bold text-gray-800 truncate">
+                        <h1 className="text-lg font-bold text-white truncate">
                             {visibleNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.label || "AgroFarm"}
                         </h1>
-                        <span className="text-xs font-medium text-gray-400 hidden sm:block truncate ml-4 max-w-[200px]">{user.name || user.username}</span>
+                        <span className="text-xs font-medium text-emerald-100 hidden sm:block truncate ml-4 max-w-[200px]">{user.name || user.username}</span>
                     </div>
                 </header>
 
