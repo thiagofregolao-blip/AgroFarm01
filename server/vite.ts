@@ -19,37 +19,7 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-/**
- * Strip ALL PWA signals from html for /pdv routes.
- * This prevents iOS Safari from treating /pdv as a web app,
- * which forces the home screen shortcut to use the root URL.
- * Also prevents the Service Worker from intercepting /pdv navigation,
- * which causes the white screen on direct access.
- */
-function stripPwaForPdv(html: string): string {
-  // 1. Remove <link rel="manifest" ...>
-  html = html.replace(/<link[^>]*rel\s*=\s*["']manifest["'][^>]*\/?>/gi, "");
-
-  // 2. Remove <meta name="apple-mobile-web-app-capable" ...>
-  html = html.replace(/<meta[^>]*name\s*=\s*["']apple-mobile-web-app-capable["'][^>]*\/?>/gi, "");
-
-  // 3. Remove <meta name="apple-mobile-web-app-status-bar-style" ...>
-  html = html.replace(/<meta[^>]*name\s*=\s*["']apple-mobile-web-app-status-bar-style["'][^>]*\/?>/gi, "");
-
-  // 4. Remove <meta name="apple-mobile-web-app-title" ...>
-  html = html.replace(/<meta[^>]*name\s*=\s*["']apple-mobile-web-app-title["'][^>]*\/?>/gi, "");
-
-  // 5. KEEP <link rel="apple-touch-icon"> so iOS uses the AgroFarm icon for the shortcut
-
-  // 6. Remove service worker registration script
-  //    VitePWA generates: <script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script>
-  //    Match any script tag that references registerSW in src OR in body
-  html = html.replace(/<script[^>]*registerSW[^>]*>[^<]*<\/script>/gi, "");
-  html = html.replace(/<script[^>]*>[^<]*registerSW[^<]*<\/script>/gi, "");
-
-  return html;
-}
-
+// (Function `stripPwaForPdv` removed to allow PWA installation on /pdv)
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
@@ -100,10 +70,6 @@ export async function setupVite(app: Express, server: Server) {
       );
       let page = await vite.transformIndexHtml(url, template);
 
-      // For /pdv routes, strip ALL PWA signals so iOS Safari treats it as a regular website
-      if (url.startsWith("/pdv")) {
-        page = stripPwaForPdv(page);
-      }
 
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
@@ -129,10 +95,6 @@ export function serveStatic(app: Express) {
     try {
       let html = await fs.promises.readFile(path.resolve(distPath, "index.html"), "utf-8");
 
-      // For /pdv routes, strip ALL PWA signals so iOS Safari treats it as a regular website
-      if (req.originalUrl.startsWith("/pdv")) {
-        html = stripPwaForPdv(html);
-      }
 
       res.set("Content-Type", "text/html").send(html);
     } catch (e) {
