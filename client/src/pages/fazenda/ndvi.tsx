@@ -124,23 +124,27 @@ export default function NdviPage() {
         return visibleTimeline[visibleTimeline.length - 1];
     }, [selectedDate, visibleTimeline]);
 
-    const overlayUrl = useMemo(() => {
+    const activeDate = useMemo(() => {
         if (!activeEntry) return null;
-        switch (layerType) {
-            case "ndvi":
-                return activeEntry.ndviUrl;
-            case "ndvi_contrast":
-                return activeEntry.ndviContrastUrl || activeEntry.ndviUrl;
-            case "evi":
-                return activeEntry.eviUrl;
-            case "truecolor":
-                return activeEntry.truecolorUrl;
-            case "falsecolor":
-                return activeEntry.falsecolorUrl;
-            default:
-                return activeEntry.ndviUrl;
-        }
-    }, [activeEntry, layerType]);
+        return activeEntry.date.split("T")[0];
+    }, [activeEntry]);
+
+    const { data: overlayData, isFetching: fetchingOverlay } = useQuery({
+        queryKey: ["/api/farm/ndvi/overlay", selectedPlot?.id, activeDate, layerType],
+        queryFn: async () => {
+            const res = await fetch(
+                `/api/farm/ndvi/${selectedPlot.id}/image?date=${activeDate}&layer=${layerType}`,
+                { credentials: "include" }
+            );
+            if (!res.ok) return { imageUrl: null };
+            return res.json();
+        },
+        enabled: !!selectedPlot?.id && !!activeDate,
+        staleTime: 10 * 60 * 1000,
+        placeholderData: (prev: any) => prev,
+    });
+
+    const overlayUrl = overlayData?.imageUrl || null;
 
     const { positions, bounds } = useMemo(() => {
         if (!selectedPlot?.coordinates || selectedPlot.coordinates.length < 3) {
@@ -177,7 +181,7 @@ export default function NdviPage() {
     }, []);
 
     const currentLayerLabel = LAYER_OPTIONS.find((o) => o.value === layerType)?.label || "NDVI";
-    const isLoading = registerMutation.isPending || loadingImages || loadingHistory;
+    const isLoading = registerMutation.isPending || loadingHistory;
     const showNdviLegend = layerType !== "truecolor" && layerType !== "falsecolor";
 
     // ===== LIST VIEW =====
@@ -383,6 +387,15 @@ export default function NdviPage() {
                 ) : (
                     <div className="h-full w-full flex items-center justify-center text-white/40 text-sm">
                         Coordenadas não encontradas
+                    </div>
+                )}
+
+                {/* Overlay loading indicator */}
+                {fetchingOverlay && !isLoading && (
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[999]">
+                        <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl">
+                            <RefreshCw className="w-7 h-7 text-white animate-spin" />
+                        </div>
                     </div>
                 )}
 

@@ -186,22 +186,32 @@ export function registerNdviRoutes(app: Express) {
                 }
 
                 const coords = JSON.parse(plot[0].coordinates);
-                const geometry = coordinatesToGeoJson(coords);
                 const bbox = coordinatesToBbox(coords);
 
                 const now = new Date();
-                const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                const from = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
                 const fromStr = from.toISOString().split("T")[0] + "T00:00:00Z";
                 const toStr = now.toISOString().split("T")[0] + "T23:59:59Z";
 
                 const dates = await searchAvailableDates(bbox, fromStr, toStr);
+                console.log(`[NDVI] Catalog found ${dates.length} dates for plot ${polygonId}`);
 
-                // Generate only NDVI contrast for the most recent dates (saves processing units)
-                const recentDates = dates.slice(0, 10);
+                // Generate small thumbnails for the 6 most recent dates
+                const recentDates = dates.slice(0, 6);
+                const geometry = coordinatesToGeoJson(coords);
 
                 const formatted = await Promise.all(
-                    recentDates.map(async (d) => {
-                        const ndviContrastUrl = await generateNdviImage(geometry, bbox, d.date, "ndvi_contrast");
+                    dates.map(async (d) => {
+                        const isRecent = recentDates.some(r => r.date === d.date);
+                        let ndviContrastUrl: string | null = null;
+
+                        if (isRecent) {
+                            try {
+                                ndviContrastUrl = await generateNdviImage(geometry, bbox, d.date, "ndvi_contrast", 256);
+                            } catch (e) {
+                                console.error(`[NDVI] Thumbnail generation failed for ${d.date}:`, e);
+                            }
+                        }
 
                         return {
                             date: d.date + "T12:00:00Z",

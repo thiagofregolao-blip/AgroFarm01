@@ -286,16 +286,31 @@ export async function generateNdviImage(
     bbox: [number, number, number, number],
     date: string,
     layer: NdviLayerType = "ndvi_contrast",
-    width: number = 512,
-    height: number = 512,
+    maxDim: number = 512,
 ): Promise<string | null> {
     const token = await getAccessToken();
+
+    const bboxWidthDeg = bbox[2] - bbox[0];
+    const bboxHeightDeg = bbox[3] - bbox[1];
+    const midLat = (bbox[1] + bbox[3]) / 2;
+    const bboxWidthM = bboxWidthDeg * 111320 * Math.cos(midLat * Math.PI / 180);
+    const bboxHeightM = bboxHeightDeg * 111320;
+    const aspectRatio = bboxWidthM / bboxHeightM;
+
+    let width: number, height: number;
+    if (aspectRatio >= 1) {
+        width = maxDim;
+        height = Math.max(64, Math.round(maxDim / aspectRatio));
+    } else {
+        height = maxDim;
+        width = Math.max(64, Math.round(maxDim * aspectRatio));
+    }
 
     const requestBody = {
         input: {
             bounds: {
                 properties: { crs: "http://www.opengis.net/def/crs/OGC/1.3/CRS84" },
-                geometry,
+                bbox,
             },
             data: [{
                 type: "sentinel-2-l2a",
@@ -316,24 +331,33 @@ export async function generateNdviImage(
         evalscript: getEvalscript(layer),
     };
 
-    const res = await fetch(PROCESS_URL, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            Accept: "image/png",
-        },
-        body: JSON.stringify(requestBody),
-    });
+    console.log(`[Copernicus] Generating ${layer} image for ${date} (${width}x${height})`);
 
-    if (!res.ok) {
-        const err = await res.text();
-        console.error(`[Copernicus] Process API failed for ${layer} (${res.status}): ${err}`);
+    try {
+        const res = await fetch(PROCESS_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+                Accept: "image/png",
+            },
+            body: JSON.stringify(requestBody),
+        });
+
+        if (!res.ok) {
+            const err = await res.text();
+            console.error(`[Copernicus] Process API failed for ${layer} on ${date} (${res.status}): ${err}`);
+            return null;
+        }
+
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const b64 = buffer.toString("base64");
+        console.log(`[Copernicus] Image generated: ${layer} ${date} — ${Math.round(b64.length / 1024)}KB`);
+        return `data:image/png;base64,${b64}`;
+    } catch (err) {
+        console.error(`[Copernicus] Process API exception for ${layer} on ${date}:`, err);
         return null;
     }
-
-    const buffer = Buffer.from(await res.arrayBuffer());
-    return `data:image/png;base64,${buffer.toString("base64")}`;
 }
 
 /**
