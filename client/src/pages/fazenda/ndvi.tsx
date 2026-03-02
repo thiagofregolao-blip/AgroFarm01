@@ -96,15 +96,17 @@ export default function NdviPage() {
 
         return ndviHistory.map((h: any, i: number) => {
             const img = imageMap.get(h.dateFormatted);
-            const prevMean = i > 0 ? ndviHistory[i - 1].mean : null;
+            const mean = h.mean ?? 0;
+            const prevMean = i > 0 ? (ndviHistory[i - 1].mean ?? null) : null;
             return {
                 ...h,
+                mean,
                 ndviUrl: img?.ndviUrl || null,
                 ndviContrastUrl: img?.ndviContrastUrl || null,
                 truecolorUrl: img?.truecolorUrl || null,
                 falsecolorUrl: img?.falsecolorUrl || null,
                 eviUrl: img?.eviUrl || null,
-                delta: prevMean !== null ? Math.round((h.mean - prevMean) * 100) / 100 : null,
+                delta: prevMean !== null ? Math.round((mean - prevMean) * 100) / 100 : null,
                 shortDate: formatShortDate(h.date),
             };
         });
@@ -401,7 +403,7 @@ export default function NdviPage() {
                             <p className="text-[9px] text-white/40 mb-0.5">Média {activeEntry.dateFormatted}</p>
                             <div className="flex items-baseline gap-1.5">
                                 <span className="text-2xl font-black leading-none" style={{ color: activeEntry.healthColor }}>
-                                    {activeEntry.mean.toFixed(2)}
+                                    {(activeEntry.mean ?? 0).toFixed(2)}
                                 </span>
                                 <span
                                     className="text-[9px] px-1.5 py-0.5 rounded-md text-white font-bold"
@@ -497,17 +499,17 @@ export default function NdviPage() {
                                         {/* Info */}
                                         <div className="w-full px-1 py-1.5 bg-white text-center">
                                             <p className="text-[9px] text-gray-400 leading-tight truncate">{entry.shortDate}</p>
-                                            <p className="text-[13px] font-bold mt-0.5 leading-tight" style={{ color: entry.healthColor }}>
-                                                {entry.mean.toFixed(2)}
+                                            <p className="text-[13px] font-bold mt-0.5 leading-tight" style={{ color: entry.healthColor || '#666' }}>
+                                                {(entry.mean ?? 0).toFixed(2)}
                                             </p>
-                                            {entry.delta !== null && (
+                                            {entry.delta != null && (
                                                 <p
                                                     className={`text-[9px] font-semibold leading-tight ${
                                                         entry.delta >= 0 ? "text-emerald-500" : "text-red-500"
                                                     }`}
                                                 >
                                                     {entry.delta >= 0 ? "+" : ""}
-                                                    {entry.delta.toFixed(2)}
+                                                    {(entry.delta ?? 0).toFixed(2)}
                                                 </p>
                                             )}
                                         </div>
