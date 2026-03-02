@@ -330,7 +330,7 @@ export default function NdviPage() {
                                 dashArray: overlayUrl ? undefined : "6 4",
                             }}
                         />
-                        {overlayUrl && <ImageOverlay url={overlayUrl} bounds={bounds} opacity={0.85} />}
+                        {overlayUrl && <ImageOverlay url={overlayUrl} bounds={bounds} opacity={0.75} />}
                         <MapUpdater bounds={bounds} />
                         <MapResizer trigger={isMapExpanded} />
                     </MapContainer>
