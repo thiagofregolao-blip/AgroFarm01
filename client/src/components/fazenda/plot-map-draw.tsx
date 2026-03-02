@@ -92,6 +92,7 @@ export default function PlotMapDraw({ initialCoordinates, onAreaCalculated, onCo
 
         const initTimer = window.setTimeout(() => {
             if (!container || !document.body.contains(container)) return;
+            if (!container.offsetWidth || !container.offsetHeight) return;
 
             // Default center: try to use user's saved farm location or Paraguay/PR region
             let center: L.LatLngExpression = [-25.2637, -54.3378]; // Región Este, Paraguay

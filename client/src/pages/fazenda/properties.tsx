@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -264,6 +264,17 @@ function PropertyForm({ initial, onSave }: { initial?: any; onSave: () => void }
     );
 }
 
+function useIsMobile() {
+    const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+    useEffect(() => {
+        const mq = window.matchMedia("(max-width: 767px)");
+        const handler = (e: MediaQueryListEvent) => setMobile(e.matches);
+        mq.addEventListener("change", handler);
+        return () => mq.removeEventListener("change", handler);
+    }, []);
+    return mobile;
+}
+
 function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: string; initial?: any; onSave: () => void; onCancel: () => void }) {
     const [name, setName] = useState(initial?.name || "");
     const [areaHa, setAreaHa] = useState(initial?.areaHa || "");
@@ -276,6 +287,7 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
         return [];
     });
     const { toast } = useToast();
+    const isMobile = useIsMobile();
 
     const save = useMutation({
         mutationFn: async () => {
@@ -290,11 +302,24 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
         },
     });
 
-    return (
-        <>
-            {/* ===== DESKTOP: Side-by-side layout ===== */}
-            <div className="hidden md:flex flex-row w-full h-full">
-                {/* LEFT: Form panel */}
+    const mapElement = (
+        <Suspense fallback={
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f3f4f6" }}>
+                <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+            </div>
+        }>
+            <PlotMapDraw
+                initialCoordinates={coordinates.length >= 3 ? coordinates : undefined}
+                onAreaCalculated={(area) => setAreaHa(String(area))}
+                onCoordinatesChange={(coords) => setCoordinates(coords)}
+            />
+        </Suspense>
+    );
+
+    if (!isMobile) {
+        // ===== DESKTOP: Side-by-side layout =====
+        return (
+            <div className="flex flex-row w-full h-full">
                 <div style={{ width: 340, minWidth: 340, display: "flex", flexDirection: "column", borderRight: "1px solid #e5e7eb", background: "white", flexShrink: 0 }}>
                     <div style={{ padding: "16px 20px", borderBottom: "1px solid #e5e7eb", background: "#ecfdf5" }}>
                         <h2 style={{ fontSize: 18, fontWeight: 700, color: "#065f46" }}>
@@ -317,7 +342,7 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
                                     <Label className="text-sm font-semibold text-gray-700">Área (ha) *</Label>
                                     {coordinates.length >= 3 && (
                                         <span style={{ fontSize: 11, background: "#d1fae5", color: "#047857", padding: "2px 8px", borderRadius: 12, fontWeight: 500 }}>
-                                            📐 Calculado do mapa
+                                            Calculado do mapa
                                         </span>
                                     )}
                                 </div>
@@ -343,7 +368,7 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
                                 ) : (
                                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                         <MapPin style={{ width: 16, height: 16 }} />
-                                        <span>Desenhe o contorno do talhão no mapa →</span>
+                                        <span>Desenhe o contorno do talhão no mapa</span>
                                     </div>
                                 )}
                             </div>
@@ -361,102 +386,80 @@ function PlotForm({ propertyId, initial, onSave, onCancel }: { propertyId: strin
                     </form>
                 </div>
 
-                {/* RIGHT: Map */}
                 <div style={{ flex: 1, position: "relative", background: "#e5e7eb", minHeight: 300 }}>
-                    <Suspense fallback={
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f3f4f6" }}>
-                            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-                        </div>
-                    }>
-                        <PlotMapDraw
-                            initialCoordinates={coordinates.length >= 3 ? coordinates : undefined}
-                            onAreaCalculated={(area) => setAreaHa(String(area))}
-                            onCoordinatesChange={(coords) => setCoordinates(coords)}
-                        />
-                    </Suspense>
+                    {mapElement}
                 </div>
             </div>
+        );
+    }
 
-            {/* ===== MOBILE: Fullscreen map + collapsible bottom form ===== */}
-            <div className="flex md:hidden flex-col w-full h-full relative">
-                {/* Map — fullscreen */}
-                <div className="flex-1 relative bg-gray-200" style={{ minHeight: 200 }}>
-                    <Suspense fallback={
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-                        </div>
-                    }>
-                        <PlotMapDraw
-                            initialCoordinates={coordinates.length >= 3 ? coordinates : undefined}
-                            onAreaCalculated={(area) => setAreaHa(String(area))}
-                            onCoordinatesChange={(coords) => setCoordinates(coords)}
-                        />
-                    </Suspense>
+    // ===== MOBILE: Fullscreen map + collapsible bottom form =====
+    return (
+        <div className="flex flex-col w-full h-full relative">
+            <div className="flex-1 relative bg-gray-200" style={{ minHeight: 200 }}>
+                {mapElement}
 
-                    {/* Floating toggle button */}
-                    <button
-                        onClick={() => setShowForm(!showForm)}
-                        className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold"
-                    >
-                        <Edit2 className="h-4 w-4" />
-                        {showForm ? "Ocultar Dados" : "Editar Dados"}
-                        <ChevronDown className={`h-4 w-4 transition-transform ${showForm ? "rotate-180" : ""}`} />
-                    </button>
-                </div>
+                <button
+                    onClick={() => setShowForm(!showForm)}
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[100] bg-emerald-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold"
+                >
+                    <Edit2 className="h-4 w-4" />
+                    {showForm ? "Ocultar Dados" : "Editar Dados"}
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showForm ? "rotate-180" : ""}`} />
+                </button>
+            </div>
 
-                {/* Collapsible form panel */}
-                {showForm && (
-                    <div className="bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] max-h-[55vh] overflow-y-auto">
-                        <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100">
-                            <h2 className="text-base font-bold text-emerald-800">
-                                {initial ? "Editar" : "Novo"} Talhão
-                            </h2>
-                            <p className="text-xs text-emerald-600">Desenhe a área no mapa acima</p>
-                        </div>
-
-                        <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="p-4 space-y-3">
-                            <div>
-                                <Label className="text-xs font-semibold text-gray-700">Nome do Talhão *</Label>
-                                <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Talhão 1" required className="mt-1 h-9" />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <div className="flex items-center gap-1">
-                                        <Label className="text-xs font-semibold text-gray-700">Área (ha) *</Label>
-                                        {coordinates.length >= 3 && (
-                                            <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">📐 Auto</span>
-                                        )}
-                                    </div>
-                                    <Input type="number" step="0.01" value={areaHa} onChange={e => setAreaHa(e.target.value)} required className="mt-1 h-9 font-bold" />
-                                </div>
-                                <div>
-                                    <Label className="text-xs font-semibold text-gray-700">Cultura</Label>
-                                    <Input value={crop} onChange={e => setCrop(e.target.value)} placeholder="Soja, Milho..." className="mt-1 h-9" />
-                                </div>
-                            </div>
-
-                            {coordinates.length >= 3 && (
-                                <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100">
-                                    <MapPin className="h-3.5 w-3.5 text-emerald-500" />
-                                    <strong>{coordinates.length}</strong> pontos marcados
-                                </div>
-                            )}
-
-                            <div className="flex gap-2 pt-2">
-                                <Button type="button" variant="outline" className="flex-1 h-10" onClick={onCancel}>
-                                    Cancelar
-                                </Button>
-                                <Button type="submit" className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 font-bold" disabled={save.isPending}>
-                                    {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    Salvar
-                                </Button>
-                            </div>
-                        </form>
+            {showForm && (
+                <div className="bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] max-h-[55vh] overflow-y-auto">
+                    <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100">
+                        <h2 className="text-base font-bold text-emerald-800">
+                            {initial ? "Editar" : "Novo"} Talhão
+                        </h2>
+                        <p className="text-xs text-emerald-600">Desenhe a área no mapa acima</p>
                     </div>
-                )}
-            </div>
-        </>
+
+                    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="p-4 space-y-3">
+                        <div>
+                            <Label className="text-xs font-semibold text-gray-700">Nome do Talhão *</Label>
+                            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Talhão 1" required className="mt-1 h-9" />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <div className="flex items-center gap-1">
+                                    <Label className="text-xs font-semibold text-gray-700">Área (ha) *</Label>
+                                    {coordinates.length >= 3 && (
+                                        <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">Auto</span>
+                                    )}
+                                </div>
+                                <Input type="number" step="0.01" value={areaHa} onChange={e => setAreaHa(e.target.value)} required className="mt-1 h-9 font-bold" />
+                            </div>
+                            <div>
+                                <Label className="text-xs font-semibold text-gray-700">Cultura</Label>
+                                <Input value={crop} onChange={e => setCrop(e.target.value)} placeholder="Soja, Milho..." className="mt-1 h-9" />
+                            </div>
+                        </div>
+
+                        {coordinates.length >= 3 && (
+                            <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100">
+                                <MapPin className="h-3.5 w-3.5 text-emerald-500" />
+                                <strong>{coordinates.length}</strong> pontos marcados
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 pt-2">
+                            <Button type="button" variant="outline" className="flex-1 h-10" onClick={onCancel}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 font-bold" disabled={save.isPending}>
+                                {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                Salvar
+                            </Button>
+                        </div>
+                    </form>
+                </div>
+            )}
+        </div>
     );
 }
 
