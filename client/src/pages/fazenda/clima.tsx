@@ -218,7 +218,7 @@ export default function FazendaClima() {
         <div className="flex flex-col md:flex-row w-full h-[100dvh] bg-background relative overflow-hidden">
             {/* Mobile Top Actions (Back + Menu) */}
             <div className="md:hidden absolute top-4 left-4 z-[1000] flex gap-2">
-                <Link href="/dashboard">
+                <Link href="/fazenda">
                     <Button variant="secondary" size="icon" className="h-10 w-10 rounded-full shadow-lg bg-white hover:bg-white text-emerald-800 pointer-events-auto">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
@@ -249,7 +249,7 @@ export default function FazendaClima() {
             `}>
                 <div className="p-4 border-b flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Link href="/dashboard" className="hidden md:flex mr-2">
+                        <Link href="/fazenda" className="hidden md:flex mr-2">
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
                                 <ArrowLeft className="h-4 w-4" />
                             </Button>
