@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import {
     CloudRain, Wind, Droplets, Thermometer, Plus, Trash2,
     MapPin, AlignJustify, Search, Target, Loader2, ArrowLeft,
@@ -44,31 +45,39 @@ interface Station {
 export default function FazendaClima() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { user } = useAuth();
     const { data: farms } = useQuery<any[]>({ queryKey: ["/api/farms"] });
     const [isCreatingMode, setIsCreatingMode] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [newStationName, setNewStationName] = useState("");
     const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
     const [mapCenter, setMapCenter] = useState<[number, number]>([-15.793889, -47.882778]); // Default Brazil
+    const [mapZoom, setMapZoom] = useState<number>(6); // Default Macro Zoom
 
     // Geolocation hook to center the user automatically on mount or when the farm API loads
     useEffect(() => {
-        if (farms && farms.length > 0 && farms[0].lat && farms[0].lng) {
-            // First priority: User's registered farm location
-            setMapCenter([parseFloat(String(farms[0].lat)), parseFloat(String(farms[0].lng))]);
-        } else if ("geolocation" in navigator) {
-            // Fallback: Browser geolocation
+        // Priority 1: User Profile properties (farmLatitude/farmLongitude)
+        if (user && user.farmLatitude && user.farmLongitude) {
+            setMapCenter([parseFloat(String(user.farmLatitude)), parseFloat(String(user.farmLongitude))]);
+            setMapZoom(13); // Deep zoom for physical farm
+        }
+        // Priority 2: Try to get device location
+        else if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     setMapCenter([position.coords.latitude, position.coords.longitude]);
+                    setMapZoom(13); // Device found, dive in
                 },
                 (error) => {
                     console.error("Erro ao obter localização do usuário:", error);
+                    setMapZoom(6); // Default macro to show country and not lose stations
                 },
                 { enableHighAccuracy: true, timeout: 5000 }
             );
+        } else {
+            setMapZoom(6);
         }
-    }, [farms]);
+    }, [user]);
 
     // Removed MapUpdater component since it forced centering on state changes
 
@@ -150,11 +159,11 @@ export default function FazendaClima() {
     }
 
     // Component to handle dynamic map centering
-    function MapUpdater({ center }: { center: [number, number] }) {
+    function MapUpdater({ center, zoom }: { center: [number, number], zoom: number }) {
         const map = useMap();
         useEffect(() => {
-            map.flyTo(center, 13, { animate: true, duration: 2 });
-        }, [center, map]);
+            map.flyTo(center, zoom, { animate: true, duration: 2 });
+        }, [center, zoom, map]);
         return null;
     }
 
@@ -297,11 +306,11 @@ export default function FazendaClima() {
             <div className="flex-1 relative z-0">
                 <MapContainer
                     center={mapCenter}
-                    zoom={6}
+                    zoom={mapZoom}
                     style={{ height: '100%', width: '100%' }}
                     zoomControl={false}
                 >
-                    <MapUpdater center={mapCenter} />
+                    <MapUpdater center={mapCenter} zoom={mapZoom} />
                     {/* Imagem de Satélite base */}
                     <TileLayer
                         attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
