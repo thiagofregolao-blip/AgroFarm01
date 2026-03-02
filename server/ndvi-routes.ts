@@ -12,9 +12,10 @@ import { registerPolygon, getNdviHistory, getNdviImages } from "./services/ndvi-
 import {
     isCopernicusConfigured,
     coordinatesToBbox,
+    coordinatesToGeoJson,
     searchAvailableDates,
     generateNdviImage,
-    getNdviStats,
+    getNdviStatsBatch,
     type NdviLayerType,
 } from "./services/copernicus-ndvi-service";
 
@@ -115,33 +116,28 @@ export function registerNdviRoutes(app: Express) {
                 }
 
                 const coords = JSON.parse(plot[0].coordinates);
-                const bbox = coordinatesToBbox(coords);
+                const geometry = coordinatesToGeoJson(coords);
 
                 const end = endDate ? new Date(endDate as string) : new Date();
                 const start = startDate ? new Date(startDate as string) : new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
                 const fromStr = start.toISOString().split("T")[0] + "T00:00:00Z";
                 const toStr = end.toISOString().split("T")[0] + "T23:59:59Z";
 
-                const dates = await searchAvailableDates(bbox, fromStr, toStr);
+                // Single batch call for all NDVI stats in the date range
+                const statsArray = await getNdviStatsBatch(geometry, fromStr, toStr);
 
-                const formatted = await Promise.all(
-                    dates.slice(0, 30).map(async (d) => {
-                        const stats = await getNdviStats(bbox, d.date);
-                        const mean = stats?.mean ?? 0;
-                        return {
-                            date: d.date + "T12:00:00Z",
-                            dateFormatted: d.date.split("-").reverse().join("/"),
-                            mean,
-                            min: stats?.min ?? 0,
-                            max: stats?.max ?? 0,
-                            median: mean,
-                            source: "Sentinel-2",
-                            cloudCover: d.cloudCover,
-                            healthLabel: getNdviLabel(mean),
-                            healthColor: getNdviColor(mean),
-                        };
-                    })
-                );
+                const formatted = statsArray.map(s => ({
+                    date: s.date + "T12:00:00Z",
+                    dateFormatted: s.date.split("-").reverse().join("/"),
+                    mean: s.mean,
+                    min: s.min,
+                    max: s.max,
+                    median: s.mean,
+                    source: "Sentinel-2",
+                    cloudCover: 0,
+                    healthLabel: getNdviLabel(s.mean),
+                    healthColor: getNdviColor(s.mean),
+                }));
 
                 return res.json(formatted.sort((a, b) => a.date.localeCompare(b.date)));
             }
@@ -190,6 +186,7 @@ export function registerNdviRoutes(app: Express) {
                 }
 
                 const coords = JSON.parse(plot[0].coordinates);
+                const geometry = coordinatesToGeoJson(coords);
                 const bbox = coordinatesToBbox(coords);
 
                 const now = new Date();
@@ -199,31 +196,21 @@ export function registerNdviRoutes(app: Express) {
 
                 const dates = await searchAvailableDates(bbox, fromStr, toStr);
 
-                // Generate images for up to 10 most recent dates
+                // Generate only NDVI contrast for the most recent dates (saves processing units)
                 const recentDates = dates.slice(0, 10);
-                const layers: NdviLayerType[] = ["ndvi_contrast", "ndvi", "truecolor", "falsecolor", "evi"];
 
                 const formatted = await Promise.all(
                     recentDates.map(async (d) => {
-                        const images: Record<string, string | null> = {};
-
-                        // Generate all layers in parallel
-                        const results = await Promise.allSettled(
-                            layers.map(layer => generateNdviImage(bbox, d.date, layer))
-                        );
-
-                        layers.forEach((layer, i) => {
-                            images[layer] = results[i].status === "fulfilled" ? results[i].value : null;
-                        });
+                        const ndviContrastUrl = await generateNdviImage(geometry, bbox, d.date, "ndvi_contrast");
 
                         return {
                             date: d.date + "T12:00:00Z",
                             dateFormatted: d.date.split("-").reverse().join("/"),
-                            ndviUrl: images.ndvi,
-                            ndviContrastUrl: images.ndvi_contrast,
-                            truecolorUrl: images.truecolor,
-                            falsecolorUrl: images.falsecolor,
-                            eviUrl: images.evi,
+                            ndviUrl: ndviContrastUrl,
+                            ndviContrastUrl,
+                            truecolorUrl: null,
+                            falsecolorUrl: null,
+                            eviUrl: null,
                             cloudCover: d.cloudCover,
                             source: "Sentinel-2",
                         };
@@ -284,11 +271,12 @@ export function registerNdviRoutes(app: Express) {
             }
 
             const coords = JSON.parse(plot[0].coordinates);
+            const geometry = coordinatesToGeoJson(coords);
             const bbox = coordinatesToBbox(coords);
 
             const targetDate = date as string || new Date().toISOString().split("T")[0];
 
-            const imageUrl = await generateNdviImage(bbox, targetDate, layer as NdviLayerType);
+            const imageUrl = await generateNdviImage(geometry, bbox, targetDate, layer as NdviLayerType);
             if (!imageUrl) {
                 return res.status(404).json({ error: "No image available for this date" });
             }

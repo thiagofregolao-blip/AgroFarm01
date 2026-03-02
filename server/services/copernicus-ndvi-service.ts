@@ -13,6 +13,7 @@
 const TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token";
 const PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process";
 const CATALOG_URL = "https://sh.dataspace.copernicus.eu/api/v1/catalog/1.0.0/search";
+const STATS_URL = "https://sh.dataspace.copernicus.eu/api/v1/statistics";
 
 let cachedToken: { access_token: string; expires_at: number } | null = null;
 
@@ -57,63 +58,45 @@ async function getAccessToken(): Promise<string> {
 const EVALSCRIPT_NDVI_CONTRAST = `//VERSION=3
 function setup() {
   return {
-    input: ["B04", "B08", "SCL"],
+    input: ["B04", "B08", "SCL", "dataMask"],
     output: { bands: 4, sampleType: "AUTO" }
   };
 }
 
 function evaluatePixel(sample) {
-  // Mask clouds, shadows, snow, water (SCL classes)
-  if ([0, 1, 3, 6, 8, 9, 10, 11].includes(sample.SCL)) {
-    return [0, 0, 0, 0]; // transparent
-  }
+  if (sample.dataMask === 0) return [0, 0, 0, 0];
+  if ([0, 1, 3, 6, 8, 9, 10, 11].includes(sample.SCL)) return [0, 0, 0, 0];
 
   let ndvi = index(sample.B08, sample.B04);
 
-  // OneSoil-style red-yellow-green contrast palette
   let r, g, b;
-  if (ndvi < -0.2) {
-    r = 0.05; g = 0.05; b = 0.05;
-  } else if (ndvi < 0.0) {
-    r = 0.75; g = 0.15; b = 0.15;
-  } else if (ndvi < 0.1) {
-    r = 0.84; g = 0.18; b = 0.13;
-  } else if (ndvi < 0.2) {
-    r = 0.96; g = 0.36; b = 0.11;
-  } else if (ndvi < 0.3) {
-    r = 0.99; g = 0.55; b = 0.14;
-  } else if (ndvi < 0.4) {
-    r = 1.0; g = 0.76; b = 0.17;
-  } else if (ndvi < 0.5) {
-    r = 0.95; g = 0.91; b = 0.2;
-  } else if (ndvi < 0.6) {
-    r = 0.65; g = 0.85; b = 0.2;
-  } else if (ndvi < 0.7) {
-    r = 0.35; g = 0.75; b = 0.17;
-  } else if (ndvi < 0.8) {
-    r = 0.15; g = 0.62; b = 0.13;
-  } else if (ndvi < 0.9) {
-    r = 0.08; g = 0.5; b = 0.08;
-  } else {
-    r = 0.04; g = 0.36; b = 0.04;
-  }
+  if (ndvi < -0.2) { r = 0.05; g = 0.05; b = 0.05; }
+  else if (ndvi < 0.0) { r = 0.75; g = 0.15; b = 0.15; }
+  else if (ndvi < 0.1) { r = 0.84; g = 0.18; b = 0.13; }
+  else if (ndvi < 0.2) { r = 0.96; g = 0.36; b = 0.11; }
+  else if (ndvi < 0.3) { r = 0.99; g = 0.55; b = 0.14; }
+  else if (ndvi < 0.4) { r = 1.0; g = 0.76; b = 0.17; }
+  else if (ndvi < 0.5) { r = 0.95; g = 0.91; b = 0.2; }
+  else if (ndvi < 0.6) { r = 0.65; g = 0.85; b = 0.2; }
+  else if (ndvi < 0.7) { r = 0.35; g = 0.75; b = 0.17; }
+  else if (ndvi < 0.8) { r = 0.15; g = 0.62; b = 0.13; }
+  else if (ndvi < 0.9) { r = 0.08; g = 0.5; b = 0.08; }
+  else { r = 0.04; g = 0.36; b = 0.04; }
 
   return [r, g, b, 1];
 }`;
 
-// Standard green-only NDVI palette
 const EVALSCRIPT_NDVI_STANDARD = `//VERSION=3
 function setup() {
   return {
-    input: ["B04", "B08", "SCL"],
+    input: ["B04", "B08", "SCL", "dataMask"],
     output: { bands: 4, sampleType: "AUTO" }
   };
 }
 
 function evaluatePixel(sample) {
-  if ([0, 1, 3, 6, 8, 9, 10, 11].includes(sample.SCL)) {
-    return [0, 0, 0, 0];
-  }
+  if (sample.dataMask === 0) return [0, 0, 0, 0];
+  if ([0, 1, 3, 6, 8, 9, 10, 11].includes(sample.SCL)) return [0, 0, 0, 0];
 
   let ndvi = index(sample.B08, sample.B04);
   return valueInterpolate(ndvi,
@@ -131,51 +114,45 @@ function evaluatePixel(sample) {
   );
 }`;
 
-// True color (RGB)
 const EVALSCRIPT_TRUECOLOR = `//VERSION=3
 function setup() {
   return {
-    input: ["B02", "B03", "B04", "SCL"],
+    input: ["B02", "B03", "B04", "SCL", "dataMask"],
     output: { bands: 4, sampleType: "AUTO" }
   };
 }
 
 function evaluatePixel(sample) {
-  if ([0, 1, 3, 8, 9, 10].includes(sample.SCL)) {
-    return [0, 0, 0, 0];
-  }
+  if (sample.dataMask === 0) return [0, 0, 0, 0];
+  if ([0, 1, 3, 8, 9, 10].includes(sample.SCL)) return [0, 0, 0, 0];
   return [2.5 * sample.B04, 2.5 * sample.B03, 2.5 * sample.B02, 1];
 }`;
 
-// False color (NIR-Red-Green)
 const EVALSCRIPT_FALSECOLOR = `//VERSION=3
 function setup() {
   return {
-    input: ["B03", "B04", "B08", "SCL"],
+    input: ["B03", "B04", "B08", "SCL", "dataMask"],
     output: { bands: 4, sampleType: "AUTO" }
   };
 }
 
 function evaluatePixel(sample) {
-  if ([0, 1, 3, 8, 9, 10].includes(sample.SCL)) {
-    return [0, 0, 0, 0];
-  }
+  if (sample.dataMask === 0) return [0, 0, 0, 0];
+  if ([0, 1, 3, 8, 9, 10].includes(sample.SCL)) return [0, 0, 0, 0];
   return [2.5 * sample.B08, 2.5 * sample.B04, 2.5 * sample.B03, 1];
 }`;
 
-// EVI (Enhanced Vegetation Index)
 const EVALSCRIPT_EVI = `//VERSION=3
 function setup() {
   return {
-    input: ["B02", "B04", "B08", "SCL"],
+    input: ["B02", "B04", "B08", "SCL", "dataMask"],
     output: { bands: 4, sampleType: "AUTO" }
   };
 }
 
 function evaluatePixel(sample) {
-  if ([0, 1, 3, 6, 8, 9, 10, 11].includes(sample.SCL)) {
-    return [0, 0, 0, 0];
-  }
+  if (sample.dataMask === 0) return [0, 0, 0, 0];
+  if ([0, 1, 3, 6, 8, 9, 10, 11].includes(sample.SCL)) return [0, 0, 0, 0];
 
   let evi = 2.5 * (sample.B08 - sample.B04) / (sample.B08 + 6.0 * sample.B04 - 7.5 * sample.B02 + 1.0);
   evi = Math.max(0, Math.min(1, evi));
@@ -193,6 +170,25 @@ function evaluatePixel(sample) {
   );
 }`;
 
+// Statistical API evalscript — must output dataMask
+const EVALSCRIPT_STATS = `//VERSION=3
+function setup() {
+  return {
+    input: ["B04", "B08", "SCL", "dataMask"],
+    output: [
+      { id: "ndvi", bands: 1, sampleType: "FLOAT32" },
+      { id: "dataMask", bands: 1 }
+    ]
+  };
+}
+
+function evaluatePixel(sample) {
+  if (sample.dataMask === 0 || [0,1,3,6,8,9,10,11].includes(sample.SCL)) {
+    return { ndvi: [0], dataMask: [0] };
+  }
+  return { ndvi: [index(sample.B08, sample.B04)], dataMask: [1] };
+}`;
+
 export type NdviLayerType = "ndvi" | "ndvi_contrast" | "truecolor" | "falsecolor" | "evi";
 
 function getEvalscript(layer: NdviLayerType): string {
@@ -207,8 +203,31 @@ function getEvalscript(layer: NdviLayerType): string {
 }
 
 /**
+ * Convert [{lat, lng}] to GeoJSON Polygon (closing the ring if needed)
+ */
+export function coordinatesToGeoJson(coords: { lat: number; lng: number }[]): { type: "Polygon"; coordinates: number[][][] } {
+    const ring = coords.map(c => [c.lng, c.lat]);
+    if (ring.length > 0) {
+        const first = ring[0];
+        const last = ring[ring.length - 1];
+        if (first[0] !== last[0] || first[1] !== last[1]) {
+            ring.push([...first]);
+        }
+    }
+    return { type: "Polygon", coordinates: [ring] };
+}
+
+/**
+ * Convert [{lat, lng}] to bbox [minLng, minLat, maxLng, maxLat]
+ */
+export function coordinatesToBbox(coords: { lat: number; lng: number }[]): [number, number, number, number] {
+    const lats = coords.map(c => c.lat);
+    const lngs = coords.map(c => c.lng);
+    return [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)];
+}
+
+/**
  * Search the Sentinel-2 catalog for available dates over a polygon.
- * Returns dates with cloud coverage info, sorted newest first.
  */
 export async function searchAvailableDates(
     bbox: [number, number, number, number],
@@ -260,10 +279,10 @@ export async function searchAvailableDates(
 }
 
 /**
- * Generate an NDVI (or other layer) PNG image for a bounding box and date.
- * Returns a base64-encoded PNG data URL.
+ * Generate an NDVI (or other layer) PNG image clipped to polygon geometry.
  */
 export async function generateNdviImage(
+    geometry: { type: "Polygon"; coordinates: number[][][] },
     bbox: [number, number, number, number],
     date: string,
     layer: NdviLayerType = "ndvi_contrast",
@@ -272,19 +291,16 @@ export async function generateNdviImage(
 ): Promise<string | null> {
     const token = await getAccessToken();
 
-    const fromDate = `${date}T00:00:00Z`;
-    const toDate = `${date}T23:59:59Z`;
-
     const requestBody = {
         input: {
             bounds: {
                 properties: { crs: "http://www.opengis.net/def/crs/OGC/1.3/CRS84" },
-                bbox,
+                geometry,
             },
             data: [{
                 type: "sentinel-2-l2a",
                 dataFilter: {
-                    timeRange: { from: fromDate, to: toDate },
+                    timeRange: { from: `${date}T00:00:00Z`, to: `${date}T23:59:59Z` },
                     mosaickingOrder: "leastCC",
                 },
             }],
@@ -312,7 +328,7 @@ export async function generateNdviImage(
 
     if (!res.ok) {
         const err = await res.text();
-        console.error(`[Copernicus] Process API failed (${res.status}): ${err}`);
+        console.error(`[Copernicus] Process API failed for ${layer} (${res.status}): ${err}`);
         return null;
     }
 
@@ -321,111 +337,78 @@ export async function generateNdviImage(
 }
 
 /**
- * Calculate NDVI statistics (mean, min, max) for a bbox and date.
- * Returns raw NDVI float values which we average.
+ * Get NDVI statistics using the Statistical API.
+ * Returns { date, mean, min, max } for each day in the range.
  */
-export async function getNdviStats(
-    bbox: [number, number, number, number],
-    date: string,
-): Promise<{ mean: number; min: number; max: number } | null> {
+export async function getNdviStatsBatch(
+    geometry: { type: "Polygon"; coordinates: number[][][] },
+    fromDate: string,
+    toDate: string,
+): Promise<{ date: string; mean: number; min: number; max: number; sampleCount: number }[]> {
     const token = await getAccessToken();
-
-    const evalscript = `//VERSION=3
-function setup() {
-  return {
-    input: ["B04", "B08", "SCL"],
-    output: { bands: 1, sampleType: "FLOAT32" },
-    mosaicking: "SIMPLE"
-  };
-}
-
-function evaluatePixel(sample) {
-  if ([0, 1, 3, 6, 8, 9, 10, 11].includes(sample.SCL)) {
-    return [-9999];
-  }
-  return [index(sample.B08, sample.B04)];
-}`;
 
     const requestBody = {
         input: {
             bounds: {
                 properties: { crs: "http://www.opengis.net/def/crs/OGC/1.3/CRS84" },
-                bbox,
+                geometry,
             },
             data: [{
                 type: "sentinel-2-l2a",
                 dataFilter: {
-                    timeRange: { from: `${date}T00:00:00Z`, to: `${date}T23:59:59Z` },
                     mosaickingOrder: "leastCC",
                 },
             }],
         },
-        output: {
-            width: 64,
-            height: 64,
-            responses: [{
-                identifier: "default",
-                format: { type: "image/tiff" },
-            }],
+        aggregation: {
+            timeRange: { from: fromDate, to: toDate },
+            aggregationInterval: { of: "P1D" },
+            evalscript: EVALSCRIPT_STATS,
+            resx: 10,
+            resy: 10,
         },
-        evalscript,
     };
 
     try {
-        const res = await fetch(PROCESS_URL, {
+        const res = await fetch(STATS_URL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
-                Accept: "image/tiff",
             },
             body: JSON.stringify(requestBody),
         });
 
-        if (!res.ok) return null;
-
-        const buffer = Buffer.from(await res.arrayBuffer());
-        const floats = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4);
-
-        let sum = 0, count = 0, min = 1, max = -1;
-        for (const v of floats) {
-            if (v > -1 && v <= 1) {
-                sum += v;
-                count++;
-                if (v < min) min = v;
-                if (v > max) max = v;
-            }
+        if (!res.ok) {
+            const err = await res.text();
+            console.error(`[Copernicus] Statistics API failed (${res.status}): ${err}`);
+            return [];
         }
 
-        if (count === 0) return null;
-        return {
-            mean: Math.round((sum / count) * 1000) / 1000,
-            min: Math.round(min * 1000) / 1000,
-            max: Math.round(max * 1000) / 1000,
-        };
+        const data = await res.json();
+        const intervals = data.data || [];
+
+        return intervals
+            .filter((i: any) => {
+                const stats = i.outputs?.ndvi?.bands?.B0?.stats;
+                return stats && stats.sampleCount > 0;
+            })
+            .map((i: any) => {
+                const stats = i.outputs.ndvi.bands.B0.stats;
+                return {
+                    date: i.interval.from.split("T")[0],
+                    mean: Math.round(stats.mean * 1000) / 1000,
+                    min: Math.round(stats.min * 1000) / 1000,
+                    max: Math.round(stats.max * 1000) / 1000,
+                    sampleCount: stats.sampleCount,
+                };
+            });
     } catch (err) {
-        console.error("[Copernicus] Stats error:", err);
-        return null;
+        console.error("[Copernicus] Stats batch error:", err);
+        return [];
     }
 }
 
-/**
- * Coordinates helper: convert [{lat, lng}] to [minLng, minLat, maxLng, maxLat] bbox
- */
-export function coordinatesToBbox(coords: { lat: number; lng: number }[]): [number, number, number, number] {
-    const lats = coords.map(c => c.lat);
-    const lngs = coords.map(c => c.lng);
-    return [
-        Math.min(...lngs),
-        Math.min(...lats),
-        Math.max(...lngs),
-        Math.max(...lats),
-    ];
-}
-
-/**
- * Check if Copernicus credentials are configured
- */
 export function isCopernicusConfigured(): boolean {
     return !!(process.env.COPERNICUS_CLIENT_ID && process.env.COPERNICUS_CLIENT_SECRET);
 }
