@@ -126,7 +126,7 @@ export function registerNdviRoutes(app: Express) {
                 const statsArray = await getNdviStatsBatch(geometry, fromStr, toStr);
 
                 const formatted = statsArray
-                    .filter(s => s.mean > 0.05 && s.sampleCount > 10)
+                    .filter(s => s.mean > 0)
                     .map(s => ({
                         date: s.date + "T12:00:00Z",
                         dateFormatted: s.date.split("-").reverse().join("/"),
