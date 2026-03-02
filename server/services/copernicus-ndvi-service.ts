@@ -310,7 +310,7 @@ export async function generateNdviImage(
         input: {
             bounds: {
                 properties: { crs: "http://www.opengis.net/def/crs/OGC/1.3/CRS84" },
-                bbox,
+                geometry,
             },
             data: [{
                 type: "sentinel-2-l2a",

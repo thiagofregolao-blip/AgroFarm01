@@ -16,6 +16,17 @@ function MapUpdater({ bounds }: { bounds: [[number, number], [number, number]] |
     return null;
 }
 
+function MapResizer({ trigger }: { trigger: any }) {
+    const map = useMap();
+    useEffect(() => {
+        const t = setTimeout(() => {
+            map.invalidateSize();
+        }, 300);
+        return () => clearTimeout(t);
+    }, [trigger, map]);
+    return null;
+}
+
 const NDVI_SCALE = [
     { min: 0, max: 0.15, color: "#DC2626", label: "Crítico" },
     { min: 0.15, max: 0.3, color: "#F97316", label: "Estresse" },
@@ -250,109 +261,55 @@ export default function NdviPage() {
         );
     }
 
-    // ===== DETAIL VIEW =====
+    // ===== DETAIL VIEW (OneSoil style) =====
     return (
-        <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col">
-            {/* NDVI contrast uses paletteid=3 from AgroMonitoring (real red-yellow-green palette) */}
-
-            {/* ─── Floating Header ─── */}
-            <div
-                className="absolute top-0 left-0 right-0 z-[1000] pointer-events-none"
-                style={{ paddingTop: "max(env(safe-area-inset-top), 12px)" }}
-            >
-                <div className="flex items-center justify-between px-4 pt-1">
-                    <button
-                        onClick={handleBack}
-                        className="pointer-events-auto w-10 h-10 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform"
-                    >
-                        <ChevronLeft size={22} />
-                    </button>
-                    <div className="pointer-events-auto bg-black/50 backdrop-blur-md px-5 py-2 rounded-2xl shadow-lg">
-                        <h2 className="text-white font-bold text-sm text-center leading-tight">{selectedPlot.name}</h2>
-                        <p className="text-white/50 text-[10px] text-center">{selectedPlot.areaHa} ha</p>
-                    </div>
-                    <div className="w-10 h-10" />
-                </div>
-            </div>
-
-            {/* ─── Layer Selector + Fullscreen ─── */}
-            <div
-                className="absolute z-[1000] left-0 right-0 pointer-events-none"
-                style={{ top: "max(calc(env(safe-area-inset-top) + 56px), 68px)" }}
-            >
-                <div className="flex items-start justify-between px-4">
-                    {/* Layer Dropdown */}
-                    <div className="pointer-events-auto relative">
+        <div className="min-h-screen bg-gray-50">
+            {/* ─── Sticky Header ─── */}
+            {!isMapExpanded && (
+                <div
+                    className="sticky top-0 z-40 bg-white border-b border-gray-100 shadow-sm"
+                    style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}
+                >
+                    <div className="flex items-center gap-3 px-4 py-3">
                         <button
-                            onClick={() => setShowLayerMenu(!showLayerMenu)}
-                            className="flex items-center gap-2 bg-black/50 backdrop-blur-md text-white pl-3 pr-2.5 py-2 rounded-xl shadow-lg active:scale-95 transition-transform"
+                            onClick={handleBack}
+                            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
                         >
-                            <Layers size={15} className="text-white/70" />
-                            <span className="text-[13px] font-medium">{currentLayerLabel}</span>
-                            <ChevronDown
-                                size={14}
-                                className={`text-white/50 transition-transform ${showLayerMenu ? "rotate-180" : ""}`}
-                            />
+                            <ChevronLeft size={20} className="text-gray-700" />
                         </button>
-
-                        {showLayerMenu && (
-                            <>
-                                <div className="fixed inset-0 z-[999]" onClick={() => setShowLayerMenu(false)} />
-                                <div className="absolute top-full left-0 mt-2 z-[1001] bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-white/10 overflow-hidden min-w-[210px]">
-                                    {LAYER_OPTIONS.map((opt) => (
-                                        <button
-                                            key={opt.value}
-                                            onClick={() => {
-                                                setLayerType(opt.value);
-                                                setShowLayerMenu(false);
-                                            }}
-                                            className={`w-full flex items-center justify-between px-4 py-3 text-left text-[13px] transition-colors ${
-                                                layerType === opt.value
-                                                    ? "bg-white/10 text-white font-semibold"
-                                                    : "text-white/60 hover:bg-white/5 hover:text-white"
-                                            }`}
-                                        >
-                                            <span>{opt.label}</span>
-                                            {layerType === opt.value && <Check size={15} className="text-emerald-400" />}
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
+                        <div className="flex-1 min-w-0">
+                            <h1 className="font-bold text-lg text-gray-900 truncate leading-tight">{selectedPlot.name}</h1>
+                            <p className="text-xs text-gray-500">{selectedPlot.areaHa} ha</p>
+                        </div>
                     </div>
-
-                    {/* Fullscreen */}
-                    <button
-                        onClick={() => setIsMapExpanded(!isMapExpanded)}
-                        className="pointer-events-auto w-10 h-10 bg-black/50 backdrop-blur-md rounded-xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform"
-                    >
-                        {isMapExpanded ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
-                    </button>
                 </div>
-            </div>
+            )}
 
-            {/* ─── Error Banner ─── */}
+            {/* ─── Initial Loading ─── */}
+            {isLoading && (
+                <div className="flex flex-col items-center justify-center py-24 gap-3">
+                    <RefreshCw className="w-8 h-8 text-gray-400 animate-spin" />
+                    <span className="text-sm text-gray-400">Processando dados de satélite...</span>
+                </div>
+            )}
+
+            {/* ─── Error ─── */}
             {registerMutation.isError && (
-                <div className="absolute top-28 left-4 right-4 z-[1000] p-3 bg-red-500/90 backdrop-blur text-white rounded-xl shadow-lg flex items-center gap-2 text-sm font-medium">
+                <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2 text-sm font-medium">
                     <AlertTriangle size={18} /> Falha ao conectar ao satélite.
                 </div>
             )}
 
-            {/* ─── Loading Overlay ─── */}
-            {isLoading && (
-                <div className="absolute inset-0 z-[999] bg-black/50 backdrop-blur-sm flex flex-col items-center justify-center">
-                    <RefreshCw className="w-10 h-10 text-white animate-spin mb-3" />
-                    <span className="text-white/70 text-sm font-medium">Processando imagem de satélite...</span>
-                </div>
-            )}
-
-            {/* ═══ MAP AREA ═══ */}
-            <div
-                className={`relative transition-all duration-300 ease-in-out ${
-                    isMapExpanded ? "flex-1" : "flex-[5]"
-                }`}
-            >
-                {bounds ? (
+            {/* ═══ MAP CARD ═══ */}
+            {!isLoading && bounds && (
+                <div
+                    className={`overflow-hidden ${
+                        isMapExpanded
+                            ? "fixed inset-0 z-[9999] rounded-none"
+                            : "relative mx-3 mt-3 rounded-2xl shadow-lg"
+                    }`}
+                    style={isMapExpanded ? undefined : { height: "50vh", minHeight: 280, maxHeight: 500 }}
+                >
                     <MapContainer
                         center={bounds[0]}
                         zoom={15}
@@ -375,72 +332,134 @@ export default function NdviPage() {
                                 dashArray: overlayUrl ? undefined : "6 4",
                             }}
                         />
-                        {overlayUrl && (
-                            <ImageOverlay
-                                url={overlayUrl}
-                                bounds={bounds}
-                                opacity={0.85}
-                            />
-                        )}
+                        {overlayUrl && <ImageOverlay url={overlayUrl} bounds={bounds} opacity={0.85} />}
                         <MapUpdater bounds={bounds} />
+                        <MapResizer trigger={isMapExpanded} />
                     </MapContainer>
-                ) : (
-                    <div className="h-full w-full flex items-center justify-center text-white/40 text-sm">
-                        Coordenadas não encontradas
-                    </div>
-                )}
 
-                {/* Overlay loading indicator */}
-                {fetchingOverlay && !isLoading && (
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[999]">
-                        <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl">
-                            <RefreshCw className="w-7 h-7 text-white animate-spin" />
-                        </div>
-                    </div>
-                )}
-
-                {/* NDVI Gradient Legend */}
-                {showNdviLegend && (
-                    <div className="absolute bottom-6 left-3 z-[1000]">
-                        <div className="bg-black/40 backdrop-blur-md rounded-xl px-2 py-2.5 flex flex-col items-center">
-                            <span className="text-[8px] font-bold text-white/70 tracking-wider mb-1.5">NDVI</span>
-                            <div className="w-[10px] h-28 rounded-full bg-gradient-to-t from-red-600 via-yellow-400 to-green-700 border border-white/15" />
-                        </div>
-                    </div>
-                )}
-
-                {/* NDVI Stats Badge */}
-                {activeEntry && showNdviLegend && (
-                    <div className="absolute bottom-6 right-3 z-[1000]">
-                        <div className="bg-black/40 backdrop-blur-md px-4 py-3 rounded-2xl">
-                            <p className="text-[9px] text-white/40 mb-0.5">Média {activeEntry.dateFormatted}</p>
-                            <div className="flex items-baseline gap-1.5">
-                                <span className="text-2xl font-black leading-none" style={{ color: activeEntry.healthColor }}>
-                                    {(activeEntry.mean ?? 0).toFixed(2)}
-                                </span>
-                                <span
-                                    className="text-[9px] px-1.5 py-0.5 rounded-md text-white font-bold"
-                                    style={{ backgroundColor: activeEntry.healthColor }}
+                    {/* Fullscreen floating header */}
+                    {isMapExpanded && (
+                        <div
+                            className="absolute top-0 left-0 right-0 z-[1000] pointer-events-none"
+                            style={{ paddingTop: "max(env(safe-area-inset-top), 12px)" }}
+                        >
+                            <div className="flex items-center justify-between px-4 pt-1">
+                                <button
+                                    onClick={() => setIsMapExpanded(false)}
+                                    className="pointer-events-auto w-10 h-10 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white shadow-lg"
                                 >
-                                    {activeEntry.healthLabel}
-                                </span>
+                                    <ChevronLeft size={22} />
+                                </button>
+                                <div className="bg-black/50 backdrop-blur-md px-5 py-2 rounded-2xl shadow-lg">
+                                    <h2 className="text-white font-bold text-sm text-center">{selectedPlot.name}</h2>
+                                    <p className="text-white/50 text-[10px] text-center">{selectedPlot.areaHa} ha</p>
+                                </div>
+                                <button
+                                    onClick={() => setIsMapExpanded(false)}
+                                    className="pointer-events-auto w-10 h-10 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white shadow-lg"
+                                >
+                                    <Minimize2 size={17} />
+                                </button>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
 
-            {/* ═══ HISTORY PANEL ═══ */}
-            {!isMapExpanded && (
-                <div
-                    className="flex-[3] min-h-0 bg-white rounded-t-[20px] -mt-3 z-[1001] flex flex-col"
-                    style={{
-                        boxShadow: "0 -8px 30px rgba(0,0,0,0.15)",
-                        paddingBottom: "max(env(safe-area-inset-bottom), 12px)",
-                    }}
-                >
-                    {/* Panel Header */}
-                    <div className="flex items-center justify-between px-5 pt-4 pb-1 shrink-0">
+                    {/* Layer Selector */}
+                    <div className={`absolute z-[1000] left-3 ${isMapExpanded ? "top-16" : "top-3"}`}>
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowLayerMenu(!showLayerMenu)}
+                                className="flex items-center gap-2 bg-black/50 backdrop-blur-md text-white pl-3 pr-2.5 py-2 rounded-xl shadow-lg active:scale-95 transition-transform"
+                            >
+                                <Layers size={15} className="text-white/70" />
+                                <span className="text-[13px] font-medium">{currentLayerLabel}</span>
+                                <ChevronDown
+                                    size={14}
+                                    className={`text-white/50 transition-transform ${showLayerMenu ? "rotate-180" : ""}`}
+                                />
+                            </button>
+                            {showLayerMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-[999]" onClick={() => setShowLayerMenu(false)} />
+                                    <div className="absolute top-full left-0 mt-2 z-[1001] bg-gray-900/95 backdrop-blur-xl rounded-xl shadow-2xl border border-white/10 overflow-hidden min-w-[210px]">
+                                        {LAYER_OPTIONS.map((opt) => (
+                                            <button
+                                                key={opt.value}
+                                                onClick={() => {
+                                                    setLayerType(opt.value);
+                                                    setShowLayerMenu(false);
+                                                }}
+                                                className={`w-full flex items-center justify-between px-4 py-3 text-left text-[13px] transition-colors ${
+                                                    layerType === opt.value
+                                                        ? "bg-white/10 text-white font-semibold"
+                                                        : "text-white/60 hover:bg-white/5 hover:text-white"
+                                                }`}
+                                            >
+                                                <span>{opt.label}</span>
+                                                {layerType === opt.value && <Check size={15} className="text-emerald-400" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Fullscreen Toggle */}
+                    <div className={`absolute z-[1000] right-3 ${isMapExpanded ? "top-16" : "top-3"}`}>
+                        <button
+                            onClick={() => setIsMapExpanded(!isMapExpanded)}
+                            className="w-10 h-10 bg-black/50 backdrop-blur-md rounded-xl flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform"
+                        >
+                            {isMapExpanded ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+                        </button>
+                    </div>
+
+                    {/* NDVI Legend */}
+                    {showNdviLegend && (
+                        <div className="absolute bottom-3 left-3 z-[1000]">
+                            <div className="bg-black/40 backdrop-blur-md rounded-xl px-2 py-2 flex flex-col items-center">
+                                <span className="text-[7px] font-bold text-white/70 tracking-wider mb-1">NDVI</span>
+                                <div className="w-[8px] h-20 rounded-full bg-gradient-to-t from-red-600 via-yellow-400 to-green-700 border border-white/15" />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Stats Badge */}
+                    {activeEntry && showNdviLegend && (
+                        <div className="absolute bottom-3 right-3 z-[1000]">
+                            <div className="bg-black/40 backdrop-blur-md px-3 py-2 rounded-xl">
+                                <p className="text-[8px] text-white/40 mb-0.5">Média {activeEntry.dateFormatted}</p>
+                                <div className="flex items-baseline gap-1.5">
+                                    <span className="text-xl font-black leading-none" style={{ color: activeEntry.healthColor }}>
+                                        {(activeEntry.mean ?? 0).toFixed(2)}
+                                    </span>
+                                    <span
+                                        className="text-[8px] px-1.5 py-0.5 rounded-md text-white font-bold"
+                                        style={{ backgroundColor: activeEntry.healthColor }}
+                                    >
+                                        {activeEntry.healthLabel}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Overlay Loading */}
+                    {fetchingOverlay && !isLoading && (
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[999]">
+                            <div className="bg-black/50 backdrop-blur-md p-3 rounded-xl">
+                                <RefreshCw className="w-6 h-6 text-white animate-spin" />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ═══ HISTORY SECTION ═══ */}
+            {!isLoading && !isMapExpanded && (
+                <div className="px-4 mt-5" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 24px)" }}>
+                    <div className="flex items-center justify-between mb-3">
                         <h3 className="font-bold text-[15px] text-gray-900">Histórico</h3>
                         <div className="flex items-center gap-2">
                             <span className="text-[11px] text-gray-400">Ocultar dias nublados</span>
@@ -459,11 +478,12 @@ export default function NdviPage() {
                         </div>
                     </div>
 
-                    {/* Timeline Cards */}
-                    <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden px-4 pt-3 pb-2 flex gap-2.5 snap-x snap-mandatory scrollbar-hide items-start">
-                        {visibleTimeline.length === 0 && !isLoading ? (
+                    <div className="flex gap-2.5 overflow-x-auto pb-4 scrollbar-hide">
+                        {visibleTimeline.length === 0 ? (
                             <div className="w-full flex items-center justify-center text-gray-400 text-sm py-4">
-                                {ndviHistory.length === 0 ? "Nenhum dado disponível" : "Todos os dias filtrados (muitas nuvens)"}
+                                {ndviHistory.length === 0
+                                    ? "Nenhum dado disponível"
+                                    : "Todos os dias filtrados (muitas nuvens)"}
                             </div>
                         ) : (
                             visibleTimeline.map((entry: any) => {
@@ -475,44 +495,42 @@ export default function NdviPage() {
                                     <button
                                         key={entry.date}
                                         onClick={() => setSelectedDate(entry.date)}
-                                        className={`snap-center shrink-0 w-[82px] flex flex-col items-center rounded-xl overflow-hidden transition-all border-2 ${
+                                        className={`snap-center shrink-0 w-[78px] flex flex-col rounded-xl overflow-hidden transition-all border-2 ${
                                             isSelected
                                                 ? "border-blue-500 shadow-lg shadow-blue-500/20"
-                                                : "border-gray-100 hover:border-gray-200"
+                                                : "border-transparent hover:border-gray-200"
                                         }`}
                                     >
                                         {/* Thumbnail */}
-                                        <div className="w-full h-[65px] bg-gray-100 relative overflow-hidden">
+                                        <div className="w-full aspect-[4/5] bg-gray-200 relative overflow-hidden">
                                             {entry.ndviUrl ? (
                                                 <img
                                                     src={entry.ndviContrastUrl || entry.ndviUrl}
                                                     alt=""
                                                     className="w-full h-full object-cover"
                                                     loading="lazy"
-                                                    crossOrigin="anonymous"
                                                 />
                                             ) : (
-                                                <div
-                                                    className="w-full h-full flex items-center justify-center"
-                                                    style={{ backgroundColor: entry.healthColor + "18" }}
-                                                >
-                                                    <div
-                                                        className="w-5 h-5 rounded-full opacity-70"
-                                                        style={{ backgroundColor: entry.healthColor }}
-                                                    />
+                                                <div className="w-full h-full bg-gradient-to-br from-emerald-800/20 to-amber-700/15 flex items-center justify-center">
+                                                    <Leaf size={14} className="text-emerald-600/40" />
                                                 </div>
                                             )}
                                             {entry.cloudCover > 20 && (
                                                 <div className="absolute top-1 right-1 bg-white/80 rounded-full p-[2px]">
-                                                    <Cloud size={9} className="text-gray-500" />
+                                                    <Cloud size={8} className="text-gray-500" />
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Info */}
                                         <div className="w-full px-1 py-1.5 bg-white text-center">
-                                            <p className="text-[9px] text-gray-400 leading-tight truncate">{entry.shortDate}</p>
-                                            <p className="text-[13px] font-bold mt-0.5 leading-tight" style={{ color: entry.healthColor || '#666' }}>
+                                            <p className="text-[9px] text-gray-400 leading-tight truncate">
+                                                {entry.shortDate}
+                                            </p>
+                                            <p
+                                                className="text-[12px] font-bold mt-0.5 leading-tight"
+                                                style={{ color: entry.healthColor || "#666" }}
+                                            >
                                                 {(entry.mean ?? 0).toFixed(2)}
                                             </p>
                                             {entry.delta != null && (

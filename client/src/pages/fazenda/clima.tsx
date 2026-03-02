@@ -545,9 +545,9 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                             if (grouped.length === 0) grouped.push({ label: 'Hoje', items: sprayWindow });
 
                             const statusConfig = {
-                                GREEN: { bg: 'bg-emerald-500 dark:bg-emerald-600', border: 'border-emerald-600 dark:border-emerald-500', text: 'text-white', icon: Check, iconColor: 'text-white' },
-                                YELLOW: { bg: 'bg-amber-400 dark:bg-amber-500', border: 'border-amber-500 dark:border-amber-400', text: 'text-white', icon: AlertTriangle, iconColor: 'text-white' },
-                                RED: { bg: 'bg-red-500 dark:bg-red-600', border: 'border-red-600 dark:border-red-500', text: 'text-white', icon: Ban, iconColor: 'text-white' },
+                                GREEN: { iconBg: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400', icon: Check },
+                                YELLOW: { iconBg: 'bg-amber-100 dark:bg-amber-900/30', iconColor: 'text-amber-600 dark:text-amber-400', icon: AlertTriangle },
+                                RED: { iconBg: 'bg-red-100 dark:bg-red-900/30', iconColor: 'text-red-600 dark:text-red-400', icon: Ban },
                             };
 
                             return (
@@ -564,10 +564,12 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                                                     const StatusIcon = cfg.icon;
                                                     const shortReason = item.reason === 'Condições ideais' ? 'Ideal para pulverizar' : item.reason;
                                                     return (
-                                                        <div key={idx} className={`flex items-center gap-3 p-2.5 rounded-lg border ${cfg.bg} ${cfg.border} transition-colors`}>
-                                                            <StatusIcon className={`h-4 w-4 shrink-0 ${cfg.iconColor}`} />
-                                                            <span className={`text-sm font-bold w-12 ${cfg.text}`}>{item.time.replace(':00', 'h')}</span>
-                                                            <span className={`text-xs flex-1 ${cfg.text} opacity-90`}>{shortReason}</span>
+                                                        <div key={idx} className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 transition-colors">
+                                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${cfg.iconBg}`}>
+                                                                <StatusIcon className={`h-3.5 w-3.5 ${cfg.iconColor}`} />
+                                                            </div>
+                                                            <span className="text-sm font-bold w-12 text-foreground">{item.time.replace(':00', 'h')}</span>
+                                                            <span className="text-xs flex-1 text-muted-foreground">{shortReason}</span>
                                                         </div>
                                                     );
                                                 })}

@@ -186,6 +186,7 @@ export function registerNdviRoutes(app: Express) {
                 }
 
                 const coords = JSON.parse(plot[0].coordinates);
+                const geometry = coordinatesToGeoJson(coords);
                 const bbox = coordinatesToBbox(coords);
 
                 const now = new Date();
@@ -196,36 +197,33 @@ export function registerNdviRoutes(app: Express) {
                 const dates = await searchAvailableDates(bbox, fromStr, toStr);
                 console.log(`[NDVI] Catalog found ${dates.length} dates for plot ${polygonId}`);
 
-                // Generate small thumbnails for the 6 most recent dates
-                const recentDates = dates.slice(0, 6);
-                const geometry = coordinatesToGeoJson(coords);
-
-                const formatted = await Promise.all(
-                    dates.map(async (d) => {
-                        const isRecent = recentDates.some(r => r.date === d.date);
-                        let ndviContrastUrl: string | null = null;
-
-                        if (isRecent) {
+                const formatted: any[] = [];
+                const batchSize = 3;
+                for (let i = 0; i < dates.length; i += batchSize) {
+                    const batch = dates.slice(i, i + batchSize);
+                    const results = await Promise.all(
+                        batch.map(async (d) => {
+                            let thumb: string | null = null;
                             try {
-                                ndviContrastUrl = await generateNdviImage(geometry, bbox, d.date, "ndvi_contrast", 256);
+                                thumb = await generateNdviImage(geometry, bbox, d.date, "ndvi_contrast", 128);
                             } catch (e) {
-                                console.error(`[NDVI] Thumbnail generation failed for ${d.date}:`, e);
+                                console.error(`[NDVI] Thumb failed for ${d.date}:`, e);
                             }
-                        }
-
-                        return {
-                            date: d.date + "T12:00:00Z",
-                            dateFormatted: d.date.split("-").reverse().join("/"),
-                            ndviUrl: ndviContrastUrl,
-                            ndviContrastUrl,
-                            truecolorUrl: null,
-                            falsecolorUrl: null,
-                            eviUrl: null,
-                            cloudCover: d.cloudCover,
-                            source: "Sentinel-2",
-                        };
-                    })
-                );
+                            return {
+                                date: d.date + "T12:00:00Z",
+                                dateFormatted: d.date.split("-").reverse().join("/"),
+                                ndviUrl: thumb,
+                                ndviContrastUrl: thumb,
+                                truecolorUrl: null,
+                                falsecolorUrl: null,
+                                eviUrl: null,
+                                cloudCover: d.cloudCover,
+                                source: "Sentinel-2",
+                            };
+                        })
+                    );
+                    formatted.push(...results);
+                }
 
                 return res.json(formatted);
             }
@@ -269,7 +267,8 @@ export function registerNdviRoutes(app: Express) {
 
         try {
             const { plotId } = req.params;
-            const { date, layer = "ndvi_contrast" } = req.query;
+            const { date, layer = "ndvi_contrast", size } = req.query;
+            const maxDim = Math.min(parseInt(size as string) || 512, 1024);
 
             const plot = await db.select({ coordinates: farmPlots.coordinates })
                 .from(farmPlots)
@@ -286,7 +285,7 @@ export function registerNdviRoutes(app: Express) {
 
             const targetDate = date as string || new Date().toISOString().split("T")[0];
 
-            const imageUrl = await generateNdviImage(geometry, bbox, targetDate, layer as NdviLayerType);
+            const imageUrl = await generateNdviImage(geometry, bbox, targetDate, layer as NdviLayerType, maxDim);
             if (!imageUrl) {
                 return res.status(404).json({ error: "No image available for this date" });
             }
