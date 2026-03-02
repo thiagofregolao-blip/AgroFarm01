@@ -141,12 +141,9 @@ export default function NdviPage() {
     }, [activeEntry]);
 
     const { data: overlayData, isFetching: fetchingOverlay } = useQuery({
-        queryKey: ["/api/farm/ndvi/overlay", selectedPlot?.id, activeDate, layerType, activeEntry?.min, activeEntry?.max],
+        queryKey: ["/api/farm/ndvi/overlay", selectedPlot?.id, activeDate, layerType],
         queryFn: async () => {
-            let url = `/api/farm/ndvi/${selectedPlot.id}/image?date=${activeDate}&layer=${layerType}`;
-            if (activeEntry?.min != null && activeEntry?.max != null) {
-                url += `&ndviMin=${activeEntry.min}&ndviMax=${activeEntry.max}`;
-            }
+            const url = `/api/farm/ndvi/${selectedPlot.id}/image?date=${activeDate}&layer=${layerType}`;
             const res = await fetch(url, { credentials: "include" });
             if (!res.ok) return { imageUrl: null };
             return res.json();
