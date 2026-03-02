@@ -123,21 +123,22 @@ export function registerNdviRoutes(app: Express) {
                 const fromStr = start.toISOString().split("T")[0] + "T00:00:00Z";
                 const toStr = end.toISOString().split("T")[0] + "T23:59:59Z";
 
-                // Single batch call for all NDVI stats in the date range
                 const statsArray = await getNdviStatsBatch(geometry, fromStr, toStr);
 
-                const formatted = statsArray.map(s => ({
-                    date: s.date + "T12:00:00Z",
-                    dateFormatted: s.date.split("-").reverse().join("/"),
-                    mean: s.mean,
-                    min: s.min,
-                    max: s.max,
-                    median: s.mean,
-                    source: "Sentinel-2",
-                    cloudCover: 0,
-                    healthLabel: getNdviLabel(s.mean),
-                    healthColor: getNdviColor(s.mean),
-                }));
+                const formatted = statsArray
+                    .filter(s => s.mean > 0.05 && s.sampleCount > 10)
+                    .map(s => ({
+                        date: s.date + "T12:00:00Z",
+                        dateFormatted: s.date.split("-").reverse().join("/"),
+                        mean: s.mean,
+                        min: s.min,
+                        max: s.max,
+                        median: s.mean,
+                        source: "Sentinel-2",
+                        cloudCover: 0,
+                        healthLabel: getNdviLabel(s.mean),
+                        healthColor: getNdviColor(s.mean),
+                    }));
 
                 return res.json(formatted.sort((a, b) => a.date.localeCompare(b.date)));
             }
@@ -194,8 +195,9 @@ export function registerNdviRoutes(app: Express) {
                 const fromStr = from.toISOString().split("T")[0] + "T00:00:00Z";
                 const toStr = now.toISOString().split("T")[0] + "T23:59:59Z";
 
-                const dates = await searchAvailableDates(bbox, fromStr, toStr);
-                console.log(`[NDVI] Catalog found ${dates.length} dates for plot ${polygonId}`);
+                const allDates = await searchAvailableDates(bbox, fromStr, toStr);
+                const dates = allDates.filter(d => d.cloudCover < 50);
+                console.log(`[NDVI] Catalog found ${allDates.length} dates, ${dates.length} with <50% clouds for plot ${polygonId}`);
 
                 const formatted: any[] = [];
                 const batchSize = 3;
@@ -268,7 +270,7 @@ export function registerNdviRoutes(app: Express) {
         try {
             const { plotId } = req.params;
             const { date, layer = "ndvi_contrast", size, ndviMin, ndviMax } = req.query;
-            const maxDim = Math.min(parseInt(size as string) || 512, 1024);
+            const maxDim = Math.min(parseInt(size as string) || 768, 1024);
             const ndviRange = ndviMin && ndviMax
                 ? { min: parseFloat(ndviMin as string), max: parseFloat(ndviMax as string) }
                 : undefined;

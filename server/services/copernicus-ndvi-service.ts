@@ -54,7 +54,7 @@ async function getAccessToken(): Promise<string> {
     return cachedToken.access_token;
 }
 
-// Vivid NDVI contrast palette with continuous interpolation (fixed scale)
+// ColorBrewer RdYlGn — scientific standard NDVI palette (continuous interpolation)
 const EVALSCRIPT_NDVI_CONTRAST = `//VERSION=3
 function setup() {
   return {
@@ -72,23 +72,23 @@ function evaluatePixel(sample) {
   return valueInterpolate(ndvi,
     [-0.2, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
     [
-      [0.05, 0.05, 0.05, 1],
-      [0.80, 0.00, 0.00, 1],
-      [0.95, 0.15, 0.00, 1],
-      [1.00, 0.40, 0.00, 1],
-      [1.00, 0.65, 0.00, 1],
-      [1.00, 0.85, 0.00, 1],
-      [0.90, 0.95, 0.00, 1],
-      [0.55, 0.88, 0.00, 1],
-      [0.20, 0.75, 0.00, 1],
-      [0.00, 0.55, 0.00, 1],
-      [0.00, 0.40, 0.00, 1],
-      [0.00, 0.28, 0.00, 1]
+      [0.40, 0.40, 0.40, 1],
+      [0.647, 0.000, 0.149, 1],
+      [0.843, 0.188, 0.153, 1],
+      [0.957, 0.427, 0.263, 1],
+      [0.992, 0.682, 0.380, 1],
+      [0.996, 0.878, 0.545, 1],
+      [1.000, 1.000, 0.749, 1],
+      [0.851, 0.937, 0.545, 1],
+      [0.651, 0.851, 0.416, 1],
+      [0.400, 0.741, 0.388, 1],
+      [0.102, 0.596, 0.314, 1],
+      [0.000, 0.408, 0.216, 1]
     ]
   );
 }`;
 
-// Agronomic NDVI — fixed scale for cross-date/cross-field comparison
+// Agronomic NDVI — green-only scale for cross-date/cross-field comparison
 const EVALSCRIPT_NDVI_STANDARD = `//VERSION=3
 function setup() {
   return {
@@ -105,13 +105,13 @@ function evaluatePixel(sample) {
   return valueInterpolate(ndvi,
     [-0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
     [
-      [0.60, 0.50, 0.40, 1],
-      [0.80, 0.75, 0.65, 1],
-      [0.75, 0.85, 0.55, 1],
-      [0.40, 0.72, 0.30, 1],
-      [0.15, 0.55, 0.10, 1],
-      [0.02, 0.40, 0.02, 1],
-      [0.00, 0.25, 0.00, 1]
+      [0.55, 0.47, 0.37, 1],
+      [0.75, 0.70, 0.60, 1],
+      [0.851, 0.937, 0.545, 1],
+      [0.651, 0.851, 0.416, 1],
+      [0.400, 0.741, 0.388, 1],
+      [0.102, 0.596, 0.314, 1],
+      [0.000, 0.408, 0.216, 1]
     ]
   );
 }`;
@@ -378,6 +378,10 @@ export async function generateNdviImage(
                 dataFilter: {
                     timeRange: { from: `${date}T00:00:00Z`, to: `${date}T23:59:59Z` },
                     mosaickingOrder: "leastCC",
+                },
+                processing: {
+                    upsampling: "BILINEAR",
+                    downsampling: "BILINEAR",
                 },
             }],
         },
