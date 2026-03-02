@@ -215,8 +215,8 @@ export default function FazendaClima() {
 
     return (
         <div className="flex flex-col md:flex-row w-full h-[100dvh] bg-background relative overflow-hidden">
-            {/* Mobile Top Actions (Back + Menu) */}
-            <div className="md:hidden absolute top-4 left-4 z-[1000] flex gap-2">
+            {/* Mobile Top Actions (Back + Menu) - hidden when dashboard is open */}
+            <div className={`md:hidden absolute top-4 left-4 z-[1000] flex gap-2 ${selectedStationId ? 'hidden' : ''}`}>
                 <Link href="/fazenda">
                     <Button variant="secondary" size="icon" className="h-10 w-10 rounded-full shadow-lg bg-white hover:bg-white text-emerald-800 pointer-events-auto">
                         <ArrowLeft className="h-5 w-5" />
@@ -455,7 +455,7 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
 
     if (isLoading) {
         return (
-            <div className="absolute inset-y-0 right-0 w-96 bg-card border-l shadow-2xl z-50 flex items-center justify-center">
+            <div className="absolute inset-y-0 right-0 w-full md:w-96 bg-card border-l shadow-2xl z-50 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         );
@@ -470,7 +470,7 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
         : null;
 
     return (
-        <div className="absolute inset-y-0 right-0 w-[450px] bg-background border-l shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-in-out font-sans">
+        <div className="absolute inset-y-0 right-0 w-full md:w-[450px] bg-background border-l shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-in-out font-sans">
             <div className="p-4 border-b flex items-center justify-between bg-card">
                 <div>
                     <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-green-600 bg-clip-text text-transparent">
@@ -642,106 +642,136 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                         </Card>
                     </div>
 
-                    {/* Minigráficos (Sparklines Recharts) - 6 Cards */}
+                    {/* Previsão 24h - OneSoil Style Cards */}
                     <section className="space-y-4">
                         <h3 className="text-sm font-semibold text-foreground border-b pb-2">Previsão 24h</h3>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            {/* Temp */}
-                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                        <Thermometer className="h-3.5 w-3.5 text-orange-500" /> Temp.
-                                    </div>
-                                    <span className="text-sm font-bold">{charts.temperatures?.[0]?.value || '--'}°</span>
-                                </div>
-                                <div className="h-12 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={charts.temperatures}>
-                                            <Area type="monotone" dataKey="value" stroke="#f97316" fill="#fb923c" fillOpacity={0.2} strokeWidth={2} />
-                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '3 3' }} />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </Card>
+                        {(() => {
+                            const getTimeTicks = (data: any[]) => {
+                                if (!data || data.length < 3) return [];
+                                return [data[0]?.time, data[Math.floor(data.length / 2)]?.time, data[data.length - 1]?.time];
+                            };
+                            const firstTime = charts.temperatures?.[0]?.time;
+                            const formatTick = (val: string) => val === firstTime ? 'Agora' : val;
+                            const dewPointData = charts.temperatures?.map((t: any, i: number) => ({
+                                time: t.time,
+                                value: Math.round(t.value - ((100 - (charts.humidity?.[i]?.value || 50)) / 5))
+                            }));
+                            const currentDewPoint = dewPointData?.[0]?.value ?? '--';
 
-                            {/* Chuva */}
-                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                        <CloudRain className="h-3.5 w-3.5 text-blue-500" /> Precip.
-                                    </div>
-                                    <span className="text-sm font-bold">{charts.precipitation?.[0]?.value || '0'}mm</span>
-                                </div>
-                                <div className="h-12 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={charts.precipitation}>
-                                            <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#60a5fa" fillOpacity={0.2} strokeWidth={2} />
-                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '3 3' }} />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </Card>
+                            const chartCardStyle = "p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors";
+                            const tooltipStyle = { fontSize: '10px', padding: '2px 6px', borderRadius: '6px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' };
 
-                            {/* Vento */}
-                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                        <Wind className="h-3.5 w-3.5 text-slate-500" /> Vento
-                                    </div>
-                                    <span className="text-sm font-bold">{charts.wind?.[0]?.value || '--'} km/h</span>
-                                </div>
-                                <div className="h-12 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={charts.wind}>
-                                            <Area type="monotone" dataKey="value" stroke="#64748b" fill="#94a3b8" fillOpacity={0.2} strokeWidth={2} />
-                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#64748b', strokeWidth: 1, strokeDasharray: '3 3' }} />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </Card>
+                            return (
+                                <div className="grid grid-cols-2 gap-3">
+                                    {/* Temperatura */}
+                                    <Card className={chartCardStyle}>
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+                                            <Thermometer className="h-3.5 w-3.5 text-orange-500" /> Temperatura
+                                        </div>
+                                        <span className="text-lg font-bold text-foreground leading-none">{charts.temperatures?.[0]?.value || '--'}°C</span>
+                                        <div className="h-14 w-full mt-2">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={charts.temperatures}>
+                                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} ticks={getTimeTicks(charts.temperatures)} tickFormatter={formatTick} />
+                                                    <Area type="monotone" dataKey="value" stroke="#f97316" fill="#fb923c" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                                                    <RechartsTooltip contentStyle={tooltipStyle} cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '3 3' }} formatter={(v: number) => [`${v}°C`, 'Temp']} />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </Card>
 
-                            {/* Nuvens */}
-                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                        <Cloud className="h-3.5 w-3.5 text-gray-400" /> Nuvens
-                                    </div>
-                                    <span className="text-sm font-bold">{charts.clouds?.[0]?.value || '--'}%</span>
-                                </div>
-                                <div className="h-12 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={charts.clouds}>
-                                            <Area type="step" dataKey="value" stroke="#9ca3af" fill="#d1d5db" fillOpacity={0.2} strokeWidth={2} />
-                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '3 3' }} />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </Card>
+                                    {/* Precipitação */}
+                                    <Card className={chartCardStyle}>
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+                                            <CloudRain className="h-3.5 w-3.5 text-blue-500" /> Precipitação
+                                        </div>
+                                        <span className="text-lg font-bold text-foreground leading-none">{charts.precipitation?.[0]?.value || '0'} mm</span>
+                                        <div className="h-14 w-full mt-2">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={charts.precipitation}>
+                                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} ticks={getTimeTicks(charts.precipitation)} tickFormatter={formatTick} />
+                                                    <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#60a5fa" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                                                    <RechartsTooltip contentStyle={tooltipStyle} cursor={{ stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '3 3' }} formatter={(v: number) => [`${v} mm`, 'Chuva']} />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </Card>
 
-                            {/* Umidade */}
-                            <Card className="p-3 shadow-sm border bg-card hover:bg-muted/30 transition-colors">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                        <Droplets className="h-3.5 w-3.5 text-cyan-500" /> Umidade
-                                    </div>
-                                    <span className="text-sm font-bold">{charts.humidity?.[0]?.value || '--'}%</span>
-                                </div>
-                                <div className="h-12 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={charts.humidity}>
-                                            <Area type="monotone" dataKey="value" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.2} />
-                                            <RechartsTooltip contentStyle={{ fontSize: '10px', padding: '2px 4px' }} />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </Card>
-                        </div>
-                    </section>
+                                    {/* Ventos */}
+                                    <Card className={chartCardStyle}>
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+                                            <Wind className="h-3.5 w-3.5 text-slate-500" /> Ventos
+                                        </div>
+                                        <span className="text-lg font-bold text-foreground leading-none">{charts.wind?.[0]?.value || '--'} km/h</span>
+                                        <div className="h-14 w-full mt-2">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={charts.wind}>
+                                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} ticks={getTimeTicks(charts.wind)} tickFormatter={formatTick} />
+                                                    <Area type="monotone" dataKey="value" stroke="#64748b" fill="#94a3b8" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                                                    <RechartsTooltip contentStyle={tooltipStyle} cursor={{ stroke: '#64748b', strokeWidth: 1, strokeDasharray: '3 3' }} formatter={(v: number) => [`${v} km/h`, 'Vento']} />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </Card>
 
-                    {/* Lista de Previsão Dinâmica */}
+                                    {/* Cobertura de nuvens */}
+                                    <Card className={chartCardStyle}>
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+                                            <Cloud className="h-3.5 w-3.5 text-gray-400" /> Cobertura de nuvens
+                                        </div>
+                                        <span className="text-lg font-bold text-foreground leading-none">{charts.clouds?.[0]?.value || '--'}%</span>
+                                        <div className="h-14 w-full mt-2">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={charts.clouds}>
+                                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} ticks={getTimeTicks(charts.clouds)} tickFormatter={formatTick} />
+                                                    <Area type="step" dataKey="value" stroke="#9ca3af" fill="#d1d5db" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                                                    <RechartsTooltip contentStyle={tooltipStyle} cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '3 3' }} formatter={(v: number) => [`${v}%`, 'Nuvens']} />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </Card>
+
+                                    {/* Umidade */}
+                                    <Card className={chartCardStyle}>
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+                                            <Droplets className="h-3.5 w-3.5 text-cyan-500" /> Umidade
+                                        </div>
+                                        <span className="text-lg font-bold text-foreground leading-none">{charts.humidity?.[0]?.value || '--'}%</span>
+                                        <div className="h-14 w-full mt-2">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={charts.humidity}>
+                                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} ticks={getTimeTicks(charts.humidity)} tickFormatter={formatTick} />
+                                                    <Area type="monotone" dataKey="value" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                                                    <RechartsTooltip contentStyle={tooltipStyle} cursor={{ stroke: '#06b6d4', strokeWidth: 1, strokeDasharray: '3 3' }} formatter={(v: number) => [`${v}%`, 'Umidade']} />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </Card>
+
+                                    {/* Ponto de orvalho */}
+                                    <Card className={chartCardStyle}>
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+                                            <Droplets className="h-3.5 w-3.5 text-teal-500" /> Ponto de orvalho
+                                        </div>
+                                        <span className="text-lg font-bold text-foreground leading-none">{currentDewPoint}°C</span>
+                                        <div className="h-14 w-full mt-2">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={dewPointData}>
+                                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af' }} ticks={getTimeTicks(dewPointData)} tickFormatter={formatTick} />
+                                                    <Area type="monotone" dataKey="value" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                                                    <RechartsTooltip contentStyle={tooltipStyle} cursor={{ stroke: '#14b8a6', strokeWidth: 1, strokeDasharray: '3 3' }} formatter={(v: number) => [`${v}°C`, 'Ponto de orvalho']} />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </Card>
+                                </div>
+                            );
+                        })()}</section>
+
+                    {/* Previsão para os próximos dias */}
                     <section>
-                        <h3 className="text-sm font-semibold text-foreground border-b pb-2 mb-3">Próximos Dias</h3>
+                        <h3 className="text-sm font-semibold text-foreground border-b pb-2 mb-3">Previsão para os próximos dias</h3>
                         <div className="space-y-1">
                             {forecast?.length > 0 ? forecast.map((day: any, idx: number) => {
                                 const dateObj = new Date(day.date + 'T12:00:00Z');
