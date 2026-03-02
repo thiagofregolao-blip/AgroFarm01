@@ -9357,22 +9357,13 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
       // Fetch agronomic intelligence and forecast
       const intelligence = await WeatherStationService.getForecastWithIntelligence(station.lat?.toString(), station.lng?.toString());
 
-      // Accumulated rain (last 30 days)
-      const { sql, gte, desc } = await import("drizzle-orm");
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const [rainResult] = await db
-        .select({
-          totalRain: sql<number>`sum(COALESCE(${weatherHistoryLogs.precipitation}, 0))`
-        })
-        .from(weatherHistoryLogs)
-        .where(
-          and(
-            eq(weatherHistoryLogs.stationId, stationId),
-            gte(weatherHistoryLogs.ts, thirtyDaysAgo)
-          )
-        );
+      // Accumulated rain from AgroMonitoring API (real data, not cron snapshots)
+      const { sql, desc } = await import("drizzle-orm");
+      const rainData = await WeatherStationService.fetchAccumulatedPrecipitation(
+        station.lat?.toString() || '',
+        station.lng?.toString() || '',
+        30
+      );
 
       // Real GDD from historical data
       const gdd = await WeatherStationService.calculateGDD(stationId);
@@ -9388,7 +9379,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
       res.json({
         station,
         ...intelligence,
-        accumulatedRain: rainResult?.totalRain ? Math.round(Number(rainResult.totalRain) * 10) / 10 : 0,
+        accumulatedRain: rainData.total,
         gdd,
         lastUpdate: lastLog?.ts || null,
       });
@@ -9429,14 +9420,14 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
-  // GET /api/farm/weather/stations/:id/history - Histórico de Chuva
+  // GET /api/farm/weather/stations/:id/history - Histórico de Chuva (API real)
   app.get("/api/farm/weather/stations/:id/history", requireAuth, async (req, res) => {
     try {
-      const { virtualWeatherStations, weatherHistoryLogs } = await import("@shared/schema");
+      const { virtualWeatherStations } = await import("@shared/schema");
+      const { WeatherStationService } = await import("./services/weather_station_service");
       const stationId = req.params.id;
       const days = Number(req.query.days) || 30;
 
-      // Verificar se a estação existe
       const [station] = await db
         .select()
         .from(virtualWeatherStations)
@@ -9446,35 +9437,17 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
         return res.status(404).json({ error: "Estação não encontrada" });
       }
 
-      // Calculate start date
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
-      startDate.setHours(0, 0, 0, 0);
+      // Fetch real precipitation data from AgroMonitoring API
+      const rainData = await WeatherStationService.fetchAccumulatedPrecipitation(
+        station.lat?.toString() || '',
+        station.lng?.toString() || '',
+        days
+      );
 
-      // We need to aggregate precipitation by day (DATE(ts))
-      const history = await db
-        .select({
-          // Format date as string 'YYYY-MM-DD'
-          date: sql<string>`DATE(${weatherHistoryLogs.ts})::text`,
-          precipitation: sql<number>`sum(COALESCE(${weatherHistoryLogs.precipitation}, 0))`
-        })
-        .from(weatherHistoryLogs)
-        .where(
-          and(
-            eq(weatherHistoryLogs.stationId, stationId),
-            gte(weatherHistoryLogs.ts, startDate)
-          )
-        )
-        // Group by the date portion
-        .groupBy(sql`DATE(${weatherHistoryLogs.ts})`)
-        .orderBy(sql`DATE(${weatherHistoryLogs.ts}) ASC`);
-
-      // Format the output specifically for Recharts BarChart
-      // we might have days with 0 rain missing from the DB if the cron didn't run, 
-      // but for V1 returning the existing DB rows is enough.
-      const formattedHistory = history.map((row: { date: string | null, precipitation: number | null }) => ({
-        date: row.date,
-        precipitation: Math.round(Number(row.precipitation) * 10) / 10
+      // Format for Recharts BarChart
+      const formattedHistory = rainData.daily.map(day => ({
+        date: day.date,
+        precipitation: day.rain
       }));
 
       res.status(200).json(formattedHistory);

@@ -224,6 +224,78 @@ export class WeatherStationService {
     }
 
     /**
+     * Fetch real precipitation data from the AgroMonitoring Accumulated Precipitation API.
+     * Returns daily rain values and the total for the period.
+     * The API returns cumulative precipitation; we compute daily differences.
+     */
+    static async fetchAccumulatedPrecipitation(
+        lat: string,
+        lng: string,
+        days: number = 30
+    ): Promise<{ daily: { date: string; rain: number }[]; total: number }> {
+        const api_key = process.env.AGROMONITORING_API_KEY;
+        if (!api_key) {
+            console.warn("AGROMONITORING_API_KEY not configured for precipitation.");
+            return { daily: [], total: 0 };
+        }
+
+        const endUnix = Math.floor(Date.now() / 1000);
+        const startUnix = endUnix - (days * 86400);
+
+        try {
+            const url = `https://api.agromonitoring.com/agro/1.0/weather/history/accumulated_precipitation?lat=${lat}&lon=${lng}&start=${startUnix}&end=${endUnix}&appid=${api_key}`;
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                console.warn(`Accumulated Precipitation API error: ${response.status} ${response.statusText}`);
+                return { daily: [], total: 0 };
+            }
+
+            const data = await response.json();
+            if (!Array.isArray(data) || data.length === 0) {
+                return { daily: [], total: 0 };
+            }
+
+            // Determine if `rain` field is cumulative or daily.
+            // Cumulative: values are monotonically non-decreasing.
+            const isMonotonic = data.every((d: any, i: number) =>
+                i === 0 || Number(d.rain) >= Number(data[i - 1].rain)
+            );
+
+            const daily: { date: string; rain: number }[] = [];
+            let total = 0;
+
+            if (isMonotonic && data.length > 1) {
+                // Cumulative: daily = difference between consecutive entries
+                let prev = 0;
+                for (const entry of data) {
+                    const cum = Number(entry.rain) || 0;
+                    const dayRain = Math.round(Math.max(0, cum - prev) * 10) / 10;
+                    const dt = new Date(Number(entry.dt) * 1000);
+                    daily.push({ date: dt.toISOString().split('T')[0], rain: dayRain });
+                    prev = cum;
+                }
+                total = Math.round((Number(data[data.length - 1].rain) || 0) * 10) / 10;
+            } else {
+                // Daily values: each entry is standalone
+                for (const entry of data) {
+                    const dayRain = Math.round((Number(entry.rain) || 0) * 10) / 10;
+                    const dt = new Date(Number(entry.dt) * 1000);
+                    daily.push({ date: dt.toISOString().split('T')[0], rain: dayRain });
+                    total += dayRain;
+                }
+                total = Math.round(total * 10) / 10;
+            }
+
+            console.log(`[Rain API] Fetched ${daily.length} days for (${lat},${lng}), total: ${total}mm, mode: ${isMonotonic ? 'cumulative' : 'daily'}`);
+            return { daily, total };
+        } catch (error) {
+            console.error("Error fetching accumulated precipitation:", error);
+            return { daily: [], total: 0 };
+        }
+    }
+
+    /**
      * GDD = sum of max(((TempMax + TempMin) / 2) - BaseTemp, 0) per day
      * Uses weather_history_logs grouped by day to find daily min/max
      */
