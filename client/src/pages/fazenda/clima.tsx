@@ -540,7 +540,8 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                                 currentGroup.items.push(item);
                             });
 
-                            if (currentGroup && currentGroup.items.length > 0) grouped.push(currentGroup);
+                            const lastGroup = currentGroup as { label: string; items: any[] } | null;
+                            if (lastGroup && lastGroup.items.length > 0) grouped.push(lastGroup);
                             if (grouped.length === 0) grouped.push({ label: 'Hoje', items: sprayWindow });
 
                             const statusConfig = {

@@ -1,5 +1,7 @@
 /**
  * NDVI Routes — Satellite monitoring API endpoints
+ * Primary: Copernicus Data Space (Sentinel Hub Process API)
+ * Fallback: AgroMonitoring API
  */
 
 import type { Express } from "express";
@@ -7,6 +9,14 @@ import { db } from "./db";
 import { farmPlots, farmProperties } from "../shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { registerPolygon, getNdviHistory, getNdviImages } from "./services/ndvi-service";
+import {
+    isCopernicusConfigured,
+    coordinatesToBbox,
+    searchAvailableDates,
+    generateNdviImage,
+    getNdviStats,
+    type NdviLayerType,
+} from "./services/copernicus-ndvi-service";
 
 export function registerNdviRoutes(app: Express) {
     const getFarmerId = (req: any) => {
@@ -26,13 +36,12 @@ export function registerNdviRoutes(app: Express) {
                 crop: farmPlots.crop,
                 coordinates: farmPlots.coordinates,
                 propertyName: farmProperties.name,
-                ndviPolygonId: sql<string>`${farmPlots.id}`.as("ndvi_check"), // placeholder
+                ndviPolygonId: sql<string>`${farmPlots.id}`.as("ndvi_check"),
             })
                 .from(farmPlots)
                 .innerJoin(farmProperties, eq(farmPlots.propertyId, farmProperties.id))
                 .where(eq(farmProperties.farmerId, farmerId));
 
-            // Check which plots have coordinates (needed for NDVI)
             const result = plots.map((p: any) => ({
                 ...p,
                 hasCoordinates: !!p.coordinates && p.coordinates.length > 10,
@@ -46,7 +55,7 @@ export function registerNdviRoutes(app: Express) {
         }
     });
 
-    // POST /api/farm/ndvi/:plotId/register — register plot polygon in Agromonitoring
+    // POST /api/farm/ndvi/:plotId/register — register plot for monitoring
     app.post("/api/farm/ndvi/:plotId/register", async (req: any, res) => {
         const farmerId = getFarmerId(req);
         if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
@@ -54,7 +63,6 @@ export function registerNdviRoutes(app: Express) {
         try {
             const { plotId } = req.params;
 
-            // Get plot coordinates
             const plot = await db.select({
                 id: farmPlots.id,
                 name: farmPlots.name,
@@ -72,13 +80,15 @@ export function registerNdviRoutes(app: Express) {
                 return res.status(400).json({ error: "Plot needs at least 3 coordinate points for NDVI monitoring" });
             }
 
-            // Register polygon in the API
-            const polygonId = await registerPolygon(plot[0].name, coords);
-            if (!polygonId) {
-                return res.status(500).json({ error: "Failed to register polygon in satellite API" });
+            if (isCopernicusConfigured()) {
+                res.json({ polygonId: plotId, plotId, source: "copernicus", message: "Ready for Copernicus NDVI" });
+            } else {
+                const polygonId = await registerPolygon(plot[0].name, coords);
+                if (!polygonId) {
+                    return res.status(500).json({ error: "Failed to register polygon in satellite API" });
+                }
+                res.json({ polygonId, plotId, source: "agromonitoring", message: "Polygon registered for NDVI monitoring" });
             }
-
-            res.json({ polygonId, plotId, message: "Polygon registered for NDVI monitoring" });
         } catch (error) {
             console.error("[NDVI] Error registering:", error);
             res.status(500).json({ error: "Failed" });
@@ -94,12 +104,53 @@ export function registerNdviRoutes(app: Express) {
             const { polygonId } = req.params;
             const { startDate, endDate } = req.query;
 
+            if (isCopernicusConfigured()) {
+                const plot = await db.select({ coordinates: farmPlots.coordinates })
+                    .from(farmPlots)
+                    .where(eq(farmPlots.id, polygonId))
+                    .limit(1);
+
+                if (!plot.length || !plot[0].coordinates) {
+                    return res.json([]);
+                }
+
+                const coords = JSON.parse(plot[0].coordinates);
+                const bbox = coordinatesToBbox(coords);
+
+                const end = endDate ? new Date(endDate as string) : new Date();
+                const start = startDate ? new Date(startDate as string) : new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
+                const fromStr = start.toISOString().split("T")[0] + "T00:00:00Z";
+                const toStr = end.toISOString().split("T")[0] + "T23:59:59Z";
+
+                const dates = await searchAvailableDates(bbox, fromStr, toStr);
+
+                const formatted = await Promise.all(
+                    dates.slice(0, 30).map(async (d) => {
+                        const stats = await getNdviStats(bbox, d.date);
+                        const mean = stats?.mean ?? 0;
+                        return {
+                            date: d.date + "T12:00:00Z",
+                            dateFormatted: d.date.split("-").reverse().join("/"),
+                            mean,
+                            min: stats?.min ?? 0,
+                            max: stats?.max ?? 0,
+                            median: mean,
+                            source: "Sentinel-2",
+                            cloudCover: d.cloudCover,
+                            healthLabel: getNdviLabel(mean),
+                            healthColor: getNdviColor(mean),
+                        };
+                    })
+                );
+
+                return res.json(formatted.sort((a, b) => a.date.localeCompare(b.date)));
+            }
+
+            // Fallback: AgroMonitoring
             const start = startDate ? new Date(startDate as string) : undefined;
             const end = endDate ? new Date(endDate as string) : undefined;
-
             const data = await getNdviHistory(polygonId, start, end);
 
-            // Format for frontend chart
             const formatted = data.map(d => ({
                 date: new Date(d.dt * 1000).toISOString(),
                 dateFormatted: new Date(d.dt * 1000).toLocaleDateString("pt-BR"),
@@ -127,6 +178,62 @@ export function registerNdviRoutes(app: Express) {
 
         try {
             const { polygonId } = req.params;
+
+            if (isCopernicusConfigured()) {
+                const plot = await db.select({ coordinates: farmPlots.coordinates })
+                    .from(farmPlots)
+                    .where(eq(farmPlots.id, polygonId))
+                    .limit(1);
+
+                if (!plot.length || !plot[0].coordinates) {
+                    return res.json([]);
+                }
+
+                const coords = JSON.parse(plot[0].coordinates);
+                const bbox = coordinatesToBbox(coords);
+
+                const now = new Date();
+                const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                const fromStr = from.toISOString().split("T")[0] + "T00:00:00Z";
+                const toStr = now.toISOString().split("T")[0] + "T23:59:59Z";
+
+                const dates = await searchAvailableDates(bbox, fromStr, toStr);
+
+                // Generate images for up to 10 most recent dates
+                const recentDates = dates.slice(0, 10);
+                const layers: NdviLayerType[] = ["ndvi_contrast", "ndvi", "truecolor", "falsecolor", "evi"];
+
+                const formatted = await Promise.all(
+                    recentDates.map(async (d) => {
+                        const images: Record<string, string | null> = {};
+
+                        // Generate all layers in parallel
+                        const results = await Promise.allSettled(
+                            layers.map(layer => generateNdviImage(bbox, d.date, layer))
+                        );
+
+                        layers.forEach((layer, i) => {
+                            images[layer] = results[i].status === "fulfilled" ? results[i].value : null;
+                        });
+
+                        return {
+                            date: d.date + "T12:00:00Z",
+                            dateFormatted: d.date.split("-").reverse().join("/"),
+                            ndviUrl: images.ndvi,
+                            ndviContrastUrl: images.ndvi_contrast,
+                            truecolorUrl: images.truecolor,
+                            falsecolorUrl: images.falsecolor,
+                            eviUrl: images.evi,
+                            cloudCover: d.cloudCover,
+                            source: "Sentinel-2",
+                        };
+                    })
+                );
+
+                return res.json(formatted);
+            }
+
+            // Fallback: AgroMonitoring
             const images = await getNdviImages(polygonId);
 
             const addPalette = (url: string | undefined, id: number) => {
@@ -150,6 +257,45 @@ export function registerNdviRoutes(app: Express) {
             res.json(formatted);
         } catch (error) {
             console.error("[NDVI] Error getting images:", error);
+            res.status(500).json({ error: "Failed" });
+        }
+    });
+
+    // GET /api/farm/ndvi/:plotId/image — generate a single NDVI image on demand
+    app.get("/api/farm/ndvi/:plotId/image", async (req: any, res) => {
+        const farmerId = getFarmerId(req);
+        if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
+
+        if (!isCopernicusConfigured()) {
+            return res.status(501).json({ error: "Copernicus not configured" });
+        }
+
+        try {
+            const { plotId } = req.params;
+            const { date, layer = "ndvi_contrast" } = req.query;
+
+            const plot = await db.select({ coordinates: farmPlots.coordinates })
+                .from(farmPlots)
+                .where(eq(farmPlots.id, plotId))
+                .limit(1);
+
+            if (!plot.length || !plot[0].coordinates) {
+                return res.status(404).json({ error: "Plot not found" });
+            }
+
+            const coords = JSON.parse(plot[0].coordinates);
+            const bbox = coordinatesToBbox(coords);
+
+            const targetDate = date as string || new Date().toISOString().split("T")[0];
+
+            const imageUrl = await generateNdviImage(bbox, targetDate, layer as NdviLayerType);
+            if (!imageUrl) {
+                return res.status(404).json({ error: "No image available for this date" });
+            }
+
+            res.json({ imageUrl, date: targetDate, layer });
+        } catch (error) {
+            console.error("[NDVI] Error generating image:", error);
             res.status(500).json({ error: "Failed" });
         }
     });
