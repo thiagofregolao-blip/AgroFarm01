@@ -100,6 +100,7 @@ export default function NdviPage() {
             return {
                 ...h,
                 ndviUrl: img?.ndviUrl || null,
+                ndviContrastUrl: img?.ndviContrastUrl || null,
                 truecolorUrl: img?.truecolorUrl || null,
                 falsecolorUrl: img?.falsecolorUrl || null,
                 eviUrl: img?.eviUrl || null,
@@ -125,8 +126,9 @@ export default function NdviPage() {
         if (!activeEntry) return null;
         switch (layerType) {
             case "ndvi":
-            case "ndvi_contrast":
                 return activeEntry.ndviUrl;
+            case "ndvi_contrast":
+                return activeEntry.ndviContrastUrl || activeEntry.ndviUrl;
             case "evi":
                 return activeEntry.eviUrl;
             case "truecolor":
@@ -245,10 +247,7 @@ export default function NdviPage() {
     // ===== DETAIL VIEW =====
     return (
         <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col">
-            {/* Contrast CSS filter scoped to .ndvi-contrast-mode */}
-            {layerType === "ndvi_contrast" && (
-                <style>{`.ndvi-contrast-mode .leaflet-image-layer { filter: contrast(1.5) saturate(1.3) !important; }`}</style>
-            )}
+            {/* NDVI contrast uses paletteid=3 from AgroMonitoring (real red-yellow-green palette) */}
 
             {/* ─── Floating Header ─── */}
             <div
@@ -345,7 +344,7 @@ export default function NdviPage() {
             <div
                 className={`relative transition-all duration-300 ease-in-out ${
                     isMapExpanded ? "flex-1" : "flex-[5]"
-                } ${layerType === "ndvi_contrast" ? "ndvi-contrast-mode" : ""}`}
+                }`}
             >
                 {bounds ? (
                     <MapContainer
@@ -374,7 +373,7 @@ export default function NdviPage() {
                             <ImageOverlay
                                 url={overlayUrl}
                                 bounds={bounds}
-                                opacity={layerType === "ndvi_contrast" ? 0.92 : 0.78}
+                                opacity={0.85}
                             />
                         )}
                         <MapUpdater bounds={bounds} />
@@ -471,11 +470,9 @@ export default function NdviPage() {
                                         <div className="w-full h-[65px] bg-gray-100 relative overflow-hidden">
                                             {entry.ndviUrl ? (
                                                 <img
-                                                    src={entry.ndviUrl}
+                                                    src={entry.ndviContrastUrl || entry.ndviUrl}
                                                     alt=""
-                                                    className={`w-full h-full object-cover ${
-                                                        layerType === "ndvi_contrast" ? "contrast-[1.5] saturate-[1.3]" : ""
-                                                    }`}
+                                                    className="w-full h-full object-cover"
                                                     loading="lazy"
                                                     crossOrigin="anonymous"
                                                 />

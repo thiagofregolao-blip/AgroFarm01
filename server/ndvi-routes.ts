@@ -129,10 +129,17 @@ export function registerNdviRoutes(app: Express) {
             const { polygonId } = req.params;
             const images = await getNdviImages(polygonId);
 
+            const addPalette = (url: string | undefined, id: number) => {
+                if (!url) return null;
+                const sep = url.includes('?') ? '&' : '?';
+                return `${url}${sep}paletteid=${id}`;
+            };
+
             const formatted = images.map(img => ({
                 date: new Date(img.dt * 1000).toISOString(),
                 dateFormatted: new Date(img.dt * 1000).toLocaleDateString("pt-BR"),
-                ndviUrl: img.image?.ndvi || null,
+                ndviUrl: addPalette(img.image?.ndvi, 1),
+                ndviContrastUrl: addPalette(img.image?.ndvi, 3),
                 truecolorUrl: img.image?.truecolor || null,
                 falsecolorUrl: img.image?.falsecolor || null,
                 eviUrl: img.image?.evi || null,
