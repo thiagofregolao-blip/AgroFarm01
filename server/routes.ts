@@ -9354,11 +9354,11 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
         return res.status(404).json({ error: "Estação não encontrada" });
       }
 
-      // Buscar inteligência agronômica e previsão baseada na localização da estação
+      // Fetch agronomic intelligence and forecast
       const intelligence = await WeatherStationService.getForecastWithIntelligence(station.lat?.toString(), station.lng?.toString());
 
-      // Buscar logs históricos para calcular o volume de chuva acumulado (últimos 30 dias)
-      const { sql, gte } = await import("drizzle-orm");
+      // Accumulated rain (last 30 days)
+      const { sql, gte, desc } = await import("drizzle-orm");
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -9374,11 +9374,23 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
           )
         );
 
+      // Real GDD from historical data
+      const gdd = await WeatherStationService.calculateGDD(stationId);
+
+      // Last data update timestamp
+      const [lastLog] = await db
+        .select({ ts: weatherHistoryLogs.ts })
+        .from(weatherHistoryLogs)
+        .where(eq(weatherHistoryLogs.stationId, stationId))
+        .orderBy(desc(weatherHistoryLogs.ts))
+        .limit(1);
+
       res.json({
         station,
         ...intelligence,
         accumulatedRain: rainResult?.totalRain ? Math.round(Number(rainResult.totalRain) * 10) / 10 : 0,
-        gdd: 450, // Stub placeholder for UI
+        gdd,
+        lastUpdate: lastLog?.ts || null,
       });
 
     } catch (error) {

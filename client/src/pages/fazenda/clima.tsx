@@ -338,10 +338,15 @@ export default function FazendaClima() {
                                         )}
                                     </div>
                                     {station.currentWeather && (
-                                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
-                                            <div className="flex items-center gap-1"><Wind className="h-3 w-3" /> {(parseFloat(station.currentWeather.windSpeed) * 3.6).toFixed(1)} km/h</div>
-                                            <div className="flex items-center gap-1"><Droplets className="h-3 w-3" /> {station.currentWeather.humidity}%</div>
-                                        </div>
+                                        <>
+                                            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
+                                                <div className="flex items-center gap-1"><Wind className="h-3 w-3" /> {(parseFloat(station.currentWeather.windSpeed) * 3.6).toFixed(1)} km/h</div>
+                                                <div className="flex items-center gap-1"><Droplets className="h-3 w-3" /> {station.currentWeather.humidity}%</div>
+                                            </div>
+                                            <p className="text-[9px] text-muted-foreground/50 mt-1.5">
+                                                {formatFns(new Date(station.currentWeather.ts), "dd/MM HH:mm")}
+                                            </p>
+                                        </>
                                     )}
                                 </Card>
                             ))
@@ -458,7 +463,11 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
 
     if (!data) return null;
 
-    const { station, charts, sprayWindow, forecast, gdd } = data;
+    const { station, charts, sprayWindow, forecast, gdd, lastUpdate } = data;
+
+    const lastUpdateStr = lastUpdate
+        ? formatFns(new Date(lastUpdate), "dd/MM HH:mm")
+        : null;
 
     return (
         <div className="absolute inset-y-0 right-0 w-[450px] bg-background border-l shadow-2xl z-50 flex flex-col transform transition-transform duration-300 ease-in-out font-sans">
@@ -471,6 +480,11 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                         <MapPin className="h-3 w-3" />
                         Lat: {parseFloat(station.lat).toFixed(4)}, Lng: {parseFloat(station.lng).toFixed(4)}
                     </p>
+                    {lastUpdateStr && (
+                        <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                            Atualizado: {lastUpdateStr}
+                        </p>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
@@ -617,14 +631,14 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
 
                         <Card className="p-4 bg-orange-50/50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900 shadow-sm">
                             <h3 className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">GDD Acumulado</h3>
-                            <p className="text-[10px] text-orange-600/70 dark:text-orange-400/70 mb-2">Ciclo da Safra</p>
+                            <p className="text-[10px] text-orange-600/70 dark:text-orange-400/70 mb-2">Últimos 90 dias (base 10°C)</p>
                             <div className="flex items-end mb-2 gap-1">
-                                <span className="text-2xl font-black text-orange-600 dark:text-orange-400 leading-none">{gdd}</span>
-                                <span className="text-sm font-semibold text-orange-600/70 dark:text-orange-400/70 leading-none pb-0.5">/ 1600</span>
+                                <span className="text-2xl font-black text-orange-600 dark:text-orange-400 leading-none">{gdd || 0}</span>
+                                <span className="text-sm font-semibold text-orange-600/70 dark:text-orange-400/70 leading-none pb-0.5">°D</span>
                             </div>
-                            <div className="w-full bg-orange-200/50 dark:bg-orange-900/50 rounded-full h-1.5 overflow-hidden">
-                                <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min((gdd / 1600) * 100, 100)}%` }}></div>
-                            </div>
+                            <p className="text-[9px] text-orange-500/60 dark:text-orange-400/50">
+                                Soja: ~1300°D | Milho: ~1600°D | Trigo: ~1100°D
+                            </p>
                         </Card>
                     </div>
 
@@ -729,17 +743,10 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                     <section>
                         <h3 className="text-sm font-semibold text-foreground border-b pb-2 mb-3">Próximos Dias</h3>
                         <div className="space-y-1">
-                            {forecast?.map((day: any, idx: number) => {
-                                // Fallback for when 'day' is just a string date
-                                const dateObj = new Date(day.date || day);
+                            {forecast?.length > 0 ? forecast.map((day: any, idx: number) => {
+                                const dateObj = new Date(day.date + 'T12:00:00Z');
                                 const isToday = new Date().toDateString() === dateObj.toDateString();
-                                const dayName = isToday ? 'Hoje' : format(dateObj, 'eee', { locale: ptBR }).replace('.', '');
-
-                                // Placeholder values if backend doesn't provide them yet
-                                const minTemp = day.minTemp || Math.floor(Math.random() * (22 - 18 + 1) + 18);
-                                const maxTemp = day.maxTemp || Math.floor(Math.random() * (35 - 28 + 1) + 28);
-                                const rain = day.rain || (Math.random() > 0.5 ? (Math.random() * 5).toFixed(1) : 0);
-                                const wind = day.wind || Math.floor(Math.random() * 5 + 1);
+                                const dayName = isToday ? 'Hoje' : (day.dayName || format(dateObj, 'eee', { locale: ptBR }).replace('.', ''));
 
                                 return (
                                     <div key={idx} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
@@ -750,31 +757,31 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                                         </div>
 
                                         <div className="flex items-center gap-4 flex-1 justify-center">
-                                            {/* Rain */}
-                                            <div className="flex items-center gap-1 w-12 text-blue-500">
-                                                {rain > 0 ? (
+                                            <div className="flex items-center gap-1 w-14 text-blue-500">
+                                                {day.rain > 0 ? (
                                                     <>
                                                         <Droplets className="h-3 w-3 fill-current" />
-                                                        <span className="text-[11px] font-medium">{rain}</span>
+                                                        <span className="text-[11px] font-medium">{day.rain} mm</span>
                                                     </>
                                                 ) : null}
                                             </div>
 
-                                            {/* Wind */}
-                                            <div className="flex items-center gap-1 w-16 text-muted-foreground">
+                                            <div className="flex items-center gap-1 w-20 text-muted-foreground">
                                                 <ArrowDown className="h-3 w-3 transform rotate-45" />
-                                                <span className="text-[11px] font-medium">{wind} m/s</span>
+                                                <span className="text-[11px] font-medium">{day.windKmh} km/h</span>
                                             </div>
                                         </div>
 
                                         <div className="flex items-center justify-end gap-2 text-[13px] font-medium">
-                                            <span className="text-muted-foreground">{minTemp}°</span>
+                                            <span className="text-muted-foreground">{day.minTemp}°</span>
                                             <div className="w-8 h-1 rounded-full bg-gradient-to-r from-blue-400 to-orange-500 opacity-80"></div>
-                                            <span className="text-foreground">{maxTemp}°</span>
+                                            <span className="text-foreground">{day.maxTemp}°</span>
                                         </div>
                                     </div>
                                 );
-                            })}
+                            }) : (
+                                <p className="text-xs text-muted-foreground text-center py-4">Sem dados de previsão disponíveis.</p>
+                            )}
                         </div>
                     </section>
 
