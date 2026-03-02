@@ -267,8 +267,11 @@ export function registerNdviRoutes(app: Express) {
 
         try {
             const { plotId } = req.params;
-            const { date, layer = "ndvi_contrast", size } = req.query;
+            const { date, layer = "ndvi_contrast", size, ndviMin, ndviMax } = req.query;
             const maxDim = Math.min(parseInt(size as string) || 512, 1024);
+            const ndviRange = ndviMin && ndviMax
+                ? { min: parseFloat(ndviMin as string), max: parseFloat(ndviMax as string) }
+                : undefined;
 
             const plot = await db.select({ coordinates: farmPlots.coordinates })
                 .from(farmPlots)
@@ -285,7 +288,7 @@ export function registerNdviRoutes(app: Express) {
 
             const targetDate = date as string || new Date().toISOString().split("T")[0];
 
-            const imageUrl = await generateNdviImage(geometry, bbox, targetDate, layer as NdviLayerType, maxDim);
+            const imageUrl = await generateNdviImage(geometry, bbox, targetDate, layer as NdviLayerType, maxDim, ndviRange);
             if (!imageUrl) {
                 return res.status(404).json({ error: "No image available for this date" });
             }

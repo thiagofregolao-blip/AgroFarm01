@@ -54,7 +54,7 @@ async function getAccessToken(): Promise<string> {
     return cachedToken.access_token;
 }
 
-// OneSoil-style NDVI contrast palette: red → orange → yellow → light green → dark green
+// Vivid NDVI contrast palette with continuous interpolation (fixed scale)
 const EVALSCRIPT_NDVI_CONTRAST = `//VERSION=3
 function setup() {
   return {
@@ -69,23 +69,26 @@ function evaluatePixel(sample) {
 
   let ndvi = index(sample.B08, sample.B04);
 
-  let r, g, b;
-  if (ndvi < -0.2) { r = 0.05; g = 0.05; b = 0.05; }
-  else if (ndvi < 0.0) { r = 0.75; g = 0.15; b = 0.15; }
-  else if (ndvi < 0.1) { r = 0.84; g = 0.18; b = 0.13; }
-  else if (ndvi < 0.2) { r = 0.96; g = 0.36; b = 0.11; }
-  else if (ndvi < 0.3) { r = 0.99; g = 0.55; b = 0.14; }
-  else if (ndvi < 0.4) { r = 1.0; g = 0.76; b = 0.17; }
-  else if (ndvi < 0.5) { r = 0.95; g = 0.91; b = 0.2; }
-  else if (ndvi < 0.6) { r = 0.65; g = 0.85; b = 0.2; }
-  else if (ndvi < 0.7) { r = 0.35; g = 0.75; b = 0.17; }
-  else if (ndvi < 0.8) { r = 0.15; g = 0.62; b = 0.13; }
-  else if (ndvi < 0.9) { r = 0.08; g = 0.5; b = 0.08; }
-  else { r = 0.04; g = 0.36; b = 0.04; }
-
-  return [r, g, b, 1];
+  return valueInterpolate(ndvi,
+    [-0.2, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    [
+      [0.05, 0.05, 0.05, 1],
+      [0.80, 0.00, 0.00, 1],
+      [0.95, 0.15, 0.00, 1],
+      [1.00, 0.40, 0.00, 1],
+      [1.00, 0.65, 0.00, 1],
+      [1.00, 0.85, 0.00, 1],
+      [0.90, 0.95, 0.00, 1],
+      [0.55, 0.88, 0.00, 1],
+      [0.20, 0.75, 0.00, 1],
+      [0.00, 0.55, 0.00, 1],
+      [0.00, 0.40, 0.00, 1],
+      [0.00, 0.28, 0.00, 1]
+    ]
+  );
 }`;
 
+// Agronomic NDVI — fixed scale for cross-date/cross-field comparison
 const EVALSCRIPT_NDVI_STANDARD = `//VERSION=3
 function setup() {
   return {
@@ -100,16 +103,15 @@ function evaluatePixel(sample) {
 
   let ndvi = index(sample.B08, sample.B04);
   return valueInterpolate(ndvi,
-    [-0.2, 0.0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.9],
+    [-0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
     [
-      [0.05, 0.05, 0.05, 1],
-      [0.75, 0.75, 0.70, 1],
-      [0.86, 0.90, 0.76, 1],
-      [0.65, 0.82, 0.52, 1],
-      [0.44, 0.73, 0.35, 1],
-      [0.27, 0.60, 0.22, 1],
-      [0.13, 0.47, 0.13, 1],
-      [0.04, 0.33, 0.04, 1]
+      [0.60, 0.50, 0.40, 1],
+      [0.80, 0.75, 0.65, 1],
+      [0.75, 0.85, 0.55, 1],
+      [0.40, 0.72, 0.30, 1],
+      [0.15, 0.55, 0.10, 1],
+      [0.02, 0.40, 0.02, 1],
+      [0.00, 0.25, 0.00, 1]
     ]
   );
 }`;
@@ -203,6 +205,56 @@ function getEvalscript(layer: NdviLayerType): string {
 }
 
 /**
+ * Build a dynamic contrast evalscript that stretches the full color palette
+ * across the field's actual NDVI range (histogram stretching).
+ */
+function buildDynamicContrastEvalscript(ndviMin: number, ndviMax: number): string {
+    let lo = Math.max(-0.2, ndviMin - 0.05);
+    let hi = Math.min(1.0, ndviMax + 0.05);
+    if (hi - lo < 0.25) {
+        const mid = (lo + hi) / 2;
+        lo = Math.max(-0.2, mid - 0.125);
+        hi = Math.min(1.0, mid + 0.125);
+    }
+
+    const steps: number[] = [];
+    for (let i = 0; i <= 9; i++) {
+        steps.push(+(lo + (hi - lo) * (i / 9)).toFixed(3));
+    }
+
+    return `//VERSION=3
+function setup() {
+  return {
+    input: ["B04", "B08", "SCL", "dataMask"],
+    output: { bands: 4, sampleType: "AUTO" }
+  };
+}
+
+function evaluatePixel(sample) {
+  if (sample.dataMask === 0) return [0, 0, 0, 0];
+  if ([0, 1, 3, 6, 8, 9, 10, 11].includes(sample.SCL)) return [0, 0, 0, 0];
+
+  let ndvi = index(sample.B08, sample.B04);
+
+  return valueInterpolate(ndvi,
+    [${steps.join(', ')}],
+    [
+      [0.80, 0.00, 0.00, 1],
+      [0.95, 0.18, 0.00, 1],
+      [1.00, 0.42, 0.00, 1],
+      [1.00, 0.65, 0.00, 1],
+      [1.00, 0.85, 0.00, 1],
+      [0.88, 0.95, 0.00, 1],
+      [0.50, 0.85, 0.00, 1],
+      [0.18, 0.72, 0.00, 1],
+      [0.00, 0.52, 0.00, 1],
+      [0.00, 0.35, 0.00, 1]
+    ]
+  );
+}`;
+}
+
+/**
  * Convert [{lat, lng}] to GeoJSON Polygon (closing the ring if needed)
  */
 export function coordinatesToGeoJson(coords: { lat: number; lng: number }[]): { type: "Polygon"; coordinates: number[][][] } {
@@ -287,6 +339,7 @@ export async function generateNdviImage(
     date: string,
     layer: NdviLayerType = "ndvi_contrast",
     maxDim: number = 512,
+    ndviRange?: { min: number; max: number },
 ): Promise<string | null> {
     const token = await getAccessToken();
 
@@ -304,6 +357,14 @@ export async function generateNdviImage(
     } else {
         height = maxDim;
         width = Math.max(64, Math.round(maxDim * aspectRatio));
+    }
+
+    let evalscript: string;
+    if (layer === "ndvi_contrast" && ndviRange) {
+        evalscript = buildDynamicContrastEvalscript(ndviRange.min, ndviRange.max);
+        console.log(`[Copernicus] Using dynamic range [${ndviRange.min}, ${ndviRange.max}] for contrast`);
+    } else {
+        evalscript = getEvalscript(layer);
     }
 
     const requestBody = {
@@ -328,7 +389,7 @@ export async function generateNdviImage(
                 format: { type: "image/png" },
             }],
         },
-        evalscript: getEvalscript(layer),
+        evalscript,
     };
 
     console.log(`[Copernicus] Generating ${layer} image for ${date} (${width}x${height})`);
