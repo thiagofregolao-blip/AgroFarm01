@@ -544,9 +544,9 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                             if (grouped.length === 0) grouped.push({ label: 'Hoje', items: sprayWindow });
 
                             const statusConfig = {
-                                GREEN: { bg: 'bg-green-50 dark:bg-green-950/30', border: 'border-green-200 dark:border-green-800', text: 'text-green-700 dark:text-green-300', icon: Check, iconColor: 'text-green-500' },
-                                YELLOW: { bg: 'bg-amber-50 dark:bg-amber-950/30', border: 'border-amber-200 dark:border-amber-800', text: 'text-amber-700 dark:text-amber-300', icon: AlertTriangle, iconColor: 'text-amber-500' },
-                                RED: { bg: 'bg-red-50 dark:bg-red-950/30', border: 'border-red-200 dark:border-red-800', text: 'text-red-700 dark:text-red-300', icon: Ban, iconColor: 'text-red-500' },
+                                GREEN: { bg: 'bg-emerald-500 dark:bg-emerald-600', border: 'border-emerald-600 dark:border-emerald-500', text: 'text-white', icon: Check, iconColor: 'text-white' },
+                                YELLOW: { bg: 'bg-amber-400 dark:bg-amber-500', border: 'border-amber-500 dark:border-amber-400', text: 'text-white', icon: AlertTriangle, iconColor: 'text-white' },
+                                RED: { bg: 'bg-red-500 dark:bg-red-600', border: 'border-red-600 dark:border-red-500', text: 'text-white', icon: Ban, iconColor: 'text-white' },
                             };
 
                             return (
@@ -566,7 +566,7 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                                                         <div key={idx} className={`flex items-center gap-3 p-2.5 rounded-lg border ${cfg.bg} ${cfg.border} transition-colors`}>
                                                             <StatusIcon className={`h-4 w-4 shrink-0 ${cfg.iconColor}`} />
                                                             <span className={`text-sm font-bold w-12 ${cfg.text}`}>{item.time.replace(':00', 'h')}</span>
-                                                            <span className={`text-xs flex-1 ${cfg.text} opacity-80`}>{shortReason}</span>
+                                                            <span className={`text-xs flex-1 ${cfg.text} opacity-90`}>{shortReason}</span>
                                                         </div>
                                                     );
                                                 })}
