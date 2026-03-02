@@ -42,6 +42,15 @@ interface Station {
     };
 }
 
+// Component to handle dynamic map centering
+function MapUpdater({ center, zoom }: { center: [number, number], zoom: number }) {
+    const map = useMap();
+    useEffect(() => {
+        map.flyTo(center, zoom, { animate: true, duration: 2 });
+    }, [center, zoom, map]);
+    return null;
+}
+
 export default function FazendaClima() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -56,12 +65,11 @@ export default function FazendaClima() {
 
     // Geolocation hook to center the user automatically on mount or when the farm API loads
     useEffect(() => {
-        // Priority 1: User Profile properties (farmLatitude/farmLongitude)
+        // Only run this effectively once initially logic for profile coords
         if (user && user.farmLatitude && user.farmLongitude) {
             setMapCenter([parseFloat(String(user.farmLatitude)), parseFloat(String(user.farmLongitude))]);
             setMapZoom(13); // Deep zoom for physical farm
         }
-        // Priority 2: Try to get device location
         else if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -77,7 +85,7 @@ export default function FazendaClima() {
         } else {
             setMapZoom(6);
         }
-    }, [user]);
+    }, [user?.farmLatitude, user?.farmLongitude]);
 
     // Removed MapUpdater component since it forced centering on state changes
 
@@ -85,6 +93,17 @@ export default function FazendaClima() {
     const { data: stations = [], isLoading } = useQuery<Station[]>({
         queryKey: ["/api/farm/weather/stations"],
     });
+
+    // Fly to station when selected from sidebar or map
+    useEffect(() => {
+        if (selectedStationId && stations.length > 0) {
+            const station = stations.find(s => s.id === selectedStationId);
+            if (station && station.lat && station.lng) {
+                setMapCenter([parseFloat(station.lat), parseFloat(station.lng)]);
+                setMapZoom(16); // High zoom to see the station closely
+            }
+        }
+    }, [selectedStationId, stations]);
 
     const createMutation = useMutation({
         mutationFn: async (data: { name: string; lat: number; lng: number }) => {
@@ -133,21 +152,29 @@ export default function FazendaClima() {
                 <div className="leaflet-control leaflet-bar">
                     <button
                         className="bg-white flex items-center justify-center w-10 h-10 hover:bg-gray-100 transition-colors cursor-pointer"
-                        title="Minha Localização"
+                        title="Minha Localização (Perfil ou GPS)"
                         onClick={(e) => {
                             e.preventDefault();
-                            if ("geolocation" in navigator) {
+                            if (user && user.farmLatitude && user.farmLongitude) {
+                                const latlng: [number, number] = [parseFloat(String(user.farmLatitude)), parseFloat(String(user.farmLongitude))];
+                                setMapCenter(latlng);
+                                setMapZoom(14);
+                                toast({ title: "Centralizado na sua fazenda cadastrada!" });
+                            } else if ("geolocation" in navigator) {
                                 navigator.geolocation.getCurrentPosition(
                                     (position) => {
                                         const latlng: [number, number] = [position.coords.latitude, position.coords.longitude];
-                                        map.flyTo(latlng, 14, { animate: true, duration: 1.5 });
-                                        toast({ title: "Localização atualizada!" });
+                                        setMapCenter(latlng);
+                                        setMapZoom(14);
+                                        toast({ title: "Centralizado no GPS do navegador!" });
                                     },
                                     (error) => {
                                         console.error("Erro GPS:", error);
-                                        toast({ title: "Erro", description: "Não foi possível obter a localização", variant: "destructive" });
+                                        toast({ title: "Erro", description: "Cadastre as coordenadas no seu perfil ou permita o GPS do navegador.", variant: "destructive" });
                                     }
                                 );
+                            } else {
+                                toast({ title: "Erro", description: "Nenhuma coordenada disponível.", variant: "destructive" });
                             }
                         }}
                     >
@@ -156,15 +183,6 @@ export default function FazendaClima() {
                 </div>
             </div>
         );
-    }
-
-    // Component to handle dynamic map centering
-    function MapUpdater({ center, zoom }: { center: [number, number], zoom: number }) {
-        const map = useMap();
-        useEffect(() => {
-            map.flyTo(center, zoom, { animate: true, duration: 2 });
-        }, [center, zoom, map]);
-        return null;
     }
 
     // Custom DivIcon for Weather Marker (OneSoil Style Pill)
