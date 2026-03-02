@@ -230,6 +230,16 @@ const runMigration = async () => {
             console.log('✅ Migração weather_stations concluída!');
         }
 
+        // Migration 19: Fix missing Centroid Column
+        const centroidPath = path.join(process.cwd(), 'migration_add_centroid.sql');
+        if (fs.existsSync(centroidPath)) {
+            const centroidSql = fs.readFileSync(centroidPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', centroidPath);
+            console.log('🚀 Executando SQL (centroid)...');
+            await sql.unsafe(centroidSql);
+            console.log('✅ Migração centroid concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

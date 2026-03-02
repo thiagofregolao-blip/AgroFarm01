@@ -62,6 +62,7 @@ export default function FazendaClima() {
     const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
     const [mapCenter, setMapCenter] = useState<[number, number]>([-15.793889, -47.882778]); // Default Brazil
     const [mapZoom, setMapZoom] = useState<number>(6); // Default Macro Zoom
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Make sidebar responsive
 
     // Geolocation hook to center the user automatically on mount or when the farm API loads
     useEffect(() => {
@@ -215,24 +216,51 @@ export default function FazendaClima() {
 
     return (
         <div className="flex flex-col md:flex-row w-full h-[100dvh] bg-background relative overflow-hidden">
-            {/* Mobile Back Button */}
-            <div className="md:hidden absolute top-4 left-4 z-[1000]">
+            {/* Mobile Top Actions (Back + Menu) */}
+            <div className="md:hidden absolute top-4 left-4 z-[1000] flex gap-2">
                 <Link href="/dashboard">
                     <Button variant="secondary" size="icon" className="h-10 w-10 rounded-full shadow-lg bg-white hover:bg-white text-emerald-800 pointer-events-auto">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
+                <Button
+                    variant="secondary"
+                    size="icon"
+                    className="h-10 w-10 rounded-full shadow-lg bg-white hover:bg-white text-emerald-800 pointer-events-auto"
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                >
+                    <AlignJustify className="h-5 w-5" />
+                </Button>
             </div>
-            {/* Sidebar for List/Search (Hidden on Mobile for 100% Map View) */}
-            <div className="hidden md:flex w-80 border-r bg-card flex-col z-10 shadow-xl relative">
+
+            {/* Sidebar Overlay background for mobile */}
+            {isSidebarOpen && (
+                <div
+                    className="md:hidden fixed inset-0 bg-black/50 z-[100]"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
+            {/* Sidebar for List/Search */}
+            <div className={`
+                ${isSidebarOpen ? 'flex' : 'hidden'} 
+                md:flex w-80 max-w-[85vw] border-r bg-card flex-col shadow-xl 
+                fixed md:relative inset-y-0 left-0 z-[101] md:z-10 transition-transform duration-300
+            `}>
                 <div className="p-4 border-b flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Link href="/dashboard" className="mr-2">
+                        <Link href="/dashboard" className="hidden md:flex mr-2">
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
                                 <ArrowLeft className="h-4 w-4" />
                             </Button>
                         </Link>
                         <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-green-600 bg-clip-text text-transparent">Minhas Estações</h1>
+                    </div>
+                    {/* Mobile close sidebar button */}
+                    <div className="md:hidden">
+                        <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(false)}>
+                            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+                        </Button>
                     </div>
                 </div>
 
@@ -297,7 +325,10 @@ export default function FazendaClima() {
                                 <Card
                                     key={station.id}
                                     className="p-3 cursor-pointer hover:border-primary/50 transition-colors shadow-sm"
-                                    onClick={() => setSelectedStationId(station.id)}
+                                    onClick={() => {
+                                        setSelectedStationId(station.id);
+                                        if (window.innerWidth < 768) setIsSidebarOpen(false); // auto close mobile drawer when selecting card
+                                    }}
                                 >
                                     <div className="flex justify-between items-start mb-2">
                                         <h4 className="font-semibold text-sm truncate">{station.name}</h4>
