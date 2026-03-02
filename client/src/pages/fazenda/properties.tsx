@@ -90,18 +90,28 @@ export default function FarmProperties() {
                 {/* New/Edit Plot — Fullscreen on mobile, centered modal on desktop */}
                 {(openNewPlot !== null || editPlot !== null) && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center">
-                        {/* Backdrop */}
+                        {/* Backdrop (desktop only) */}
                         <div
-                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                            className="absolute inset-0 bg-black/50 backdrop-blur-sm hidden md:block"
                             onClick={() => { setOpenNewPlot(null); setEditPlot(null); }}
                         />
                         {/* Content — fullscreen on mobile, modal on desktop */}
                         <div className="relative w-full h-full md:w-[1200px] md:max-w-[95vw] md:h-[85vh] bg-white md:rounded-xl overflow-hidden flex flex-col md:flex-row shadow-2xl">
-                            {/* Close button */}
+                            {/* Desktop close button */}
                             <button
                                 onClick={() => { setOpenNewPlot(null); setEditPlot(null); }}
-                                className="absolute top-3 right-3 z-[1001] w-8 h-8 rounded-full bg-white/80 hover:bg-white flex items-center justify-center text-lg shadow-md"
+                                className="hidden md:flex absolute top-3 right-3 z-[1001] w-8 h-8 rounded-full bg-white/80 hover:bg-white items-center justify-center text-lg shadow-md"
                             >✕</button>
+
+                            {/* Mobile floating back button */}
+                            <button
+                                onClick={() => { setOpenNewPlot(null); setEditPlot(null); }}
+                                className="md:hidden absolute top-3 left-3 z-[1001] flex items-center gap-2 bg-white/90 backdrop-blur-md pl-2 pr-4 py-2 rounded-full shadow-lg text-sm font-bold text-gray-800 active:scale-95 transition-transform"
+                            >
+                                <ChevronRight className="h-5 w-5 rotate-180" />
+                                Voltar
+                            </button>
+
                             <PlotForm
                                 propertyId={openNewPlot || editPlot?.propertyId}
                                 initial={editPlot}
