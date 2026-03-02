@@ -135,6 +135,7 @@ export function registerNdviRoutes(app: Express) {
                 ndviUrl: img.image?.ndvi || null,
                 truecolorUrl: img.image?.truecolor || null,
                 falsecolorUrl: img.image?.falsecolor || null,
+                eviUrl: img.image?.evi || null,
                 cloudCover: img.dc,
                 source: img.type,
             }));
