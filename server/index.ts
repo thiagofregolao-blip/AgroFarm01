@@ -63,8 +63,9 @@ app.use((req, res, next) => {
 
   // Inline migration: ensure the `type` column exists on farm_pdv_terminals
   try {
-    const { db } = await import("./db");
+    const { db, dbReady } = await import("./db");
     const { sql } = await import("drizzle-orm");
+    await dbReady;
     await db.execute(sql`ALTER TABLE farm_pdv_terminals ADD COLUMN IF NOT EXISTS type text NOT NULL DEFAULT 'estoque'`);
     log("✅ Migration: farm_pdv_terminals.type column ensured");
   } catch (migErr: any) {
@@ -73,8 +74,9 @@ app.use((req, res, next) => {
 
   // Inline migration: ensure the `farm_price_history` table exists
   try {
-    const { db } = await import("./db");
+    const { db, dbReady } = await import("./db");
     const { sql } = await import("drizzle-orm");
+    await dbReady;
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS farm_price_history (
         id varchar PRIMARY KEY DEFAULT gen_random_uuid(),

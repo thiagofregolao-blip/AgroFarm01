@@ -55,7 +55,6 @@ export default function FazendaClima() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { user } = useAuth();
-    const { data: farms } = useQuery<any[]>({ queryKey: ["/api/farms"] });
     const [isCreatingMode, setIsCreatingMode] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number, lng: number } | null>(null);
     const [newStationName, setNewStationName] = useState("");

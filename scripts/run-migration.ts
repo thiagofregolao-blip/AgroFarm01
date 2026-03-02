@@ -230,10 +230,20 @@ const runMigration = async () => {
             console.log('✅ Migração weather_stations concluída!');
         }
 
-        // Migration 19: Fix missing Centroid Column
+        // Migration 19: Fix missing Centroid Column on virtual_weather_stations
         console.log('🚀 Executando SQL (centroid)...');
         await sql.unsafe('ALTER TABLE "virtual_weather_stations" ADD COLUMN IF NOT EXISTS "centroid" text;');
         console.log('✅ Migração centroid concluída via SQL direto!');
+
+        // Migration 20: Add missing columns (centroid on farms, coordinates/centroid on farm_plots)
+        const missingColumnsPath = path.join(process.cwd(), 'migration_add_missing_columns.sql');
+        if (fs.existsSync(missingColumnsPath)) {
+            const missingColumnsSql = fs.readFileSync(missingColumnsPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', missingColumnsPath);
+            console.log('🚀 Executando SQL (missing_columns)...');
+            await sql.unsafe(missingColumnsSql);
+            console.log('✅ Migração missing_columns concluída!');
+        }
 
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
