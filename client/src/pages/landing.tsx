@@ -4,7 +4,7 @@ import {
     Package, Sprout, FileBarChart, Tractor, BarChart3, TrendingUp,
     Map, FileText, DollarSign, Satellite, BookOpen, ArrowDownUp,
     ChevronDown, ChevronUp, MessageCircle, ArrowRight, Menu, X,
-    Shield, Zap, Smartphone, Globe, Bell, Users
+    Shield, Zap, Smartphone, Globe, Bell, Users, CloudSun
 } from "lucide-react";
 
 // ===========================
@@ -289,28 +289,34 @@ export default function LandingPage() {
                             color: colors.green, image: "/feature-estoque.png",
                         },
                         {
-                            icon: Satellite, title: "Monitoramento com Drone DJI Mavic 3M",
-                            desc: "Imagens multiespectrais de alta precisão com o DJI Mavic 3 Multispectral.",
-                            items: ["Câmera RGB 20MP + 4 câmeras multiespectrais 5MP", "Bandas: Verde, Vermelho, Red Edge e Infravermelho Próximo (NIR)", "Até 200 hectares por voo (43 min de autonomia)", "Posicionamento RTK centimétrico sem pontos de controle", "Índices NDVI, NDRE e GNDVI em tempo real"],
+                            icon: Satellite, title: "Monitoramento NDVI por Satélite",
+                            desc: "Imagens de satélite Sentinel-2 atualizadas a cada 5 dias, direto no mapa dos seus talhões.",
+                            items: ["Índices NDVI, EVI, Cor Real e Falsa Cor", "Resolução de 10 metros por pixel (Sentinel-2)", "Histórico de 90 dias com comparativo visual", "Paleta profissional para identificar estresse na lavoura", "Filtro automático de nuvens e dias inválidos"],
                             color: colors.greenLight, reverse: true, image: "/feature-ndvi.png",
+                        },
+                        {
+                            icon: CloudSun, title: "Estações Meteorológicas Virtuais",
+                            desc: "Dados climáticos em tempo real para cada talhão, sem precisar instalar equipamentos.",
+                            items: ["Temperatura, umidade, vento, pressão e índice UV", "Previsão do tempo para os próximos 7 dias", "Janela de Pulverização inteligente por horário", "Graus-Dia de Desenvolvimento (GDD) da cultura", "Histórico climático completo por estação"],
+                            color: colors.green, image: "/feature-caderno.png",
                         },
                         {
                             icon: BookOpen, title: "Caderno de Campo Automático",
                             desc: "Rastreabilidade total sem trabalho manual. 100% automático.",
                             items: ["Gerado a partir das aplicações registradas", "Mapa dos talhões com áreas aplicadas", "Linha do tempo completa da safra", "Exportação em PDF profissional", "Atende exigências de exportação"],
-                            color: colors.green, image: "/feature-caderno.png",
+                            color: colors.greenLight, reverse: true, image: "/feature-caderno.png",
                         },
                         {
                             icon: Bell, title: "Alertas Inteligentes via WhatsApp",
                             desc: "Receba avisos importantes sem precisar abrir o sistema.",
                             items: ["Estoque baixo? Avisamos no WhatsApp", "Fatura vencendo em 5 dias", "Variação de preço de insumos", "Boletim diário com clima e cotações", "Notícias do mercado agrícola"],
-                            color: colors.greenLight, reverse: true, image: "/feature-alertas.png",
+                            color: colors.green, image: "/feature-alertas.png",
                         },
                         {
                             icon: Users, title: "Rede de Cotação Anônima",
                             desc: "Compare seus preços com outros agricultores. Negocie melhor.",
                             items: ["Comparativo anônimo de preços", "Média, menor e maior preço pago", "Ranking: você está acima ou abaixo?", "Privacidade garantida", "Poder de negociação na compra"],
-                            color: colors.green, image: "/feature-cotacoes.png",
+                            color: colors.greenLight, reverse: true, image: "/feature-cotacoes.png",
                         },
                     ].map((feature, idx) => {
                         const Icon = feature.icon;
