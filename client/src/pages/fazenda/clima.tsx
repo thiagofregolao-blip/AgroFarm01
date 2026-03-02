@@ -5,7 +5,8 @@ import { useAuth } from "@/hooks/use-auth";
 import {
     CloudRain, Wind, Droplets, Thermometer, Plus, Trash2,
     MapPin, AlignJustify, Search, Target, Loader2, ArrowLeft,
-    Cloud, ArrowDown, ArrowUp, History, Calendar, CalendarDays
+    Cloud, ArrowDown, ArrowUp, History, Calendar, CalendarDays,
+    Sun, CloudSun, CloudDrizzle, Info, Check, AlertTriangle, Ban
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -509,30 +510,77 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
             <ScrollArea className="flex-1 p-4">
                 <div className="space-y-6 pb-20">
 
-                    {/* Janela de Pulverização (O Pulo do Gato 1) */}
+                    {/* Janela de Pulverização — Timeline por dia */}
                     <section>
                         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-foreground">
-                            <Target className="h-4 w-4 text-primary" /> Janela de Pulverização (Hoje)
+                            <Target className="h-4 w-4 text-primary" /> Janela de Pulverização
                         </h3>
-                        <div className="grid grid-cols-4 gap-2">
-                            {sprayWindow?.map((item: any, idx: number) => (
-                                <div
-                                    key={idx}
-                                    className={`p-2 rounded-lg border text-center relative group cursor-help transition-colors ${item.status === 'GREEN' ? 'bg-green-100 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' :
-                                        item.status === 'YELLOW' ? 'bg-yellow-100 border-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-800 dark:text-yellow-300' :
-                                            'bg-red-100 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-                                        }`}
-                                >
-                                    <div className="text-xs font-bold">{item.time}</div>
-                                    <div className="absolute invisible group-hover:visible z-50 bg-popover text-popover-foreground text-xs p-2 rounded shadow-lg -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap border">
-                                        {item.reason}
+                        {(() => {
+                            if (!sprayWindow || sprayWindow.length === 0) return <p className="text-xs text-muted-foreground text-center py-2">Sem dados disponíveis.</p>;
+
+                            const now = new Date();
+                            const todayStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+                            const grouped: { label: string; items: any[] }[] = [];
+                            let currentGroup: { label: string; items: any[] } | null = null;
+
+                            sprayWindow.forEach((item: any) => {
+                                const hour = parseInt(item.time.split(':')[0], 10);
+                                const isNextDay = grouped.length === 0 && currentGroup && currentGroup.items.length > 0 && hour < parseInt(currentGroup.items[0].time.split(':')[0], 10);
+
+                                if (!currentGroup) {
+                                    currentGroup = { label: 'Hoje', items: [] };
+                                }
+
+                                if (isNextDay && !grouped.find(g => g.label === 'Amanhã')) {
+                                    grouped.push(currentGroup);
+                                    currentGroup = { label: 'Amanhã', items: [] };
+                                }
+
+                                currentGroup.items.push(item);
+                            });
+
+                            if (currentGroup && currentGroup.items.length > 0) grouped.push(currentGroup);
+                            if (grouped.length === 0) grouped.push({ label: 'Hoje', items: sprayWindow });
+
+                            const statusConfig = {
+                                GREEN: { bg: 'bg-green-50 dark:bg-green-950/30', border: 'border-green-200 dark:border-green-800', text: 'text-green-700 dark:text-green-300', icon: Check, iconColor: 'text-green-500' },
+                                YELLOW: { bg: 'bg-amber-50 dark:bg-amber-950/30', border: 'border-amber-200 dark:border-amber-800', text: 'text-amber-700 dark:text-amber-300', icon: AlertTriangle, iconColor: 'text-amber-500' },
+                                RED: { bg: 'bg-red-50 dark:bg-red-950/30', border: 'border-red-200 dark:border-red-800', text: 'text-red-700 dark:text-red-300', icon: Ban, iconColor: 'text-red-500' },
+                            };
+
+                            return (
+                                <div className="space-y-3">
+                                    {grouped.map((group, gi) => (
+                                        <div key={gi}>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-xs font-semibold text-foreground">{group.label}</span>
+                                                <div className="flex-1 h-px bg-border" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                {group.items.map((item: any, idx: number) => {
+                                                    const cfg = statusConfig[item.status as keyof typeof statusConfig] || statusConfig.RED;
+                                                    const StatusIcon = cfg.icon;
+                                                    const shortReason = item.reason === 'Condições ideais' ? 'Ideal para pulverizar' : item.reason;
+                                                    return (
+                                                        <div key={idx} className={`flex items-center gap-3 p-2.5 rounded-lg border ${cfg.bg} ${cfg.border} transition-colors`}>
+                                                            <StatusIcon className={`h-4 w-4 shrink-0 ${cfg.iconColor}`} />
+                                                            <span className={`text-sm font-bold w-12 ${cfg.text}`}>{item.time.replace(':00', 'h')}</span>
+                                                            <span className={`text-xs flex-1 ${cfg.text} opacity-80`}>{shortReason}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="flex items-center justify-center gap-4 mt-2 pt-2 border-t">
+                                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-[10px] text-muted-foreground">Ideal</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-amber-500" /><span className="text-[10px] text-muted-foreground">Atenção</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-500" /><span className="text-[10px] text-muted-foreground">Não pulverizar</span></div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                            Baseado em regras agronômicas de Vento, Umidade e Chuva.
-                        </p>
+                            );
+                        })()}
                     </section>
 
                     {/* Acumulado de Chuva + GDD */}
@@ -629,17 +677,85 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                             </DialogContent>
                         </Dialog>
 
-                        <Card className="p-4 bg-orange-50/50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900 shadow-sm">
-                            <h3 className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">GDD Acumulado</h3>
-                            <p className="text-[10px] text-orange-600/70 dark:text-orange-400/70 mb-2">Últimos 90 dias (base 10°C)</p>
-                            <div className="flex items-end mb-2 gap-1">
-                                <span className="text-2xl font-black text-orange-600 dark:text-orange-400 leading-none">{gdd || 0}</span>
-                                <span className="text-sm font-semibold text-orange-600/70 dark:text-orange-400/70 leading-none pb-0.5">°D</span>
-                            </div>
-                            <p className="text-[9px] text-orange-500/60 dark:text-orange-400/50">
-                                Soja: ~1300°D | Milho: ~1600°D | Trigo: ~1100°D
-                            </p>
-                        </Card>
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Card className="p-4 bg-orange-50/50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900 shadow-sm cursor-pointer hover:bg-orange-100/50 transition-colors group relative overflow-hidden">
+                                    <div className="absolute top-2 right-2 p-1.5 bg-orange-100 dark:bg-orange-900 rounded-full text-orange-600 dark:text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Info className="h-3 w-3" />
+                                    </div>
+                                    <h3 className="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-1">GDD Acumulado</h3>
+                                    <p className="text-[10px] text-orange-600/70 dark:text-orange-400/70 mb-2">Últimos 90 dias (base 10°C)</p>
+                                    <div className="flex items-end mb-2 gap-1">
+                                        <span className="text-2xl font-black text-orange-600 dark:text-orange-400 leading-none">{gdd || 0}</span>
+                                        <span className="text-sm font-semibold text-orange-600/70 dark:text-orange-400/70 leading-none pb-0.5">°D</span>
+                                    </div>
+                                    <p className="text-[9px] text-orange-500/60 dark:text-orange-400/50">
+                                        Toque para entender o GDD
+                                    </p>
+                                </Card>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[480px]">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2">
+                                        <Thermometer className="h-5 w-5 text-orange-500" /> O que é GDD (Graus-Dia)?
+                                    </DialogTitle>
+                                    <DialogDescription>
+                                        Entenda como o acúmulo térmico influencia o ciclo da sua lavoura.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg p-4 space-y-2">
+                                        <p className="text-sm text-foreground leading-relaxed">
+                                            <strong>GDD (Graus-Dia de Desenvolvimento)</strong> mede o acúmulo de calor que a planta recebe ao longo do tempo. Cada cultura precisa de uma quantidade específica de calor para completar seu ciclo.
+                                        </p>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Quanto mais quente acima da <strong>temperatura base (10°C)</strong>, mais rápido a cultura avança no ciclo fenológico.
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-muted/50 rounded-lg p-3 border">
+                                        <p className="text-xs font-semibold text-muted-foreground mb-1">Fórmula simplificada:</p>
+                                        <p className="text-sm font-mono text-center py-2 text-foreground">
+                                            GDD = (T.máx + T.mín) ÷ 2 − 10°C
+                                        </p>
+                                    </div>
+
+                                    {(() => {
+                                        const gddVal = gdd || 0;
+                                        const crops = [
+                                            { name: 'Trigo', need: 1100, color: 'bg-amber-500' },
+                                            { name: 'Soja', need: 1300, color: 'bg-green-500' },
+                                            { name: 'Milho', need: 1600, color: 'bg-orange-500' },
+                                        ];
+                                        return (
+                                            <div className="space-y-3">
+                                                <p className="text-xs font-semibold text-foreground">Seu GDD atual: <span className="text-orange-600 dark:text-orange-400">{gddVal}°D</span></p>
+                                                {crops.map(crop => {
+                                                    const pct = Math.min((gddVal / crop.need) * 100, 100);
+                                                    return (
+                                                        <div key={crop.name} className="space-y-1">
+                                                            <div className="flex justify-between text-xs">
+                                                                <span className="font-medium">{crop.name}</span>
+                                                                <span className="text-muted-foreground">{Math.round(pct)}% de {crop.need}°D</span>
+                                                            </div>
+                                                            <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                                                                <div className={`h-full ${crop.color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                        <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                                            <strong>Exemplo prático:</strong> Se o GDD está em {gdd || 800}°D e sua soja precisa de ~1300°D, a cultura está em ~{Math.round(((gdd || 800) / 1300) * 100)}% do ciclo térmico. Isso ajuda a prever datas de floração, maturação e colheita.
+                                        </p>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
                     </div>
 
                     {/* Previsão 24h - OneSoil Style Cards */}
@@ -778,33 +894,46 @@ function StationDashboard({ stationId, onClose }: { stationId: string, onClose: 
                                 const isToday = new Date().toDateString() === dateObj.toDateString();
                                 const dayName = isToday ? 'Hoje' : (day.dayName || format(dateObj, 'eee', { locale: ptBR }).replace('.', ''));
 
+                                const WeatherIcon = day.rain > 2
+                                    ? CloudRain
+                                    : day.rain > 0
+                                        ? CloudDrizzle
+                                        : day.clouds > 70
+                                            ? Cloud
+                                            : day.clouds > 30
+                                                ? CloudSun
+                                                : Sun;
+                                const iconColor = day.rain > 0
+                                    ? 'text-blue-500'
+                                    : day.clouds > 70
+                                        ? 'text-gray-400'
+                                        : day.clouds > 30
+                                            ? 'text-gray-500'
+                                            : 'text-yellow-500';
+
                                 return (
-                                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
-                                        <div className="flex items-center w-16">
-                                            <span className="text-[13px] font-semibold capitalize text-foreground">
-                                                {dayName}
-                                            </span>
-                                        </div>
+                                    <div key={idx} className="flex items-center gap-2 p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
+                                        <span className="text-[13px] font-semibold capitalize text-foreground w-12 shrink-0">
+                                            {dayName}
+                                        </span>
 
-                                        <div className="flex items-center gap-4 flex-1 justify-center">
-                                            <div className="flex items-center gap-1 w-14 text-blue-500">
-                                                {day.rain > 0 ? (
-                                                    <>
-                                                        <Droplets className="h-3 w-3 fill-current" />
-                                                        <span className="text-[11px] font-medium">{day.rain} mm</span>
-                                                    </>
-                                                ) : null}
-                                            </div>
+                                        <WeatherIcon className={`h-5 w-5 shrink-0 ${iconColor}`} />
 
-                                            <div className="flex items-center gap-1 w-20 text-muted-foreground">
-                                                <ArrowDown className="h-3 w-3 transform rotate-45" />
-                                                <span className="text-[11px] font-medium">{day.windKmh} km/h</span>
+                                        <div className="flex items-center gap-3 flex-1 justify-center min-w-0">
+                                            {day.rain > 0 ? (
+                                                <span className="text-[11px] font-medium text-blue-500 w-14 text-center">{day.rain} mm</span>
+                                            ) : (
+                                                <span className="w-14" />
+                                            )}
+                                            <div className="flex items-center gap-1 text-muted-foreground">
+                                                <Wind className="h-3 w-3" />
+                                                <span className="text-[11px] font-medium">{day.windKmh}</span>
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center justify-end gap-2 text-[13px] font-medium">
+                                        <div className="flex items-center gap-1.5 text-[13px] font-medium shrink-0">
                                             <span className="text-muted-foreground">{day.minTemp}°</span>
-                                            <div className="w-8 h-1 rounded-full bg-gradient-to-r from-blue-400 to-orange-500 opacity-80"></div>
+                                            <div className="w-8 h-1 rounded-full bg-gradient-to-r from-blue-400 to-orange-500 opacity-80" />
                                             <span className="text-foreground">{day.maxTemp}°</span>
                                         </div>
                                     </div>

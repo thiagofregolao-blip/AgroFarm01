@@ -45,10 +45,19 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         // Ensure SPA deep-link navigation works correctly
         navigateFallback: "index.html",
-        // CRITICAL: Exclude /api routes from service worker navigation interception
+        // CRITICAL: Exclude /pdv and /api routes from service worker navigation interception
+        // /pdv must hit the server to receive the custom HTML injected with PDV Manifest for PWA
         // /api routes must always hit the network
-        navigateFallbackDenylist: [/^\/api/],
+        navigateFallbackDenylist: [/^\/pdv/, /^\/api/],
         runtimeCaching: [
+          {
+            urlPattern: /^\/pdv.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "pdv-html-cache",
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 },
+            }
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
