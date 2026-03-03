@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function FarmInvoices() {
     const [, setLocation] = useLocation();
@@ -49,6 +50,24 @@ export default function FarmInvoices() {
         enabled: !!selectedInvoice,
     });
 
+    const { data: expenses = [], isLoading: isLoadingExpenses } = useQuery({
+        queryKey: ["/api/farm/expenses"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/expenses"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: equipment = [] } = useQuery({
+        queryKey: ["/api/farm/equipment"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/equipment"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const pendingFleetReceipts = (expenses as any[]).filter((e) =>
+        e.status === "pending" &&
+        e.equipmentId &&
+        (e.description?.startsWith("[Via WhatsApp]") ?? false)
+    );
+
     const confirmMutation = useMutation({
         mutationFn: (id: string) => apiRequest("POST", `/api/farm/invoices/${id}/confirm`),
         onSuccess: () => {
@@ -68,6 +87,24 @@ export default function FarmInvoices() {
             setSelectedInvoice(null);
         },
         onError: () => toast({ title: "Erro ao excluir fatura", variant: "destructive" }),
+    });
+
+    const confirmExpenseMutation = useMutation({
+        mutationFn: (id: string) => apiRequest("POST", `/api/farm/expenses/${id}/confirm`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            toast({ title: "✅ Recibo aprovado!" });
+        },
+        onError: () => toast({ title: "Erro ao aprovar recibo", variant: "destructive" }),
+    });
+
+    const deleteExpenseMutation = useMutation({
+        mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/expenses/${id}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            toast({ title: "Recibo removido." });
+        },
+        onError: () => toast({ title: "Erro ao remover recibo", variant: "destructive" }),
     });
 
     const linkProductMutation = useMutation({
@@ -211,170 +248,265 @@ export default function FarmInvoices() {
                     </DialogContent>
                 </Dialog>
 
-                {/* Selected invoice detail */}
-                {selectedInvoice && invoiceDetail && (
-                    <Card className="border-emerald-200 bg-white">
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-emerald-800">
-                                    Fatura #{invoiceDetail.invoiceNumber || "—"}
-                                    <Badge className="ml-2" variant={invoiceDetail.status === "confirmed" ? "default" : "secondary"}>
-                                        {invoiceDetail.status === "confirmed" ? "Confirmada" : "Pendente"}
-                                    </Badge>
-                                </CardTitle>
-                                <div className="flex items-center gap-2">
-                                    {invoiceDetail.source === "email_import" && (
-                                        <Button variant="outline" size="sm" onClick={(e) => {
-                                            e.stopPropagation();
-                                            window.open(`/api/farm/invoices/${selectedInvoice}/pdf`, '_blank');
-                                        }}>
-                                            <Download className="mr-1 h-3 w-3" /> PDF
-                                        </Button>
-                                    )}
-                                    <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null)}>Fechar</Button>
-                                </div>
-                            </div>
-                            <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                                <span>Fornecedor: <strong>{invoiceDetail.supplier || "—"}</strong></span>
-                                <span>Data: <strong>{invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("pt-BR") : "—"}</strong></span>
-                                <span>Total: <strong>${invoiceDetail.totalAmount}</strong></span>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {invoiceDetail.items && invoiceDetail.items.length > 0 ? (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-emerald-50">
-                                            <tr>
-                                                <th className="text-left p-2">Cód</th>
-                                                <th className="text-left p-2">Produto (Fatura)</th>
-                                                <th className="text-left p-2">Vincular ao Catálogo</th>
-                                                <th className="text-center p-2">Un</th>
-                                                <th className="text-right p-2">Qtd</th>
-                                                <th className="text-right p-2">Preço Un.</th>
-                                                <th className="text-right p-2">Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {invoiceDetail.items.map((item: any) => (
-                                                <tr key={item.id} className="border-t border-gray-100">
-                                                    <td className="p-2 text-gray-500 font-mono text-xs">{item.productCode || "—"}</td>
-                                                    <td className="p-2 font-medium">{item.productName}</td>
-                                                    <td className="p-2">
-                                                        <Select
-                                                            value={item.productId || ""}
-                                                            onValueChange={(v) => linkProductMutation.mutate({ invoiceId: selectedInvoice!, itemId: item.id, productId: v })}
-                                                        >
-                                                            <SelectTrigger className="h-8 text-xs">
-                                                                <SelectValue placeholder="Vincular..." />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {products.map((p: any) => (
-                                                                    <SelectItem key={p.id} value={p.id}>{p.name} ({p.unit})</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </td>
-                                                    <td className="text-center p-2">{item.unit}</td>
-                                                    <td className="text-right p-2 font-mono">{parseFloat(item.quantity).toFixed(2)}</td>
-                                                    <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
-                                                    <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <p className="text-gray-500 py-4 text-center">Nenhum item extraído</p>
-                            )}
+                <Tabs defaultValue="invoices" className="space-y-4">
+                    <TabsList className="bg-emerald-50 text-emerald-800">
+                        <TabsTrigger value="invoices">Faturas</TabsTrigger>
+                        <TabsTrigger value="receipts">Recibos de Frota</TabsTrigger>
+                    </TabsList>
 
-                            {invoiceDetail.status === "pending" && (
-                                <div className="mt-4 flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-                                    <p className="text-sm text-amber-800 flex-1">
-                                        Revise os itens e vincule ao catálogo antes de confirmar. Itens sem vínculo <strong>não</strong> entrarão no estoque.
-                                    </p>
-                                    <Button
-                                        className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
-                                        onClick={() => confirmMutation.mutate(selectedInvoice!)}
-                                        disabled={confirmMutation.isPending}
-                                    >
-                                        {confirmMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                                        Confirmar Entrada
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Invoices list */}
-                <Card className="border-emerald-100">
-                    <CardHeader>
-                        <CardTitle className="text-emerald-800">Faturas Importadas</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? (
-                            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
-                        ) : invoices.length === 0 ? (
-                            <div className="py-8 text-center">
-                                <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">Nenhuma fatura importada</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-2">
-                                {invoices.map((inv: any) => (
-                                    <div
-                                        key={inv.id}
-                                        className={`p-3 rounded-lg border cursor-pointer transition-colors overflow-hidden
-                      ${selectedInvoice === inv.id ? "border-emerald-300 bg-emerald-50" : "border-gray-100 hover:bg-gray-50"}`}
-                                        onClick={() => setSelectedInvoice(inv.id)}
-                                    >
-                                        {/* Row 1: Icon + invoice info + delete */}
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <FileText className={`h-4 w-4 shrink-0 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
-                                            <p className="font-medium text-sm truncate flex-1 min-w-0">#{inv.invoiceNumber || "—"}</p>
-                                            <button
-                                                onClick={(e) => {
+                    <TabsContent value="invoices">
+                        {/* Selected invoice detail */}
+                        {selectedInvoice && invoiceDetail && (
+                            <Card className="border-emerald-200 bg-white mb-4">
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-emerald-800">
+                                            Fatura #{invoiceDetail.invoiceNumber || "—"}
+                                            <Badge className="ml-2" variant={invoiceDetail.status === "confirmed" ? "default" : "secondary"}>
+                                                {invoiceDetail.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                            </Badge>
+                                        </CardTitle>
+                                        <div className="flex items-center gap-2">
+                                            {invoiceDetail.source === "email_import" && (
+                                                <Button variant="outline" size="sm" onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (confirm("Excluir esta fatura? Esta ação não pode ser desfeita.")) {
-                                                        deleteMutation.mutate(inv.id);
-                                                    }
-                                                }}
-                                                className="p-1 rounded hover:bg-red-100 transition-colors shrink-0"
-                                                title="Excluir fatura"
-                                            >
-                                                <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
-                                            </button>
-                                            {inv.source === "email_import" && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        window.open(`/api/farm/invoices/${inv.id}/pdf`, '_blank');
-                                                    }}
-                                                    className="p-1 rounded hover:bg-blue-100 transition-colors shrink-0"
-                                                    title="Baixar PDF"
-                                                >
-                                                    <Download className="h-4 w-4 text-blue-400 hover:text-blue-600" />
-                                                </button>
+                                                    window.open(`/api/farm/invoices/${selectedInvoice}/pdf`, '_blank');
+                                                }}>
+                                                    <Download className="mr-1 h-3 w-3" /> PDF
+                                                </Button>
                                             )}
-                                        </div>
-                                        {/* Row 2: Date + Badge + Price */}
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <p className="text-xs text-gray-500 shrink-0">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "—"}</p>
-                                                <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0 h-5 shrink-0">
-                                                    {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
-                                                </Badge>
-                                            </div>
-                                            <p className="font-bold text-sm text-gray-900 shrink-0">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                                            <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null)}>Fechar</Button>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
+                                    <div className="flex gap-4 text-sm text-gray-600 mt-1">
+                                        <span>Fornecedor: <strong>{invoiceDetail.supplier || "—"}</strong></span>
+                                        <span>Data: <strong>{invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("pt-BR") : "—"}</strong></span>
+                                        <span>Total: <strong>${invoiceDetail.totalAmount}</strong></span>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    {invoiceDetail.items && invoiceDetail.items.length > 0 ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-emerald-50">
+                                                    <tr>
+                                                        <th className="text-left p-2">Cód</th>
+                                                        <th className="text-left p-2">Produto (Fatura)</th>
+                                                        <th className="text-left p-2">Vincular ao Catálogo</th>
+                                                        <th className="text-center p-2">Un</th>
+                                                        <th className="text-right p-2">Qtd</th>
+                                                        <th className="text-right p-2">Preço Un.</th>
+                                                        <th className="text-right p-2">Total</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {invoiceDetail.items.map((item: any) => (
+                                                        <tr key={item.id} className="border-t border-gray-100">
+                                                            <td className="p-2 text-gray-500 font-mono text-xs">{item.productCode || "—"}</td>
+                                                            <td className="p-2 font-medium">{item.productName}</td>
+                                                            <td className="p-2">
+                                                                <Select
+                                                                    value={item.productId || ""}
+                                                                    onValueChange={(v) => linkProductMutation.mutate({ invoiceId: selectedInvoice!, itemId: item.id, productId: v })}
+                                                                >
+                                                                    <SelectTrigger className="h-8 text-xs">
+                                                                        <SelectValue placeholder="Vincular..." />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {products.map((p: any) => (
+                                                                            <SelectItem key={p.id} value={p.id}>{p.name} ({p.unit})</SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </td>
+                                                            <td className="text-center p-2">{item.unit}</td>
+                                                            <td className="text-right p-2 font-mono">{parseFloat(item.quantity).toFixed(2)}</td>
+                                                            <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
+                                                            <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-500 py-4 text-center">Nenhum item extraído</p>
+                                    )}
+
+                                    {invoiceDetail.status === "pending" && (
+                                        <div className="mt-4 flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+                                            <p className="text-sm text-amber-800 flex-1">
+                                                Revise os itens e vincule ao catálogo antes de confirmar. Itens sem vínculo <strong>não</strong> entrarão no estoque.
+                                            </p>
+                                            <Button
+                                                className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
+                                                onClick={() => confirmMutation.mutate(selectedInvoice!)}
+                                                disabled={confirmMutation.isPending}
+                                            >
+                                                {confirmMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                                                Confirmar Entrada
+                                            </Button>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         )}
-                    </CardContent>
-                </Card>
+
+                        {/* Invoices list */}
+                        <Card className="border-emerald-100">
+                            <CardHeader>
+                                <CardTitle className="text-emerald-800">Faturas Importadas</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {isLoading ? (
+                                    <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+                                ) : invoices.length === 0 ? (
+                                    <div className="py-8 text-center">
+                                        <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                                        <p className="text-gray-500">Nenhuma fatura importada</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {invoices.map((inv: any) => (
+                                            <div
+                                                key={inv.id}
+                                                className={`p-3 rounded-lg border cursor-pointer transition-colors overflow-hidden
+                      ${selectedInvoice === inv.id ? "border-emerald-300 bg-emerald-50" : "border-gray-100 hover:bg-gray-50"}`}
+                                                onClick={() => setSelectedInvoice(inv.id)}
+                                            >
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <FileText className={`h-4 w-4 shrink-0 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
+                                                    <p className="font-medium text-sm truncate flex-1 min-w-0">#{inv.invoiceNumber || "—"}</p>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (confirm("Excluir esta fatura? Esta ação não pode ser desfeita.")) {
+                                                                deleteMutation.mutate(inv.id);
+                                                            }
+                                                        }}
+                                                        className="p-1 rounded hover:bg-red-100 transition-colors shrink-0"
+                                                        title="Excluir fatura"
+                                                    >
+                                                        <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
+                                                    </button>
+                                                    {inv.source === "email_import" && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                window.open(`/api/farm/invoices/${inv.id}/pdf`, '_blank');
+                                                            }}
+                                                            className="p-1 rounded hover:bg-blue-100 transition-colors shrink-0"
+                                                            title="Baixar PDF"
+                                                        >
+                                                            <Download className="h-4 w-4 text-blue-400 hover:text-blue-600" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <p className="text-xs text-gray-500 shrink-0">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "—"}</p>
+                                                        <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0 h-5 shrink-0">
+                                                            {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="font-bold text-sm text-gray-900 shrink-0">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="receipts">
+                        <Card className="border-emerald-100">
+                            <CardHeader>
+                                <CardTitle className="text-emerald-800">Recibos de Frota (WhatsApp)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {isLoadingExpenses ? (
+                                    <div className="flex justify-center py-8">
+                                        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                                    </div>
+                                ) : pendingFleetReceipts.length === 0 ? (
+                                    <div className="py-8 text-center">
+                                        <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                                        <p className="text-gray-500">Nenhum recibo de frota pendente de aprovação</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-emerald-50">
+                                                <tr>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Máquina / Veículo</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Descrição</th>
+                                                    <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
+                                                    <th className="text-right p-3 font-semibold text-emerald-800">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {pendingFleetReceipts.map((e: any) => {
+                                                    const equip = (equipment as any[]).find((eq) => eq.id === e.equipmentId);
+                                                    return (
+                                                        <tr key={e.id} className="border-t border-gray-100">
+                                                            <td className="p-3">
+                                                                {new Date(e.expenseDate).toLocaleDateString("pt-BR")}
+                                                            </td>
+                                                            <td className="p-3">
+                                                                <span className="font-semibold text-gray-800">
+                                                                    {equip?.name || "Equipamento não encontrado"}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3">
+                                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                                                    {e.category}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3">
+                                                                {e.description?.replace("[Via WhatsApp]", "").trim() || "—"}
+                                                            </td>
+                                                            <td className="text-right p-3 font-mono font-semibold">
+                                                                ${parseFloat(e.amount).toFixed(2)}
+                                                            </td>
+                                                            <td className="text-right p-3">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="bg-emerald-600 hover:bg-emerald-700"
+                                                                        disabled={confirmExpenseMutation.isPending}
+                                                                        onClick={() => confirmExpenseMutation.mutate(e.id)}
+                                                                    >
+                                                                        {confirmExpenseMutation.isPending
+                                                                            ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                                                            : <Check className="mr-1 h-3 w-3" />}
+                                                                        Aprovar
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="text-red-600 border-red-200 hover:bg-red-50"
+                                                                        disabled={deleteExpenseMutation.isPending}
+                                                                        onClick={() => deleteExpenseMutation.mutate(e.id)}
+                                                                    >
+                                                                        <Trash2 className="mr-1 h-3 w-3" />
+                                                                        Remover
+                                                                    </Button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
         </FarmLayout>
     );

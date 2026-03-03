@@ -7,7 +7,7 @@ import { GeminiClient } from "./gemini-client";
 import { MessageHandler } from "./message-handler";
 import { db, pool } from "../db";
 import { farmExpenses, farmEquipment } from "../../shared/schema";
-import { and, desc, eq, ilike, gt } from "drizzle-orm";
+import { and, desc, eq, ilike, gt, isNull } from "drizzle-orm";
 
 interface WhatsAppServiceConfig {
   zapiInstanceId: string;
@@ -111,8 +111,7 @@ export class WhatsAppService {
           eq(farmExpenses.status, "pending"),
           ilike(farmExpenses.description, "[Via WhatsApp]%"),
           gt(farmExpenses.createdAt, tenMinutesAgo),
-          // ainda sem equipamento vinculado
-          eq(farmExpenses.equipmentId, null as any)
+          isNull(farmExpenses.equipmentId)
         )
       )
       .orderBy(desc(farmExpenses.createdAt))

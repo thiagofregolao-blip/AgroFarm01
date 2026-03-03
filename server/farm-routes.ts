@@ -1031,6 +1031,46 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    app.post("/api/farm/expenses/:id/confirm", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenses } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+
+            await db.update(farmExpenses).set({ status: "confirmed" }).where(
+                and(
+                    eq(farmExpenses.id, req.params.id),
+                    eq(farmExpenses.farmerId, (req.user as any).id)
+                )
+            );
+
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[FARM_EXPENSE_CONFIRM]", error);
+            res.status(500).json({ error: "Failed to confirm expense" });
+        }
+    });
+
+    app.delete("/api/farm/expenses/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenses } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+
+            await db.delete(farmExpenses).where(
+                and(
+                    eq(farmExpenses.id, req.params.id),
+                    eq(farmExpenses.farmerId, (req.user as any).id)
+                )
+            );
+
+            res.status(204).send();
+        } catch (error) {
+            console.error("[FARM_EXPENSE_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete expense" });
+        }
+    });
+
     // ==================== PDV TERMINALS ====================
 
     app.get("/api/farm/pdv-terminals", requireFarmer, async (req, res) => {
