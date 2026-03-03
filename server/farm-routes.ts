@@ -1679,17 +1679,35 @@ export function registerFarmRoutes(app: Express) {
 
             const base64Image = buffer.toString("base64");
 
-            const prompt = `Você é um assistente do AgroFarm. A imagem é um COMPROVANTE, NOTA FISCAL ou RECIBO.
-Analise a imagem e classifique se é uma Despesa com Veículos/Frete/Serviços (expense) ou se é uma Fatura de Insumos/Produtos Agrícolas (invoice).
+            const prompt = `Você é um assistente do AgroFarm que classifica comprovantes agrícolas.
 
-Se for 'invoice', extraia TAMBÉM o fornecedor (fornecedor), o número da nota (se houver) e TODOS os produtos contidos nela com suas respectivas quantidades, unidades e valores.
+REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
+
+**expense** (Despesa de Frota/Manutenção) — use quando os itens são:
+- Peças de máquinas/veículos (porcas, parafusos, rolamentos, correias, filtros, ponta de eixo, etc.)
+- Óleo de motor, lubrificantes, graxas
+- Diesel, combustível, gasolina
+- Serviços mecânicos, mão de obra, frete, transporte
+- Pneus, baterias, peças automotivas
+- Qualquer coisa relacionada a manutenção de tratores, colheitadeiras, caminhões, veículos
+
+**invoice** (Fatura de Insumos Agrícolas) — use APENAS quando os itens são:
+- Defensivos agrícolas (herbicidas, fungicidas, inseticidas, acaricidas): Glifosato, Atrazina, Flumitop, etc.
+- Sementes (soja, milho, trigo, etc.)
+- Fertilizantes e adubos (NPK, ureia, MAP, KCl, etc.)
+- Adjuvantes, espalhantes, reguladores de crescimento
+- Produtos fitossanitários em geral
+
+**unknown** — quando não for possível determinar.
+
+Se for 'invoice', extraia TAMBÉM o fornecedor, o número da nota (se houver) e TODOS os produtos com quantidades, unidades e valores.
 
 Retorne APENAS UM JSON VÁLIDO no formato exato:
 {
   "type": "expense" | "invoice" | "unknown",
   "totalAmount": 150.50,
-  "description": "Breve resumo geral (ex: Compra de Glifosato e Adubos)",
-  "category": "diesel" | "frete" | "mao_de_obra" | "outro",
+  "description": "Breve resumo geral (ex: Compra de peças para trator)",
+  "category": "diesel" | "pecas" | "frete" | "mao_de_obra" | "outro",
   "invoiceNumber": "123456",
   "supplier": "Nome da Empresa Fornecedora",
   "items": [
