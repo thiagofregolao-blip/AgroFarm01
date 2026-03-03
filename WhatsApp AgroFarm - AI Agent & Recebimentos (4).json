@@ -78,7 +78,7 @@
       "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/receipt",
       "sendBody": true,
       "specifyBody": "json",
-      "jsonBody": "={ \"whatsapp_number\": \"{{ $json.body.phone }}\", \"imageUrl\": \"{{ $json.body.image?.imageUrl || $json.body.document?.documentUrl }}\", \"caption\": \"{{ $json.body.text?.message || $json.body.message || '' }}\" }",
+      "jsonBody": "={ \"whatsapp_number\": \"{{ $json.body.phone }}\", \"imageUrl\": \"{{ $json.body.image?.imageUrl || $json.body.document?.documentUrl }}\", \"caption\": \"{{ $json.body.image?.caption || $json.body.document?.caption || $json.body.text?.message || $json.body.message || '' }}\" }",
       "options": {}
       },
       "id": "ac72ca85-1c06-4869-a317-c42f89eaaf37",

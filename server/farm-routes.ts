@@ -1636,6 +1636,8 @@ export function registerFarmRoutes(app: Express) {
                 return res.status(400).json({ error: "imageUrl is required" });
             }
 
+            console.log(`[WEBHOOK_N8N_RECEIPT] phone=${whatsapp_number}, caption="${caption || ''}", imageUrl=${imageUrl?.substring(0, 60)}...`);
+
             // Find farmer by phone number
             const { users, farmExpenses, farmInvoices, farmInvoiceItems, farmEquipment } = await import("../shared/schema");
             const { eq, or, sql, and, ilike, gt } = await import("drizzle-orm");
