@@ -656,7 +656,7 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-amber-900/30 text-white flex flex-col">
                 {/* Header */}
-                <header className="flex items-center justify-between px-5 py-3 bg-gray-900/80 backdrop-blur-sm border-b border-amber-500/20 shrink-0">
+                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
                             <Droplets className="h-5 w-5 text-amber-400" />
@@ -864,7 +864,7 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gradient-to-br from-gray-50 to-[#16A249]/5 text-gray-800 flex flex-col">
                 {/* Header with gradient */}
-                <header className="flex items-center justify-between px-5 py-3 bg-[#16A249] text-white shrink-0 shadow-md">
+                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setStep("product")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
@@ -1081,7 +1081,7 @@ export default function PdvTerminal() {
     if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
         return (
             <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
-                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shrink-0 shadow-md">
+                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setStep("plot")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
@@ -1275,7 +1275,7 @@ export default function PdvTerminal() {
     return (
         <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
             {/* ===== GREEN HEADER ===== */}
-            <header className="bg-gradient-to-b from-emerald-700 to-emerald-600 shrink-0 z-20 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+            <header className="bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 shrink-0 z-20 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                 <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-2.5">
                         <h1 className="font-extrabold text-xl text-white">{pdvData?.terminal?.name || "Depósito Central"}</h1>
@@ -1297,9 +1297,9 @@ export default function PdvTerminal() {
                 {/* Search */}
                 <div className="px-4 pb-3">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-300" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
                         <Input
-                            className="pl-10 h-11 bg-white/15 border-white/20 text-white placeholder:text-emerald-200/70 text-sm rounded-xl focus:ring-white/30 focus:border-white/40 backdrop-blur-sm"
+                            className="pl-10 h-11 bg-white border border-emerald-200 text-emerald-900 placeholder:text-emerald-500 text-sm rounded-xl focus:ring-emerald-200 focus:border-emerald-300"
                             placeholder="Pesquisar produtos..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
