@@ -1536,6 +1536,96 @@ export function registerFarmRoutes(app: Express) {
 
     // ==================== n8n / WhatsApp Webhooks ====================
 
+    app.post("/api/farm/webhook/n8n/check-pending-equipment", async (req, res) => {
+        try {
+            const { whatsapp_number, message } = req.body;
+            if (!whatsapp_number || !message) {
+                return res.json({ handled: false });
+            }
+
+            const { users, farmExpenses, farmEquipment } = await import("../shared/schema");
+            const { eq, or, sql, and, ilike, gt, isNull, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number);
+            const farmers = await db.select().from(users).where(
+                or(
+                    eq(users.whatsapp_number, formattedPhone),
+                    sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
+                )
+            ).limit(1);
+
+            if (farmers.length === 0) {
+                return res.json({ handled: false });
+            }
+
+            const farmer = farmers[0];
+            const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+
+            const [pending] = await db
+                .select()
+                .from(farmExpenses)
+                .where(
+                    and(
+                        eq(farmExpenses.farmerId, farmer.id),
+                        eq(farmExpenses.status, "pending"),
+                        ilike(farmExpenses.description, "[Via WhatsApp]%"),
+                        gt(farmExpenses.createdAt, tenMinutesAgo),
+                        isNull(farmExpenses.equipmentId)
+                    )
+                )
+                .orderBy(desc(farmExpenses.createdAt))
+                .limit(1);
+
+            if (!pending) {
+                return res.json({ handled: false });
+            }
+
+            const search = message.trim();
+            if (!search) {
+                return res.json({
+                    handled: true,
+                    reply: "Não consegui identificar a máquina/veículo. Me mande o nome ou a placa, por exemplo: *John Deere 5360*."
+                });
+            }
+
+            const [equip] = await db
+                .select()
+                .from(farmEquipment)
+                .where(
+                    and(
+                        eq(farmEquipment.farmerId, farmer.id),
+                        ilike(farmEquipment.name, `%${search}%`)
+                    )
+                )
+                .limit(1);
+
+            if (!equip) {
+                return res.json({
+                    handled: true,
+                    reply: `Não achei nenhuma máquina/veículo com o nome "${search}". Tente mandar o nome exatamente como está cadastrado no painel de equipamentos.`
+                });
+            }
+
+            await db
+                .update(farmExpenses)
+                .set({
+                    equipmentId: equip.id,
+                    description: `${pending.description || ""} (Equipamento: ${equip.name})`,
+                })
+                .where(eq(farmExpenses.id, pending.id));
+
+            return res.json({
+                handled: true,
+                reply: `Perfeito! Vinculei essa despesa à máquina/veículo *${equip.name}*. Ela já está aguardando aprovação no painel da AgroFarm. ✅`
+            });
+
+        } catch (error) {
+            console.error("[CHECK_PENDING_EQUIPMENT]", error);
+            return res.json({ handled: false });
+        }
+    });
+
     app.post("/api/farm/webhook/n8n/receipt", async (req, res) => {
         try {
             const { whatsapp_number, imageUrl, caption } = req.body;
