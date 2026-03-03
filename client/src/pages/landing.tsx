@@ -298,7 +298,7 @@ export default function LandingPage() {
                             icon: CloudSun, title: "Estações Meteorológicas Virtuais",
                             desc: "Dados climáticos em tempo real para cada talhão, sem precisar instalar equipamentos.",
                             items: ["Temperatura, umidade, vento, pressão e índice UV", "Previsão do tempo para os próximos 7 dias", "Janela de Pulverização inteligente por horário", "Graus-Dia de Desenvolvimento (GDD) da cultura", "Histórico climático completo por estação"],
-                            color: colors.green, image: "/feature-caderno.png",
+                            color: colors.green, image: "/feature-weather.png",
                         },
                         {
                             icon: BookOpen, title: "Caderno de Campo Automático",
