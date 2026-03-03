@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Tractor, Plus, Trash2, Settings2, ShieldCheck, Wrench } from "lucide-react";
+import { Loader2, Tractor, Plus, Trash2, Settings2, ShieldCheck, Wrench, DollarSign, Eye, FileText } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,12 +23,30 @@ export default function FarmEquipment() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
     const { user } = useAuth();
+    const [selectedEquipId, setSelectedEquipId] = useState<string | null>(null);
+    const [expenseDetailId, setExpenseDetailId] = useState<string | null>(null);
 
     const { data: equipment = [], isLoading } = useQuery({
         queryKey: ["/api/farm/equipment"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/equipment"); return r.json(); },
         enabled: !!user,
     });
+
+    const { data: expenses = [] } = useQuery({
+        queryKey: ["/api/farm/expenses"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/expenses"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: expenseDetail } = useQuery({
+        queryKey: ["/api/farm/expenses", expenseDetailId],
+        queryFn: async () => { const r = await apiRequest("GET", `/api/farm/expenses/${expenseDetailId}`); return r.json(); },
+        enabled: !!expenseDetailId,
+    });
+
+    const selectedEquip = (equipment as any[]).find((e: any) => e.id === selectedEquipId);
+    const equipExpenses = (expenses as any[]).filter((e: any) => e.equipmentId === selectedEquipId);
+    const totalEquipExpenses = equipExpenses.reduce((sum: number, e: any) => sum + (parseFloat(e.amount) || 0), 0);
 
     const deleteEquipment = useMutation({
         mutationFn: async (id: string) => {
@@ -75,10 +93,17 @@ export default function FarmEquipment() {
                             const statusConfig = STATUS_OPTIONS.find(s => s.value === e.status) || STATUS_OPTIONS[0];
                             const StatusIcon = statusConfig.icon;
 
+                            const eqExpenses = (expenses as any[]).filter((ex: any) => ex.equipmentId === e.id);
+                            const eqTotal = eqExpenses.reduce((sum: number, ex: any) => sum + (parseFloat(ex.amount) || 0), 0);
+
                             return (
-                                <Card key={e.id} className="overflow-hidden border-emerald-100 hover:shadow-md transition-shadow relative group">
-                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(e.id, e.name)}>
+                                <Card
+                                    key={e.id}
+                                    className="overflow-hidden border-emerald-100 hover:shadow-md transition-shadow relative group cursor-pointer"
+                                    onClick={() => setSelectedEquipId(e.id)}
+                                >
+                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={(ev) => { ev.stopPropagation(); handleDelete(e.id, e.name); }}>
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </div>
@@ -89,11 +114,19 @@ export default function FarmEquipment() {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <h3 className="font-semibold text-gray-900 truncate">{e.name}</h3>
-                                                <p className="text-sm text-gray-500 mb-3">{e.type}</p>
+                                                <p className="text-sm text-gray-500 mb-2">{e.type}</p>
 
-                                                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.color}`}>
-                                                    <StatusIcon className="h-3.5 w-3.5" />
-                                                    {statusConfig.label}
+                                                <div className="flex items-center gap-3 flex-wrap">
+                                                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.color}`}>
+                                                        <StatusIcon className="h-3.5 w-3.5" />
+                                                        {statusConfig.label}
+                                                    </div>
+                                                    {eqExpenses.length > 0 && (
+                                                        <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                                                            <DollarSign className="h-3 w-3" />
+                                                            {eqExpenses.length} despesa{eqExpenses.length > 1 ? 's' : ''} · ${eqTotal.toFixed(2)}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -104,6 +137,147 @@ export default function FarmEquipment() {
                     </div>
                 )}
             </div>
+
+            <Dialog open={!!selectedEquipId} onOpenChange={(open) => { if (!open) { setSelectedEquipId(null); setExpenseDetailId(null); } }}>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-emerald-800">
+                            <Tractor className="h-5 w-5" />
+                            {selectedEquip?.name || "Equipamento"}
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                                <span className="text-gray-500">Tipo:</span>
+                                <p className="font-semibold">{selectedEquip?.type}</p>
+                            </div>
+                            <div>
+                                <span className="text-gray-500">Status:</span>
+                                <p className="font-semibold">{selectedEquip?.status}</p>
+                            </div>
+                            <div>
+                                <span className="text-gray-500">Total em Despesas:</span>
+                                <p className="font-semibold text-lg text-emerald-700">${totalEquipExpenses.toFixed(2)}</p>
+                            </div>
+                        </div>
+
+                        <h4 className="font-semibold text-gray-800">
+                            Despesas ({equipExpenses.length})
+                        </h4>
+
+                        {equipExpenses.length === 0 ? (
+                            <div className="py-6 text-center">
+                                <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                                <p className="text-gray-500 text-sm">Nenhuma despesa registrada para este equipamento</p>
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="text-left p-3 font-semibold text-gray-600">Data</th>
+                                            <th className="text-left p-3 font-semibold text-gray-600">Fornecedor</th>
+                                            <th className="text-left p-3 font-semibold text-gray-600">Categoria</th>
+                                            <th className="text-left p-3 font-semibold text-gray-600">Descrição</th>
+                                            <th className="text-right p-3 font-semibold text-gray-600">Valor</th>
+                                            <th className="text-center p-3 font-semibold text-gray-600">Status</th>
+                                            <th className="text-center p-3 font-semibold text-gray-600">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {equipExpenses.map((ex: any) => {
+                                            const supplierMatch = ex.description?.match(/\[Via WhatsApp\]\s*\[([^\]]+)\]/);
+                                            const supplier = ex.supplier || (supplierMatch ? supplierMatch[1] : "—");
+                                            const cleanDesc = ex.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "—";
+
+                                            return (
+                                                <tr key={ex.id} className="border-t border-gray-100">
+                                                    <td className="p-3">{new Date(ex.expenseDate).toLocaleDateString("pt-BR")}</td>
+                                                    <td className="p-3 text-gray-700">{supplier}</td>
+                                                    <td className="p-3">
+                                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                                            {ex.category}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3">{cleanDesc}</td>
+                                                    <td className="text-right p-3 font-mono font-semibold">${parseFloat(ex.amount).toFixed(2)}</td>
+                                                    <td className="text-center p-3">
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ex.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                            {ex.status === 'confirmed' ? 'Aprovado' : 'Pendente'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-center p-3">
+                                                        {ex.hasImage && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="text-gray-600 border-gray-200"
+                                                                onClick={() => setExpenseDetailId(ex.id)}
+                                                            >
+                                                                <Eye className="mr-1 h-3 w-3" />
+                                                                Ver
+                                                            </Button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {expenseDetail && expenseDetailId && (
+                            <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="font-semibold text-emerald-800">Detalhe do Recibo</h4>
+                                    <Button size="sm" variant="ghost" onClick={() => setExpenseDetailId(null)}>Fechar</Button>
+                                </div>
+
+                                {expenseDetail.items && expenseDetail.items.length > 0 && (
+                                    <div className="bg-white rounded-lg border border-emerald-100 overflow-hidden">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-emerald-50">
+                                                <tr>
+                                                    <th className="text-left p-2 font-semibold text-emerald-800">Item</th>
+                                                    <th className="text-center p-2 font-semibold text-emerald-800">Qtd</th>
+                                                    <th className="text-center p-2 font-semibold text-emerald-800">Unid</th>
+                                                    <th className="text-right p-2 font-semibold text-emerald-800">Preço Unit.</th>
+                                                    <th className="text-right p-2 font-semibold text-emerald-800">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {expenseDetail.items.map((item: any) => (
+                                                    <tr key={item.id} className="border-t border-gray-100">
+                                                        <td className="p-2 font-medium">{item.itemName}</td>
+                                                        <td className="text-center p-2">{parseFloat(item.quantity)}</td>
+                                                        <td className="text-center p-2 text-gray-500">{item.unit}</td>
+                                                        <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
+                                                        <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {expenseDetail.hasImage && (
+                                    <div>
+                                        <p className="text-sm font-semibold text-gray-600 mb-1">Imagem do Recibo</p>
+                                        <img
+                                            src={`/api/farm/expenses/${expenseDetailId}/image`}
+                                            alt="Recibo"
+                                            className="rounded-lg border border-gray-200 max-w-full max-h-96"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </FarmLayout>
     );
 }
