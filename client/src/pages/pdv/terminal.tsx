@@ -1273,21 +1273,21 @@ export default function PdvTerminal() {
 
     return (
         <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
-            {/* ===== CLEAN HEADER ===== */}
-            <header className="bg-white border-b border-gray-100 shrink-0 z-20" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+            {/* ===== GREEN HEADER ===== */}
+            <header className="bg-gradient-to-b from-emerald-700 to-emerald-600 shrink-0 z-20 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                 <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                        <h1 className="font-extrabold text-xl text-gray-900">{pdvData?.terminal?.name || "Depósito Central"}</h1>
-                        <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-emerald-500" : "bg-red-400"}`} />
+                    <div className="flex items-center gap-2.5">
+                        <h1 className="font-extrabold text-xl text-white">{pdvData?.terminal?.name || "Depósito Central"}</h1>
+                        <div className={`w-2.5 h-2.5 rounded-full ring-2 ring-white/20 ${isOnline ? "bg-green-300" : "bg-red-400"}`} />
                     </div>
                     <div className="flex items-center gap-2">
                         {offlineQueue.length > 0 && isOnline && (
                             <button onClick={processOfflineQueue} disabled={submitting}
-                                className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 text-xs font-bold animate-pulse">
+                                className="px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs font-bold animate-pulse backdrop-blur-sm">
                                 Sync ({offlineQueue.length})
                             </button>
                         )}
-                        <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm">
+                        <div className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white font-bold text-sm">
                             {(pdvData?.terminal?.name || "D")[0]}
                         </div>
                     </div>
@@ -1296,9 +1296,9 @@ export default function PdvTerminal() {
                 {/* Search */}
                 <div className="px-4 pb-3">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-300" />
                         <Input
-                            className="pl-10 h-11 bg-gray-50 border-gray-200 text-gray-800 text-sm rounded-xl focus:ring-emerald-500 focus:border-emerald-500"
+                            className="pl-10 h-11 bg-white/15 border-white/20 text-white placeholder:text-emerald-200/70 text-sm rounded-xl focus:ring-white/30 focus:border-white/40 backdrop-blur-sm"
                             placeholder="Pesquisar produtos..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -1311,7 +1311,7 @@ export default function PdvTerminal() {
                 <div className="px-4 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
                     <button
                         onClick={() => setCategoryFilter("")}
-                        className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${!categoryFilter ? "bg-emerald-600 text-white shadow-sm" : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                        className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${!categoryFilter ? "bg-white text-emerald-700 shadow-sm" : "bg-white/15 text-white/80 hover:bg-white/25 backdrop-blur-sm"}`}
                     >Todos ({products.length})</button>
                     {categories.map(cat => {
                         const count = products.filter((p: any) => p.category === cat).length;
@@ -1319,7 +1319,7 @@ export default function PdvTerminal() {
                             <button
                                 key={cat}
                                 onClick={() => setCategoryFilter(categoryFilter === cat ? "" : cat)}
-                                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${categoryFilter === cat ? "bg-emerald-600 text-white shadow-sm" : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${categoryFilter === cat ? "bg-white text-emerald-700 shadow-sm" : "bg-white/15 text-white/80 hover:bg-white/25 backdrop-blur-sm"}`}
                             >
                                 <span>{CATEGORY_EMOJI[cat] || "📦"}</span>
                                 {cat.charAt(0).toUpperCase() + cat.slice(1)} ({count})
