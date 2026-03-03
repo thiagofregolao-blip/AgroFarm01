@@ -1299,7 +1299,7 @@ export default function PdvTerminal() {
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600" />
                         <Input
-                            className="pl-10 h-11 bg-white border border-emerald-200 text-emerald-900 placeholder:text-emerald-500 text-sm rounded-xl focus:ring-emerald-200 focus:border-emerald-300"
+                            className="pl-10 h-11 bg-white border border-emerald-200 text-black placeholder:text-emerald-500 text-sm rounded-xl focus:ring-emerald-200 focus:border-emerald-300"
                             placeholder="Pesquisar produtos..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
