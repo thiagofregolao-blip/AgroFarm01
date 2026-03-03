@@ -94,7 +94,7 @@
         "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/receipt",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"whatsapp_number\": \"{{ $json.body.phone }}\", \"imageUrl\": \"{{ $json.body.image?.imageUrl || $json.body.document?.documentUrl }}\" }",
+        "jsonBody": "={ \"whatsapp_number\": \"{{ $json.body.phone }}\", \"imageUrl\": \"{{ $json.body.image?.imageUrl || $json.body.document?.documentUrl }}\", \"caption\": \"{{ $json.body.text?.message || $json.body.message || '' }}\" }",
         "options": {}
       },
       "id": "fd5bd74f-7009-4f2e-b705-538ba97c39c6",

@@ -6,6 +6,8 @@ import { ZApiClient, ZApiClient as ZApi } from "./zapi-client";
 import { GeminiClient } from "./gemini-client";
 import { MessageHandler } from "./message-handler";
 import { db, pool } from "../db";
+import { farmExpenses, farmEquipment } from "../../shared/schema";
+import { and, desc, eq, ilike, gt } from "drizzle-orm";
 
 interface WhatsAppServiceConfig {
   zapiInstanceId: string;
@@ -85,6 +87,86 @@ export class WhatsAppService {
       apiKey: config.geminiApiKey,
     });
     this.handler = new MessageHandler();
+  }
+
+  /**
+   * Se existir uma despesa via WhatsApp recente sem equipamento vinculado,
+   * interpreta a mensagem atual como nome/placa da máquina e faz o vínculo.
+   */
+  private async handlePendingExpenseEquipment(
+    farmerId: string,
+    message: string,
+    replyTo: string,
+    replyIsGroup: boolean
+  ): Promise<boolean> {
+    const now = new Date();
+    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+
+    const [pending] = await db
+      .select()
+      .from(farmExpenses)
+      .where(
+        and(
+          eq(farmExpenses.farmerId, farmerId),
+          eq(farmExpenses.status, "pending"),
+          ilike(farmExpenses.description, "[Via WhatsApp]%"),
+          gt(farmExpenses.createdAt, tenMinutesAgo),
+          // ainda sem equipamento vinculado
+          eq(farmExpenses.equipmentId, null as any)
+        )
+      )
+      .orderBy(desc(farmExpenses.createdAt))
+      .limit(1);
+
+    if (!pending) {
+      return false;
+    }
+
+    const search = message.trim();
+    if (!search) {
+      await this.sendMessage(
+        replyTo,
+        "Não consegui identificar a máquina/veículo. Me mande o nome ou a placa, por exemplo: *John Deere 5360*.",
+        replyIsGroup
+      );
+      return true;
+    }
+
+    const [equip] = await db
+      .select()
+      .from(farmEquipment)
+      .where(
+        and(
+          eq(farmEquipment.farmerId, farmerId),
+          ilike(farmEquipment.name, `%${search}%`)
+        )
+      )
+      .limit(1);
+
+    if (!equip) {
+      await this.sendMessage(
+        replyTo,
+        "Não achei nenhuma máquina/veículo com esse nome. Tente mandar o nome exatamente como está cadastrado no painel de equipamentos.",
+        replyIsGroup
+      );
+      return true;
+    }
+
+    await db
+      .update(farmExpenses)
+      .set({
+        equipmentId: equip.id,
+        description: `${pending.description || ""} (Equipamento: ${equip.name})`,
+      })
+      .where(eq(farmExpenses.id, pending.id));
+
+    await this.sendMessage(
+      replyTo,
+      `Perfeito! Vinculei essa despesa à máquina/veículo *${equip.name}*. Ela já está aguardando aprovação no painel da AgroFarm. ✅`,
+      replyIsGroup
+    );
+
+    return true;
   }
 
   /**
@@ -186,6 +268,12 @@ export class WhatsAppService {
       // Regra Estrita: Apenas agricultores podem usar o WhatsApp Bot. Outros papéis (consultor, gerente, etc) são ignorados.
       if (user.role !== 'agricultor') {
         console.log(`[WhatsAppService] Match de numero, porem o role do usuario (${user.name}) é '${user.role}'. Ignorando a mensagem pois o bot é exclusivo para agricultores.`);
+        return;
+      }
+
+      // 2.a) Verificar se há alguma despesa via WhatsApp aguardando vínculo com equipamento
+      const handledEquipment = await this.handlePendingExpenseEquipment(user.id, message, replyTo, replyIsGroup);
+      if (handledEquipment) {
         return;
       }
 

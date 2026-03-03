@@ -264,6 +264,16 @@ const runMigration = async () => {
             console.log('✅ Migração dose_per_ha concluída!');
         }
 
+        // Migration 22: Add equipment_id to farm_expenses
+        const expenseEquipPath = path.join(process.cwd(), 'migration_add_expense_equipment.sql');
+        if (fs.existsSync(expenseEquipPath)) {
+            const expenseEquipSql = fs.readFileSync(expenseEquipPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', expenseEquipPath);
+            console.log('🚀 Executando SQL (expense_equipment)...');
+            await sql.unsafe(expenseEquipSql);
+            console.log('✅ Migração expense_equipment concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

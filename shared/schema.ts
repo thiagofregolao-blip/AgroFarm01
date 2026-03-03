@@ -1182,6 +1182,7 @@ export const farmApplications = pgTable("farm_applications", {
 export const farmExpenses = pgTable("farm_expenses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  equipmentId: varchar("equipment_id").references(() => farmEquipment.id),
   plotId: varchar("plot_id").references(() => farmPlots.id),
   propertyId: varchar("property_id").references(() => farmProperties.id),
   category: text("category").notNull(), // diesel, frete, mao_de_obra, outro

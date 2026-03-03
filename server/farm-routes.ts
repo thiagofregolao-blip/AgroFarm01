@@ -1498,7 +1498,7 @@ export function registerFarmRoutes(app: Express) {
 
     app.post("/api/farm/webhook/n8n/receipt", async (req, res) => {
         try {
-            const { whatsapp_number, imageUrl } = req.body;
+            const { whatsapp_number, imageUrl, caption } = req.body;
             if (!whatsapp_number) {
                 return res.status(400).json({ error: "whatsapp_number is required" });
             }
@@ -1507,8 +1507,8 @@ export function registerFarmRoutes(app: Express) {
             }
 
             // Find farmer by phone number
-            const { users, farmExpenses, farmInvoices, farmInvoiceItems } = await import("../shared/schema");
-            const { eq, or, sql } = await import("drizzle-orm");
+            const { users, farmExpenses, farmInvoices, farmInvoiceItems, farmEquipment } = await import("../shared/schema");
+            const { eq, or, sql, and, ilike, gt } = await import("drizzle-orm");
             const { db } = await import("./db");
 
             const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number);
@@ -1603,15 +1603,38 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
             const amount = parseFloat(parsed.totalAmount) || 0;
 
+            // Try to match equipment from caption (for vehicle/fleet receipts)
+            let matchedEquipmentId: string | null = null;
+            const normalizedCaption = (caption || "").trim();
+            if (parsed.type === "expense" && normalizedCaption) {
+                const equipmentMatch = await db.select().from(farmEquipment).where(
+                    and(
+                        eq(farmEquipment.farmerId, farmer.id),
+                        ilike(farmEquipment.name, `%${normalizedCaption}%`)
+                    )
+                ).limit(1);
+                if (equipmentMatch.length > 0) {
+                    matchedEquipmentId = equipmentMatch[0].id;
+                }
+            }
+
             if (parsed.type === "expense") {
                 await db.insert(farmExpenses).values({
                     farmerId: farmer.id,
+                    equipmentId: matchedEquipmentId,
                     amount: String(amount),
                     description: `[Via WhatsApp] ${parsed.description}`,
                     category: parsed.category || 'outro',
                     status: 'pending',
                 });
-                return res.json({ message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) recebida e aguardando aprovação no painel AgroFarm!` });
+                if (matchedEquipmentId) {
+                    return res.json({
+                        message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) recebida e vinculada à máquina/veículo informado. Ela está aguardando aprovação no painel da AgroFarm.`
+                    });
+                }
+                return res.json({
+                    message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) recebida.\n\nDe qual veículo ou máquina é essa despesa? Responda com o nome ou placa para eu vincular à sua frota. 🚜`
+                });
             }
             else if (parsed.type === "invoice") {
                 const [newInvoice] = await db.insert(farmInvoices).values({
