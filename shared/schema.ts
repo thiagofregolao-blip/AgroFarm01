@@ -32,6 +32,7 @@ export const users = pgTable("users", {
   farmLongitude: decimal("farm_longitude", { precision: 10, scale: 7 }),
   farmCity: text("farm_city"),
   bulletinEnabled: boolean("bulletin_enabled").default(false),
+  language: text("language").default("pt-BR"),
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {

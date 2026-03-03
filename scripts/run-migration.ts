@@ -245,6 +245,15 @@ const runMigration = async () => {
             console.log('✅ Migração missing_columns concluída!');
         }
 
+        const languagePath = path.join(process.cwd(), 'migration_add_language.sql');
+        if (fs.existsSync(languagePath)) {
+            const languageSql = fs.readFileSync(languagePath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', languagePath);
+            console.log('🚀 Executando SQL (language)...');
+            await sql.unsafe(languageSql);
+            console.log('✅ Migração language concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
