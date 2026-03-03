@@ -62,11 +62,20 @@ export default function FarmInvoices() {
         enabled: !!user,
     });
 
-    const pendingFleetReceipts = (expenses as any[]).filter((e) =>
-        e.status === "pending" &&
+    const whatsappExpenses = (expenses as any[]).filter((e) =>
         e.equipmentId &&
         (e.description?.startsWith("[Via WhatsApp]") ?? false)
     );
+    const pendingFleetReceipts = whatsappExpenses.filter((e) => e.status === "pending");
+    const confirmedFleetReceipts = whatsappExpenses.filter((e) => e.status === "confirmed");
+
+    const extractSupplier = (desc: string) => {
+        const match = desc?.match(/\[Via WhatsApp\]\s*\[([^\]]+)\]/);
+        return match ? match[1] : "—";
+    };
+    const cleanDescription = (desc: string) => {
+        return desc?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "—";
+    };
 
     const confirmMutation = useMutation({
         mutationFn: (id: string) => apiRequest("POST", `/api/farm/invoices/${id}/confirm`),
@@ -441,6 +450,7 @@ export default function FarmInvoices() {
                                                 <tr>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Máquina / Veículo</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Descrição</th>
                                                     <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
@@ -460,13 +470,16 @@ export default function FarmInvoices() {
                                                                     {equip?.name || "Equipamento não encontrado"}
                                                                 </span>
                                                             </td>
+                                                            <td className="p-3 text-gray-700">
+                                                                {extractSupplier(e.description)}
+                                                            </td>
                                                             <td className="p-3">
                                                                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
                                                                     {e.category}
                                                                 </span>
                                                             </td>
                                                             <td className="p-3">
-                                                                {e.description?.replace("[Via WhatsApp]", "").trim() || "—"}
+                                                                {cleanDescription(e.description)}
                                                             </td>
                                                             <td className="text-right p-3 font-mono font-semibold">
                                                                 ${parseFloat(e.amount).toFixed(2)}
@@ -502,6 +515,61 @@ export default function FarmInvoices() {
                                             </tbody>
                                         </table>
                                     </div>
+                                )}
+
+                                {confirmedFleetReceipts.length > 0 && (
+                                    <>
+                                        <h3 className="text-lg font-semibold text-emerald-800 mt-8 mb-3">Recibos Aprovados</h3>
+                                        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th className="text-left p-3 font-semibold text-gray-600">Data</th>
+                                                        <th className="text-left p-3 font-semibold text-gray-600">Máquina / Veículo</th>
+                                                        <th className="text-left p-3 font-semibold text-gray-600">Fornecedor</th>
+                                                        <th className="text-left p-3 font-semibold text-gray-600">Categoria</th>
+                                                        <th className="text-left p-3 font-semibold text-gray-600">Descrição</th>
+                                                        <th className="text-right p-3 font-semibold text-gray-600">Valor</th>
+                                                        <th className="text-center p-3 font-semibold text-gray-600">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {confirmedFleetReceipts.map((e: any) => {
+                                                        const equip = (equipment as any[]).find((eq) => eq.id === e.equipmentId);
+                                                        return (
+                                                            <tr key={e.id} className="border-t border-gray-100">
+                                                                <td className="p-3 text-gray-600">
+                                                                    {new Date(e.expenseDate).toLocaleDateString("pt-BR")}
+                                                                </td>
+                                                                <td className="p-3 font-semibold text-gray-700">
+                                                                    {equip?.name || "—"}
+                                                                </td>
+                                                                <td className="p-3 text-gray-600">
+                                                                    {extractSupplier(e.description)}
+                                                                </td>
+                                                                <td className="p-3">
+                                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                                                        {e.category}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-3 text-gray-600">
+                                                                    {cleanDescription(e.description)}
+                                                                </td>
+                                                                <td className="text-right p-3 font-mono font-semibold text-gray-700">
+                                                                    ${parseFloat(e.amount).toFixed(2)}
+                                                                </td>
+                                                                <td className="text-center p-3">
+                                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                                                        Aprovado
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
                                 )}
                             </CardContent>
                         </Card>

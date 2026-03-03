@@ -1769,21 +1769,26 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             }
 
             if (parsed.type === "expense") {
+                const supplierName = parsed.supplier || "";
+                const descParts = [`[Via WhatsApp]`];
+                if (supplierName) descParts.push(`[${supplierName}]`);
+                descParts.push(parsed.description || "Despesa");
+
                 await db.insert(farmExpenses).values({
                     farmerId: farmer.id,
                     equipmentId: matchedEquipmentId,
                     amount: String(amount),
-                    description: `[Via WhatsApp] ${parsed.description}`,
+                    description: descParts.join(" "),
                     category: parsed.category || 'outro',
                     status: 'pending',
                 });
                 if (matchedEquipmentId) {
                     return res.json({
-                        message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) recebida e vinculada à máquina/veículo informado. Ela está aguardando aprovação no painel da AgroFarm.`
+                        message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) da *${supplierName || 'empresa'}* recebida e vinculada à máquina/veículo informado. Ela está aguardando aprovação no painel da AgroFarm.`
                     });
                 }
                 return res.json({
-                    message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) recebida.\n\nDe qual veículo ou máquina é essa despesa? Responda com o nome ou placa para eu vincular à sua frota. 🚜`
+                    message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category})${supplierName ? ` da *${supplierName}*` : ''} recebida.\n\nDe qual veículo ou máquina é essa despesa? Responda com o nome ou placa para eu vincular à sua frota. 🚜`
                 });
             }
             else if (parsed.type === "invoice") {
