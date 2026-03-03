@@ -20,6 +20,7 @@ export default function FarmInvoices() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
+    const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
     const [selectedSeasonId, setSelectedSeasonId] = useState<string>("");
     const [skipStockEntry, setSkipStockEntry] = useState(false);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -54,6 +55,12 @@ export default function FarmInvoices() {
         queryKey: ["/api/farm/expenses"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/expenses"); return r.json(); },
         enabled: !!user,
+    });
+
+    const { data: expenseDetail } = useQuery({
+        queryKey: ["/api/farm/expenses", selectedExpense],
+        queryFn: async () => { const r = await apiRequest("GET", `/api/farm/expenses/${selectedExpense}`); return r.json(); },
+        enabled: !!selectedExpense,
     });
 
     const { data: equipment = [] } = useQuery({
@@ -488,6 +495,15 @@ export default function FarmInvoices() {
                                                                 <div className="flex items-center justify-end gap-2">
                                                                     <Button
                                                                         size="sm"
+                                                                        variant="outline"
+                                                                        className="text-emerald-700 border-emerald-200"
+                                                                        onClick={() => setSelectedExpense(e.id)}
+                                                                    >
+                                                                        <Eye className="mr-1 h-3 w-3" />
+                                                                        Ver
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
                                                                         className="bg-emerald-600 hover:bg-emerald-700"
                                                                         disabled={confirmExpenseMutation.isPending}
                                                                         onClick={() => confirmExpenseMutation.mutate(e.id)}
@@ -531,6 +547,7 @@ export default function FarmInvoices() {
                                                         <th className="text-left p-3 font-semibold text-gray-600">Descrição</th>
                                                         <th className="text-right p-3 font-semibold text-gray-600">Valor</th>
                                                         <th className="text-center p-3 font-semibold text-gray-600">Status</th>
+                                                        <th className="text-center p-3 font-semibold text-gray-600">Ações</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -563,6 +580,17 @@ export default function FarmInvoices() {
                                                                         Aprovado
                                                                     </span>
                                                                 </td>
+                                                                <td className="text-center p-3">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="text-gray-600 border-gray-200"
+                                                                        onClick={() => setSelectedExpense(e.id)}
+                                                                    >
+                                                                        <Eye className="mr-1 h-3 w-3" />
+                                                                        Ver
+                                                                    </Button>
+                                                                </td>
                                                             </tr>
                                                         );
                                                     })}
@@ -576,6 +604,85 @@ export default function FarmInvoices() {
                     </TabsContent>
                 </Tabs>
             </div>
+
+            <Dialog open={!!selectedExpense} onOpenChange={(open) => !open && setSelectedExpense(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-emerald-800">Detalhes do Recibo</DialogTitle>
+                    </DialogHeader>
+                    {expenseDetail ? (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <span className="text-gray-500">Fornecedor:</span>
+                                    <p className="font-semibold">{expenseDetail.supplier || extractSupplier(expenseDetail.description) || "—"}</p>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Categoria:</span>
+                                    <p><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{expenseDetail.category}</span></p>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Valor Total:</span>
+                                    <p className="font-semibold text-lg">${parseFloat(expenseDetail.amount).toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500">Data:</span>
+                                    <p className="font-semibold">{new Date(expenseDetail.expenseDate).toLocaleDateString("pt-BR")}</p>
+                                </div>
+                                <div className="col-span-2">
+                                    <span className="text-gray-500">Descrição:</span>
+                                    <p>{cleanDescription(expenseDetail.description)}</p>
+                                </div>
+                            </div>
+
+                            {expenseDetail.items && expenseDetail.items.length > 0 && (
+                                <div>
+                                    <h4 className="font-semibold text-emerald-800 mb-2">Itens do Recibo ({expenseDetail.items.length})</h4>
+                                    <div className="bg-white rounded-lg border border-emerald-100 overflow-hidden">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-emerald-50">
+                                                <tr>
+                                                    <th className="text-left p-2 font-semibold text-emerald-800">Item</th>
+                                                    <th className="text-center p-2 font-semibold text-emerald-800">Qtd</th>
+                                                    <th className="text-center p-2 font-semibold text-emerald-800">Unid</th>
+                                                    <th className="text-right p-2 font-semibold text-emerald-800">Preço Unit.</th>
+                                                    <th className="text-right p-2 font-semibold text-emerald-800">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {expenseDetail.items.map((item: any) => (
+                                                    <tr key={item.id} className="border-t border-gray-100">
+                                                        <td className="p-2 font-medium">{item.itemName}</td>
+                                                        <td className="text-center p-2">{parseFloat(item.quantity)}</td>
+                                                        <td className="text-center p-2 text-gray-500">{item.unit}</td>
+                                                        <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
+                                                        <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {expenseDetail.hasImage && (
+                                <div>
+                                    <h4 className="font-semibold text-emerald-800 mb-2">Imagem do Recibo</h4>
+                                    <img
+                                        src={`/api/farm/expenses/${selectedExpense}/image`}
+                                        alt="Recibo"
+                                        className="rounded-lg border border-gray-200 max-w-full"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </FarmLayout>
     );
 }

@@ -274,6 +274,16 @@ const runMigration = async () => {
             console.log('✅ Migração expense_equipment concluída!');
         }
 
+        // Migration 23: Add expense items table + supplier/image columns
+        const expenseItemsPath = path.join(process.cwd(), 'migration_add_expense_items.sql');
+        if (fs.existsSync(expenseItemsPath)) {
+            const expenseItemsSql = fs.readFileSync(expenseItemsPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', expenseItemsPath);
+            console.log('🚀 Executando SQL (expense_items)...');
+            await sql.unsafe(expenseItemsSql);
+            console.log('✅ Migração expense_items concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

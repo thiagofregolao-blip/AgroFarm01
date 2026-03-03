@@ -1003,7 +1003,11 @@ export function registerFarmRoutes(app: Express) {
     app.get("/api/farm/expenses", requireFarmer, async (req, res) => {
         try {
             const expenses = await farmStorage.getExpenses((req.user as any).id);
-            res.json(expenses);
+            const sanitized = (expenses as any[]).map(({ imageBase64, ...rest }) => ({
+                ...rest,
+                hasImage: !!imageBase64,
+            }));
+            res.json(sanitized);
         } catch (error) {
             console.error("[FARM_EXPENSES_GET]", error);
             res.status(500).json({ error: "Failed to get expenses" });
@@ -1068,6 +1072,66 @@ export function registerFarmRoutes(app: Express) {
         } catch (error) {
             console.error("[FARM_EXPENSE_DELETE]", error);
             res.status(500).json({ error: "Failed to delete expense" });
+        }
+    });
+
+    app.get("/api/farm/expenses/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenses, farmExpenseItems } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+
+            const [expense] = await db.select().from(farmExpenses).where(
+                and(
+                    eq(farmExpenses.id, req.params.id),
+                    eq(farmExpenses.farmerId, (req.user as any).id)
+                )
+            ).limit(1);
+
+            if (!expense) {
+                return res.status(404).json({ error: "Expense not found" });
+            }
+
+            const items = await db.select().from(farmExpenseItems).where(
+                eq(farmExpenseItems.expenseId, expense.id)
+            );
+
+            res.json({
+                ...expense,
+                imageBase64: expense.imageBase64 ? `data:image/jpeg;base64,${expense.imageBase64.substring(0, 50)}...` : null,
+                hasImage: !!expense.imageBase64,
+                items,
+            });
+        } catch (error) {
+            console.error("[FARM_EXPENSE_DETAIL]", error);
+            res.status(500).json({ error: "Failed to get expense detail" });
+        }
+    });
+
+    app.get("/api/farm/expenses/:id/image", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenses } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+
+            const [expense] = await db.select({ imageBase64: farmExpenses.imageBase64 }).from(farmExpenses).where(
+                and(
+                    eq(farmExpenses.id, req.params.id),
+                    eq(farmExpenses.farmerId, (req.user as any).id)
+                )
+            ).limit(1);
+
+            if (!expense?.imageBase64) {
+                return res.status(404).json({ error: "Image not found" });
+            }
+
+            const buffer = Buffer.from(expense.imageBase64, "base64");
+            res.setHeader("Content-Type", "image/jpeg");
+            res.setHeader("Content-Length", buffer.length);
+            res.send(buffer);
+        } catch (error) {
+            console.error("[FARM_EXPENSE_IMAGE]", error);
+            res.status(500).json({ error: "Failed to get expense image" });
         }
     });
 
@@ -1769,26 +1833,49 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             }
 
             if (parsed.type === "expense") {
+                const { farmExpenseItems } = await import("../shared/schema");
                 const supplierName = parsed.supplier || "";
                 const descParts = [`[Via WhatsApp]`];
                 if (supplierName) descParts.push(`[${supplierName}]`);
                 descParts.push(parsed.description || "Despesa");
 
-                await db.insert(farmExpenses).values({
+                const [newExpense] = await db.insert(farmExpenses).values({
                     farmerId: farmer.id,
                     equipmentId: matchedEquipmentId,
+                    supplier: supplierName || null,
                     amount: String(amount),
                     description: descParts.join(" "),
                     category: parsed.category || 'outro',
+                    imageBase64: base64Image,
                     status: 'pending',
-                });
+                }).returning();
+
+                let itemsCount = 0;
+                if (parsed.items && Array.isArray(parsed.items) && parsed.items.length > 0) {
+                    for (const item of parsed.items) {
+                        const q = parseFloat(item.quantity) || 1;
+                        const uPrice = parseFloat(item.unitPrice) || 0;
+                        const tPrice = parseFloat(item.totalPrice) || (q * uPrice);
+                        await db.insert(farmExpenseItems).values({
+                            expenseId: newExpense.id,
+                            itemName: item.productName || "Item",
+                            quantity: String(q),
+                            unit: item.unit || "UN",
+                            unitPrice: String(uPrice),
+                            totalPrice: String(tPrice),
+                        });
+                        itemsCount++;
+                    }
+                }
+
+                const itemsMsg = itemsCount > 0 ? ` com ${itemsCount} itens` : '';
                 if (matchedEquipmentId) {
                     return res.json({
-                        message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) da *${supplierName || 'empresa'}* recebida e vinculada à máquina/veículo informado. Ela está aguardando aprovação no painel da AgroFarm.`
+                        message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category}) da *${supplierName || 'empresa'}*${itemsMsg} recebida e vinculada à máquina/veículo informado. Ela está aguardando aprovação no painel da AgroFarm.`
                     });
                 }
                 return res.json({
-                    message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category})${supplierName ? ` da *${supplierName}*` : ''} recebida.\n\nDe qual veículo ou máquina é essa despesa? Responda com o nome ou placa para eu vincular à sua frota. 🚜`
+                    message: `✅ Despesa de R$ ${amount.toFixed(2)} (${parsed.category})${supplierName ? ` da *${supplierName}*` : ''}${itemsMsg} recebida.\n\nDe qual veículo ou máquina é essa despesa? Responda com o nome ou placa para eu vincular à sua frota. 🚜`
                 });
             }
             else if (parsed.type === "invoice") {

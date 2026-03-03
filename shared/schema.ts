@@ -1185,12 +1185,24 @@ export const farmExpenses = pgTable("farm_expenses", {
   equipmentId: varchar("equipment_id").references(() => farmEquipment.id),
   plotId: varchar("plot_id").references(() => farmPlots.id),
   propertyId: varchar("property_id").references(() => farmProperties.id),
-  category: text("category").notNull(), // diesel, frete, mao_de_obra, outro
+  category: text("category").notNull(),
+  supplier: text("supplier"),
   description: text("description"),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-  status: text("status", { enum: ["pending", "confirmed"] }).default("confirmed"), // Para aprovações do WhatsApp/n8n
+  imageBase64: text("image_base64"),
+  status: text("status", { enum: ["pending", "confirmed"] }).default("confirmed"),
   expenseDate: timestamp("expense_date").notNull().default(sql`now()`),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const farmExpenseItems = pgTable("farm_expense_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  expenseId: varchar("expense_id").notNull().references(() => farmExpenses.id, { onDelete: "cascade" }),
+  itemName: text("item_name").notNull(),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  unit: text("unit"),
+  unitPrice: decimal("unit_price", { precision: 15, scale: 4 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 15, scale: 2 }).notNull(),
 });
 
 // Histórico simplificado de preços para consulta rápida no n8n/WhatsApp
