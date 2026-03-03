@@ -1171,8 +1171,9 @@ export const farmApplications = pgTable("farm_applications", {
   horimeter: integer("horimeter"), // Horímetro no momento (opcional)
   odometer: integer("odometer"), // Hodômetro no momento (opcional)
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  dosePerHa: decimal("dose_per_ha", { precision: 10, scale: 4 }),
   appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
-  appliedBy: text("applied_by"), // Nome do funcionário (manual)
+  appliedBy: text("applied_by"),
   notes: text("notes"),
   syncedFromOffline: boolean("synced_from_offline").default(false),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),

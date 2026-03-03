@@ -188,9 +188,8 @@ export default function PdvTerminal() {
     };
 
     const updateDose = (productId: string, dose: number | string) => {
-        let numericDose = typeof dose === 'string' ? parseFloat(dose.replace(',', '.')) : dose;
-        if (isNaN(numericDose) || numericDose < 0) numericDose = 0;
-        setCart(cart.map(c => c.product.id === productId ? { ...c, dosePerHa: dose } : c));
+        const normalized = typeof dose === 'string' ? dose.replace(',', '.') : dose;
+        setCart(cart.map(c => c.product.id === productId ? { ...c, dosePerHa: normalized } : c));
     };
 
     const removeFromCart = (productId: string) => {
@@ -211,9 +210,15 @@ export default function PdvTerminal() {
         return selectedPlots.reduce((sum, p) => sum + (parseFloat(p.areaHa) || 0), 0);
     }, [selectedPlots]);
 
+    const parseBR = (v: any) => {
+        if (v === undefined || v === null || v === '') return NaN;
+        const s = String(v).replace(',', '.');
+        return parseFloat(s);
+    };
+
     const getDistribution = (item: CartItem) => {
-        const dose = item.dosePerHa !== undefined ? (typeof item.dosePerHa === 'string' ? parseFloat(item.dosePerHa) : item.dosePerHa) : parseFloat(item.product.dosePerHa);
-        const totalQty = typeof item.quantity === 'string' ? (parseFloat(item.quantity) || 0) : item.quantity;
+        const dose = item.dosePerHa !== undefined && item.dosePerHa !== '' ? parseBR(item.dosePerHa) : parseBR(item.product.dosePerHa);
+        const totalQty = parseBR(item.quantity) || 0;
 
         if (dose && !isNaN(dose) && selectedPlots.length > 0) {
             let totalIdeal = 0;
@@ -432,7 +437,9 @@ export default function PdvTerminal() {
 
             for (const item of confirmationData) {
                 const cartItem = cart.find(c => c.product.id === item.product.id);
-                const appliedDose = cartItem?.dosePerHa;
+                const appliedDose = cartItem?.dosePerHa !== undefined && cartItem?.dosePerHa !== ''
+                    ? parseBR(cartItem.dosePerHa) : parseBR(item.product.dosePerHa);
+                const validDose = !isNaN(appliedDose) && appliedDose > 0 ? appliedDose : undefined;
 
                 for (const d of item.distribution) {
                     if (d.allocatedQty <= 0) continue;
@@ -445,16 +452,17 @@ export default function PdvTerminal() {
                         horimeter: horimeter || null,
                         odometer: odometer || null,
                         notes: count === 0 ? instructions : undefined,
+                        dosePerHa: validDose,
                     } : {
                         productId: item.product.id,
                         quantity: d.allocatedQty,
                         plotId: d.plotId,
                         propertyId: plot?.propertyId,
                         notes: count === 0 ? instructions : undefined,
+                        dosePerHa: validDose,
                     };
                     payloads.push(payload);
 
-                    // If online, send immediately. If offline, queue it.
                     if (isOnline) {
                         await apiRequest("POST", "/api/pdv/withdraw", payload);
                     }
@@ -466,7 +474,7 @@ export default function PdvTerminal() {
                         propertyId: plot?.propertyId,
                         plotName: d.plotName,
                         productName: item.product.name,
-                        dosePerHa: appliedDose ? Number(appliedDose) : undefined,
+                        dosePerHa: validDose,
                         unit: item.product.unit,
                     });
                     count++;
@@ -518,20 +526,25 @@ export default function PdvTerminal() {
                 batch.applications.some((app: any) => app.propertyId === p.id)
             ) || properties[0];
 
-            // Reorganizar aplicações para estrutura do PDF
             const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
+            const products = pdvData?.products || [];
 
             batch.applications.forEach((app: any) => {
-                const dosePerHa = app.productName ? undefined : undefined; // Precisa buscar do produto
+                const productInfo = products.find((p: any) => p.id === app.productId || p.name === app.productName);
+                const storedDose = app.dosePerHa ? parseFloat(app.dosePerHa) : undefined;
+                const fallbackDose = productInfo?.dosePerHa ? parseFloat(productInfo.dosePerHa) : undefined;
+                const dosePerHa = storedDose || fallbackDose;
+
                 if (!productsByProduct.has(app.productName)) {
                     productsByProduct.set(app.productName, {
                         productName: app.productName,
-                        dosePerHa: dosePerHa,
-                        unit: "L", // Precisa buscar do produto
+                        dosePerHa,
+                        unit: productInfo?.unit || "L",
                         plots: [],
                     });
                 }
                 const product = productsByProduct.get(app.productName)!;
+                if (!product.dosePerHa && dosePerHa) product.dosePerHa = dosePerHa;
                 const existingPlot = product.plots.find(p => p.plotName === app.plotName);
                 if (existingPlot) {
                     existingPlot.quantity += parseFloat(app.quantity);
@@ -543,16 +556,7 @@ export default function PdvTerminal() {
                 }
             });
 
-            // Buscar informações completas dos produtos
-            const products = pdvData?.products || [];
-            const productsWithDetails = Array.from(productsByProduct.values()).map(product => {
-                const productInfo = products.find((p: any) => p.name === product.productName);
-                return {
-                    ...product,
-                    dosePerHa: productInfo?.dosePerHa ? parseFloat(productInfo.dosePerHa) : undefined,
-                    unit: productInfo?.unit || product.unit,
-                };
-            });
+            const productsWithDetails = Array.from(productsByProduct.values());
 
             const pdfData: ReceituarioData = {
                 propertyName: firstProperty?.name || batch.propertyName || "Propriedade",
@@ -1134,13 +1138,10 @@ export default function PdvTerminal() {
                                 // Use the dose from the item (calculated in getDistribution using the overridden dose)
                                 // We need to find the cart item again to access the dosePerHa property if it wasn't preserved in confirmationData mapping
                                 // Actually, confirmationData items map `product` and `totalQty`. 
-                                // Let's check `getDistribution` again. It uses `item.dosePerHa`.
-                                // Wait, `confirmationData` maps `cart.map`. 
-                                // `item` here is the result of that map: `{ product, totalQty, distribution, totalAllocated }`
-                                // We should access the dose from the cart item associated with this product.
                                 const cartItem = cart.find(c => c.product.id === p.id);
-                                const dose = cartItem?.dosePerHa;
-                                const hasDose = dose !== undefined && dose !== null && !isNaN(Number(dose));
+                                const rawDose = cartItem?.dosePerHa !== undefined && cartItem?.dosePerHa !== '' ? parseBR(cartItem.dosePerHa) : parseBR(p.dosePerHa);
+                                const hasDose = !isNaN(rawDose) && rawDose > 0;
+                                const dose = hasDose ? rawDose : 0;
                                 const diff = Number(item.totalQty) - Number(item.totalAllocated);
 
                                 return (
@@ -1161,7 +1162,7 @@ export default function PdvTerminal() {
                                                     {hasDose && (
                                                         <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                                                             <Droplets className="h-3 w-3" />
-                                                            {Number(dose).toFixed(1)} {p.unit}/ha
+                                                            {dose.toFixed(1)} {p.unit}/ha
                                                         </span>
                                                     )}
                                                 </div>
@@ -1184,7 +1185,7 @@ export default function PdvTerminal() {
                                                         <p className="text-sm font-bold text-gray-700 truncate">{d.plotName}</p>
                                                         <p className="text-[10px] text-gray-400">
                                                             {d.areaHa.toFixed(1)} ha
-                                                            {hasDose && <span className="text-blue-400 ml-1">• Ideal: {(d.areaHa * Number(dose)).toFixed(0)}</span>}
+                                                            {hasDose && <span className="text-blue-400 ml-1">• Ideal: {(d.areaHa * dose).toFixed(0)}</span>}
                                                         </p>
                                                     </div>
                                                     {/* Quantity Input */}

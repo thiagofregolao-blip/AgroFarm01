@@ -254,6 +254,16 @@ const runMigration = async () => {
             console.log('✅ Migração language concluída!');
         }
 
+        // Migration 21: Add dose_per_ha to farm_applications
+        const dosePerHaPath = path.join(process.cwd(), 'migration_add_dose_per_ha.sql');
+        if (fs.existsSync(dosePerHaPath)) {
+            const dosePerHaSql = fs.readFileSync(dosePerHaPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', dosePerHaPath);
+            console.log('🚀 Executando SQL (dose_per_ha)...');
+            await sql.unsafe(dosePerHaSql);
+            console.log('✅ Migração dose_per_ha concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

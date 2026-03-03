@@ -472,6 +472,7 @@ export class FarmStorage {
             plotId: farmApplications.plotId,
             propertyId: farmApplications.propertyId,
             quantity: farmApplications.quantity,
+            dosePerHa: farmApplications.dosePerHa,
             appliedAt: farmApplications.appliedAt,
             appliedBy: farmApplications.appliedBy,
             notes: farmApplications.notes,
