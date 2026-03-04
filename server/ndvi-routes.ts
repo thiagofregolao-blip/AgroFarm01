@@ -207,7 +207,7 @@ export function registerNdviRoutes(app: Express) {
                         batch.map(async (d) => {
                             let thumb: string | null = null;
                             try {
-                                thumb = await generateNdviImage(geometry, bbox, d.date, "ndvi_contrast", 128);
+                                thumb = await generateNdviImage(geometry, bbox, d.date, "ndvi_contrast", 256);
                             } catch (e) {
                                 console.error(`[NDVI] Thumb failed for ${d.date}:`, e);
                             }
