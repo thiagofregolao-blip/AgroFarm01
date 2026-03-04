@@ -165,27 +165,28 @@ export class WhatsAppService {
     }
 
     if (ctx.step === "awaiting_equipment") {
-      if (!search) {
-        await this.sendMessage(replyTo,
-          "Me mande o nome da máquina/veículo, por exemplo: *John Deere 5360*.",
-          replyIsGroup
-        );
-        return true;
+      const allEquipment = await db.select().from(farmEquipment).where(eq(farmEquipment.farmerId, farmerId));
+      const skipOption = allEquipment.length + 1;
+      const idx = parseInt(search) - 1;
+
+      let equip: any = null;
+      if (!isNaN(idx) && idx >= 0 && idx < allEquipment.length) {
+        equip = allEquipment[idx];
+      } else if (parseInt(search) === skipOption) {
+        equip = null;
+      } else {
+        equip = allEquipment.find(e => e.name.toLowerCase().includes(search.toLowerCase()));
+        if (!equip) {
+          const equipList = allEquipment.map((e, i) => `${i + 1}️⃣ ${e.name}`).join("\n");
+          await this.sendMessage(replyTo,
+            `Não entendi. Responda com o número:\n${equipList}\n${skipOption}️⃣ Nenhuma`,
+            replyIsGroup
+          );
+          return true;
+        }
       }
 
-      const [equip] = await db.select().from(farmEquipment).where(
-        and(eq(farmEquipment.farmerId, farmerId), ilike(farmEquipment.name, `%${search}%`))
-      ).limit(1);
-
-      if (!equip) {
-        await this.sendMessage(replyTo,
-          `Não achei "${search}" na frota. Tente o nome exato como cadastrado no painel.`,
-          replyIsGroup
-        );
-        return true;
-      }
-
-      if (ctx.expenseId) {
+      if (equip && ctx.expenseId) {
         const [exp] = await db.select().from(farmExpenses).where(eq(farmExpenses.id, ctx.expenseId)).limit(1);
         await db.update(farmExpenses).set({
           equipmentId: equip.id,
@@ -196,22 +197,22 @@ export class WhatsAppService {
       const accounts = await db.select().from(farmCashAccounts).where(
         and(eq(farmCashAccounts.farmerId, farmerId), eq(farmCashAccounts.isActive, true))
       );
+      const equipMsg = equip ? `🚜 Máquina: *${equip.name}* ✅` : `🚜 Sem vínculo de máquina ✅`;
 
       if (accounts.length > 0) {
         await db.update(farmWhatsappPendingContext).set({
           step: "awaiting_account",
-          data: { ...data, equipmentId: equip.id, equipmentName: equip.name },
+          data: { ...data, equipmentId: equip?.id || null, equipmentName: equip?.name || null },
         }).where(eq(farmWhatsappPendingContext.id, ctx.id));
-
         const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
         await this.sendMessage(replyTo,
-          `Vinculado a *${equip.name}* ✅\n\nDe qual conta saiu o pagamento?\n${accountList}`,
+          `${equipMsg}\n\nDe qual conta saiu o pagamento?\n${accountList}`,
           replyIsGroup
         );
       } else {
         await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
         await this.sendMessage(replyTo,
-          `Vinculado a *${equip.name}* ✅\nDespesa aguardando aprovação no painel.`,
+          `Pronto! ✅\n${equipMsg}\nDespesa aguardando aprovação no painel da AgroFarm! 🌾`,
           replyIsGroup
         );
       }
@@ -222,15 +223,16 @@ export class WhatsAppService {
       const accounts = await db.select().from(farmCashAccounts).where(
         and(eq(farmCashAccounts.farmerId, farmerId), eq(farmCashAccounts.isActive, true))
       );
-
       const idx = parseInt(search) - 1;
-      let matched = accounts[idx];
-      if (!matched) {
-        matched = accounts.find(a => a.name.toLowerCase().includes(search.toLowerCase())) as any;
+      let matched: any = null;
+      if (!isNaN(idx) && idx >= 0 && idx < accounts.length) {
+        matched = accounts[idx];
+      } else {
+        matched = accounts.find(a => a.name.toLowerCase().includes(search.toLowerCase()));
       }
 
       if (!matched) {
-        const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name}`).join("\n");
+        const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
         await this.sendMessage(replyTo,
           `Não entendi. Responda com o número:\n${accountList}`,
           replyIsGroup
@@ -238,33 +240,43 @@ export class WhatsAppService {
         return true;
       }
 
+      let expAmount = 0;
+      let expCategory = data.category || "";
       if (ctx.expenseId) {
         const [exp] = await db.select().from(farmExpenses).where(eq(farmExpenses.id, ctx.expenseId)).limit(1);
         if (exp) {
-          const amount = parseFloat(exp.amount as string) || 0;
+          expAmount = parseFloat(exp.amount as string) || 0;
+          expCategory = exp.category;
           await db.insert(farmCashTransactions).values({
             farmerId,
             accountId: matched.id,
             type: "saida",
-            amount: String(amount),
+            amount: String(expAmount),
             currency: matched.currency,
-            category: exp.category,
+            category: expCategory,
             description: exp.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa via WhatsApp",
             paymentMethod: "efetivo",
             expenseId: exp.id,
             referenceType: "whatsapp",
           });
           await db.update(farmCashAccounts)
-            .set({ currentBalance: sql`current_balance - ${amount}` })
+            .set({ currentBalance: sql`current_balance - ${expAmount}` })
             .where(eq(farmCashAccounts.id, matched.id));
         }
       }
 
       await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
-      await this.sendMessage(replyTo,
-        `Lançado no caixa *${matched.name}* ✅\nDespesa registrada e aguardando aprovação no painel da AgroFarm! 🌾`,
-        replyIsGroup
-      );
+
+      const amt = data.amount || expAmount;
+      const amtStr = typeof amt === 'number' ? amt.toFixed(2) : parseFloat(amt).toFixed(2);
+      const summary = [`Pronto! ✅`, `💰 Despesa: *$ ${amtStr}*`];
+      if (data.supplierName) summary.push(`🏪 Fornecedor: *${data.supplierName}*`);
+      if (expCategory) summary.push(`📋 Categoria: *${expCategory}*`);
+      if (data.equipmentName) summary.push(`🚜 Máquina: *${data.equipmentName}*`);
+      summary.push(`🏦 Conta: *${matched.name}*`);
+      summary.push(`\nAguardando aprovação no painel da AgroFarm! 🌾`);
+
+      await this.sendMessage(replyTo, summary.join("\n"), replyIsGroup);
       return true;
     }
 

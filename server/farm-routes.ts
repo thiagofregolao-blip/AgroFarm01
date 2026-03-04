@@ -1931,18 +1931,24 @@ export function registerFarmRoutes(app: Express) {
             const data = (ctx.data as any) || {};
 
             if (ctx.step === "awaiting_equipment") {
-                if (!search) {
-                    return res.json({ handled: true, reply: "Me mande o nome da máquina/veículo. Ex: *John Deere 5360*." });
-                }
-                const [equip] = await db.select().from(farmEquipment).where(
-                    and(eq(farmEquipment.farmerId, farmer.id), ilike(farmEquipment.name, `%${search}%`))
-                ).limit(1);
+                const allEquipment = await db.select().from(farmEquipment).where(eq(farmEquipment.farmerId, farmer.id));
+                const skipOption = allEquipment.length + 1;
+                const idx = parseInt(search) - 1;
 
-                if (!equip) {
-                    return res.json({ handled: true, reply: `Não achei "${search}" na frota. Tente o nome exato.` });
+                let equip: any = null;
+                if (!isNaN(idx) && idx >= 0 && idx < allEquipment.length) {
+                    equip = allEquipment[idx];
+                } else if (parseInt(search) === skipOption) {
+                    equip = null;
+                } else {
+                    equip = allEquipment.find(e => e.name.toLowerCase().includes(search.toLowerCase()));
+                    if (!equip) {
+                        const equipList = allEquipment.map((e, i) => `${i + 1}️⃣ ${e.name}`).join("\n");
+                        return res.json({ handled: true, reply: `Não entendi. Responda com o número:\n${equipList}\n${skipOption}️⃣ Nenhuma` });
+                    }
                 }
 
-                if (ctx.expenseId) {
+                if (equip && ctx.expenseId) {
                     const [exp] = await db.select().from(farmExpenses).where(eq(farmExpenses.id, ctx.expenseId)).limit(1);
                     await db.update(farmExpenses).set({
                         equipmentId: equip.id,
@@ -1954,16 +1960,20 @@ export function registerFarmRoutes(app: Express) {
                     and(eq(farmCashAccounts.farmerId, farmer.id), eq(farmCashAccounts.isActive, true))
                 );
 
+                const equipMsg = equip ? `🚜 Máquina: *${equip.name}* ✅` : `🚜 Sem vínculo de máquina ✅`;
+
                 if (accounts.length > 0) {
                     await db.update(farmWhatsappPendingContext).set({
                         step: "awaiting_account",
-                        data: { ...data, equipmentId: equip.id, equipmentName: equip.name },
+                        data: { ...data, equipmentId: equip?.id || null, equipmentName: equip?.name || null },
                     }).where(eq(farmWhatsappPendingContext.id, ctx.id));
                     const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
-                    return res.json({ handled: true, reply: `Vinculado a *${equip.name}* ✅\n\nDe qual conta saiu o pagamento?\n${accountList}` });
+                    return res.json({ handled: true, reply: `${equipMsg}\n\nDe qual conta saiu o pagamento?\n${accountList}` });
                 }
+
                 await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
-                return res.json({ handled: true, reply: `Vinculado a *${equip.name}* ✅ Aguardando aprovação no painel.` });
+                const amt = data.amount ? `$ ${parseFloat(data.amount).toFixed(2)}` : '';
+                return res.json({ handled: true, reply: `Pronto! ✅\n💰 Despesa: ${amt}\n${equipMsg}\n\nAguardando aprovação no painel da AgroFarm! 🌾` });
             }
 
             if (ctx.step === "awaiting_account") {
@@ -1971,30 +1981,49 @@ export function registerFarmRoutes(app: Express) {
                     and(eq(farmCashAccounts.farmerId, farmer.id), eq(farmCashAccounts.isActive, true))
                 );
                 const idx = parseInt(search) - 1;
-                let matched = accounts[idx];
-                if (!matched) matched = accounts.find(a => a.name.toLowerCase().includes(search.toLowerCase())) as any;
+                let matched: any = null;
+                if (!isNaN(idx) && idx >= 0 && idx < accounts.length) {
+                    matched = accounts[idx];
+                } else {
+                    matched = accounts.find(a => a.name.toLowerCase().includes(search.toLowerCase()));
+                }
                 if (!matched) {
-                    const list = accounts.map((a, i) => `${i + 1}️⃣ ${a.name}`).join("\n");
+                    const list = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
                     return res.json({ handled: true, reply: `Não entendi. Responda com o número:\n${list}` });
                 }
 
+                let expAmount = 0;
+                let expCategory = data.category || "";
                 if (ctx.expenseId) {
                     const [exp] = await db.select().from(farmExpenses).where(eq(farmExpenses.id, ctx.expenseId)).limit(1);
                     if (exp) {
-                        const amt = parseFloat(exp.amount as string) || 0;
+                        expAmount = parseFloat(exp.amount as string) || 0;
+                        expCategory = exp.category;
                         await db.insert(farmCashTransactions).values({
                             farmerId: farmer.id, accountId: matched.id, type: "saida",
-                            amount: String(amt), currency: matched.currency, category: exp.category,
+                            amount: String(expAmount), currency: matched.currency, category: expCategory,
                             description: exp.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa WhatsApp",
                             paymentMethod: "efetivo", expenseId: exp.id, referenceType: "whatsapp",
                         });
                         await db.update(farmCashAccounts)
-                            .set({ currentBalance: sqlFn`current_balance - ${amt}` })
+                            .set({ currentBalance: sqlFn`current_balance - ${expAmount}` })
                             .where(eq(farmCashAccounts.id, matched.id));
                     }
                 }
+
                 await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
-                return res.json({ handled: true, reply: `Lançado no caixa *${matched.name}* ✅ Despesa registrada! 🌾` });
+
+                const summary = [
+                    `Pronto! ✅`,
+                    `💰 Despesa: *$ ${(data.amount || expAmount).toFixed ? (data.amount || expAmount).toFixed(2) : parseFloat(data.amount || expAmount).toFixed(2)}*`,
+                ];
+                if (data.supplierName) summary.push(`🏪 Fornecedor: *${data.supplierName}*`);
+                if (expCategory) summary.push(`📋 Categoria: *${expCategory}*`);
+                if (data.equipmentName) summary.push(`🚜 Máquina: *${data.equipmentName}*`);
+                summary.push(`🏦 Conta: *${matched.name}*`);
+                summary.push(`\nAguardando aprovação no painel da AgroFarm! 🌾`);
+
+                return res.json({ handled: true, reply: summary.join("\n") });
             }
 
             return res.json({ handled: false });
@@ -2189,37 +2218,59 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 const accounts = await db.select().from(farmCashAccounts).where(
                     and(eq(farmCashAccounts.farmerId, farmer.id), eq(farmCashAccounts.isActive, true))
                 );
+                const allEquipment = await db.select().from(farmEquipment).where(
+                    eq(farmEquipment.farmerId, farmer.id)
+                );
 
-                if (matchedEquipmentId && accounts.length > 0) {
+                const header = `✅ Recibo de *$ ${amount.toFixed(2)}*${supplierName ? ` da *${supplierName}*` : ''} (${parsed.category})${itemsMsg} recebido!`;
+
+                if (matchedEquipmentId) {
+                    const matchedEquip = allEquipment.find(e => e.id === matchedEquipmentId);
+                    if (accounts.length > 0) {
+                        await db.insert(farmWhatsappPendingContext).values({
+                            farmerId: farmer.id, phone: formattedPhone, step: "awaiting_account",
+                            expenseId: newExpense.id,
+                            data: { equipmentId: matchedEquipmentId, equipmentName: matchedEquip?.name, supplierName, amount, category: parsed.category },
+                            expiresAt,
+                        });
+                        const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
+                        return res.json({
+                            message: `${header}\n🚜 Máquina: *${matchedEquip?.name}*\n\nDe qual conta saiu o pagamento?\n${accountList}`
+                        });
+                    }
+                    return res.json({
+                        message: `${header}\n🚜 Máquina: *${matchedEquip?.name}*\n\nAguardando aprovação no painel da AgroFarm! 🌾`
+                    });
+                }
+
+                if (allEquipment.length > 0) {
                     await db.insert(farmWhatsappPendingContext).values({
-                        farmerId: farmer.id,
-                        phone: formattedPhone,
-                        step: "awaiting_account",
+                        farmerId: farmer.id, phone: formattedPhone, step: "awaiting_equipment",
                         expenseId: newExpense.id,
-                        data: { equipmentId: matchedEquipmentId },
+                        data: { supplierName, amount, category: parsed.category },
+                        expiresAt,
+                    });
+                    const equipList = allEquipment.map((e, i) => `${i + 1}️⃣ ${e.name}`).join("\n");
+                    return res.json({
+                        message: `${header}\n\nDe qual máquina/veículo é essa despesa?\n${equipList}\n${allEquipment.length + 1}️⃣ Nenhuma (não vincular)`
+                    });
+                }
+
+                if (accounts.length > 0) {
+                    await db.insert(farmWhatsappPendingContext).values({
+                        farmerId: farmer.id, phone: formattedPhone, step: "awaiting_account",
+                        expenseId: newExpense.id,
+                        data: { supplierName, amount, category: parsed.category },
                         expiresAt,
                     });
                     const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
                     return res.json({
-                        message: `✅ Despesa de $ ${amount.toFixed(2)} (${parsed.category}) da *${supplierName || 'empresa'}*${itemsMsg} recebida e vinculada à máquina/veículo.\n\nDe qual conta saiu o pagamento?\n${accountList}`
-                    });
-                }
-                if (matchedEquipmentId) {
-                    return res.json({
-                        message: `✅ Despesa de $ ${amount.toFixed(2)} (${parsed.category}) da *${supplierName || 'empresa'}*${itemsMsg} recebida e vinculada. Aguardando aprovação no painel da AgroFarm.`
+                        message: `${header}\n\nDe qual conta saiu o pagamento?\n${accountList}`
                     });
                 }
 
-                await db.insert(farmWhatsappPendingContext).values({
-                    farmerId: farmer.id,
-                    phone: formattedPhone,
-                    step: "awaiting_equipment",
-                    expenseId: newExpense.id,
-                    data: {},
-                    expiresAt,
-                });
                 return res.json({
-                    message: `✅ Despesa de $ ${amount.toFixed(2)} (${parsed.category})${supplierName ? ` da *${supplierName}*` : ''}${itemsMsg} recebida.\n\nDe qual veículo ou máquina é essa despesa? Responda com o nome ou placa. 🚜`
+                    message: `${header}\n\nAguardando aprovação no painel da AgroFarm! 🌾`
                 });
             }
             else if (parsed.type === "invoice") {
