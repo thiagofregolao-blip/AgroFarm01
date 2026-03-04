@@ -176,8 +176,17 @@ export default function FarmInvoices() {
                 credentials: "include",
             });
 
-            if (!res.ok) throw new Error("Upload failed");
             const data = await res.json();
+            if (res.status === 409) {
+                toast({
+                    title: "Fatura possivelmente duplicada!",
+                    description: data.message,
+                    variant: "destructive",
+                    duration: 10000,
+                });
+                return;
+            }
+            if (!res.ok) throw new Error("Upload failed");
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
             setSelectedInvoice(data.invoice.id);
             setImportDialogOpen(false);

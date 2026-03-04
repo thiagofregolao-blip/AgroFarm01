@@ -666,11 +666,48 @@ export function registerFarmRoutes(app: Express) {
             }
 
 
+            // Verificação de duplicidade
+            const farmerId = (req.user as any).id;
+            const { farmInvoices } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and, or, ilike } = await import("drizzle-orm");
+
+            const existingInvoices = await db.select({
+                id: farmInvoices.id,
+                invoiceNumber: farmInvoices.invoiceNumber,
+                supplier: farmInvoices.supplier,
+                totalAmount: farmInvoices.totalAmount,
+                status: farmInvoices.status,
+            }).from(farmInvoices).where(eq(farmInvoices.farmerId, farmerId));
+
+            const parsedAmount = parseFloat(String(parsed.totalAmount)) || 0;
+            const duplicate = existingInvoices.find(inv => {
+                const invAmount = parseFloat(inv.totalAmount as string) || 0;
+                const sameNumber = parsed.invoiceNumber && inv.invoiceNumber &&
+                    inv.invoiceNumber.replace(/\D/g, '') === parsed.invoiceNumber.replace(/\D/g, '');
+                const sameSupplier = parsed.supplier && inv.supplier &&
+                    inv.supplier.toLowerCase().includes(parsed.supplier.toLowerCase().substring(0, 10));
+                const sameAmount = Math.abs(invAmount - parsedAmount) < 0.01;
+                return (sameNumber && sameAmount) || (sameNumber && sameSupplier) || (sameSupplier && sameAmount);
+            });
+
+            if (duplicate) {
+                const statusLabel = duplicate.status === "confirmed" ? "confirmada" : "pendente";
+                return res.status(409).json({
+                    error: "duplicate",
+                    message: `⚠️ Fatura possivelmente duplicada! Já existe uma fatura ${statusLabel} com dados semelhantes:\n` +
+                        `• Número: ${duplicate.invoiceNumber || 'N/A'}\n` +
+                        `• Fornecedor: ${duplicate.supplier || 'N/A'}\n` +
+                        `• Valor: $ ${(parseFloat(duplicate.totalAmount as string) || 0).toFixed(2)}`,
+                    existingId: duplicate.id,
+                });
+            }
+
             // Create invoice record
             const seasonId = req.body?.seasonId || null;
             const skipStockEntry = req.body?.skipStockEntry === "true";
             const invoice = await farmStorage.createInvoice({
-                farmerId: (req.user as any).id,
+                farmerId,
                 seasonId,
                 invoiceNumber: parsed.invoiceNumber,
                 supplier: parsed.supplier,
@@ -679,7 +716,7 @@ export function registerFarmRoutes(app: Express) {
                 totalAmount: String(parsed.totalAmount),
                 status: "pending",
                 skipStockEntry,
-                rawPdfData: parsed.rawText.substring(0, 5000), // Save first 5k chars for debug
+                rawPdfData: parsed.rawText.substring(0, 5000),
             });
 
             // Create invoice items (try to match with catalog products, auto-create if not found)
@@ -2390,6 +2427,26 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             if (parsed.type === "expense") {
                 const { farmExpenseItems } = await import("../shared/schema");
                 const supplierName = parsed.supplier || "";
+
+                const recentExpenses = await db.select({
+                    id: farmExpenses.id, supplier: farmExpenses.supplier,
+                    amount: farmExpenses.amount, expenseDate: farmExpenses.expenseDate,
+                }).from(farmExpenses).where(eq(farmExpenses.farmerId, farmer.id));
+
+                const expDuplicate = recentExpenses.find(e => {
+                    const eAmt = parseFloat(e.amount as string) || 0;
+                    const sameAmt = Math.abs(eAmt - amount) < 0.01;
+                    const sameSup = supplierName && e.supplier &&
+                        e.supplier.toLowerCase().includes(supplierName.toLowerCase().substring(0, 8));
+                    const recentDate = e.expenseDate && (Date.now() - new Date(e.expenseDate).getTime()) < 24 * 60 * 60 * 1000;
+                    return sameAmt && sameSup && recentDate;
+                });
+
+                if (expDuplicate) {
+                    return res.json({
+                        message: `⚠️ *Recibo possivelmente duplicado!*\n\nJá existe uma despesa recente com dados semelhantes:\n• Fornecedor: ${expDuplicate.supplier || 'N/A'}\n• Valor: $ ${(parseFloat(expDuplicate.amount as string) || 0).toFixed(2)}\n\nEsse recibo *não foi cadastrado* para evitar duplicidade. Verifique no painel.`
+                    });
+                }
                 const descParts = [`[Via WhatsApp]`];
                 if (supplierName) descParts.push(`[${supplierName}]`);
                 descParts.push(parsed.description || "Despesa");
@@ -2485,6 +2542,27 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 });
             }
             else if (parsed.type === "invoice") {
+                const existingInvs = await db.select({
+                    id: farmInvoices.id, invoiceNumber: farmInvoices.invoiceNumber,
+                    supplier: farmInvoices.supplier, totalAmount: farmInvoices.totalAmount,
+                }).from(farmInvoices).where(eq(farmInvoices.farmerId, farmer.id));
+
+                const invDuplicate = existingInvs.find(inv => {
+                    const invAmt = parseFloat(inv.totalAmount as string) || 0;
+                    const sameNum = parsed.invoiceNumber && inv.invoiceNumber &&
+                        inv.invoiceNumber.replace(/\D/g, '') === String(parsed.invoiceNumber).replace(/\D/g, '');
+                    const sameSup = parsed.supplier && inv.supplier &&
+                        inv.supplier.toLowerCase().includes(String(parsed.supplier).toLowerCase().substring(0, 10));
+                    const sameAmt = Math.abs(invAmt - amount) < 0.01;
+                    return (sameNum && sameAmt) || (sameNum && sameSup) || (sameSup && sameAmt);
+                });
+
+                if (invDuplicate) {
+                    return res.json({
+                        message: `⚠️ *Fatura possivelmente duplicada!*\n\nJá existe uma fatura no sistema com dados semelhantes:\n• Nº: ${invDuplicate.invoiceNumber || 'N/A'}\n• Fornecedor: ${invDuplicate.supplier || 'N/A'}\n• Valor: $ ${(parseFloat(invDuplicate.totalAmount as string) || 0).toFixed(2)}\n\nEssa fatura *não foi cadastrada* para evitar duplicidade. Verifique no painel.`
+                    });
+                }
+
                 const [newInvoice] = await db.insert(farmInvoices).values({
                     farmerId: farmer.id,
                     totalAmount: String(amount),

@@ -216,6 +216,35 @@ export async function createDraftInvoice(
         console.error("[Invoice Email] Error getting season:", e);
     }
 
+    // Verificação de duplicidade
+    const { eq, and } = await import("drizzle-orm");
+    const existingInvs = await db.select({
+        id: farmInvoices.id, invoiceNumber: farmInvoices.invoiceNumber,
+        supplier: farmInvoices.supplier, totalAmount: farmInvoices.totalAmount,
+        sourceEmailId: farmInvoices.sourceEmailId,
+    }).from(farmInvoices).where(eq(farmInvoices.farmerId, farmerId));
+
+    if (emailId && existingInvs.find(inv => inv.sourceEmailId === emailId)) {
+        console.log(`[Invoice Email] Duplicada por emailId: ${emailId}`);
+        return existingInvs.find(inv => inv.sourceEmailId === emailId) as any;
+    }
+
+    const parsedAmt = parseFloat(String(extracted.totalAmount)) || 0;
+    const emailDuplicate = existingInvs.find(inv => {
+        const invAmt = parseFloat(inv.totalAmount as string) || 0;
+        const sameNum = extracted.invoiceNumber && inv.invoiceNumber &&
+            inv.invoiceNumber.replace(/\D/g, '') === String(extracted.invoiceNumber).replace(/\D/g, '');
+        const sameSup = extracted.supplier && inv.supplier &&
+            inv.supplier.toLowerCase().includes(String(extracted.supplier).toLowerCase().substring(0, 10));
+        const sameAmt = Math.abs(invAmt - parsedAmt) < 0.01;
+        return (sameNum && sameAmt) || (sameNum && sameSup) || (sameSup && sameAmt);
+    });
+
+    if (emailDuplicate) {
+        console.log(`[Invoice Email] Fatura duplicada detectada: ${emailDuplicate.invoiceNumber} / ${emailDuplicate.supplier}`);
+        return emailDuplicate as any;
+    }
+
     // Match products with catalog
     const matchedItems = await matchProducts(farmerId, extracted.items);
 
