@@ -6,10 +6,11 @@ import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -31,6 +32,14 @@ export default function FarmInvoices() {
     const [selectedSeasonId, setSelectedSeasonId] = useState<string>("");
     const [skipStockEntry, setSkipStockEntry] = useState(false);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [editingInvoice, setEditingInvoice] = useState(false);
+    const [editInvData, setEditInvData] = useState<any>({});
+    const [editingItemId, setEditingItemId] = useState<string | null>(null);
+    const [editItemData, setEditItemData] = useState<any>({});
+    const [editingExpense, setEditingExpense] = useState(false);
+    const [editExpData, setEditExpData] = useState<any>({});
+    const [editingExpItemId, setEditingExpItemId] = useState<string | null>(null);
+    const [editExpItemData, setEditExpItemData] = useState<any>({});
 
     const { user } = useAuth();
 
@@ -153,6 +162,52 @@ export default function FarmInvoices() {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices", selectedInvoice] });
             toast({ title: "Produto vinculado" });
         },
+    });
+
+    const updateInvoiceMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) =>
+            apiRequest("PUT", `/api/farm/invoices/${id}`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices", selectedInvoice] });
+            setEditingInvoice(false);
+            toast({ title: "Fatura atualizada com sucesso!" });
+        },
+        onError: () => toast({ title: "Erro ao atualizar fatura", variant: "destructive" }),
+    });
+
+    const updateInvoiceItemMutation = useMutation({
+        mutationFn: ({ invoiceId, itemId, data }: { invoiceId: string; itemId: string; data: any }) =>
+            apiRequest("PATCH", `/api/farm/invoices/${invoiceId}/items/${itemId}`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices", selectedInvoice] });
+            setEditingItemId(null);
+            toast({ title: "Item atualizado!" });
+        },
+        onError: () => toast({ title: "Erro ao atualizar item", variant: "destructive" }),
+    });
+
+    const updateExpenseMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) =>
+            apiRequest("PUT", `/api/farm/expenses/${id}`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses", selectedExpense] });
+            setEditingExpense(false);
+            toast({ title: "Recibo atualizado com sucesso!" });
+        },
+        onError: () => toast({ title: "Erro ao atualizar recibo", variant: "destructive" }),
+    });
+
+    const updateExpenseItemMutation = useMutation({
+        mutationFn: ({ expenseId, itemId, data }: { expenseId: string; itemId: string; data: any }) =>
+            apiRequest("PATCH", `/api/farm/expenses/${expenseId}/items/${itemId}`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses", selectedExpense] });
+            setEditingExpItemId(null);
+            toast({ title: "Item atualizado!" });
+        },
+        onError: () => toast({ title: "Erro ao atualizar item", variant: "destructive" }),
     });
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -308,13 +363,38 @@ export default function FarmInvoices() {
                             <Card className="border-emerald-200 bg-white mb-4">
                                 <CardHeader className="pb-3">
                                     <div className="flex items-center justify-between">
-                                        <CardTitle className="text-emerald-800">
-                                            Fatura #{invoiceDetail.invoiceNumber || "—"}
+                                        <CardTitle className="text-emerald-800 flex items-center gap-2">
+                                            {editingInvoice ? "Editando Fatura" : `Fatura #${invoiceDetail.invoiceNumber || "—"}`}
                                             <Badge className="ml-2" variant={invoiceDetail.status === "confirmed" ? "default" : "secondary"}>
                                                 {invoiceDetail.status === "confirmed" ? "Confirmada" : "Pendente"}
                                             </Badge>
                                         </CardTitle>
                                         <div className="flex items-center gap-2">
+                                            {!editingInvoice && invoiceDetail.status === "pending" && (
+                                                <Button variant="outline" size="sm" onClick={() => {
+                                                    setEditingInvoice(true);
+                                                    setEditInvData({
+                                                        invoiceNumber: invoiceDetail.invoiceNumber || "",
+                                                        supplier: invoiceDetail.supplier || "",
+                                                        issueDate: invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toISOString().split("T")[0] : "",
+                                                        totalAmount: invoiceDetail.totalAmount || "",
+                                                    });
+                                                }}>
+                                                    <Pencil className="mr-1 h-3 w-3" /> Editar
+                                                </Button>
+                                            )}
+                                            {editingInvoice && (
+                                                <>
+                                                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
+                                                        disabled={updateInvoiceMutation.isPending}
+                                                        onClick={() => updateInvoiceMutation.mutate({ id: selectedInvoice!, data: editInvData })}>
+                                                        {updateInvoiceMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />} Salvar
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => setEditingInvoice(false)}>
+                                                        <X className="mr-1 h-3 w-3" /> Cancelar
+                                                    </Button>
+                                                </>
+                                            )}
                                             {invoiceDetail.source === "email_import" && (
                                                 <Button variant="outline" size="sm" onClick={(e) => {
                                                     e.stopPropagation();
@@ -323,14 +403,39 @@ export default function FarmInvoices() {
                                                     <Download className="mr-1 h-3 w-3" /> PDF
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null)}>Fechar</Button>
+                                            <Button variant="ghost" size="sm" onClick={() => { setSelectedInvoice(null); setEditingInvoice(false); }}>Fechar</Button>
                                         </div>
                                     </div>
-                                    <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                                        <span>Fornecedor: <strong>{invoiceDetail.supplier || "—"}</strong></span>
-                                        <span>Data: <strong>{invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("pt-BR") : "—"}</strong></span>
-                                        <span>Total: <strong>${invoiceDetail.totalAmount}</strong></span>
-                                    </div>
+                                    {editingInvoice ? (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Nº Fatura</Label>
+                                                <Input className="h-8 text-sm" value={editInvData.invoiceNumber}
+                                                    onChange={e => setEditInvData({ ...editInvData, invoiceNumber: e.target.value })} />
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Fornecedor</Label>
+                                                <Input className="h-8 text-sm" value={editInvData.supplier}
+                                                    onChange={e => setEditInvData({ ...editInvData, supplier: e.target.value })} />
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Data</Label>
+                                                <Input type="date" className="h-8 text-sm" value={editInvData.issueDate}
+                                                    onChange={e => setEditInvData({ ...editInvData, issueDate: e.target.value })} />
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Valor Total ($)</Label>
+                                                <Input type="number" step="0.01" className="h-8 text-sm" value={editInvData.totalAmount}
+                                                    onChange={e => setEditInvData({ ...editInvData, totalAmount: e.target.value })} />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex gap-4 text-sm text-gray-600 mt-1 flex-wrap">
+                                            <span>Fornecedor: <strong>{invoiceDetail.supplier || "—"}</strong></span>
+                                            <span>Data: <strong>{invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("pt-BR") : "—"}</strong></span>
+                                            <span>Total: <strong>${invoiceDetail.totalAmount}</strong></span>
+                                        </div>
+                                    )}
                                 </CardHeader>
                                 <CardContent>
                                     {invoiceDetail.items && invoiceDetail.items.length > 0 ? (
@@ -345,33 +450,106 @@ export default function FarmInvoices() {
                                                         <th className="text-right p-2">Qtd</th>
                                                         <th className="text-right p-2">Preço Un.</th>
                                                         <th className="text-right p-2">Total</th>
+                                                        {invoiceDetail.status === "pending" && <th className="text-center p-2">Ações</th>}
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {invoiceDetail.items.map((item: any) => (
-                                                        <tr key={item.id} className="border-t border-gray-100">
-                                                            <td className="p-2 text-gray-500 font-mono text-xs">{item.productCode || "—"}</td>
-                                                            <td className="p-2 font-medium">{item.productName}</td>
-                                                            <td className="p-2">
-                                                                <Select
-                                                                    value={item.productId || ""}
-                                                                    onValueChange={(v) => linkProductMutation.mutate({ invoiceId: selectedInvoice!, itemId: item.id, productId: v })}
-                                                                >
-                                                                    <SelectTrigger className="h-8 text-xs">
-                                                                        <SelectValue placeholder="Vincular..." />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {products.map((p: any) => (
-                                                                            <SelectItem key={p.id} value={p.id}>{p.name} ({p.unit})</SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </td>
-                                                            <td className="text-center p-2">{item.unit}</td>
-                                                            <td className="text-right p-2 font-mono">{parseFloat(item.quantity).toFixed(2)}</td>
-                                                            <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
-                                                            <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
-                                                        </tr>
+                                                        editingItemId === item.id ? (
+                                                            <tr key={item.id} className="border-t border-emerald-200 bg-emerald-50/50">
+                                                                <td className="p-2">
+                                                                    <Input className="h-7 text-xs w-20" value={editItemData.productCode}
+                                                                        onChange={e => setEditItemData({ ...editItemData, productCode: e.target.value })} />
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <Input className="h-7 text-xs" value={editItemData.productName}
+                                                                        onChange={e => setEditItemData({ ...editItemData, productName: e.target.value })} />
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <Select value={editItemData.productId || ""} onValueChange={(v) => setEditItemData({ ...editItemData, productId: v })}>
+                                                                        <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Vincular..." /></SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {products.map((p: any) => (
+                                                                                <SelectItem key={p.id} value={p.id}>{p.name} ({p.unit})</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <Input className="h-7 text-xs w-16 text-center" value={editItemData.unit}
+                                                                        onChange={e => setEditItemData({ ...editItemData, unit: e.target.value })} />
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <Input type="number" step="0.01" className="h-7 text-xs w-20 text-right" value={editItemData.quantity}
+                                                                        onChange={e => setEditItemData({ ...editItemData, quantity: e.target.value })} />
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <Input type="number" step="0.01" className="h-7 text-xs w-24 text-right" value={editItemData.unitPrice}
+                                                                        onChange={e => setEditItemData({ ...editItemData, unitPrice: e.target.value })} />
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <Input type="number" step="0.01" className="h-7 text-xs w-24 text-right" value={editItemData.totalPrice}
+                                                                        onChange={e => setEditItemData({ ...editItemData, totalPrice: e.target.value })} />
+                                                                </td>
+                                                                <td className="p-2 text-center">
+                                                                    <div className="flex items-center justify-center gap-1">
+                                                                        <button className="p-1 rounded hover:bg-emerald-200" title="Salvar"
+                                                                            onClick={() => updateInvoiceItemMutation.mutate({
+                                                                                invoiceId: selectedInvoice!, itemId: item.id, data: editItemData
+                                                                            })}>
+                                                                            <Save className="h-4 w-4 text-emerald-600" />
+                                                                        </button>
+                                                                        <button className="p-1 rounded hover:bg-gray-200" title="Cancelar"
+                                                                            onClick={() => setEditingItemId(null)}>
+                                                                            <X className="h-4 w-4 text-gray-500" />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ) : (
+                                                            <tr key={item.id} className="border-t border-gray-100">
+                                                                <td className="p-2 text-gray-500 font-mono text-xs">{item.productCode || "—"}</td>
+                                                                <td className="p-2 font-medium">{item.productName}</td>
+                                                                <td className="p-2">
+                                                                    <Select
+                                                                        value={item.productId || ""}
+                                                                        onValueChange={(v) => linkProductMutation.mutate({ invoiceId: selectedInvoice!, itemId: item.id, productId: v })}
+                                                                    >
+                                                                        <SelectTrigger className="h-8 text-xs">
+                                                                            <SelectValue placeholder="Vincular..." />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {products.map((p: any) => (
+                                                                                <SelectItem key={p.id} value={p.id}>{p.name} ({p.unit})</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </td>
+                                                                <td className="text-center p-2">{item.unit}</td>
+                                                                <td className="text-right p-2 font-mono">{parseFloat(item.quantity).toFixed(2)}</td>
+                                                                <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
+                                                                <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                                {invoiceDetail.status === "pending" && (
+                                                                    <td className="text-center p-2">
+                                                                        <button className="p-1 rounded hover:bg-amber-100" title="Editar item"
+                                                                            onClick={() => {
+                                                                                setEditingItemId(item.id);
+                                                                                setEditItemData({
+                                                                                    productCode: item.productCode || "",
+                                                                                    productName: item.productName || "",
+                                                                                    productId: item.productId || "",
+                                                                                    unit: item.unit || "",
+                                                                                    quantity: item.quantity || "",
+                                                                                    unitPrice: item.unitPrice || "",
+                                                                                    totalPrice: item.totalPrice || "",
+                                                                                });
+                                                                            }}>
+                                                                            <Pencil className="h-3.5 w-3.5 text-amber-600" />
+                                                                        </button>
+                                                                    </td>
+                                                                )}
+                                                            </tr>
+                                                        )
                                                     ))}
                                                 </tbody>
                                             </table>
@@ -710,35 +888,95 @@ export default function FarmInvoices() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!selectedExpense} onOpenChange={(open) => !open && setSelectedExpense(null)}>
+            <Dialog open={!!selectedExpense} onOpenChange={(open) => { if (!open) { setSelectedExpense(null); setEditingExpense(false); setEditingExpItemId(null); } }}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="text-emerald-800">Detalhes do Recibo</DialogTitle>
+                        <div className="flex items-center justify-between">
+                            <DialogTitle className="text-emerald-800">
+                                {editingExpense ? "Editando Recibo" : "Detalhes do Recibo"}
+                            </DialogTitle>
+                            {expenseDetail && !editingExpense && expenseDetail.status === "pending" && (
+                                <Button variant="outline" size="sm" onClick={() => {
+                                    setEditingExpense(true);
+                                    setEditExpData({
+                                        supplier: expenseDetail.supplier || extractSupplier(expenseDetail.description) || "",
+                                        category: expenseDetail.category || "",
+                                        amount: expenseDetail.amount || "",
+                                        description: cleanDescription(expenseDetail.description),
+                                        expenseDate: expenseDetail.expenseDate ? new Date(expenseDetail.expenseDate).toISOString().split("T")[0] : "",
+                                    });
+                                }}>
+                                    <Pencil className="mr-1 h-3 w-3" /> Editar
+                                </Button>
+                            )}
+                            {editingExpense && (
+                                <div className="flex items-center gap-2">
+                                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"
+                                        disabled={updateExpenseMutation.isPending}
+                                        onClick={() => updateExpenseMutation.mutate({ id: selectedExpense!, data: editExpData })}>
+                                        {updateExpenseMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />} Salvar
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setEditingExpense(false)}>
+                                        <X className="mr-1 h-3 w-3" /> Cancelar
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     </DialogHeader>
                     {expenseDetail ? (
                         <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <span className="text-gray-500">Fornecedor:</span>
-                                    <p className="font-semibold">{expenseDetail.supplier || extractSupplier(expenseDetail.description) || "—"}</p>
+                            {editingExpense ? (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Fornecedor</Label>
+                                        <Input className="h-8 text-sm" value={editExpData.supplier}
+                                            onChange={e => setEditExpData({ ...editExpData, supplier: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Categoria</Label>
+                                        <Input className="h-8 text-sm" value={editExpData.category}
+                                            onChange={e => setEditExpData({ ...editExpData, category: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Valor ($)</Label>
+                                        <Input type="number" step="0.01" className="h-8 text-sm" value={editExpData.amount}
+                                            onChange={e => setEditExpData({ ...editExpData, amount: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Data</Label>
+                                        <Input type="date" className="h-8 text-sm" value={editExpData.expenseDate}
+                                            onChange={e => setEditExpData({ ...editExpData, expenseDate: e.target.value })} />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <Label className="text-xs text-gray-500">Descrição</Label>
+                                        <Input className="h-8 text-sm" value={editExpData.description}
+                                            onChange={e => setEditExpData({ ...editExpData, description: e.target.value })} />
+                                    </div>
                                 </div>
-                                <div>
-                                    <span className="text-gray-500">Categoria:</span>
-                                    <p><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{expenseDetail.category}</span></p>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span className="text-gray-500">Fornecedor:</span>
+                                        <p className="font-semibold">{expenseDetail.supplier || extractSupplier(expenseDetail.description) || "—"}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Categoria:</span>
+                                        <p><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{expenseDetail.category}</span></p>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Valor Total:</span>
+                                        <p className="font-semibold text-lg">${parseFloat(expenseDetail.amount).toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Data:</span>
+                                        <p className="font-semibold">{new Date(expenseDetail.expenseDate).toLocaleDateString("pt-BR")}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <span className="text-gray-500">Descrição:</span>
+                                        <p>{cleanDescription(expenseDetail.description)}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <span className="text-gray-500">Valor Total:</span>
-                                    <p className="font-semibold text-lg">${parseFloat(expenseDetail.amount).toFixed(2)}</p>
-                                </div>
-                                <div>
-                                    <span className="text-gray-500">Data:</span>
-                                    <p className="font-semibold">{new Date(expenseDetail.expenseDate).toLocaleDateString("pt-BR")}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <span className="text-gray-500">Descrição:</span>
-                                    <p>{cleanDescription(expenseDetail.description)}</p>
-                                </div>
-                            </div>
+                            )}
 
                             {expenseDetail.items && expenseDetail.items.length > 0 && (
                                 <div>
@@ -752,17 +990,74 @@ export default function FarmInvoices() {
                                                     <th className="text-center p-2 font-semibold text-emerald-800">Unid</th>
                                                     <th className="text-right p-2 font-semibold text-emerald-800">Preço Unit.</th>
                                                     <th className="text-right p-2 font-semibold text-emerald-800">Total</th>
+                                                    {expenseDetail.status === "pending" && <th className="text-center p-2 font-semibold text-emerald-800">Ações</th>}
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {expenseDetail.items.map((item: any) => (
-                                                    <tr key={item.id} className="border-t border-gray-100">
-                                                        <td className="p-2 font-medium">{item.itemName}</td>
-                                                        <td className="text-center p-2">{parseFloat(item.quantity)}</td>
-                                                        <td className="text-center p-2 text-gray-500">{item.unit}</td>
-                                                        <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
-                                                        <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
-                                                    </tr>
+                                                    editingExpItemId === item.id ? (
+                                                        <tr key={item.id} className="border-t border-emerald-200 bg-emerald-50/50">
+                                                            <td className="p-2">
+                                                                <Input className="h-7 text-xs" value={editExpItemData.itemName}
+                                                                    onChange={e => setEditExpItemData({ ...editExpItemData, itemName: e.target.value })} />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <Input type="number" step="0.01" className="h-7 text-xs w-20 text-center" value={editExpItemData.quantity}
+                                                                    onChange={e => setEditExpItemData({ ...editExpItemData, quantity: e.target.value })} />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <Input className="h-7 text-xs w-16 text-center" value={editExpItemData.unit}
+                                                                    onChange={e => setEditExpItemData({ ...editExpItemData, unit: e.target.value })} />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <Input type="number" step="0.01" className="h-7 text-xs w-24 text-right" value={editExpItemData.unitPrice}
+                                                                    onChange={e => setEditExpItemData({ ...editExpItemData, unitPrice: e.target.value })} />
+                                                            </td>
+                                                            <td className="p-2">
+                                                                <Input type="number" step="0.01" className="h-7 text-xs w-24 text-right" value={editExpItemData.totalPrice}
+                                                                    onChange={e => setEditExpItemData({ ...editExpItemData, totalPrice: e.target.value })} />
+                                                            </td>
+                                                            <td className="p-2 text-center">
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    <button className="p-1 rounded hover:bg-emerald-200" title="Salvar"
+                                                                        onClick={() => updateExpenseItemMutation.mutate({
+                                                                            expenseId: selectedExpense!, itemId: item.id, data: editExpItemData
+                                                                        })}>
+                                                                        <Save className="h-4 w-4 text-emerald-600" />
+                                                                    </button>
+                                                                    <button className="p-1 rounded hover:bg-gray-200" title="Cancelar"
+                                                                        onClick={() => setEditingExpItemId(null)}>
+                                                                        <X className="h-4 w-4 text-gray-500" />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        <tr key={item.id} className="border-t border-gray-100">
+                                                            <td className="p-2 font-medium">{item.itemName}</td>
+                                                            <td className="text-center p-2">{parseFloat(item.quantity)}</td>
+                                                            <td className="text-center p-2 text-gray-500">{item.unit}</td>
+                                                            <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
+                                                            <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                            {expenseDetail.status === "pending" && (
+                                                                <td className="text-center p-2">
+                                                                    <button className="p-1 rounded hover:bg-amber-100" title="Editar item"
+                                                                        onClick={() => {
+                                                                            setEditingExpItemId(item.id);
+                                                                            setEditExpItemData({
+                                                                                itemName: item.itemName || "",
+                                                                                quantity: item.quantity || "",
+                                                                                unit: item.unit || "",
+                                                                                unitPrice: item.unitPrice || "",
+                                                                                totalPrice: item.totalPrice || "",
+                                                                            });
+                                                                        }}>
+                                                                        <Pencil className="h-3.5 w-3.5 text-amber-600" />
+                                                                    </button>
+                                                                </td>
+                                                            )}
+                                                        </tr>
+                                                    )
                                                 ))}
                                             </tbody>
                                         </table>

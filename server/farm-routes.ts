@@ -807,23 +807,113 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
-    // Update invoice item (link to catalog product)
+    // Update invoice header
+    app.put("/api/farm/invoices/:id", requireFarmer, async (req, res) => {
+        try {
+            const { db } = await import("./db");
+            const { farmInvoices } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+
+            const { invoiceNumber, supplier, issueDate, totalAmount, currency } = req.body;
+            const updateData: any = {};
+            if (invoiceNumber !== undefined) updateData.invoiceNumber = invoiceNumber;
+            if (supplier !== undefined) updateData.supplier = supplier;
+            if (issueDate !== undefined) updateData.issueDate = issueDate ? new Date(issueDate) : null;
+            if (totalAmount !== undefined) updateData.totalAmount = String(totalAmount);
+            if (currency !== undefined) updateData.currency = currency;
+
+            const [updated] = await db.update(farmInvoices)
+                .set(updateData)
+                .where(eq(farmInvoices.id, req.params.id))
+                .returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[FARM_INVOICE_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update invoice" });
+        }
+    });
+
+    // Update invoice item (link to catalog product + edit fields)
     app.patch("/api/farm/invoices/:invoiceId/items/:itemId", requireFarmer, async (req, res) => {
         try {
-            const { productId } = req.body;
-            // Simple update of the productId link
             const { db } = await import("./db");
             const { farmInvoiceItems } = await import("../shared/schema");
             const { eq } = await import("drizzle-orm");
 
+            const { productId, productName, productCode, unit, quantity, unitPrice, discount, totalPrice, batch, expiryDate } = req.body;
+            const updateData: any = {};
+            if (productId !== undefined) updateData.productId = productId;
+            if (productName !== undefined) updateData.productName = productName;
+            if (productCode !== undefined) updateData.productCode = productCode;
+            if (unit !== undefined) updateData.unit = unit;
+            if (quantity !== undefined) updateData.quantity = String(quantity);
+            if (unitPrice !== undefined) updateData.unitPrice = String(unitPrice);
+            if (discount !== undefined) updateData.discount = String(discount);
+            if (totalPrice !== undefined) updateData.totalPrice = String(totalPrice);
+            if (batch !== undefined) updateData.batch = batch;
+            if (expiryDate !== undefined) updateData.expiryDate = expiryDate;
+
             const [updated] = await db.update(farmInvoiceItems)
-                .set({ productId })
+                .set(updateData)
                 .where(eq(farmInvoiceItems.id, req.params.itemId))
                 .returning();
             res.json(updated);
         } catch (error) {
             console.error("[FARM_INVOICE_ITEM_UPDATE]", error);
             res.status(500).json({ error: "Failed to update invoice item" });
+        }
+    });
+
+    // Update expense header
+    app.put("/api/farm/expenses/:id", requireFarmer, async (req, res) => {
+        try {
+            const { db } = await import("./db");
+            const { farmExpenses } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+
+            const { supplier, category, amount, description, expenseDate, equipmentId } = req.body;
+            const updateData: any = {};
+            if (supplier !== undefined) updateData.supplier = supplier;
+            if (category !== undefined) updateData.category = category;
+            if (amount !== undefined) updateData.amount = String(amount);
+            if (description !== undefined) updateData.description = description;
+            if (expenseDate !== undefined) updateData.expenseDate = expenseDate ? new Date(expenseDate) : null;
+            if (equipmentId !== undefined) updateData.equipmentId = equipmentId || null;
+
+            const [updated] = await db.update(farmExpenses)
+                .set(updateData)
+                .where(eq(farmExpenses.id, req.params.id))
+                .returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[FARM_EXPENSE_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update expense" });
+        }
+    });
+
+    // Update expense item
+    app.patch("/api/farm/expenses/:expenseId/items/:itemId", requireFarmer, async (req, res) => {
+        try {
+            const { db } = await import("./db");
+            const { farmExpenseItems } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+
+            const { itemName, quantity, unit, unitPrice, totalPrice } = req.body;
+            const updateData: any = {};
+            if (itemName !== undefined) updateData.itemName = itemName;
+            if (quantity !== undefined) updateData.quantity = String(quantity);
+            if (unit !== undefined) updateData.unit = unit;
+            if (unitPrice !== undefined) updateData.unitPrice = String(unitPrice);
+            if (totalPrice !== undefined) updateData.totalPrice = String(totalPrice);
+
+            const [updated] = await db.update(farmExpenseItems)
+                .set(updateData)
+                .where(eq(farmExpenseItems.id, req.params.itemId))
+                .returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[FARM_EXPENSE_ITEM_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update expense item" });
         }
     });
 
