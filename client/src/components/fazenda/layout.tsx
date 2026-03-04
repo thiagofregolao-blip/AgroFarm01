@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, Package, FileText, BarChart3,
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
-    BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain
+    BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -19,6 +19,7 @@ const navItems = [
     { labelKey: "nav_applications", href: "/fazenda/aplicacoes", icon: BarChart3, moduleKey: "applications" },
     { labelKey: "nav_plot_costs", href: "/fazenda/custos", icon: TrendingUp, moduleKey: "plot_costs" },
     { labelKey: "nav_expenses", href: "/fazenda/despesas", icon: DollarSign, moduleKey: "expenses" },
+    { labelKey: "nav_cash_flow", href: "/fazenda/fluxo-caixa", icon: Wallet, moduleKey: "cash_flow", alwaysOn: true },
     { labelKey: "nav_terminals", href: "/fazenda/terminais", icon: Monitor, moduleKey: "terminals" },
     { labelKey: "nav_field_notebook", href: "/fazenda/caderno-campo", icon: BookOpen, moduleKey: "field_notebook" },
     { labelKey: "nav_quotations", href: "/fazenda/cotacoes", icon: ArrowDownUp, moduleKey: "quotations" },

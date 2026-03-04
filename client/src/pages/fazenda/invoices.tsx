@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
@@ -21,6 +22,8 @@ export default function FarmInvoices() {
     const [uploading, setUploading] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
     const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
+    const [approveExpenseId, setApproveExpenseId] = useState<string | null>(null);
+    const [approveAccountId, setApproveAccountId] = useState<string>("");
     const [selectedSeasonId, setSelectedSeasonId] = useState<string>("");
     const [skipStockEntry, setSkipStockEntry] = useState(false);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -105,11 +108,21 @@ export default function FarmInvoices() {
         onError: () => toast({ title: "Erro ao excluir fatura", variant: "destructive" }),
     });
 
+    const { data: cashAccounts = [] } = useQuery({
+        queryKey: ["/api/farm/cash-accounts"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/cash-accounts"); return r.json(); },
+        enabled: !!user,
+    });
+
     const confirmExpenseMutation = useMutation({
-        mutationFn: (id: string) => apiRequest("POST", `/api/farm/expenses/${id}/confirm`),
+        mutationFn: ({ id, accountId }: { id: string; accountId?: string }) =>
+            apiRequest("POST", `/api/farm/expenses/${id}/confirm`, { accountId, paymentMethod: "efetivo" }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
-            toast({ title: "✅ Recibo aprovado!" });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+            toast({ title: "✅ Recibo aprovado e lançado no caixa!" });
+            setApproveExpenseId(null);
+            setApproveAccountId("");
         },
         onError: () => toast({ title: "Erro ao aprovar recibo", variant: "destructive" }),
     });
@@ -505,12 +518,9 @@ export default function FarmInvoices() {
                                                                     <Button
                                                                         size="sm"
                                                                         className="bg-emerald-600 hover:bg-emerald-700"
-                                                                        disabled={confirmExpenseMutation.isPending}
-                                                                        onClick={() => confirmExpenseMutation.mutate(e.id)}
+                                                                        onClick={() => setApproveExpenseId(e.id)}
                                                                     >
-                                                                        {confirmExpenseMutation.isPending
-                                                                            ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                                                            : <Check className="mr-1 h-3 w-3" />}
+                                                                        <Check className="mr-1 h-3 w-3" />
                                                                         Aprovar
                                                                     </Button>
                                                                     <Button
@@ -604,6 +614,53 @@ export default function FarmInvoices() {
                     </TabsContent>
                 </Tabs>
             </div>
+
+            <Dialog open={!!approveExpenseId} onOpenChange={(open) => { if (!open) { setApproveExpenseId(null); setApproveAccountId(""); } }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Wallet className="h-5 w-5 text-emerald-600" />
+                            Aprovar e Lançar no Caixa
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <p className="text-sm text-gray-600">
+                            De qual conta/caixa saiu o pagamento desta despesa?
+                        </p>
+                        <div>
+                            <Label>Conta de Pagamento</Label>
+                            <Select value={approveAccountId} onValueChange={setApproveAccountId}>
+                                <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                                <SelectContent>
+                                    {(cashAccounts as any[]).map((a: any) => (
+                                        <SelectItem key={a.id} value={a.id}>
+                                            {a.name} ({a.currency})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                                disabled={confirmExpenseMutation.isPending || !approveAccountId}
+                                onClick={() => approveExpenseId && confirmExpenseMutation.mutate({ id: approveExpenseId, accountId: approveAccountId })}
+                            >
+                                {confirmExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                                Aprovar
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="flex-1"
+                                disabled={confirmExpenseMutation.isPending}
+                                onClick={() => approveExpenseId && confirmExpenseMutation.mutate({ id: approveExpenseId })}
+                            >
+                                Aprovar sem Caixa
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={!!selectedExpense} onOpenChange={(open) => !open && setSelectedExpense(null)}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

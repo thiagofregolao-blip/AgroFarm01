@@ -60,6 +60,7 @@ import FarmPlotCosts from "@/pages/fazenda/plot-costs";
 import FarmSeasons from "@/pages/fazenda/seasons";
 import FarmProfile from "@/pages/fazenda/profile";
 import FarmEquipment from "@/pages/fazenda/equipment";
+import FarmCashFlow from "@/pages/fazenda/cash-flow";
 import FarmLogin from "@/pages/fazenda/login";
 import FarmReports from "@/pages/fazenda/reports";
 import FazendaClima from "@/pages/fazenda/clima";
@@ -132,6 +133,7 @@ function Router() {
       <Route path="/fazenda/equipamentos" component={FarmEquipment} />
       <Route path="/fazenda/aplicacoes" component={FarmApplications} />
       <Route path="/fazenda/despesas" component={FarmExpenses} />
+      <Route path="/fazenda/fluxo-caixa" component={FarmCashFlow} />
       <Route path="/fazenda/custos" component={FarmPlotCosts} />
       <Route path="/fazenda/terminais" component={FarmTerminals} />
       <Route path="/fazenda/safras" component={FarmSeasons} />

@@ -284,6 +284,16 @@ const runMigration = async () => {
             console.log('✅ Migração expense_items concluída!');
         }
 
+        // Migration 24: Cash flow tables
+        const cashFlowPath = path.join(process.cwd(), 'migration_add_cash_flow.sql');
+        if (fs.existsSync(cashFlowPath)) {
+            const cashFlowSql = fs.readFileSync(cashFlowPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', cashFlowPath);
+            console.log('🚀 Executando SQL (cash_flow)...');
+            await sql.unsafe(cashFlowSql);
+            console.log('✅ Migração cash_flow concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

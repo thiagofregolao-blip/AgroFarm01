@@ -1205,6 +1205,51 @@ export const farmExpenseItems = pgTable("farm_expense_items", {
   totalPrice: decimal("total_price", { precision: 15, scale: 2 }).notNull(),
 });
 
+// ==================== FLUXO DE CAIXA ====================
+
+export const farmCashAccounts = pgTable("farm_cash_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  bankName: text("bank_name"),
+  accountType: text("account_type").notNull(), // caixa_fisico, conta_corrente, poupanca, carteira_digital
+  currency: text("currency").notNull().default("USD"), // USD ou PYG
+  initialBalance: decimal("initial_balance", { precision: 15, scale: 2 }).notNull().default("0"),
+  currentBalance: decimal("current_balance", { precision: 15, scale: 2 }).notNull().default("0"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const farmCashTransactions = pgTable("farm_cash_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  accountId: varchar("account_id").notNull().references(() => farmCashAccounts.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // entrada, saida
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("USD"),
+  category: text("category").notNull(),
+  description: text("description"),
+  paymentMethod: text("payment_method"), // efetivo, transferencia, cheque, cartao, pix
+  expenseId: varchar("expense_id").references(() => farmExpenses.id),
+  invoiceId: varchar("invoice_id").references(() => farmInvoices.id),
+  referenceType: text("reference_type").notNull().default("manual"), // manual, whatsapp, aprovacao_despesa, aprovacao_fatura
+  transactionDate: timestamp("transaction_date").notNull().default(sql`now()`),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Contexto de conversa pendente do WhatsApp (multi-etapa)
+export const farmWhatsappPendingContext = pgTable("farm_whatsapp_pending_context", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  phone: varchar("phone").notNull(),
+  step: text("step").notNull(), // awaiting_category, awaiting_account, awaiting_equipment
+  expenseId: varchar("expense_id").references(() => farmExpenses.id),
+  invoiceId: varchar("invoice_id").references(() => farmInvoices.id),
+  data: jsonb("data"), // dados parciais da conversa
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
 // Histórico simplificado de preços para consulta rápida no n8n/WhatsApp
 export const farmPriceHistory = pgTable("farm_price_history", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

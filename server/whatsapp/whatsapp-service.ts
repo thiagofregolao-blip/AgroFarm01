@@ -6,8 +6,8 @@ import { ZApiClient, ZApiClient as ZApi } from "./zapi-client";
 import { GeminiClient } from "./gemini-client";
 import { MessageHandler } from "./message-handler";
 import { db, pool } from "../db";
-import { farmExpenses, farmEquipment } from "../../shared/schema";
-import { and, desc, eq, ilike, gt, isNull } from "drizzle-orm";
+import { farmExpenses, farmEquipment, farmWhatsappPendingContext, farmCashAccounts, farmCashTransactions } from "../../shared/schema";
+import { and, desc, eq, ilike, gt, isNull, sql } from "drizzle-orm";
 
 interface WhatsAppServiceConfig {
   zapiInstanceId: string;
@@ -90,82 +90,185 @@ export class WhatsAppService {
   }
 
   /**
-   * Se existir uma despesa via WhatsApp recente sem equipamento vinculado,
-   * interpreta a mensagem atual como nome/placa da máquina e faz o vínculo.
+   * Gerencia conversa multi-etapa do WhatsApp:
+   * - awaiting_category: esperando o tipo de despesa
+   * - awaiting_equipment: esperando nome da máquina/veículo
+   * - awaiting_account: esperando conta de pagamento
    */
-  private async handlePendingExpenseEquipment(
+  private async handlePendingContext(
     farmerId: string,
+    phone: string,
     message: string,
     replyTo: string,
     replyIsGroup: boolean
   ): Promise<boolean> {
     const now = new Date();
-    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
 
-    const [pending] = await db
-      .select()
-      .from(farmExpenses)
-      .where(
-        and(
-          eq(farmExpenses.farmerId, farmerId),
-          eq(farmExpenses.status, "pending"),
-          ilike(farmExpenses.description, "[Via WhatsApp]%"),
-          gt(farmExpenses.createdAt, tenMinutesAgo),
-          isNull(farmExpenses.equipmentId)
-        )
+    const [ctx] = await db.select().from(farmWhatsappPendingContext).where(
+      and(
+        eq(farmWhatsappPendingContext.farmerId, farmerId),
+        eq(farmWhatsappPendingContext.phone, phone),
+        gt(farmWhatsappPendingContext.expiresAt, now)
       )
-      .orderBy(desc(farmExpenses.createdAt))
-      .limit(1);
+    ).orderBy(desc(farmWhatsappPendingContext.createdAt)).limit(1);
 
-    if (!pending) {
-      return false;
-    }
+    if (!ctx) return false;
 
     const search = message.trim();
-    if (!search) {
-      await this.sendMessage(
-        replyTo,
-        "Não consegui identificar a máquina/veículo. Me mande o nome ou a placa, por exemplo: *John Deere 5360*.",
+    const data = (ctx.data as any) || {};
+
+    if (ctx.step === "awaiting_category") {
+      const categories: Record<string, string> = {
+        "1": "pecas", "pecas": "pecas", "peças": "pecas",
+        "2": "diesel", "diesel": "diesel", "combustivel": "diesel",
+        "3": "mao_de_obra", "mao de obra": "mao_de_obra", "serviço": "mao_de_obra",
+        "4": "frete", "frete": "frete", "transporte": "frete",
+        "5": "energia", "energia": "energia", "luz": "energia",
+        "6": "outro", "outro": "outro", "outros": "outro",
+      };
+      const matched = categories[search.toLowerCase()];
+      if (!matched) {
+        await this.sendMessage(replyTo,
+          "Não entendi. Responda com o número ou nome:\n1️⃣ Peças\n2️⃣ Diesel\n3️⃣ Mão de obra\n4️⃣ Frete\n5️⃣ Energia\n6️⃣ Outro",
+          replyIsGroup
+        );
+        return true;
+      }
+
+      if (ctx.expenseId) {
+        await db.update(farmExpenses).set({ category: matched }).where(eq(farmExpenses.id, ctx.expenseId));
+      }
+
+      const accounts = await db.select().from(farmCashAccounts).where(
+        and(eq(farmCashAccounts.farmerId, farmerId), eq(farmCashAccounts.isActive, true))
+      );
+
+      if (accounts.length > 0) {
+        await db.update(farmWhatsappPendingContext).set({
+          step: "awaiting_account",
+          data: { ...data, category: matched },
+        }).where(eq(farmWhatsappPendingContext.id, ctx.id));
+
+        const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
+        await this.sendMessage(replyTo,
+          `Categoria: *${matched}* ✅\n\nDe qual conta saiu o pagamento?\n${accountList}`,
+          replyIsGroup
+        );
+      } else {
+        await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+        await this.sendMessage(replyTo,
+          `Categoria registrada: *${matched}* ✅\nDespesa aguardando aprovação no painel da AgroFarm.`,
+          replyIsGroup
+        );
+      }
+      return true;
+    }
+
+    if (ctx.step === "awaiting_equipment") {
+      if (!search) {
+        await this.sendMessage(replyTo,
+          "Me mande o nome da máquina/veículo, por exemplo: *John Deere 5360*.",
+          replyIsGroup
+        );
+        return true;
+      }
+
+      const [equip] = await db.select().from(farmEquipment).where(
+        and(eq(farmEquipment.farmerId, farmerId), ilike(farmEquipment.name, `%${search}%`))
+      ).limit(1);
+
+      if (!equip) {
+        await this.sendMessage(replyTo,
+          `Não achei "${search}" na frota. Tente o nome exato como cadastrado no painel.`,
+          replyIsGroup
+        );
+        return true;
+      }
+
+      if (ctx.expenseId) {
+        const [exp] = await db.select().from(farmExpenses).where(eq(farmExpenses.id, ctx.expenseId)).limit(1);
+        await db.update(farmExpenses).set({
+          equipmentId: equip.id,
+          description: `${exp?.description || ""} (Equipamento: ${equip.name})`,
+        }).where(eq(farmExpenses.id, ctx.expenseId));
+      }
+
+      const accounts = await db.select().from(farmCashAccounts).where(
+        and(eq(farmCashAccounts.farmerId, farmerId), eq(farmCashAccounts.isActive, true))
+      );
+
+      if (accounts.length > 0) {
+        await db.update(farmWhatsappPendingContext).set({
+          step: "awaiting_account",
+          data: { ...data, equipmentId: equip.id, equipmentName: equip.name },
+        }).where(eq(farmWhatsappPendingContext.id, ctx.id));
+
+        const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
+        await this.sendMessage(replyTo,
+          `Vinculado a *${equip.name}* ✅\n\nDe qual conta saiu o pagamento?\n${accountList}`,
+          replyIsGroup
+        );
+      } else {
+        await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+        await this.sendMessage(replyTo,
+          `Vinculado a *${equip.name}* ✅\nDespesa aguardando aprovação no painel.`,
+          replyIsGroup
+        );
+      }
+      return true;
+    }
+
+    if (ctx.step === "awaiting_account") {
+      const accounts = await db.select().from(farmCashAccounts).where(
+        and(eq(farmCashAccounts.farmerId, farmerId), eq(farmCashAccounts.isActive, true))
+      );
+
+      const idx = parseInt(search) - 1;
+      let matched = accounts[idx];
+      if (!matched) {
+        matched = accounts.find(a => a.name.toLowerCase().includes(search.toLowerCase())) as any;
+      }
+
+      if (!matched) {
+        const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name}`).join("\n");
+        await this.sendMessage(replyTo,
+          `Não entendi. Responda com o número:\n${accountList}`,
+          replyIsGroup
+        );
+        return true;
+      }
+
+      if (ctx.expenseId) {
+        const [exp] = await db.select().from(farmExpenses).where(eq(farmExpenses.id, ctx.expenseId)).limit(1);
+        if (exp) {
+          const amount = parseFloat(exp.amount as string) || 0;
+          await db.insert(farmCashTransactions).values({
+            farmerId,
+            accountId: matched.id,
+            type: "saida",
+            amount: String(amount),
+            currency: matched.currency,
+            category: exp.category,
+            description: exp.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa via WhatsApp",
+            paymentMethod: "efetivo",
+            expenseId: exp.id,
+            referenceType: "whatsapp",
+          });
+          await db.update(farmCashAccounts)
+            .set({ currentBalance: sql`current_balance - ${amount}` })
+            .where(eq(farmCashAccounts.id, matched.id));
+        }
+      }
+
+      await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+      await this.sendMessage(replyTo,
+        `Lançado no caixa *${matched.name}* ✅\nDespesa registrada e aguardando aprovação no painel da AgroFarm! 🌾`,
         replyIsGroup
       );
       return true;
     }
 
-    const [equip] = await db
-      .select()
-      .from(farmEquipment)
-      .where(
-        and(
-          eq(farmEquipment.farmerId, farmerId),
-          ilike(farmEquipment.name, `%${search}%`)
-        )
-      )
-      .limit(1);
-
-    if (!equip) {
-      await this.sendMessage(
-        replyTo,
-        "Não achei nenhuma máquina/veículo com esse nome. Tente mandar o nome exatamente como está cadastrado no painel de equipamentos.",
-        replyIsGroup
-      );
-      return true;
-    }
-
-    await db
-      .update(farmExpenses)
-      .set({
-        equipmentId: equip.id,
-        description: `${pending.description || ""} (Equipamento: ${equip.name})`,
-      })
-      .where(eq(farmExpenses.id, pending.id));
-
-    await this.sendMessage(
-      replyTo,
-      `Perfeito! Vinculei essa despesa à máquina/veículo *${equip.name}*. Ela já está aguardando aprovação no painel da AgroFarm. ✅`,
-      replyIsGroup
-    );
-
-    return true;
+    return false;
   }
 
   /**
@@ -270,9 +373,9 @@ export class WhatsAppService {
         return;
       }
 
-      // 2.a) Verificar se há alguma despesa via WhatsApp aguardando vínculo com equipamento
-      const handledEquipment = await this.handlePendingExpenseEquipment(user.id, message, replyTo, replyIsGroup);
-      if (handledEquipment) {
+      // 2.a) Verificar contexto pendente de conversa multi-etapa
+      const handledContext = await this.handlePendingContext(user.id, phone, message, replyTo, replyIsGroup);
+      if (handledContext) {
         return;
       }
 
