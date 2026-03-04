@@ -100,27 +100,57 @@ export default function NdviPage() {
     });
 
     // Merge history + images by date and calculate deltas
+    // If history is empty but images exist, build timeline from images alone
     const timeline = useMemo(() => {
-        if (!ndviHistory.length) return [];
         const imageMap = new Map<string, any>();
         ndviImages.forEach((img: any) => imageMap.set(img.dateFormatted, img));
 
-        return ndviHistory.map((h: any, i: number) => {
-            const img = imageMap.get(h.dateFormatted);
-            const mean = h.mean ?? 0;
-            const prevMean = i > 0 ? (ndviHistory[i - 1].mean ?? null) : null;
-            return {
-                ...h,
-                mean,
-                ndviUrl: img?.ndviUrl || null,
-                ndviContrastUrl: img?.ndviContrastUrl || null,
-                truecolorUrl: img?.truecolorUrl || null,
-                falsecolorUrl: img?.falsecolorUrl || null,
-                eviUrl: img?.eviUrl || null,
-                delta: prevMean !== null ? Math.round((mean - prevMean) * 100) / 100 : null,
-                shortDate: formatShortDate(h.date),
-            };
-        });
+        if (ndviHistory.length > 0) {
+            return ndviHistory.map((h: any, i: number) => {
+                const img = imageMap.get(h.dateFormatted);
+                const mean = h.mean ?? 0;
+                const prevMean = i > 0 ? (ndviHistory[i - 1].mean ?? null) : null;
+                return {
+                    ...h,
+                    mean,
+                    ndviUrl: img?.ndviUrl || null,
+                    ndviContrastUrl: img?.ndviContrastUrl || null,
+                    truecolorUrl: img?.truecolorUrl || null,
+                    falsecolorUrl: img?.falsecolorUrl || null,
+                    eviUrl: img?.eviUrl || null,
+                    delta: prevMean !== null ? Math.round((mean - prevMean) * 100) / 100 : null,
+                    shortDate: formatShortDate(h.date),
+                };
+            });
+        }
+
+        // Fallback: build timeline from images when history is empty
+        if (ndviImages.length > 0) {
+            return ndviImages
+                .filter((img: any) => img.date)
+                .sort((a: any, b: any) => a.date.localeCompare(b.date))
+                .map((img: any, i: number) => ({
+                    date: img.date,
+                    dateFormatted: img.dateFormatted,
+                    mean: null,
+                    min: null,
+                    max: null,
+                    median: null,
+                    source: img.source || "Sentinel-2",
+                    cloudCover: img.cloudCover ?? 0,
+                    healthLabel: null,
+                    healthColor: "#6B7280",
+                    ndviUrl: img.ndviUrl || null,
+                    ndviContrastUrl: img.ndviContrastUrl || null,
+                    truecolorUrl: img.truecolorUrl || null,
+                    falsecolorUrl: img.falsecolorUrl || null,
+                    eviUrl: img.eviUrl || null,
+                    delta: null,
+                    shortDate: formatShortDate(img.date),
+                }));
+        }
+
+        return [];
     }, [ndviHistory, ndviImages]);
 
     const visibleTimeline = useMemo(() => {
@@ -190,7 +220,7 @@ export default function NdviPage() {
     }, []);
 
     const currentLayerLabel = LAYER_OPTIONS.find((o) => o.value === layerType)?.label || "NDVI";
-    const isLoading = registerMutation.isPending || loadingHistory;
+    const isLoading = registerMutation.isPending || loadingHistory || loadingImages;
     const showNdviLegend = layerType !== "truecolor" && layerType !== "falsecolor";
 
     // ===== LIST VIEW =====
@@ -230,11 +260,10 @@ export default function NdviPage() {
                                 >
                                     <div className="flex items-center gap-4">
                                         <div
-                                            className={`w-12 h-12 rounded-xl shrink-0 flex items-center justify-center ${
-                                                plot.hasCoordinates
-                                                    ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                                                    : "bg-gray-50 text-gray-400 border border-gray-100"
-                                            }`}
+                                            className={`w-12 h-12 rounded-xl shrink-0 flex items-center justify-center ${plot.hasCoordinates
+                                                ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                                                : "bg-gray-50 text-gray-400 border border-gray-100"
+                                                }`}
                                         >
                                             {plot.hasCoordinates ? <Satellite size={22} /> : <AlertTriangle size={22} />}
                                         </div>
@@ -301,11 +330,10 @@ export default function NdviPage() {
             {/* ═══ MAP CARD ═══ */}
             {!isLoading && bounds && (
                 <div
-                    className={`overflow-hidden ${
-                        isMapExpanded
-                            ? "fixed inset-0 z-[9999] rounded-none"
-                            : "relative mx-3 mt-3 rounded-2xl shadow-lg"
-                    }`}
+                    className={`overflow-hidden ${isMapExpanded
+                        ? "fixed inset-0 z-[9999] rounded-none"
+                        : "relative mx-3 mt-3 rounded-2xl shadow-lg"
+                        }`}
                     style={isMapExpanded ? undefined : { height: "50vh", minHeight: 280, maxHeight: 500 }}
                 >
                     <MapContainer
@@ -387,11 +415,10 @@ export default function NdviPage() {
                                                     setLayerType(opt.value);
                                                     setShowLayerMenu(false);
                                                 }}
-                                                className={`w-full flex items-center justify-between px-4 py-3 text-left text-[13px] transition-colors ${
-                                                    layerType === opt.value
-                                                        ? "bg-white/10 text-white font-semibold"
-                                                        : "text-white/60 hover:bg-white/5 hover:text-white"
-                                                }`}
+                                                className={`w-full flex items-center justify-between px-4 py-3 text-left text-[13px] transition-colors ${layerType === opt.value
+                                                    ? "bg-white/10 text-white font-semibold"
+                                                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                                                    }`}
                                             >
                                                 <span>{opt.label}</span>
                                                 {layerType === opt.value && <Check size={15} className="text-emerald-400" />}
@@ -427,17 +454,25 @@ export default function NdviPage() {
                     {activeEntry && showNdviLegend && (
                         <div className="absolute bottom-3 right-3 z-[1000]">
                             <div className="bg-black/40 backdrop-blur-md px-3 py-2 rounded-xl">
-                                <p className="text-[8px] text-white/40 mb-0.5">Média {activeEntry.dateFormatted}</p>
+                                <p className="text-[8px] text-white/40 mb-0.5">{activeEntry.mean != null ? `Média ${activeEntry.dateFormatted}` : activeEntry.dateFormatted}</p>
                                 <div className="flex items-baseline gap-1.5">
-                                    <span className="text-xl font-black leading-none" style={{ color: activeEntry.healthColor }}>
-                                        {(activeEntry.mean ?? 0).toFixed(2)}
-                                    </span>
-                                    <span
-                                        className="text-[8px] px-1.5 py-0.5 rounded-md text-white font-bold"
-                                        style={{ backgroundColor: activeEntry.healthColor }}
-                                    >
-                                        {activeEntry.healthLabel}
-                                    </span>
+                                    {activeEntry.mean != null ? (
+                                        <>
+                                            <span className="text-xl font-black leading-none" style={{ color: activeEntry.healthColor }}>
+                                                {(activeEntry.mean).toFixed(2)}
+                                            </span>
+                                            {activeEntry.healthLabel && (
+                                                <span
+                                                    className="text-[8px] px-1.5 py-0.5 rounded-md text-white font-bold"
+                                                    style={{ backgroundColor: activeEntry.healthColor }}
+                                                >
+                                                    {activeEntry.healthLabel}
+                                                </span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <span className="text-sm font-medium text-white/70">Imagem disponível</span>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -463,14 +498,12 @@ export default function NdviPage() {
                             <span className="text-[11px] text-gray-400">Ocultar dias nublados</span>
                             <button
                                 onClick={() => setHideClouds(!hideClouds)}
-                                className={`relative inline-flex h-[22px] w-[40px] items-center rounded-full transition-colors ${
-                                    hideClouds ? "bg-emerald-500" : "bg-gray-300"
-                                }`}
+                                className={`relative inline-flex h-[22px] w-[40px] items-center rounded-full transition-colors ${hideClouds ? "bg-emerald-500" : "bg-gray-300"
+                                    }`}
                             >
                                 <span
-                                    className={`inline-block h-[16px] w-[16px] transform rounded-full bg-white shadow-sm transition-transform ${
-                                        hideClouds ? "translate-x-[20px]" : "translate-x-[3px]"
-                                    }`}
+                                    className={`inline-block h-[16px] w-[16px] transform rounded-full bg-white shadow-sm transition-transform ${hideClouds ? "translate-x-[20px]" : "translate-x-[3px]"
+                                        }`}
                                 />
                             </button>
                         </div>
@@ -493,11 +526,10 @@ export default function NdviPage() {
                                     <button
                                         key={entry.date}
                                         onClick={() => setSelectedDate(entry.date)}
-                                        className={`snap-center shrink-0 w-[78px] flex flex-col rounded-xl overflow-hidden transition-all border-2 ${
-                                            isSelected
-                                                ? "border-blue-500 shadow-lg shadow-blue-500/20"
-                                                : "border-transparent hover:border-gray-200"
-                                        }`}
+                                        className={`snap-center shrink-0 w-[78px] flex flex-col rounded-xl overflow-hidden transition-all border-2 ${isSelected
+                                            ? "border-blue-500 shadow-lg shadow-blue-500/20"
+                                            : "border-transparent hover:border-gray-200"
+                                            }`}
                                     >
                                         {/* Thumbnail */}
                                         <div className="w-full aspect-[4/5] bg-gray-200 relative overflow-hidden">
@@ -529,13 +561,12 @@ export default function NdviPage() {
                                                 className="text-[12px] font-bold mt-0.5 leading-tight"
                                                 style={{ color: entry.healthColor || "#666" }}
                                             >
-                                                {(entry.mean ?? 0).toFixed(2)}
+                                                {entry.mean != null ? entry.mean.toFixed(2) : "—"}
                                             </p>
                                             {entry.delta != null && (
                                                 <p
-                                                    className={`text-[9px] font-semibold leading-tight ${
-                                                        entry.delta >= 0 ? "text-emerald-500" : "text-red-500"
-                                                    }`}
+                                                    className={`text-[9px] font-semibold leading-tight ${entry.delta >= 0 ? "text-emerald-500" : "text-red-500"
+                                                        }`}
                                                 >
                                                     {entry.delta >= 0 ? "+" : ""}
                                                     {(entry.delta ?? 0).toFixed(2)}
