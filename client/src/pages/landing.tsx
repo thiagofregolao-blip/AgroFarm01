@@ -149,14 +149,23 @@ export default function LandingPage() {
             {/* ========== HERO ========== */}
             <section style={{
                 minHeight: "100vh", display: "flex", alignItems: "center",
-                background: `linear-gradient(135deg, ${colors.green} 0%, ${colors.greenDark} 50%, #1A3F15 100%)`,
                 position: "relative", overflow: "hidden", paddingTop: 70,
             }}>
+                {/* Background image with dark overlay */}
+                <div style={{
+                    position: "absolute", inset: 0, zIndex: 0,
+                    backgroundImage: "url('/hero-soja-bg.png')",
+                    backgroundSize: "cover", backgroundPosition: "center",
+                }} />
+                <div style={{
+                    position: "absolute", inset: 0, zIndex: 1,
+                    background: "linear-gradient(135deg, rgba(0,0,0,0.7) 0%, rgba(10,30,10,0.75) 50%, rgba(0,0,0,0.65) 100%)",
+                }} />
                 {/* Decorative circles */}
-                <div style={{ position: "absolute", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", border: `2px solid rgba(255,222,0,0.15)` }} />
-                <div style={{ position: "absolute", bottom: -50, left: -50, width: 300, height: 300, borderRadius: "50%", border: `2px solid rgba(255,222,0,0.1)` }} />
+                <div style={{ position: "absolute", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", border: `2px solid rgba(255,222,0,0.1)`, zIndex: 2 }} />
+                <div style={{ position: "absolute", bottom: -50, left: -50, width: 300, height: 300, borderRadius: "50%", border: `2px solid rgba(255,222,0,0.07)`, zIndex: 2 }} />
 
-                <div style={{ maxWidth: 1200, margin: "0 auto", padding: "60px 24px", display: "flex", alignItems: "center", gap: 60, flexWrap: "wrap" }}>
+                <div style={{ maxWidth: 1200, margin: "0 auto", padding: "60px 24px", display: "flex", alignItems: "center", gap: 60, flexWrap: "wrap", position: "relative", zIndex: 3 }}>
                     <div style={{ flex: 1, minWidth: 320 }}>
                         <div style={{ display: "inline-block", background: "rgba(255,222,0,0.2)", color: colors.yellow, padding: "6px 16px", borderRadius: 20, fontSize: 13, fontWeight: 600, marginBottom: 20, letterSpacing: 1 }}>
                             🌾 GESTÃO AGRÍCOLA DIGITAL
