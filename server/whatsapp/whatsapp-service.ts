@@ -6,7 +6,7 @@ import { ZApiClient, ZApiClient as ZApi } from "./zapi-client";
 import { GeminiClient } from "./gemini-client";
 import { MessageHandler } from "./message-handler";
 import { db, pool } from "../db";
-import { farmExpenses, farmEquipment, farmWhatsappPendingContext, farmCashAccounts, farmCashTransactions } from "../../shared/schema";
+import { farmExpenses, farmEquipment, farmWhatsappPendingContext, farmCashAccounts, farmCashTransactions, farmSeasons } from "../../shared/schema";
 import { and, desc, eq, ilike, gt, isNull, sql } from "drizzle-orm";
 
 interface WhatsAppServiceConfig {
@@ -220,82 +220,129 @@ export class WhatsAppService {
         }).where(eq(farmExpenses.id, ctx.expenseId));
       }
 
-      if (aiExtras.paymentType && ctx.expenseId) {
-        const payUpdate: any = { paymentType: aiExtras.paymentType };
-        if (aiExtras.dueDate) payUpdate.dueDate = new Date(aiExtras.dueDate);
-        if (aiExtras.installments) payUpdate.installments = aiExtras.installments;
-        if (aiExtras.isPaid === false) payUpdate.paymentStatus = "pendente";
-        await db.update(farmExpenses).set(payUpdate).where(eq(farmExpenses.id, ctx.expenseId));
-      }
-
       const equipMsg = equip ? `🚜 Máquina: *${equip.name}* ✅` : `🚜 Sem vínculo de máquina ✅`;
 
-      if (aiExtras.accountIndex && aiExtras.accountIndex > 0 && aiExtras.accountIndex <= accounts.length) {
-        const matchedAcct = accounts[aiExtras.accountIndex - 1];
-        await this.finishExpenseFlow(farmerId, ctx, data, equip, matchedAcct, aiExtras, replyTo, replyIsGroup);
-        return true;
-      }
+      let pmIdx = 1;
+      const pmLines: string[] = [];
+      for (const a of accounts) { pmLines.push(`${pmIdx}️⃣ ${a.name} (${a.currency})`); pmIdx++; }
+      pmLines.push(`${pmIdx}️⃣ Efetivo (bolso)`); pmIdx++;
+      pmLines.push(`${pmIdx}️⃣ Financiado (safra)`);
 
-      if (accounts.length > 0) {
-        const payInfo = aiExtras.isPaid === false ? " (a prazo)" : "";
-        await db.update(farmWhatsappPendingContext).set({
-          step: "awaiting_account",
-          data: { ...data, equipmentId: equip?.id || null, equipmentName: equip?.name || null, ...aiExtras },
-        }).where(eq(farmWhatsappPendingContext.id, ctx.id));
-        const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
-        await this.sendMessage(replyTo,
-          `${equipMsg}${payInfo}\n\nDe qual conta saiu o pagamento?\n${accountList}`,
-          replyIsGroup
-        );
-      } else {
-        await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
-        await this.sendMessage(replyTo,
-          `Pronto! ✅\n${equipMsg}\nDespesa aguardando aprovação no painel da AgroFarm! 🌾`,
-          replyIsGroup
-        );
-      }
+      await db.update(farmWhatsappPendingContext).set({
+        step: "awaiting_payment_method",
+        data: { ...data, equipmentId: equip?.id || null, equipmentName: equip?.name || null },
+      }).where(eq(farmWhatsappPendingContext.id, ctx.id));
+      await this.sendMessage(replyTo, `${equipMsg}\n\nQual a forma de pagamento?\n${pmLines.join("\n")}`, replyIsGroup);
       return true;
     }
 
-    if (ctx.step === "awaiting_account") {
+    if (ctx.step === "awaiting_payment_method") {
       const accounts = await db.select().from(farmCashAccounts).where(
         and(eq(farmCashAccounts.farmerId, farmerId), eq(farmCashAccounts.isActive, true))
       );
-      const idx = parseInt(search) - 1;
-      let matched: any = null;
-      let aiExtras: any = {};
+      const efIndex = accounts.length + 1;
+      const finIndex = accounts.length + 2;
+      const chosen = parseInt(search);
 
-      if (!isNaN(idx) && idx >= 0 && idx < accounts.length) {
-        matched = accounts[idx];
+      if (chosen === finIndex || search.toLowerCase().includes("financ") || search.toLowerCase().includes("safra")) {
+        const seasons = await db.select().from(farmSeasons).where(
+          and(eq(farmSeasons.farmerId, farmerId), eq(farmSeasons.isActive, true))
+        );
+        if (seasons.length > 0) {
+          await db.update(farmWhatsappPendingContext).set({
+            step: "awaiting_season",
+            data: { ...data, paymentType: "financiado" },
+          }).where(eq(farmWhatsappPendingContext.id, ctx.id));
+          const seasonList = seasons.map((s, i) => {
+            const endStr = s.endDate ? new Date(s.endDate).toLocaleDateString("pt-BR") : "sem data";
+            return `${i + 1}️⃣ ${s.name} (vence: ${endStr})`;
+          }).join("\n");
+          await this.sendMessage(replyTo, `Financiado ✅\n\nEm qual safra será pago?\n${seasonList}`, replyIsGroup);
+          return true;
+        }
+        if (ctx.expenseId) {
+          await db.update(farmExpenses).set({ paymentType: "financiado", paymentStatus: "pendente" }).where(eq(farmExpenses.id, ctx.expenseId));
+        }
+        await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+        await this.sendSummary(data, "Financiado", null, null, replyTo, replyIsGroup);
+        return true;
+      }
+
+      if (chosen === efIndex || search.toLowerCase().includes("efetivo") || search.toLowerCase().includes("bolso") || search.toLowerCase().includes("dinheiro")) {
+        if (ctx.expenseId) {
+          await db.update(farmExpenses).set({ paymentType: "a_vista", paymentStatus: "pago" }).where(eq(farmExpenses.id, ctx.expenseId));
+        }
+        await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+        await this.sendSummary(data, "Efetivo (bolso) 💵", null, null, replyTo, replyIsGroup);
+        return true;
+      }
+
+      const acctIdx = chosen - 1;
+      let matched: any = null;
+      if (!isNaN(acctIdx) && acctIdx >= 0 && acctIdx < accounts.length) {
+        matched = accounts[acctIdx];
       } else {
         matched = accounts.find(a => a.name.toLowerCase().includes(search.toLowerCase()));
       }
 
-      if (!matched && search.length > 2) {
-        const allEquipment = await db.select().from(farmEquipment).where(eq(farmEquipment.farmerId, farmerId));
-        const ai = await this.gemini.interpretExpenseResponse(search, {
-          step: "awaiting_account",
-          equipmentList: allEquipment.map(e => ({ id: e.id, name: e.name })),
-          accountList: accounts.map(a => ({ id: a.id, name: a.name, currency: a.currency })),
-        });
-        if (ai.understood && ai.accountIndex && ai.accountIndex > 0 && ai.accountIndex <= accounts.length) {
-          matched = accounts[ai.accountIndex - 1];
-          aiExtras = ai;
-        }
-      }
-
       if (!matched) {
-        const accountList = accounts.map((a, i) => `${i + 1}️⃣ ${a.name} (${a.currency})`).join("\n");
-        await this.sendMessage(replyTo,
-          `Não entendi. Responda com o número:\n${accountList}`,
-          replyIsGroup
-        );
+        let ri = 1;
+        const rLines: string[] = [];
+        for (const a of accounts) { rLines.push(`${ri}️⃣ ${a.name} (${a.currency})`); ri++; }
+        rLines.push(`${ri}️⃣ Efetivo (bolso)`); ri++;
+        rLines.push(`${ri}️⃣ Financiado (safra)`);
+        await this.sendMessage(replyTo, `Não entendi. Responda com o número:\n${rLines.join("\n")}`, replyIsGroup);
         return true;
       }
 
-      const mergedExtras = { ...data, ...aiExtras };
-      const equip = data.equipmentId ? { id: data.equipmentId, name: data.equipmentName } : null;
-      await this.finishExpenseFlow(farmerId, ctx, data, equip, matched, mergedExtras, replyTo, replyIsGroup);
+      if (ctx.expenseId) {
+        const [exp] = await db.select().from(farmExpenses).where(eq(farmExpenses.id, ctx.expenseId)).limit(1);
+        if (exp) {
+          const expAmt = parseFloat(exp.amount as string) || 0;
+          await db.update(farmExpenses).set({ paymentType: "a_vista", paymentStatus: "pago", paidAmount: String(expAmt) }).where(eq(farmExpenses.id, ctx.expenseId));
+          await db.insert(farmCashTransactions).values({
+            farmerId, accountId: matched.id, type: "saida",
+            amount: String(expAmt), currency: matched.currency, category: exp.category,
+            description: exp.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa via WhatsApp",
+            paymentMethod: "transferencia", expenseId: exp.id, referenceType: "whatsapp",
+          });
+          await db.update(farmCashAccounts).set({ currentBalance: sql`current_balance - ${expAmt}` }).where(eq(farmCashAccounts.id, matched.id));
+        }
+      }
+      await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+      await this.sendSummary(data, null, matched.name, null, replyTo, replyIsGroup);
+      return true;
+    }
+
+    if (ctx.step === "awaiting_season") {
+      const seasons = await db.select().from(farmSeasons).where(
+        and(eq(farmSeasons.farmerId, farmerId), eq(farmSeasons.isActive, true))
+      );
+      const sIdx = parseInt(search) - 1;
+      let season: any = null;
+      if (!isNaN(sIdx) && sIdx >= 0 && sIdx < seasons.length) {
+        season = seasons[sIdx];
+      } else {
+        season = seasons.find(s => s.name.toLowerCase().includes(search.toLowerCase()));
+      }
+      if (!season) {
+        const sList = seasons.map((s, i) => {
+          const endStr = s.endDate ? new Date(s.endDate).toLocaleDateString("pt-BR") : "sem data";
+          return `${i + 1}️⃣ ${s.name} (vence: ${endStr})`;
+        }).join("\n");
+        await this.sendMessage(replyTo, `Não entendi. Responda com o número:\n${sList}`, replyIsGroup);
+        return true;
+      }
+
+      if (ctx.expenseId) {
+        await db.update(farmExpenses).set({
+          paymentType: "financiado", paymentStatus: "pendente",
+          dueDate: season.endDate || null,
+        }).where(eq(farmExpenses.id, ctx.expenseId));
+      }
+      await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+      const dueStr = season.endDate ? new Date(season.endDate).toLocaleDateString("pt-BR") : "sem data";
+      await this.sendSummary(data, "Financiado", null, `${season.name} (vence: ${dueStr})`, replyTo, replyIsGroup);
       return true;
     }
 
@@ -303,70 +350,24 @@ export class WhatsAppService {
   }
 
   /**
-   * Finaliza o fluxo de despesa: registra transação no caixa e envia resumo completo.
+   * Envia resumo final padronizado da despesa.
    */
-  private async finishExpenseFlow(
-    farmerId: string, ctx: any, data: any,
-    equip: { id: string; name: string } | null,
-    account: any, extras: any,
+  private async sendSummary(
+    data: any,
+    paymentLabel: string | null,
+    accountName: string | null,
+    seasonInfo: string | null,
     replyTo: string, replyIsGroup: boolean
   ): Promise<void> {
-    let expAmount = 0;
-    let expCategory = data.category || "";
-    const isPaid = extras.isPaid !== false;
-    const paymentType = extras.paymentType || "a_vista";
-    const paymentMethod = extras.paymentMethod || "efetivo";
-
-    if (ctx.expenseId) {
-      const [exp] = await db.select().from(farmExpenses).where(eq(farmExpenses.id, ctx.expenseId)).limit(1);
-      if (exp) {
-        expAmount = parseFloat(exp.amount as string) || 0;
-        expCategory = exp.category;
-
-        const payUpdate: any = {
-          paymentType,
-          paymentStatus: isPaid ? "pago" : "pendente",
-        };
-        if (isPaid) {
-          payUpdate.paidAmount = String(expAmount);
-          payUpdate.installmentsPaid = exp.installments || 1;
-        }
-        if (extras.dueDate) payUpdate.dueDate = new Date(extras.dueDate);
-        if (extras.installments) payUpdate.installments = extras.installments;
-        await db.update(farmExpenses).set(payUpdate).where(eq(farmExpenses.id, ctx.expenseId));
-
-        if (isPaid) {
-          await db.insert(farmCashTransactions).values({
-            farmerId, accountId: account.id, type: "saida",
-            amount: String(expAmount), currency: account.currency, category: expCategory,
-            description: exp.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa via WhatsApp",
-            paymentMethod, expenseId: exp.id, referenceType: "whatsapp",
-          });
-          await db.update(farmCashAccounts)
-            .set({ currentBalance: sql`current_balance - ${expAmount}` })
-            .where(eq(farmCashAccounts.id, account.id));
-        }
-      }
-    }
-
-    await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
-
-    const amt = data.amount || expAmount;
-    const amtStr = typeof amt === 'number' ? amt.toFixed(2) : parseFloat(amt).toFixed(2);
-    const summary = [`✅ *Despesa registrada!*`, ``, `💰 Valor: *$ ${amtStr}*`];
+    const amt = data.amount ? parseFloat(data.amount).toFixed(2) : "0.00";
+    const summary = [`✅ *Despesa registrada!*`, ``, `💰 Valor: *$ ${amt}*`];
     if (data.supplierName) summary.push(`🏪 Fornecedor: *${data.supplierName}*`);
-    if (expCategory) summary.push(`📋 Categoria: *${expCategory}*`);
-    if (equip?.name) summary.push(`🚜 Máquina: *${equip.name}*`);
-    summary.push(`🏦 Conta: *${account.name}*`);
-    if (isPaid) {
-      summary.push(`💳 Pagamento: *À vista* (${paymentMethod})`);
-    } else {
-      const dueLine = extras.dueDate ? ` - Vence: ${extras.dueDate}` : '';
-      const instLine = extras.installments ? ` em ${extras.installments}x` : '';
-      summary.push(`💳 Pagamento: *A prazo${instLine}*${dueLine}`);
-    }
+    if (data.category) summary.push(`📋 Categoria: *${data.category}*`);
+    if (data.equipmentName) summary.push(`🚜 Máquina: *${data.equipmentName}*`);
+    if (accountName) summary.push(`🏦 Conta: *${accountName}*`);
+    if (paymentLabel) summary.push(`💳 Pagamento: *${paymentLabel}*`);
+    if (seasonInfo) summary.push(`📅 Safra: *${seasonInfo}*`);
     summary.push(`\nAguardando aprovação no painel da AgroFarm! 🌾`);
-
     await this.sendMessage(replyTo, summary.join("\n"), replyIsGroup);
   }
 
