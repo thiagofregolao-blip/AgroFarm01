@@ -24,6 +24,10 @@ export default function FarmInvoices() {
     const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
     const [approveExpenseId, setApproveExpenseId] = useState<string | null>(null);
     const [approveAccountId, setApproveAccountId] = useState<string>("");
+    const [approvePayStatus, setApprovePayStatus] = useState<string>("pago");
+    const [approvePayType, setApprovePayType] = useState<string>("a_vista");
+    const [approveDueDate, setApproveDueDate] = useState<string>("");
+    const [approveInstallments, setApproveInstallments] = useState<string>("1");
     const [selectedSeasonId, setSelectedSeasonId] = useState<string>("");
     const [skipStockEntry, setSkipStockEntry] = useState(false);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -116,7 +120,13 @@ export default function FarmInvoices() {
 
     const confirmExpenseMutation = useMutation({
         mutationFn: ({ id, accountId }: { id: string; accountId?: string }) =>
-            apiRequest("POST", `/api/farm/expenses/${id}/confirm`, { accountId, paymentMethod: "efetivo" }),
+            apiRequest("POST", `/api/farm/expenses/${id}/confirm`, {
+                accountId, paymentMethod: "efetivo",
+                paymentStatus: approvePayStatus,
+                paymentType: approvePayType,
+                dueDate: approveDueDate || undefined,
+                installments: approveInstallments || "1",
+            }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
@@ -615,47 +625,76 @@ export default function FarmInvoices() {
                 </Tabs>
             </div>
 
-            <Dialog open={!!approveExpenseId} onOpenChange={(open) => { if (!open) { setApproveExpenseId(null); setApproveAccountId(""); } }}>
-                <DialogContent className="max-w-sm">
+            <Dialog open={!!approveExpenseId} onOpenChange={(open) => { if (!open) { setApproveExpenseId(null); setApproveAccountId(""); setApprovePayStatus("pago"); setApprovePayType("a_vista"); setApproveDueDate(""); setApproveInstallments("1"); } }}>
+                <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Wallet className="h-5 w-5 text-emerald-600" />
-                            Aprovar e Lançar no Caixa
+                            Aprovar Despesa
                         </DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
-                        <p className="text-sm text-gray-600">
-                            De qual conta/caixa saiu o pagamento desta despesa?
-                        </p>
                         <div>
-                            <Label>Conta de Pagamento</Label>
-                            <Select value={approveAccountId} onValueChange={setApproveAccountId}>
-                                <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                            <Label>Status do Pagamento</Label>
+                            <Select value={approvePayStatus} onValueChange={setApprovePayStatus}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {(cashAccounts as any[]).map((a: any) => (
-                                        <SelectItem key={a.id} value={a.id}>
-                                            {a.name} ({a.currency})
-                                        </SelectItem>
-                                    ))}
+                                    <SelectItem value="pago">Já foi pago</SelectItem>
+                                    <SelectItem value="pendente">Ainda não pagou</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div>
+                            <Label>Tipo de Pagamento</Label>
+                            <Select value={approvePayType} onValueChange={setApprovePayType}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="a_vista">À Vista</SelectItem>
+                                    <SelectItem value="a_prazo">A Prazo (Fiado)</SelectItem>
+                                    <SelectItem value="financiado">Financiado / Parcelado</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {(approvePayType === "a_prazo" || approvePayType === "financiado") && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label>Vencimento</Label>
+                                    <Input type="date" value={approveDueDate} onChange={e => setApproveDueDate(e.target.value)} />
+                                </div>
+                                {approvePayType === "financiado" && (
+                                    <div>
+                                        <Label>Parcelas</Label>
+                                        <Input type="number" min="1" value={approveInstallments} onChange={e => setApproveInstallments(e.target.value)} />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {approvePayStatus === "pago" && (
+                            <div>
+                                <Label>Conta de Pagamento</Label>
+                                <Select value={approveAccountId} onValueChange={setApproveAccountId}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {(cashAccounts as any[]).map((a: any) => (
+                                            <SelectItem key={a.id} value={a.id}>
+                                                {a.name} ({a.currency})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                         <div className="flex gap-2">
                             <Button
                                 className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                                disabled={confirmExpenseMutation.isPending || !approveAccountId}
-                                onClick={() => approveExpenseId && confirmExpenseMutation.mutate({ id: approveExpenseId, accountId: approveAccountId })}
+                                disabled={confirmExpenseMutation.isPending || (approvePayStatus === "pago" && !approveAccountId)}
+                                onClick={() => approveExpenseId && confirmExpenseMutation.mutate({
+                                    id: approveExpenseId,
+                                    accountId: approvePayStatus === "pago" ? approveAccountId : undefined,
+                                })}
                             >
                                 {confirmExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                                Aprovar
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="flex-1"
-                                disabled={confirmExpenseMutation.isPending}
-                                onClick={() => approveExpenseId && confirmExpenseMutation.mutate({ id: approveExpenseId })}
-                            >
-                                Aprovar sem Caixa
+                                {approvePayStatus === "pago" ? "Aprovar e Lançar" : "Aprovar (Pendente)"}
                             </Button>
                         </div>
                     </div>

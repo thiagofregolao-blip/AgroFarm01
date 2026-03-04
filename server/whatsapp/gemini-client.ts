@@ -90,6 +90,79 @@ export class GeminiClient {
   }
 
   /**
+   * Interpreta resposta livre (texto ou áudio transcrito) durante conversa multi-etapa.
+   * Extrai equipamento, conta, tipo de pagamento e vencimento de uma frase natural.
+   */
+  async interpretExpenseResponse(
+    message: string,
+    context: {
+      step: string;
+      equipmentList?: { id: string; name: string }[];
+      accountList?: { id: string; name: string; currency: string }[];
+    }
+  ): Promise<{
+    equipmentIndex?: number;
+    accountIndex?: number;
+    paymentType?: string; // a_vista, a_prazo, financiado
+    paymentMethod?: string; // efetivo, transferencia, cheque, cartao, pix
+    isPaid?: boolean;
+    dueDate?: string;
+    installments?: number;
+    skipEquipment?: boolean;
+    understood: boolean;
+  }> {
+    try {
+      const equipNames = context.equipmentList?.map((e, i) => `${i + 1}. ${e.name}`) || [];
+      const acctNames = context.accountList?.map((a, i) => `${i + 1}. ${a.name} (${a.currency})`) || [];
+
+      const prompt = `Você é um assistente agrícola. O agricultor respondeu com uma mensagem de texto ou áudio sobre uma despesa.
+Extraia as informações da mensagem dele. Responda SOMENTE com JSON válido sem markdown.
+
+Etapa atual: ${context.step}
+
+${equipNames.length > 0 ? `Máquinas/veículos cadastrados:\n${equipNames.join("\n")}` : ""}
+${acctNames.length > 0 ? `Contas bancárias cadastradas:\n${acctNames.join("\n")}` : ""}
+
+Mensagem do agricultor: "${message}"
+
+Extraia o que for possível:
+- equipmentIndex: número (1-based) da máquina mencionada, ou null. Se ele disser "nenhuma" ou "nenhum", retorne -1.
+- accountIndex: número (1-based) da conta mencionada, ou null. Busque por nome parcial.
+- paymentType: "a_vista" se pagou à vista/já pagou, "a_prazo" se comprou a prazo/fiado/30 dias, "financiado" se financiou/parcelou. null se não mencionou.
+- paymentMethod: "efetivo" (dinheiro/cash), "transferencia" (transferência/TED/PIX), "cheque", "cartao" (cartão). null se não mencionou.
+- isPaid: true se já pagou, false se ainda não pagou / vai pagar depois. null se não mencionou.
+- dueDate: data de vencimento em formato "YYYY-MM-DD" se mencionou (ex: "vence dia 15" = próximo dia 15). null se não mencionou.
+- installments: número de parcelas se mencionou parcelamento. null se não mencionou.
+- skipEquipment: true se disse "nenhuma máquina" ou similar.
+- understood: true se conseguiu extrair pelo menos uma informação útil.
+
+Responda SOMENTE JSON:`;
+
+      const response = await fetch(
+        `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1 },
+          }),
+        }
+      );
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(cleanJson);
+      console.log(`[Gemini] Interpretação de resposta livre:`, parsed);
+      return parsed;
+    } catch (error) {
+      console.error("[Gemini] Erro ao interpretar resposta:", error);
+      return { understood: false };
+    }
+  }
+
+  /**
    * Interpreta pergunta do usuário e retorna intenção estruturada
    */
   async interpretQuestion(question: string, userId: string, context?: any): Promise<QueryIntent> {

@@ -294,6 +294,16 @@ const runMigration = async () => {
             console.log('✅ Migração cash_flow concluída!');
         }
 
+        // Migration 25: Payment status + custom categories
+        const paymentCatPath = path.join(process.cwd(), 'migration_add_payment_categories.sql');
+        if (fs.existsSync(paymentCatPath)) {
+            const paymentCatSql = fs.readFileSync(paymentCatPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', paymentCatPath);
+            console.log('🚀 Executando SQL (payment_categories)...');
+            await sql.unsafe(paymentCatSql);
+            console.log('✅ Migração payment_categories concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

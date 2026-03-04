@@ -13,7 +13,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
     Wallet, Plus, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
-    Loader2, Trash2, Building2, Banknote, CreditCard, Landmark, DollarSign
+    Loader2, Trash2, Building2, Banknote, CreditCard, Landmark, DollarSign,
+    AlertTriangle, Calendar, Tag, CreditCard as CardIcon
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -81,10 +82,18 @@ export default function FarmCashFlow() {
         enabled: !!user,
     });
 
+    const { data: customCategories = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/expense-categories"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/expense-categories"); return r.json(); },
+        enabled: !!user,
+    });
+
     const accounts: any[] = summary?.accounts || [];
     const month = summary?.monthSummary || { totalEntradas: 0, totalSaidas: 0, saldoLiquido: 0 };
     const chartData: any[] = summary?.chartData || [];
     const byCategory: any[] = summary?.byCategory || [];
+    const contasAPagar: any[] = summary?.contasAPagar || [];
+    const totalAPagar = contasAPagar.reduce((sum: number, c: any) => sum + c.remaining, 0);
     const PIE_COLORS = ["#059669", "#0891b2", "#d97706", "#dc2626", "#7c3aed", "#db2777", "#65a30d", "#ea580c", "#4f46e5", "#0d9488"];
 
     const deleteTransaction = useMutation({
@@ -124,6 +133,7 @@ export default function FarmCashFlow() {
                             <TabsTrigger value="dashboard">Painel</TabsTrigger>
                             <TabsTrigger value="extrato">Extrato</TabsTrigger>
                             <TabsTrigger value="contas">Contas / Bancos</TabsTrigger>
+                            <TabsTrigger value="categorias">Categorias</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="dashboard" className="space-y-6 mt-4">
@@ -246,6 +256,71 @@ export default function FarmCashFlow() {
                                 </Card>
                             </div>
 
+                            {/* Contas a Pagar */}
+                            {contasAPagar.length > 0 && (
+                                <Card className="border-amber-200 bg-amber-50/30">
+                                    <CardHeader>
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-amber-800 flex items-center gap-2">
+                                                <AlertTriangle className="h-5 w-5" /> Contas a Pagar
+                                            </CardTitle>
+                                            <span className="text-sm font-bold text-amber-700">Total: $ {totalAPagar.toFixed(2)}</span>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="bg-white rounded-xl border border-amber-200 overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-amber-50">
+                                                    <tr>
+                                                        <th className="text-left p-3 font-semibold text-amber-700">Fornecedor</th>
+                                                        <th className="text-left p-3 font-semibold text-amber-700">Categoria</th>
+                                                        <th className="text-left p-3 font-semibold text-amber-700">Descrição</th>
+                                                        <th className="text-center p-3 font-semibold text-amber-700">Tipo</th>
+                                                        <th className="text-center p-3 font-semibold text-amber-700">Vencimento</th>
+                                                        <th className="text-center p-3 font-semibold text-amber-700">Parcelas</th>
+                                                        <th className="text-right p-3 font-semibold text-amber-700">Total</th>
+                                                        <th className="text-right p-3 font-semibold text-amber-700">Pago</th>
+                                                        <th className="text-right p-3 font-semibold text-amber-700">Restante</th>
+                                                        <th className="text-center p-3 font-semibold text-amber-700">Ação</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {contasAPagar.map((c: any) => {
+                                                        const isOverdue = c.dueDate && new Date(c.dueDate) < new Date();
+                                                        return (
+                                                            <tr key={c.id} className={`border-t border-amber-100 ${isOverdue ? 'bg-red-50' : ''}`}>
+                                                                <td className="p-3 font-medium">{c.supplier || "—"}</td>
+                                                                <td className="p-3">{c.category}</td>
+                                                                <td className="p-3 max-w-[150px] truncate">{c.description || "—"}</td>
+                                                                <td className="p-3 text-center">
+                                                                    <span className={`px-2 py-0.5 rounded-full text-xs ${c.paymentType === 'a_prazo' ? 'bg-amber-100 text-amber-700' : c.paymentType === 'financiado' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                                        {c.paymentType === "a_prazo" ? "A Prazo" : c.paymentType === "financiado" ? "Financiado" : "À Vista"}
+                                                                    </span>
+                                                                </td>
+                                                                <td className={`p-3 text-center ${isOverdue ? 'text-red-600 font-bold' : ''}`}>
+                                                                    {c.dueDate ? new Date(c.dueDate).toLocaleDateString("pt-BR") : "—"}
+                                                                    {isOverdue && " ⚠️"}
+                                                                </td>
+                                                                <td className="p-3 text-center">{c.installmentsPaid || 0}/{c.installments || 1}</td>
+                                                                <td className="p-3 text-right font-mono">$ {c.amount.toFixed(2)}</td>
+                                                                <td className="p-3 text-right font-mono text-emerald-600">$ {c.paidAmount.toFixed(2)}</td>
+                                                                <td className="p-3 text-right font-mono font-bold text-red-600">$ {c.remaining.toFixed(2)}</td>
+                                                                <td className="p-3 text-center">
+                                                                    <PayExpenseButton expenseId={c.id} remaining={c.remaining} accounts={accounts} onSuccess={() => {
+                                                                        queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+                                                                        queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+                                                                    }} />
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             {/* Últimas movimentações */}
                             <Card className="border-emerald-100">
                                 <CardHeader><CardTitle className="text-emerald-800">Últimas Movimentações</CardTitle></CardHeader>
@@ -276,6 +351,13 @@ export default function FarmCashFlow() {
 
                         <TabsContent value="contas" className="mt-4">
                             <AccountsManager accounts={accounts} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
+                        </TabsContent>
+
+                        <TabsContent value="categorias" className="mt-4">
+                            <CategoriesManager
+                                categories={customCategories}
+                                onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/expense-categories"] })}
+                            />
                         </TabsContent>
                     </Tabs>
                 )}
@@ -477,6 +559,175 @@ function CreateAccountDialog({ onSuccess }: { onSuccess: () => void }) {
                 </div>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function PayExpenseButton({ expenseId, remaining, accounts, onSuccess }: { expenseId: string; remaining: number; accounts: any[]; onSuccess: () => void }) {
+    const [open, setOpen] = useState(false);
+    const [accountId, setAccountId] = useState("");
+    const [payAmount, setPayAmount] = useState(String(remaining));
+    const [paymentMethod, setPaymentMethod] = useState("efetivo");
+    const { toast } = useToast();
+
+    const pay = useMutation({
+        mutationFn: () => apiRequest("POST", `/api/farm/expenses/${expenseId}/pay`, {
+            accountId, paymentMethod, amount: parseFloat(payAmount),
+        }),
+        onSuccess: () => {
+            toast({ title: "Pagamento registrado!" });
+            setOpen(false);
+            onSuccess();
+        },
+        onError: () => toast({ title: "Erro ao pagar", variant: "destructive" }),
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs">Pagar</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-sm">
+                <DialogHeader><DialogTitle>Registrar Pagamento</DialogTitle></DialogHeader>
+                <div className="space-y-3 py-2">
+                    <div>
+                        <Label>Valor a Pagar</Label>
+                        <Input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
+                        <p className="text-xs text-gray-500 mt-1">Restante: $ {remaining.toFixed(2)}</p>
+                    </div>
+                    <div>
+                        <Label>Conta</Label>
+                        <Select value={accountId} onValueChange={setAccountId}>
+                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                            <SelectContent>
+                                {accounts.map((a: any) => (
+                                    <SelectItem key={a.id} value={a.id}>{a.name} ({formatMoney(parseFloat(a.currentBalance), a.currency)})</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div>
+                        <Label>Forma de Pagamento</Label>
+                        <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {PAYMENT_METHODS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => pay.mutate()} disabled={pay.isPending || !accountId}>
+                        {pay.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Confirmar Pagamento"}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function CategoriesManager({ categories, onRefresh }: { categories: any[]; onRefresh: () => void }) {
+    const { toast } = useToast();
+    const [name, setName] = useState("");
+    const [type, setType] = useState("saida");
+
+    const create = useMutation({
+        mutationFn: () => apiRequest("POST", "/api/farm/expense-categories", { name, type }),
+        onSuccess: () => {
+            toast({ title: "Categoria criada!" });
+            setName("");
+            onRefresh();
+        },
+        onError: () => toast({ title: "Erro ao criar", variant: "destructive" }),
+    });
+
+    const remove = useMutation({
+        mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/expense-categories/${id}`),
+        onSuccess: () => { onRefresh(); toast({ title: "Categoria removida" }); },
+    });
+
+    const defaultSaida = SAIDA_CATEGORIES;
+    const defaultEntrada = ENTRADA_CATEGORIES;
+    const customSaida = categories.filter(c => c.type === "saida");
+    const customEntrada = categories.filter(c => c.type === "entrada");
+
+    return (
+        <div className="space-y-6">
+            <Card className="border-emerald-100">
+                <CardHeader><CardTitle className="text-emerald-800 flex items-center gap-2"><Tag className="h-5 w-5" /> Gerenciar Categorias</CardTitle></CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="flex gap-3 items-end">
+                        <div className="flex-1">
+                            <Label>Nome da Categoria</Label>
+                            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Aluguel de máquinas, Soja, Milho..." />
+                        </div>
+                        <div className="w-36">
+                            <Label>Tipo</Label>
+                            <Select value={type} onValueChange={setType}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="saida">Saída</SelectItem>
+                                    <SelectItem value="entrada">Entrada</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => create.mutate()} disabled={create.isPending || !name}>
+                            <Plus className="mr-1 h-4 w-4" /> Adicionar
+                        </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 className="font-semibold text-red-700 mb-3 flex items-center gap-2">
+                                <TrendingDown className="h-4 w-4" /> Categorias de Saída
+                            </h3>
+                            <div className="space-y-2">
+                                {defaultSaida.map(c => (
+                                    <div key={c.value} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 text-sm">
+                                        <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 text-xs">padrão</span>
+                                        <span>{c.label}</span>
+                                    </div>
+                                ))}
+                                {customSaida.map((c: any) => (
+                                    <div key={c.id} className="flex items-center justify-between p-2 rounded-lg bg-red-50 border border-red-100 text-sm group">
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-xs">custom</span>
+                                            <span className="font-medium">{c.name}</span>
+                                        </div>
+                                        <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 text-red-500 h-6 w-6 p-0"
+                                            onClick={() => remove.mutate(c.id)}>
+                                            <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="font-semibold text-emerald-700 mb-3 flex items-center gap-2">
+                                <TrendingUp className="h-4 w-4" /> Categorias de Entrada
+                            </h3>
+                            <div className="space-y-2">
+                                {defaultEntrada.map(c => (
+                                    <div key={c.value} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 text-sm">
+                                        <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 text-xs">padrão</span>
+                                        <span>{c.label}</span>
+                                    </div>
+                                ))}
+                                {customEntrada.map((c: any) => (
+                                    <div key={c.id} className="flex items-center justify-between p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-sm group">
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 text-xs">custom</span>
+                                            <span className="font-medium">{c.name}</span>
+                                        </div>
+                                        <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 text-red-500 h-6 w-6 p-0"
+                                            onClick={() => remove.mutate(c.id)}>
+                                            <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
     );
 }
 

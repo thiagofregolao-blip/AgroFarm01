@@ -1042,7 +1042,7 @@ export function registerFarmRoutes(app: Express) {
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
 
             const farmerId = (req.user as any).id;
-            const { accountId, paymentMethod } = req.body || {};
+            const { accountId, paymentMethod, paymentStatus, paymentType, dueDate, installments } = req.body || {};
 
             const [expense] = await db.select().from(farmExpenses).where(
                 and(eq(farmExpenses.id, req.params.id), eq(farmExpenses.farmerId, farmerId))
@@ -1050,21 +1050,30 @@ export function registerFarmRoutes(app: Express) {
 
             if (!expense) return res.status(404).json({ error: "Expense not found" });
 
-            await db.update(farmExpenses).set({ status: "confirmed" }).where(eq(farmExpenses.id, expense.id));
+            const amount = parseFloat(expense.amount as string) || 0;
+            const isPago = paymentStatus === "pago" || (!paymentStatus && accountId);
 
-            if (accountId) {
-                const amount = parseFloat(expense.amount as string) || 0;
+            const updateData: any = {
+                status: "confirmed",
+                paymentStatus: paymentStatus || (accountId ? "pago" : "pendente"),
+                paymentType: paymentType || "a_vista",
+            };
+            if (dueDate) updateData.dueDate = new Date(dueDate);
+            if (installments) updateData.installments = parseInt(installments);
+            if (isPago) {
+                updateData.paidAmount = String(amount);
+                updateData.installmentsPaid = updateData.installments || 1;
+            }
+
+            await db.update(farmExpenses).set(updateData).where(eq(farmExpenses.id, expense.id));
+
+            if (accountId && isPago) {
                 await db.insert(farmCashTransactions).values({
-                    farmerId,
-                    accountId,
-                    type: "saida",
-                    amount: String(amount),
-                    currency: "USD",
-                    category: expense.category,
+                    farmerId, accountId, type: "saida",
+                    amount: String(amount), currency: "USD", category: expense.category,
                     description: expense.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa aprovada",
                     paymentMethod: paymentMethod || "efetivo",
-                    expenseId: expense.id,
-                    referenceType: "aprovacao_despesa",
+                    expenseId: expense.id, referenceType: "aprovacao_despesa",
                 });
                 await db.update(farmCashAccounts)
                     .set({ currentBalance: sqlFn`current_balance - ${amount}` })
@@ -1075,6 +1084,52 @@ export function registerFarmRoutes(app: Express) {
         } catch (error) {
             console.error("[FARM_EXPENSE_CONFIRM]", error);
             res.status(500).json({ error: "Failed to confirm expense" });
+        }
+    });
+
+    app.post("/api/farm/expenses/:id/pay", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenses, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and, sql: sqlFn } = await import("drizzle-orm");
+
+            const farmerId = (req.user as any).id;
+            const { accountId, paymentMethod, amount: payAmount } = req.body;
+            if (!accountId) return res.status(400).json({ error: "accountId obrigatório" });
+
+            const [expense] = await db.select().from(farmExpenses).where(
+                and(eq(farmExpenses.id, req.params.id), eq(farmExpenses.farmerId, farmerId))
+            ).limit(1);
+            if (!expense) return res.status(404).json({ error: "Expense not found" });
+
+            const totalAmount = parseFloat(expense.amount as string) || 0;
+            const previouslyPaid = parseFloat(expense.paidAmount as string) || 0;
+            const thisPayment = payAmount ? parseFloat(payAmount) : totalAmount - previouslyPaid;
+            const newPaid = previouslyPaid + thisPayment;
+            const newInstPaid = (expense.installmentsPaid || 0) + 1;
+            const fullyPaid = newPaid >= totalAmount;
+
+            await db.update(farmExpenses).set({
+                paidAmount: String(newPaid),
+                installmentsPaid: newInstPaid,
+                paymentStatus: fullyPaid ? "pago" : "parcial",
+            }).where(eq(farmExpenses.id, expense.id));
+
+            await db.insert(farmCashTransactions).values({
+                farmerId, accountId, type: "saida",
+                amount: String(thisPayment), currency: "USD", category: expense.category,
+                description: `Pagamento ${newInstPaid}/${expense.installments || 1} - ${expense.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa"}`,
+                paymentMethod: paymentMethod || "efetivo",
+                expenseId: expense.id, referenceType: "aprovacao_despesa",
+            });
+            await db.update(farmCashAccounts)
+                .set({ currentBalance: sqlFn`current_balance - ${thisPayment}` })
+                .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
+
+            res.json({ success: true, fullyPaid, paidAmount: newPaid, remaining: totalAmount - newPaid });
+        } catch (error) {
+            console.error("[FARM_EXPENSE_PAY]", error);
+            res.status(500).json({ error: "Failed to pay expense" });
         }
     });
 
@@ -1155,6 +1210,52 @@ export function registerFarmRoutes(app: Express) {
         } catch (error) {
             console.error("[FARM_EXPENSE_IMAGE]", error);
             res.status(500).json({ error: "Failed to get expense image" });
+        }
+    });
+
+    // ==================== CATEGORIAS PERSONALIZADAS ====================
+
+    app.get("/api/farm/expense-categories", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenseCategories } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq } = await import("drizzle-orm");
+            const farmerId = (req.user as any).id;
+            const categories = await db.select().from(farmExpenseCategories).where(eq(farmExpenseCategories.farmerId, farmerId));
+            res.json(categories);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to load categories" });
+        }
+    });
+
+    app.post("/api/farm/expense-categories", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenseCategories } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+            const { name, type } = req.body;
+            if (!name) return res.status(400).json({ error: "Nome é obrigatório" });
+            const [cat] = await db.insert(farmExpenseCategories).values({
+                farmerId, name, type: type || "saida",
+            }).returning();
+            res.json(cat);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to create category" });
+        }
+    });
+
+    app.delete("/api/farm/expense-categories/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenseCategories } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+            const farmerId = (req.user as any).id;
+            await db.delete(farmExpenseCategories).where(
+                and(eq(farmExpenseCategories.id, req.params.id), eq(farmExpenseCategories.farmerId, farmerId))
+            );
+            res.json({ ok: true });
+        } catch (error) {
+            res.status(500).json({ error: "Failed to delete category" });
         }
     });
 
@@ -1385,6 +1486,29 @@ export function registerFarmRoutes(app: Express) {
             const byCategory = Object.entries(byCategoryRaw).map(([cat, val]) => ({ category: cat, value: Math.round(val * 100) / 100 }))
                 .sort((a, b) => b.value - a.value);
 
+            const { farmExpenses } = await import("../shared/schema");
+            const { or } = await import("drizzle-orm");
+            const unpaidExpenses = await db.select().from(farmExpenses).where(
+                and(
+                    eq(farmExpenses.farmerId, farmerId),
+                    eq(farmExpenses.status, "confirmed"),
+                    or(eq(farmExpenses.paymentStatus, "pendente"), eq(farmExpenses.paymentStatus, "parcial"))
+                )
+            );
+            const contasAPagar = unpaidExpenses.map(e => ({
+                id: e.id,
+                description: e.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim(),
+                supplier: e.supplier,
+                category: e.category,
+                amount: parseFloat(e.amount as string) || 0,
+                paidAmount: parseFloat(e.paidAmount as string) || 0,
+                remaining: (parseFloat(e.amount as string) || 0) - (parseFloat(e.paidAmount as string) || 0),
+                dueDate: e.dueDate,
+                paymentType: e.paymentType,
+                installments: e.installments,
+                installmentsPaid: e.installmentsPaid,
+            }));
+
             res.json({
                 accounts,
                 monthSummary: {
@@ -1395,6 +1519,7 @@ export function registerFarmRoutes(app: Express) {
                 },
                 chartData,
                 byCategory,
+                contasAPagar,
             });
         } catch (error) {
             console.error("[CASH_SUMMARY]", error);

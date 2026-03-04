@@ -1179,6 +1179,15 @@ export const farmApplications = pgTable("farm_applications", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+export const farmExpenseCategories = pgTable("farm_expense_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("saida"), // saida, entrada
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 export const farmExpenses = pgTable("farm_expenses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -1191,6 +1200,12 @@ export const farmExpenses = pgTable("farm_expenses", {
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   imageBase64: text("image_base64"),
   status: text("status", { enum: ["pending", "confirmed"] }).default("confirmed"),
+  paymentStatus: text("payment_status").notNull().default("pendente"), // pendente, pago, parcial
+  paymentType: text("payment_type").notNull().default("a_vista"), // a_vista, a_prazo, financiado
+  dueDate: timestamp("due_date"),
+  installments: integer("installments").default(1),
+  installmentsPaid: integer("installments_paid").default(0),
+  paidAmount: decimal("paid_amount", { precision: 15, scale: 2 }).default("0"),
   expenseDate: timestamp("expense_date").notNull().default(sql`now()`),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
@@ -1352,6 +1367,10 @@ export type FarmApplication = typeof farmApplications.$inferSelect;
 export const insertFarmExpenseSchema = createInsertSchema(farmExpenses).omit({ id: true, createdAt: true });
 export type InsertFarmExpense = z.infer<typeof insertFarmExpenseSchema>;
 export type FarmExpense = typeof farmExpenses.$inferSelect;
+
+export const insertFarmExpenseCategorySchema = createInsertSchema(farmExpenseCategories).omit({ id: true, createdAt: true });
+export type InsertFarmExpenseCategory = z.infer<typeof insertFarmExpenseCategorySchema>;
+export type FarmExpenseCategory = typeof farmExpenseCategories.$inferSelect;
 
 export const insertFarmPdvTerminalSchema = createInsertSchema(farmPdvTerminals).omit({ id: true, createdAt: true });
 export type InsertFarmPdvTerminal = z.infer<typeof insertFarmPdvTerminalSchema>;
