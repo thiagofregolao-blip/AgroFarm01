@@ -159,7 +159,7 @@ export default function LandingPage() {
                 }} />
                 <div style={{
                     position: "absolute", inset: 0, zIndex: 1,
-                    background: "linear-gradient(135deg, rgba(0,0,0,0.7) 0%, rgba(10,30,10,0.75) 50%, rgba(0,0,0,0.65) 100%)",
+                    background: "linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(10,30,10,0.55) 50%, rgba(0,0,0,0.45) 100%)",
                 }} />
                 {/* Decorative circles */}
                 <div style={{ position: "absolute", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", border: `2px solid rgba(255,222,0,0.1)`, zIndex: 2 }} />
