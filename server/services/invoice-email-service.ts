@@ -216,8 +216,7 @@ export async function createDraftInvoice(
         console.error("[Invoice Email] Error getting season:", e);
     }
 
-    // Verificação de duplicidade
-    const { eq, and } = await import("drizzle-orm");
+    // Verificação de duplicidade (eq, and already imported at top-level)
     const existingInvs = await db.select({
         id: farmInvoices.id, invoiceNumber: farmInvoices.invoiceNumber,
         supplier: farmInvoices.supplier, totalAmount: farmInvoices.totalAmount,
