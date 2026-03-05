@@ -1384,7 +1384,123 @@ export const insertFarmPriceHistorySchema = createInsertSchema(farmPriceHistory)
 export type InsertFarmPriceHistory = z.infer<typeof insertFarmPriceHistorySchema>;
 export type FarmPriceHistory = typeof farmPriceHistory.$inferSelect;
 
-// Farm Farmers (Agricultores management separately from internal team)
+// ==================== ROMANEIOS (Boletas de Pesaje) ====================
+
+export const farmRomaneios = pgTable("farm_romaneios", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  plotId: varchar("plot_id").references(() => farmPlots.id),
+  propertyId: varchar("property_id").references(() => farmProperties.id),
+  seasonId: varchar("season_id").references(() => farmSeasons.id),
+  buyer: text("buyer").notNull(),
+  crop: text("crop").notNull(),
+  deliveryDate: timestamp("delivery_date").notNull(),
+  grossWeight: decimal("gross_weight", { precision: 15, scale: 2 }).notNull(),
+  tare: decimal("tare", { precision: 15, scale: 2 }).notNull(),
+  netWeight: decimal("net_weight", { precision: 15, scale: 2 }).notNull(),
+  moisture: decimal("moisture", { precision: 5, scale: 2 }),
+  impurities: decimal("impurities", { precision: 5, scale: 2 }),
+  moistureDiscount: decimal("moisture_discount", { precision: 15, scale: 2 }).default("0"),
+  impurityDiscount: decimal("impurity_discount", { precision: 15, scale: 2 }).default("0"),
+  finalWeight: decimal("final_weight", { precision: 15, scale: 2 }).notNull(),
+  pricePerTon: decimal("price_per_ton", { precision: 15, scale: 2 }),
+  currency: text("currency").notNull().default("USD"),
+  totalValue: decimal("total_value", { precision: 15, scale: 2 }),
+  truckPlate: text("truck_plate"),
+  ticketNumber: text("ticket_number"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFarmRomaneioSchema = createInsertSchema(farmRomaneios).omit({ id: true, createdAt: true });
+export type InsertFarmRomaneio = z.infer<typeof insertFarmRomaneioSchema>;
+export type FarmRomaneio = typeof farmRomaneios.$inferSelect;
+
+// ==================== CONTAS A PAGAR ====================
+
+export const farmAccountsPayable = pgTable("farm_accounts_payable", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  invoiceId: varchar("invoice_id").references(() => farmInvoices.id),
+  expenseId: varchar("expense_id").references(() => farmExpenses.id),
+  supplier: text("supplier").notNull(),
+  description: text("description"),
+  totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
+  paidAmount: decimal("paid_amount", { precision: 15, scale: 2 }).default("0"),
+  currency: text("currency").notNull().default("USD"),
+  installmentNumber: integer("installment_number").default(1),
+  totalInstallments: integer("total_installments").default(1),
+  dueDate: timestamp("due_date").notNull(),
+  paidDate: timestamp("paid_date"),
+  status: text("status").notNull().default("aberto"), // aberto, parcial, pago, vencido
+  cashTransactionId: varchar("cash_transaction_id").references(() => farmCashTransactions.id),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFarmAccountPayableSchema = createInsertSchema(farmAccountsPayable).omit({ id: true, createdAt: true });
+export type InsertFarmAccountPayable = z.infer<typeof insertFarmAccountPayableSchema>;
+export type FarmAccountPayable = typeof farmAccountsPayable.$inferSelect;
+
+// ==================== CONTAS A RECEBER ====================
+
+export const farmAccountsReceivable = pgTable("farm_accounts_receivable", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  romaneioId: varchar("romaneio_id").references(() => farmRomaneios.id),
+  buyer: text("buyer").notNull(),
+  description: text("description"),
+  totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
+  receivedAmount: decimal("received_amount", { precision: 15, scale: 2 }).default("0"),
+  currency: text("currency").notNull().default("USD"),
+  dueDate: timestamp("due_date").notNull(),
+  receivedDate: timestamp("received_date"),
+  status: text("status").notNull().default("pendente"), // pendente, parcial, recebido
+  cashTransactionId: varchar("cash_transaction_id").references(() => farmCashTransactions.id),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFarmAccountReceivableSchema = createInsertSchema(farmAccountsReceivable).omit({ id: true, createdAt: true });
+export type InsertFarmAccountReceivable = z.infer<typeof insertFarmAccountReceivableSchema>;
+export type FarmAccountReceivable = typeof farmAccountsReceivable.$inferSelect;
+
+// ==================== ORÇAMENTO POR SAFRA ====================
+
+export const farmBudgets = pgTable("farm_budgets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  seasonId: varchar("season_id").references(() => farmSeasons.id),
+  category: text("category").notNull(), // insumos, diesel, mao_de_obra, frete, secagem, admin, manutencao
+  plannedAmount: decimal("planned_amount", { precision: 15, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("USD"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFarmBudgetSchema = createInsertSchema(farmBudgets).omit({ id: true, createdAt: true });
+export type InsertFarmBudget = z.infer<typeof insertFarmBudgetSchema>;
+export type FarmBudget = typeof farmBudgets.$inferSelect;
+
+// ==================== CONCILIAÇÃO BANCÁRIA ====================
+
+export const farmBankStatements = pgTable("farm_bank_statements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  accountId: varchar("account_id").notNull().references(() => farmCashAccounts.id),
+  transactionDate: timestamp("transaction_date").notNull(),
+  description: text("description").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  type: text("type").notNull(), // credit, debit
+  matchedTransactionId: varchar("matched_transaction_id").references(() => farmCashTransactions.id),
+  status: text("status").notNull().default("pending"), // pending, matched, unmatched
+  importBatch: text("import_batch"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFarmBankStatementSchema = createInsertSchema(farmBankStatements).omit({ id: true, createdAt: true });
+export type InsertFarmBankStatement = z.infer<typeof insertFarmBankStatementSchema>;
+export type FarmBankStatement = typeof farmBankStatements.$inferSelect;
+
+// ==================== USER MODULES ====================
 
 // User Modules (per-client module access control)
 export const userModules = pgTable("user_modules", {
@@ -1397,3 +1513,4 @@ export const userModules = pgTable("user_modules", {
 }, (table) => ({
   uniqueUserModule: unique().on(table.userId, table.moduleKey),
 }));
+

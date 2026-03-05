@@ -3,31 +3,56 @@ import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, Package, FileText, BarChart3,
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
-    BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet
+    BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
+    ClipboardList, Receipt, HandCoins, PieChart, Target, Scale, Landmark
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
 
-const navItems = [
+// ===========================
+// NAV ITEMS — Separated by area
+// ===========================
+
+const farmNavItems = [
     { labelKey: "nav_home", href: "/fazenda", icon: Home, moduleKey: "dashboard", alwaysOn: true },
     { labelKey: "nav_properties", href: "/fazenda/propriedades", icon: Map, moduleKey: "properties" },
     { labelKey: "nav_seasons", href: "/fazenda/safras", icon: Sprout, moduleKey: "seasons" },
-    { labelKey: "nav_invoices", href: "/fazenda/faturas", icon: FileText, moduleKey: "invoices" },
     { labelKey: "nav_stock", href: "/fazenda/estoque", icon: Warehouse, moduleKey: "stock" },
     { labelKey: "nav_fleet", href: "/fazenda/equipamentos", icon: Tractor, moduleKey: "fleet" },
     { labelKey: "nav_applications", href: "/fazenda/aplicacoes", icon: BarChart3, moduleKey: "applications" },
     { labelKey: "nav_plot_costs", href: "/fazenda/custos", icon: TrendingUp, moduleKey: "plot_costs" },
-    { labelKey: "nav_expenses", href: "/fazenda/despesas", icon: DollarSign, moduleKey: "expenses" },
-    { labelKey: "nav_cash_flow", href: "/fazenda/fluxo-caixa", icon: Wallet, moduleKey: "cash_flow" },
-    { labelKey: "nav_terminals", href: "/fazenda/terminais", icon: Monitor, moduleKey: "terminals" },
+    { labelKey: "nav_romaneios", href: "/fazenda/romaneios", icon: Scale, moduleKey: "romaneios" },
     { labelKey: "nav_field_notebook", href: "/fazenda/caderno-campo", icon: BookOpen, moduleKey: "field_notebook" },
     { labelKey: "nav_quotations", href: "/fazenda/cotacoes", icon: ArrowDownUp, moduleKey: "quotations" },
     { labelKey: "nav_ndvi", href: "/fazenda/ndvi", icon: Satellite, moduleKey: "ndvi" },
     { labelKey: "nav_weather", href: "/fazenda/clima", icon: CloudRain, moduleKey: "weather" },
+] as const;
+
+const financeNavItems = [
+    { labelKey: "nav_cash_flow", href: "/fazenda/fluxo-caixa", icon: Wallet, moduleKey: "cash_flow" },
+    { labelKey: "nav_invoices", href: "/fazenda/faturas", icon: FileText, moduleKey: "invoices" },
+    { labelKey: "nav_expenses", href: "/fazenda/despesas", icon: DollarSign, moduleKey: "expenses" },
+    { labelKey: "nav_terminals", href: "/fazenda/terminais", icon: Monitor, moduleKey: "terminals" },
+    { labelKey: "nav_accounts_payable", href: "/fazenda/contas-pagar", icon: Receipt, moduleKey: "accounts_payable" },
+    { labelKey: "nav_accounts_receivable", href: "/fazenda/contas-receber", icon: HandCoins, moduleKey: "accounts_receivable" },
+    { labelKey: "nav_dre", href: "/fazenda/dre", icon: PieChart, moduleKey: "dre" },
+    { labelKey: "nav_budget", href: "/fazenda/orcamento", icon: Target, moduleKey: "budget" },
+    { labelKey: "nav_reconciliation", href: "/fazenda/conciliacao", icon: Landmark, moduleKey: "reconciliation" },
+] as const;
+
+const sharedNavItems = [
     { labelKey: "nav_reports", href: "/fazenda/relatorios", icon: FileBarChart, moduleKey: "reports" },
     { labelKey: "nav_profile", href: "/fazenda/perfil", icon: User, moduleKey: "profile", alwaysOn: true },
 ] as const;
+
+// All nav items for route matching in header
+const allNavItems = [...farmNavItems, ...financeNavItems, ...sharedNavItems];
+
+// Financial routes for auto-detecting active tab
+const financeRoutes = financeNavItems.map(i => i.href);
+
+type SidebarTab = "fazenda" | "financeiro";
 
 export default function FarmLayout({ children }: { children: ReactNode }) {
     const [location, setLocation] = useLocation();
@@ -35,8 +60,18 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { t } = useLanguage();
 
+    // Auto-detect active tab based on current route
+    const isFinanceRoute = financeRoutes.some(r => location === r || location.startsWith(r + "/"));
+    const [activeTab, setActiveTab] = useState<SidebarTab>(isFinanceRoute ? "financeiro" : "fazenda");
+
+    // Sync tab when navigating
     useEffect(() => {
         setIsMobileMenuOpen(false);
+        if (financeRoutes.some(r => location === r || location.startsWith(r + "/"))) {
+            setActiveTab("financeiro");
+        } else if (location === "/fazenda" || farmNavItems.some(i => location === i.href || location.startsWith(i.href + "/"))) {
+            setActiveTab("fazenda");
+        }
     }, [location]);
 
     const { data: myModules = [] } = useQuery<any[]>({
@@ -44,12 +79,15 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
         enabled: !!user,
     });
 
-    const visibleNavItems = navItems.filter(item => {
+    const filterByModules = (items: readonly any[]) => items.filter((item: any) => {
         if ('alwaysOn' in item && item.alwaysOn) return true;
         const dbModule = myModules.find(m => m.moduleKey === item.moduleKey);
         if (dbModule) return dbModule.enabled;
         return true;
     });
+
+    const currentNavItems = activeTab === "fazenda" ? farmNavItems : financeNavItems;
+    const visibleNavItems = [...filterByModules(currentNavItems), ...filterByModules(sharedNavItems)];
 
     const handleLogout = () => {
         logoutMutation.mutate(undefined, {
@@ -99,8 +137,30 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     </button>
                 </div>
 
+                {/* === TAB SWITCHER === */}
+                <div className="flex mx-2 mt-3 bg-white/10 rounded-xl p-0.5">
+                    <button
+                        onClick={() => setActiveTab("fazenda")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-all duration-200 ${activeTab === "fazenda"
+                                ? "bg-white/20 text-white shadow-sm"
+                                : "text-emerald-200/70 hover:text-white"
+                            }`}
+                    >
+                        🌾 {t("nav_tab_farm" as any)}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("financeiro")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-all duration-200 ${activeTab === "financeiro"
+                                ? "bg-white/20 text-white shadow-sm"
+                                : "text-emerald-200/70 hover:text-white"
+                            }`}
+                    >
+                        💰 {t("nav_tab_finance" as any)}
+                    </button>
+                </div>
+
                 <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
-                    {visibleNavItems.map((item) => {
+                    {visibleNavItems.map((item: any) => {
                         const isActive = location === item.href ||
                             (item.href !== "/fazenda" && location.startsWith(item.href));
                         const Icon = item.icon;
@@ -150,7 +210,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     </button>
                     <div className="flex-1 flex items-center justify-between min-w-0">
                         <h1 className="text-lg font-bold text-white truncate">
-                            {t((visibleNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.labelKey || "nav_home") as any) || "AgroFarm"}
+                            {t((allNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.labelKey || "nav_home") as any) || "AgroFarm"}
                         </h1>
                         <span className="text-xs font-medium text-emerald-100 hidden sm:block truncate ml-4 max-w-[200px]">{user.name || user.username}</span>
                     </div>

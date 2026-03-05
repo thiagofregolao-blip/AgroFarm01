@@ -3099,5 +3099,633 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
+    // ============================================================================
+    // ROMANEIOS (Boletas de Pesaje)
+    // ============================================================================
+
+    app.get("/api/farm/romaneios", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios, farmPlots, farmProperties, farmSeasons } = await import("../shared/schema");
+            const { eq, and, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const romaneios = await db.select({
+                romaneio: farmRomaneios,
+                plotName: farmPlots.name,
+                plotArea: farmPlots.areaHa,
+                propertyName: farmProperties.name,
+                seasonName: farmSeasons.name,
+            })
+                .from(farmRomaneios)
+                .leftJoin(farmPlots, eq(farmRomaneios.plotId, farmPlots.id))
+                .leftJoin(farmProperties, eq(farmRomaneios.propertyId, farmProperties.id))
+                .leftJoin(farmSeasons, eq(farmRomaneios.seasonId, farmSeasons.id))
+                .where(eq(farmRomaneios.farmerId, farmerId))
+                .orderBy(desc(farmRomaneios.deliveryDate));
+
+            res.json(romaneios.map((r: any) => ({
+                ...r.romaneio,
+                plotName: r.plotName,
+                plotArea: r.plotArea,
+                propertyName: r.propertyName,
+                seasonName: r.seasonName,
+            })));
+        } catch (error) {
+            console.error("[ROMANEIOS_GET]", error);
+            res.status(500).json({ error: "Failed to get romaneios" });
+        }
+    });
+
+    app.post("/api/farm/romaneios", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios, farmAccountsReceivable } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [romaneio] = await db.insert(farmRomaneios).values({
+                ...req.body,
+                farmerId,
+            }).returning();
+
+            // Auto-generate Conta a Receber if price is provided
+            if (romaneio.totalValue && parseFloat(romaneio.totalValue) > 0) {
+                const dueDate = new Date(romaneio.deliveryDate);
+                dueDate.setDate(dueDate.getDate() + 30); // 30 days to receive
+                await db.insert(farmAccountsReceivable).values({
+                    farmerId,
+                    romaneioId: romaneio.id,
+                    buyer: romaneio.buyer,
+                    description: `${romaneio.crop} - Ticket ${romaneio.ticketNumber || 'S/N'} - ${(parseFloat(romaneio.finalWeight) / 1000).toFixed(2)} ton`,
+                    totalAmount: romaneio.totalValue,
+                    currency: romaneio.currency,
+                    dueDate: dueDate.toISOString(),
+                    status: "pendente",
+                });
+            }
+
+            res.json(romaneio);
+        } catch (error) {
+            console.error("[ROMANEIO_CREATE]", error);
+            res.status(500).json({ error: "Failed to create romaneio" });
+        }
+    });
+
+    app.put("/api/farm/romaneios/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [updated] = await db.update(farmRomaneios).set(req.body).where(
+                and(eq(farmRomaneios.id, req.params.id), eq(farmRomaneios.farmerId, farmerId))
+            ).returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[ROMANEIO_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update romaneio" });
+        }
+    });
+
+    app.delete("/api/farm/romaneios/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            await db.delete(farmRomaneios).where(
+                and(eq(farmRomaneios.id, req.params.id), eq(farmRomaneios.farmerId, farmerId))
+            );
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[ROMANEIO_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete romaneio" });
+        }
+    });
+
+    // Get productivity per plot (aggregated romaneios)
+    app.get("/api/farm/romaneios/productivity", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios, farmPlots } = await import("../shared/schema");
+            const { eq, and, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const conditions: any[] = [eq(farmRomaneios.farmerId, farmerId)];
+            if (req.query.seasonId) {
+                conditions.push(eq(farmRomaneios.seasonId, req.query.seasonId as string));
+            }
+
+            const productivity = await db.select({
+                plotId: farmRomaneios.plotId,
+                plotName: farmPlots.name,
+                plotArea: farmPlots.areaHa,
+                crop: farmRomaneios.crop,
+                totalFinalWeight: sql<string>`SUM(CAST(${farmRomaneios.finalWeight} AS NUMERIC))`,
+                totalValue: sql<string>`SUM(CAST(${farmRomaneios.totalValue} AS NUMERIC))`,
+                deliveryCount: sql<string>`COUNT(*)`,
+            })
+                .from(farmRomaneios)
+                .leftJoin(farmPlots, eq(farmRomaneios.plotId, farmPlots.id))
+                .where(and(...conditions))
+                .groupBy(farmRomaneios.plotId, farmPlots.name, farmPlots.areaHa, farmRomaneios.crop);
+
+            res.json(productivity.map((p: any) => ({
+                ...p,
+                kgPerHa: p.plotArea && parseFloat(p.plotArea) > 0
+                    ? (parseFloat(p.totalFinalWeight) / parseFloat(p.plotArea)).toFixed(0)
+                    : null,
+                tonPerHa: p.plotArea && parseFloat(p.plotArea) > 0
+                    ? (parseFloat(p.totalFinalWeight) / parseFloat(p.plotArea) / 1000).toFixed(2)
+                    : null,
+            })));
+        } catch (error) {
+            console.error("[ROMANEIO_PRODUCTIVITY]", error);
+            res.status(500).json({ error: "Failed to get productivity" });
+        }
+    });
+
+    // ============================================================================
+    // CONTAS A PAGAR
+    // ============================================================================
+
+    app.get("/api/farm/accounts-payable", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable } = await import("../shared/schema");
+            const { eq, and, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const conditions: any[] = [eq(farmAccountsPayable.farmerId, farmerId)];
+            if (req.query.status) conditions.push(eq(farmAccountsPayable.status, req.query.status as string));
+
+            const accounts = await db.select().from(farmAccountsPayable)
+                .where(and(...conditions))
+                .orderBy(desc(farmAccountsPayable.dueDate));
+            res.json(accounts);
+        } catch (error) {
+            console.error("[ACCOUNTS_PAYABLE_GET]", error);
+            res.status(500).json({ error: "Failed to get accounts payable" });
+        }
+    });
+
+    app.post("/api/farm/accounts-payable", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [ap] = await db.insert(farmAccountsPayable).values({
+                ...req.body,
+                farmerId,
+            }).returning();
+            res.json(ap);
+        } catch (error) {
+            console.error("[ACCOUNTS_PAYABLE_CREATE]", error);
+            res.status(500).json({ error: "Failed to create account payable" });
+        }
+    });
+
+    app.put("/api/farm/accounts-payable/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [updated] = await db.update(farmAccountsPayable).set(req.body).where(
+                and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+            ).returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[ACCOUNTS_PAYABLE_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update account payable" });
+        }
+    });
+
+    // Pay action — creates cash flow transaction
+    app.post("/api/farm/accounts-payable/:id/pay", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+            const { accountId, amount, paymentMethod } = req.body;
+
+            // Get the account payable
+            const [ap] = await db.select().from(farmAccountsPayable).where(
+                and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+            );
+            if (!ap) return res.status(404).json({ error: "Not found" });
+
+            const payAmount = parseFloat(amount || ap.totalAmount);
+            const previousPaid = parseFloat(ap.paidAmount || "0");
+            const newPaidTotal = previousPaid + payAmount;
+            const totalDue = parseFloat(ap.totalAmount);
+
+            // Create cash flow transaction (SAÍDA)
+            const [tx] = await db.insert(farmCashTransactions).values({
+                farmerId,
+                accountId,
+                type: "saida",
+                amount: String(payAmount),
+                currency: ap.currency,
+                category: "pagamento_titulo",
+                description: `Pgto: ${ap.supplier} - ${ap.description || ''}`.trim(),
+                paymentMethod: paymentMethod || "transferencia",
+                referenceType: "pagamento_conta",
+            }).returning();
+
+            // Update account balance
+            const { sql: sqlFn } = await import("drizzle-orm");
+            await db.update(farmCashAccounts)
+                .set({ currentBalance: sqlFn`current_balance - ${payAmount}` })
+                .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
+
+            // Update account payable status
+            const newStatus = newPaidTotal >= totalDue ? "pago" : "parcial";
+            await db.update(farmAccountsPayable).set({
+                paidAmount: String(newPaidTotal),
+                paidDate: new Date().toISOString(),
+                status: newStatus,
+                cashTransactionId: tx.id,
+            }).where(eq(farmAccountsPayable.id, req.params.id));
+
+            res.json({ success: true, status: newStatus, transaction: tx });
+        } catch (error) {
+            console.error("[ACCOUNTS_PAYABLE_PAY]", error);
+            res.status(500).json({ error: "Failed to pay account" });
+        }
+    });
+
+    app.delete("/api/farm/accounts-payable/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            await db.delete(farmAccountsPayable).where(
+                and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+            );
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[ACCOUNTS_PAYABLE_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete account payable" });
+        }
+    });
+
+    // ============================================================================
+    // CONTAS A RECEBER
+    // ============================================================================
+
+    app.get("/api/farm/accounts-receivable", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsReceivable } = await import("../shared/schema");
+            const { eq, and, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const conditions: any[] = [eq(farmAccountsReceivable.farmerId, farmerId)];
+            if (req.query.status) conditions.push(eq(farmAccountsReceivable.status, req.query.status as string));
+
+            const accounts = await db.select().from(farmAccountsReceivable)
+                .where(and(...conditions))
+                .orderBy(desc(farmAccountsReceivable.dueDate));
+            res.json(accounts);
+        } catch (error) {
+            console.error("[ACCOUNTS_RECEIVABLE_GET]", error);
+            res.status(500).json({ error: "Failed to get accounts receivable" });
+        }
+    });
+
+    app.post("/api/farm/accounts-receivable", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsReceivable } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [ar] = await db.insert(farmAccountsReceivable).values({
+                ...req.body,
+                farmerId,
+            }).returning();
+            res.json(ar);
+        } catch (error) {
+            console.error("[ACCOUNTS_RECEIVABLE_CREATE]", error);
+            res.status(500).json({ error: "Failed to create account receivable" });
+        }
+    });
+
+    // Receive action — creates cash flow transaction (ENTRADA)
+    app.post("/api/farm/accounts-receivable/:id/receive", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsReceivable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+            const { accountId, amount, paymentMethod } = req.body;
+
+            const [ar] = await db.select().from(farmAccountsReceivable).where(
+                and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
+            );
+            if (!ar) return res.status(404).json({ error: "Not found" });
+
+            const receiveAmount = parseFloat(amount || ar.totalAmount);
+            const previousReceived = parseFloat(ar.receivedAmount || "0");
+            const newReceivedTotal = previousReceived + receiveAmount;
+            const totalExpected = parseFloat(ar.totalAmount);
+
+            // Create cash flow transaction (ENTRADA)
+            const [tx] = await db.insert(farmCashTransactions).values({
+                farmerId,
+                accountId,
+                type: "entrada",
+                amount: String(receiveAmount),
+                currency: ar.currency,
+                category: "recebimento_venda",
+                description: `Receb: ${ar.buyer} - ${ar.description || ''}`.trim(),
+                paymentMethod: paymentMethod || "transferencia",
+                referenceType: "recebimento_conta",
+            }).returning();
+
+            // Update account balance
+            const { sql: sqlFn } = await import("drizzle-orm");
+            await db.update(farmCashAccounts)
+                .set({ currentBalance: sqlFn`current_balance + ${receiveAmount}` })
+                .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
+
+            // Update account receivable status
+            const newStatus = newReceivedTotal >= totalExpected ? "recebido" : "parcial";
+            await db.update(farmAccountsReceivable).set({
+                receivedAmount: String(newReceivedTotal),
+                receivedDate: new Date().toISOString(),
+                status: newStatus,
+                cashTransactionId: tx.id,
+            }).where(eq(farmAccountsReceivable.id, req.params.id));
+
+            res.json({ success: true, status: newStatus, transaction: tx });
+        } catch (error) {
+            console.error("[ACCOUNTS_RECEIVABLE_RECEIVE]", error);
+            res.status(500).json({ error: "Failed to receive payment" });
+        }
+    });
+
+    app.delete("/api/farm/accounts-receivable/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsReceivable } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            await db.delete(farmAccountsReceivable).where(
+                and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
+            );
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[ACCOUNTS_RECEIVABLE_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete account receivable" });
+        }
+    });
+
+    // ============================================================================
+    // DRE — Estado de Resultados por Safra (read-only aggregation)
+    // ============================================================================
+
+    app.get("/api/farm/dre", requireFarmer, async (req, res) => {
+        try {
+            const {
+                farmAccountsReceivable, farmAccountsPayable,
+                farmExpenses, farmApplications, farmStock,
+                farmCashTransactions
+            } = await import("../shared/schema");
+            const { eq, and, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            // RECEITAS: Contas a Receber (recebido)
+            const [receivableSum] = await db.select({
+                total: sql<string>`COALESCE(SUM(CAST(${farmAccountsReceivable.receivedAmount} AS NUMERIC)), 0)`,
+            }).from(farmAccountsReceivable).where(eq(farmAccountsReceivable.farmerId, farmerId));
+
+            // CUSTOS DE PRODUÇÃO: applications × avg cost
+            const [appCostSum] = await db.select({
+                total: sql<string>`COALESCE(SUM(CAST(${farmApplications.quantity} AS NUMERIC) * CAST(${farmStock.averageCost} AS NUMERIC)), 0)`,
+            }).from(farmApplications)
+                .leftJoin(farmStock, and(
+                    eq(farmApplications.productId, farmStock.productId),
+                    eq(farmApplications.farmerId, farmStock.farmerId),
+                ))
+                .where(eq(farmApplications.farmerId, farmerId));
+
+            // DESPESAS com talhão (custo de produção)
+            const [plotExpenseSum] = await db.select({
+                total: sql<string>`COALESCE(SUM(CAST(${farmExpenses.amount} AS NUMERIC)), 0)`,
+            }).from(farmExpenses).where(
+                and(eq(farmExpenses.farmerId, farmerId), sql`${farmExpenses.plotId} IS NOT NULL`)
+            );
+
+            // DESPESAS sem talhão (operacionais)
+            const [opExpenseSum] = await db.select({
+                total: sql<string>`COALESCE(SUM(CAST(${farmExpenses.amount} AS NUMERIC)), 0)`,
+            }).from(farmExpenses).where(
+                and(eq(farmExpenses.farmerId, farmerId), sql`${farmExpenses.plotId} IS NULL`)
+            );
+
+            // CONTAS A PAGAR pagas (financeiro)
+            const [payableSum] = await db.select({
+                total: sql<string>`COALESCE(SUM(CAST(${farmAccountsPayable.paidAmount} AS NUMERIC)), 0)`,
+            }).from(farmAccountsPayable).where(eq(farmAccountsPayable.farmerId, farmerId));
+
+            const receitas = parseFloat(receivableSum.total);
+            const custoProducao = parseFloat(appCostSum.total) + parseFloat(plotExpenseSum.total);
+            const lucroBruto = receitas - custoProducao;
+            const despesasOp = parseFloat(opExpenseSum.total);
+            const resultadoOp = lucroBruto - despesasOp;
+            const resultadoLiquido = resultadoOp; // Can add financial items later
+
+            res.json({
+                receitas,
+                custoProducao,
+                lucroBruto,
+                despesasOperacionais: despesasOp,
+                resultadoOperacional: resultadoOp,
+                resultadoLiquido,
+                detail: {
+                    receitasRecebidas: parseFloat(receivableSum.total),
+                    custoInsumos: parseFloat(appCostSum.total),
+                    despesasTalhao: parseFloat(plotExpenseSum.total),
+                    despesasGerais: despesasOp,
+                    totalPago: parseFloat(payableSum.total),
+                },
+            });
+        } catch (error) {
+            console.error("[DRE_GET]", error);
+            res.status(500).json({ error: "Failed to generate DRE" });
+        }
+    });
+
+    // ============================================================================
+    // ORÇAMENTO POR SAFRA
+    // ============================================================================
+
+    app.get("/api/farm/budgets", requireFarmer, async (req, res) => {
+        try {
+            const { farmBudgets, farmExpenses } = await import("../shared/schema");
+            const { eq, and, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const budgets = await db.select().from(farmBudgets)
+                .where(eq(farmBudgets.farmerId, farmerId));
+
+            // Get actual expenses by category for comparison
+            const actualExpenses = await db.select({
+                category: farmExpenses.category,
+                actualAmount: sql<string>`COALESCE(SUM(CAST(${farmExpenses.amount} AS NUMERIC)), 0)`,
+            }).from(farmExpenses)
+                .where(eq(farmExpenses.farmerId, farmerId))
+                .groupBy(farmExpenses.category);
+
+            const actualMap = new Map(actualExpenses.map((e: any) => [e.category, parseFloat(e.actualAmount)]));
+
+            res.json(budgets.map((b: any) => ({
+                ...b,
+                actualAmount: actualMap.get(b.category) || 0,
+                percentUsed: parseFloat(String(b.plannedAmount)) > 0
+                    ? (((actualMap.get(b.category) || 0) / parseFloat(String(b.plannedAmount))) * 100).toFixed(1)
+                    : "0",
+            })));
+        } catch (error) {
+            console.error("[BUDGETS_GET]", error);
+            res.status(500).json({ error: "Failed to get budgets" });
+        }
+    });
+
+    app.post("/api/farm/budgets", requireFarmer, async (req, res) => {
+        try {
+            const { farmBudgets } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [budget] = await db.insert(farmBudgets).values({
+                ...req.body,
+                farmerId,
+            }).returning();
+            res.json(budget);
+        } catch (error) {
+            console.error("[BUDGET_CREATE]", error);
+            res.status(500).json({ error: "Failed to create budget" });
+        }
+    });
+
+    app.put("/api/farm/budgets/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmBudgets } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [updated] = await db.update(farmBudgets).set(req.body).where(
+                and(eq(farmBudgets.id, req.params.id), eq(farmBudgets.farmerId, farmerId))
+            ).returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[BUDGET_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update budget" });
+        }
+    });
+
+    app.delete("/api/farm/budgets/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmBudgets } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            await db.delete(farmBudgets).where(
+                and(eq(farmBudgets.id, req.params.id), eq(farmBudgets.farmerId, farmerId))
+            );
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[BUDGET_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete budget" });
+        }
+    });
+
+    // ============================================================================
+    // CONCILIAÇÃO BANCÁRIA
+    // ============================================================================
+
+    app.get("/api/farm/bank-statements", requireFarmer, async (req, res) => {
+        try {
+            const { farmBankStatements } = await import("../shared/schema");
+            const { eq, and, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const conditions: any[] = [eq(farmBankStatements.farmerId, farmerId)];
+            if (req.query.accountId) conditions.push(eq(farmBankStatements.accountId, req.query.accountId as string));
+            if (req.query.status) conditions.push(eq(farmBankStatements.status, req.query.status as string));
+
+            const statements = await db.select().from(farmBankStatements)
+                .where(and(...conditions))
+                .orderBy(desc(farmBankStatements.transactionDate));
+            res.json(statements);
+        } catch (error) {
+            console.error("[BANK_STATEMENTS_GET]", error);
+            res.status(500).json({ error: "Failed to get bank statements" });
+        }
+    });
+
+    app.post("/api/farm/bank-statements", requireFarmer, async (req, res) => {
+        try {
+            const { farmBankStatements } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            // Support batch import (array of statements)
+            const items = Array.isArray(req.body) ? req.body : [req.body];
+            const importBatch = `import-${Date.now()}`;
+
+            const inserted = [];
+            for (const item of items) {
+                const [stmt] = await db.insert(farmBankStatements).values({
+                    ...item,
+                    farmerId,
+                    importBatch,
+                }).returning();
+                inserted.push(stmt);
+            }
+            res.json(inserted);
+        } catch (error) {
+            console.error("[BANK_STATEMENT_CREATE]", error);
+            res.status(500).json({ error: "Failed to import bank statements" });
+        }
+    });
+
+    // Match bank statement to cash flow transaction
+    app.post("/api/farm/bank-statements/:id/match", requireFarmer, async (req, res) => {
+        try {
+            const { farmBankStatements } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+            const { transactionId } = req.body;
+
+            const [updated] = await db.update(farmBankStatements).set({
+                matchedTransactionId: transactionId,
+                status: "matched",
+            }).where(
+                and(eq(farmBankStatements.id, req.params.id), eq(farmBankStatements.farmerId, farmerId))
+            ).returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[BANK_STATEMENT_MATCH]", error);
+            res.status(500).json({ error: "Failed to match statement" });
+        }
+    });
+
     console.log("✅ Farm routes registered (/api/farm/*, /api/pdv/*)");
 }

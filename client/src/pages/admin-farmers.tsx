@@ -888,6 +888,12 @@ const AVAILABLE_MODULES = [
     { key: "ndvi", label: "NDVI Satélite", defaultEnabled: true },
     { key: "weather", label: "Clima", defaultEnabled: true },
     { key: "reports", label: "Relatórios", defaultEnabled: true },
+    { key: "romaneios", label: "Romaneios", defaultEnabled: true },
+    { key: "accounts_payable", label: "Contas a Pagar", defaultEnabled: true },
+    { key: "accounts_receivable", label: "Contas a Receber", defaultEnabled: true },
+    { key: "dre", label: "DRE / Resultado", defaultEnabled: true },
+    { key: "budget", label: "Orçamento por Safra", defaultEnabled: true },
+    { key: "reconciliation", label: "Conciliação Bancária", defaultEnabled: true },
     { key: "profile", label: "Perfil", defaultEnabled: true, alwaysOn: true },
 ];
 

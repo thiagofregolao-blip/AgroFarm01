@@ -24,6 +24,14 @@ const translations = {
     nav_profile: "Perfil",
     nav_logout: "Sair",
     nav_open_menu: "Abrir menu",
+    nav_tab_farm: "Fazenda",
+    nav_tab_finance: "Financeiro",
+    nav_romaneios: "Romaneios",
+    nav_accounts_payable: "Contas a Pagar",
+    nav_accounts_receivable: "Contas a Receber",
+    nav_dre: "DRE / Resultado",
+    nav_budget: "Orçamento",
+    nav_reconciliation: "Conciliação",
 
     // Profile
     profile_title: "Meu Perfil",
@@ -150,6 +158,14 @@ const translations = {
     nav_profile: "Perfil",
     nav_logout: "Salir",
     nav_open_menu: "Abrir menú",
+    nav_tab_farm: "Finca",
+    nav_tab_finance: "Financiero",
+    nav_romaneios: "Romaneos",
+    nav_accounts_payable: "Cuentas por Pagar",
+    nav_accounts_receivable: "Cuentas por Cobrar",
+    nav_dre: "Estado de Resultados",
+    nav_budget: "Presupuesto",
+    nav_reconciliation: "Conciliación",
 
     // Profile
     profile_title: "Mi Perfil",
@@ -266,7 +282,7 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType>({
   language: "pt-BR",
-  setLanguage: () => {},
+  setLanguage: () => { },
   t: (key) => key,
 });
 

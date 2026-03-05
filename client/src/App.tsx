@@ -68,6 +68,12 @@ import LandingPage from "@/pages/landing";
 import FieldNotebook from "@/pages/fazenda/field-notebook";
 import QuotationNetwork from "@/pages/fazenda/quotation-network";
 import NdviPage from "@/pages/fazenda/ndvi";
+import FarmRomaneios from "@/pages/fazenda/romaneios";
+import AccountsPayable from "@/pages/fazenda/accounts-payable";
+import AccountsReceivable from "@/pages/fazenda/accounts-receivable";
+import DrePage from "@/pages/fazenda/dre";
+import BudgetPage from "@/pages/fazenda/budget";
+import BankReconciliation from "@/pages/fazenda/reconciliation";
 
 // PDV (Point of Sale)
 import PdvLogin from "@/pages/pdv/login";
@@ -143,6 +149,12 @@ function Router() {
       <Route path="/fazenda/ndvi" component={NdviPage} />
       <Route path="/fazenda/clima" component={FazendaClima} />
       <Route path="/fazenda/perfil" component={FarmProfile} />
+      <Route path="/fazenda/romaneios" component={FarmRomaneios} />
+      <Route path="/fazenda/contas-pagar" component={AccountsPayable} />
+      <Route path="/fazenda/contas-receber" component={AccountsReceivable} />
+      <Route path="/fazenda/dre" component={DrePage} />
+      <Route path="/fazenda/orcamento" component={BudgetPage} />
+      <Route path="/fazenda/conciliacao" component={BankReconciliation} />
 
       {/* PDV Routes (Tablet) */}
       <Route path="/pdv/login" component={PdvLogin} />
