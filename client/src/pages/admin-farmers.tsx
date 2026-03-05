@@ -881,10 +881,12 @@ const AVAILABLE_MODULES = [
     { key: "applications", label: "Aplicações", defaultEnabled: true },
     { key: "plot_costs", label: "Custo/Talhão", defaultEnabled: true },
     { key: "expenses", label: "Despesas", defaultEnabled: true },
+    { key: "cash_flow", label: "Fluxo de Caixa", defaultEnabled: true },
     { key: "terminals", label: "Terminais PDV", defaultEnabled: true },
     { key: "field_notebook", label: "Caderno de Campo", defaultEnabled: true },
     { key: "quotations", label: "Cotações", defaultEnabled: true },
     { key: "ndvi", label: "NDVI Satélite", defaultEnabled: true },
+    { key: "weather", label: "Clima", defaultEnabled: true },
     { key: "reports", label: "Relatórios", defaultEnabled: true },
     { key: "profile", label: "Perfil", defaultEnabled: true, alwaysOn: true },
 ];

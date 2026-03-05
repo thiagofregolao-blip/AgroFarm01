@@ -19,12 +19,12 @@ const navItems = [
     { labelKey: "nav_applications", href: "/fazenda/aplicacoes", icon: BarChart3, moduleKey: "applications" },
     { labelKey: "nav_plot_costs", href: "/fazenda/custos", icon: TrendingUp, moduleKey: "plot_costs" },
     { labelKey: "nav_expenses", href: "/fazenda/despesas", icon: DollarSign, moduleKey: "expenses" },
-    { labelKey: "nav_cash_flow", href: "/fazenda/fluxo-caixa", icon: Wallet, moduleKey: "cash_flow", alwaysOn: true },
+    { labelKey: "nav_cash_flow", href: "/fazenda/fluxo-caixa", icon: Wallet, moduleKey: "cash_flow" },
     { labelKey: "nav_terminals", href: "/fazenda/terminais", icon: Monitor, moduleKey: "terminals" },
     { labelKey: "nav_field_notebook", href: "/fazenda/caderno-campo", icon: BookOpen, moduleKey: "field_notebook" },
     { labelKey: "nav_quotations", href: "/fazenda/cotacoes", icon: ArrowDownUp, moduleKey: "quotations" },
     { labelKey: "nav_ndvi", href: "/fazenda/ndvi", icon: Satellite, moduleKey: "ndvi" },
-    { labelKey: "nav_weather", href: "/fazenda/clima", icon: CloudRain, moduleKey: "weather", alwaysOn: true },
+    { labelKey: "nav_weather", href: "/fazenda/clima", icon: CloudRain, moduleKey: "weather" },
     { labelKey: "nav_reports", href: "/fazenda/relatorios", icon: FileBarChart, moduleKey: "reports" },
     { labelKey: "nav_profile", href: "/fazenda/perfil", icon: User, moduleKey: "profile", alwaysOn: true },
 ] as const;
@@ -45,7 +45,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
     });
 
     const visibleNavItems = navItems.filter(item => {
-        if (item.alwaysOn) return true;
+        if ('alwaysOn' in item && item.alwaysOn) return true;
         const dbModule = myModules.find(m => m.moduleKey === item.moduleKey);
         if (dbModule) return dbModule.enabled;
         return true;
