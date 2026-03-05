@@ -133,7 +133,7 @@ export default function FarmReports() {
                 }
             `}</style>
 
-            <div className="space-y-4 p-2 lg:p-6 max-w-7xl mx-auto">
+            <div className="space-y-4 px-1 sm:p-2 lg:p-6 max-w-7xl mx-auto w-full overflow-hidden">
                 {/* Title */}
                 <div className="flex items-center justify-between no-print">
                     <div>
@@ -142,7 +142,7 @@ export default function FarmReports() {
                         </h1>
                         <p className="text-sm text-emerald-600">Dados consolidados da sua fazenda</p>
                     </div>
-                    <Button onClick={() => window.print()} variant="outline" className="gap-2">
+                    <Button onClick={() => window.print()} variant="outline" className="gap-2 hidden sm:flex">
                         <Printer className="h-4 w-4" /> Imprimir PDF
                     </Button>
                 </div>
@@ -172,16 +172,16 @@ export default function FarmReports() {
 
                 {/* FILTERS */}
                 <Card className="no-print border-emerald-100">
-                    <CardContent className="py-3">
-                        <div className="flex flex-wrap items-end gap-3">
+                    <CardContent className="py-3 px-2 sm:px-4">
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
                             {/* Date filters — for most tabs */}
                             {needsDateFilter && (
                                 <>
-                                    <div className="min-w-[130px]">
+                                    <div className="w-full sm:min-w-[130px] sm:w-auto">
                                         <Label className="text-xs text-gray-500">Data Início</Label>
                                         <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9" />
                                     </div>
-                                    <div className="min-w-[130px]">
+                                    <div className="w-full sm:min-w-[130px] sm:w-auto">
                                         <Label className="text-xs text-gray-500">Data Fim</Label>
                                         <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9" />
                                     </div>
@@ -190,7 +190,7 @@ export default function FarmReports() {
 
                             {/* Stock: filter by category */}
                             {activeTab === "stock" && filterOptions?.categories?.length > 0 && (
-                                <div className="min-w-[160px]">
+                                <div className="w-full sm:min-w-[160px] sm:w-auto">
                                     <Label className="text-xs text-gray-500">Categoria</Label>
                                     <Select value={category} onValueChange={setCategory}>
                                         <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
@@ -205,7 +205,7 @@ export default function FarmReports() {
 
                             {/* Movements: filter by type */}
                             {activeTab === "movements" && (
-                                <div className="min-w-[140px]">
+                                <div className="w-full sm:min-w-[140px] sm:w-auto">
                                     <Label className="text-xs text-gray-500">Tipo</Label>
                                     <Select value={movementType} onValueChange={setMovementType}>
                                         <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
@@ -220,7 +220,7 @@ export default function FarmReports() {
 
                             {/* Expenses: filter by category */}
                             {activeTab === "expenses" && filterOptions?.expenseCategories?.length > 0 && (
-                                <div className="min-w-[160px]">
+                                <div className="w-full sm:min-w-[160px] sm:w-auto">
                                     <Label className="text-xs text-gray-500">Categoria</Label>
                                     <Select value={category} onValueChange={setCategory}>
                                         <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
@@ -237,7 +237,7 @@ export default function FarmReports() {
                             {activeTab === "invoices" && (
                                 <>
                                     {filterOptions?.suppliers?.length > 0 && (
-                                        <div className="min-w-[180px]">
+                                        <div className="w-full sm:min-w-[180px] sm:w-auto">
                                             <Label className="text-xs text-gray-500">Fornecedor</Label>
                                             <Select value={supplier} onValueChange={setSupplier}>
                                                 <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
@@ -249,7 +249,7 @@ export default function FarmReports() {
                                             </Select>
                                         </div>
                                     )}
-                                    <div className="min-w-[140px]">
+                                    <div className="w-full sm:min-w-[140px] sm:w-auto">
                                         <Label className="text-xs text-gray-500">Status</Label>
                                         <Select value={statusFilter} onValueChange={setStatusFilter}>
                                             <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
@@ -261,7 +261,7 @@ export default function FarmReports() {
                                         </Select>
                                     </div>
                                     {filterOptions?.seasons?.length > 0 && (
-                                        <div className="min-w-[160px]">
+                                        <div className="w-full sm:min-w-[160px] sm:w-auto">
                                             <Label className="text-xs text-gray-500">Safra</Label>
                                             <Select value={seasonId} onValueChange={setSeasonId}>
                                                 <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
@@ -278,7 +278,7 @@ export default function FarmReports() {
 
                             {/* Cost/ha + Applications: filter by property */}
                             {(activeTab === "cost-per-ha" || activeTab === "applications") && filterOptions?.properties?.length > 0 && (
-                                <div className="min-w-[180px]">
+                                <div className="w-full sm:min-w-[180px] sm:w-auto">
                                     <Label className="text-xs text-gray-500">Propriedade</Label>
                                     <Select value={propertyId} onValueChange={setPropertyId}>
                                         <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
@@ -293,7 +293,7 @@ export default function FarmReports() {
 
                             {/* Price history: filter by product */}
                             {activeTab === "price-history" && filterOptions?.productNames?.length > 0 && (
-                                <div className="min-w-[200px]">
+                                <div className="w-full sm:min-w-[200px] sm:w-auto">
                                     <Label className="text-xs text-gray-500">Produto</Label>
                                     <Select value={productName} onValueChange={setProductName}>
                                         <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
@@ -308,7 +308,7 @@ export default function FarmReports() {
 
                             {/* Fleet: filter by equipment */}
                             {activeTab === "fleet" && filterOptions?.equipment?.length > 0 && (
-                                <div className="min-w-[180px]">
+                                <div className="w-full sm:min-w-[180px] sm:w-auto">
                                     <Label className="text-xs text-gray-500">Equipamento</Label>
                                     <Select value={equipmentId} onValueChange={setEquipmentId}>
                                         <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
@@ -367,12 +367,12 @@ export default function FarmReports() {
 // ============================================================
 function SummaryCards({ items }: { items: { label: string; value: string; color?: string }[] }) {
     return (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4">
             {items.map((item, i) => (
                 <Card key={i} className="border-gray-100">
                     <CardContent className="py-3 px-4">
-                        <p className="text-xs text-gray-500 mb-1">{item.label}</p>
-                        <p className={`text-lg font-bold ${item.color || "text-emerald-700"}`}>{item.value}</p>
+                        <p className="text-xs text-gray-500 mb-0.5 truncate">{item.label}</p>
+                        <p className={`text-base sm:text-lg font-bold ${item.color || "text-emerald-700"} truncate`}>{item.value}</p>
                     </CardContent>
                 </Card>
             ))}
@@ -431,11 +431,11 @@ function StockReport({ data }: { data: any[] }) {
                         <div className="space-y-2">
                             {Object.entries(byCategory).sort((a, b) => b[1] - a[1]).map(([cat, val]) => (
                                 <div key={cat} className="flex items-center gap-3">
-                                    <span className="text-xs w-24 text-gray-600 truncate">{categoryLabel[cat] || cat}</span>
-                                    <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                                    <span className="text-xs w-20 sm:w-24 text-gray-600 truncate shrink-0">{categoryLabel[cat] || cat}</span>
+                                    <div className="flex-1 bg-gray-100 rounded-full h-3 sm:h-4 overflow-hidden min-w-0">
                                         <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min((val / totalValue) * 100, 100)}%` }} />
                                     </div>
-                                    <span className="text-xs font-semibold text-gray-700 w-24 text-right">R$ {fmt(val)}</span>
+                                    <span className="text-xs font-semibold text-gray-700 w-20 sm:w-24 text-right shrink-0">R$ {fmt(val)}</span>
                                 </div>
                             ))}
                         </div>
@@ -517,11 +517,11 @@ function ExpensesReport({ data }: { data: any[] }) {
                         <div className="space-y-2">
                             {Object.entries(byCategory).sort((a, b) => b[1] - a[1]).map(([cat, val]) => (
                                 <div key={cat} className="flex items-center gap-3">
-                                    <span className="text-xs w-28 text-gray-600 truncate">{categoryLabel[cat] || cat}</span>
-                                    <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                                    <span className="text-xs w-20 sm:w-28 text-gray-600 truncate shrink-0">{categoryLabel[cat] || cat}</span>
+                                    <div className="flex-1 bg-gray-100 rounded-full h-3 sm:h-4 overflow-hidden min-w-0">
                                         <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min((val / totalAmount) * 100, 100)}%` }} />
                                     </div>
-                                    <span className="text-xs font-semibold text-gray-700 w-24 text-right">R$ {fmt(val)}</span>
+                                    <span className="text-xs font-semibold text-gray-700 w-20 sm:w-24 text-right shrink-0">R$ {fmt(val)}</span>
                                 </div>
                             ))}
                         </div>
@@ -719,7 +719,7 @@ function SeasonSummaryReport({ data }: { data: any }) {
                 { label: "Valor Estoque", value: `R$ ${fmt(data.stockValue)}` },
                 { label: "Itens Estoque", value: String(data.stockItems) },
             ]} />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                 <Card className="border-emerald-100 bg-gradient-to-br from-emerald-50 to-white">
                     <CardContent className="py-4 text-center">
                         <p className="text-xs text-gray-500 mb-1">Faturas</p>
