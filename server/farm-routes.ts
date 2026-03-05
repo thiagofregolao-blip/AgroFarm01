@@ -3444,6 +3444,127 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
+    // ===== SILO VISUALIZATION: Aggregate by buyer with crop breakdown + invoice cross-ref =====
+    app.get("/api/farm/romaneios/silos", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios, farmInvoices } = await import("../shared/schema");
+            const { eq, and, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const conditions: any[] = [
+                eq(farmRomaneios.farmerId, farmerId),
+                eq(farmRomaneios.status, "confirmed"),
+            ];
+            if (req.query.seasonId) {
+                conditions.push(eq(farmRomaneios.seasonId, req.query.seasonId as string));
+            }
+
+            // 1. Aggregate romaneios by buyer + crop
+            const romaneioAgg = await db.select({
+                buyer: farmRomaneios.buyer,
+                crop: farmRomaneios.crop,
+                totalWeight: sql<string>`SUM(CAST(${farmRomaneios.finalWeight} AS NUMERIC))`,
+                totalValue: sql<string>`SUM(CAST(${farmRomaneios.totalValue} AS NUMERIC))`,
+                deliveryCount: sql<string>`COUNT(*)`,
+                grossWeight: sql<string>`SUM(CAST(${farmRomaneios.grossWeight} AS NUMERIC))`,
+            })
+                .from(farmRomaneios)
+                .where(and(...conditions))
+                .groupBy(farmRomaneios.buyer, farmRomaneios.crop);
+
+            // 2. Get total harvest across all buyers
+            const totalHarvest = romaneioAgg.reduce((s, r) => s + parseFloat(r.totalWeight || "0"), 0);
+
+            // 3. Aggregate invoices by supplier (for input spend cross-reference)
+            const invoiceConditions: any[] = [eq(farmInvoices.farmerId, farmerId)];
+            if (req.query.seasonId) {
+                invoiceConditions.push(eq(farmInvoices.seasonId, req.query.seasonId as string));
+            }
+
+            const invoiceAgg = await db.select({
+                supplier: farmInvoices.supplier,
+                totalSpent: sql<string>`SUM(CAST(${farmInvoices.totalAmount} AS NUMERIC))`,
+                invoiceCount: sql<string>`COUNT(*)`,
+            })
+                .from(farmInvoices)
+                .where(and(...invoiceConditions))
+                .groupBy(farmInvoices.supplier);
+
+            // 4. Build silos: group by buyer, with crop breakdown + invoice match
+            const buyerMap: Record<string, any> = {};
+
+            for (const row of romaneioAgg) {
+                const buyer = row.buyer;
+                if (!buyerMap[buyer]) {
+                    buyerMap[buyer] = {
+                        buyer,
+                        crops: [],
+                        totalWeight: 0,
+                        totalGrossWeight: 0,
+                        totalValue: 0,
+                        deliveryCount: 0,
+                        inputSpent: 0,
+                        invoiceCount: 0,
+                        percentOfHarvest: 0,
+                    };
+                }
+                const weight = parseFloat(row.totalWeight || "0");
+                const gross = parseFloat(row.grossWeight || "0");
+                const value = parseFloat(row.totalValue || "0");
+                const count = parseInt(row.deliveryCount || "0");
+
+                buyerMap[buyer].crops.push({
+                    crop: row.crop,
+                    weight,
+                    grossWeight: gross,
+                    value,
+                    deliveryCount: count,
+                });
+                buyerMap[buyer].totalWeight += weight;
+                buyerMap[buyer].totalGrossWeight += gross;
+                buyerMap[buyer].totalValue += value;
+                buyerMap[buyer].deliveryCount += count;
+            }
+
+            // 5. Match invoices to buyers (fuzzy match on supplier name)
+            for (const inv of invoiceAgg) {
+                const supplierLower = (inv.supplier || "").toLowerCase().trim();
+                if (!supplierLower) continue;
+
+                for (const buyer of Object.keys(buyerMap)) {
+                    const buyerLower = buyer.toLowerCase().trim();
+                    // Match if supplier contains buyer name or vice versa
+                    if (supplierLower.includes(buyerLower) || buyerLower.includes(supplierLower) ||
+                        supplierLower.replace(/\s*(sa|s\.a\.|ltda|srl|s\.r\.l\.)\s*/gi, "").trim() ===
+                        buyerLower.replace(/\s*(sa|s\.a\.|ltda|srl|s\.r\.l\.)\s*/gi, "").trim()) {
+                        buyerMap[buyer].inputSpent += parseFloat(inv.totalSpent || "0");
+                        buyerMap[buyer].invoiceCount += parseInt(inv.invoiceCount || "0");
+                    }
+                }
+            }
+
+            // 6. Calculate percentages and sort
+            const silos = Object.values(buyerMap).map((silo: any) => ({
+                ...silo,
+                percentOfHarvest: totalHarvest > 0 ? (silo.totalWeight / totalHarvest) * 100 : 0,
+                balance: silo.totalValue - silo.inputSpent, // Grains value - Input cost
+            }));
+
+            silos.sort((a: any, b: any) => b.totalWeight - a.totalWeight);
+
+            res.json({
+                silos,
+                totalHarvest,
+                totalValue: silos.reduce((s: number, silo: any) => s + silo.totalValue, 0),
+                totalInputSpent: silos.reduce((s: number, silo: any) => s + silo.inputSpent, 0),
+            });
+        } catch (error) {
+            console.error("[ROMANEIO_SILOS]", error);
+            res.status(500).json({ error: "Failed to get silo data" });
+        }
+    });
+
     // ============================================================================
     // CONTAS A PAGAR
     // ============================================================================

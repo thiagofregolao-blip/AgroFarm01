@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Scale, Loader2, Wheat, TrendingUp, Truck, Upload, Camera, Check, X, Clock, MessageSquare, FileImage } from "lucide-react";
-
+import SiloVisualization from "@/components/fazenda/silo-visualization";
 export default function FarmRomaneios() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
@@ -48,6 +48,12 @@ export default function FarmRomaneios() {
     const { data: productivity = [] } = useQuery({
         queryKey: ["/api/farm/romaneios/productivity"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/romaneios/productivity"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: siloData } = useQuery({
+        queryKey: ["/api/farm/romaneios/silos"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/romaneios/silos"); return r.json(); },
         enabled: !!user,
     });
 
@@ -196,6 +202,16 @@ export default function FarmRomaneios() {
                         </Dialog>
                     </div>
                 </div>
+
+                {/* ====== Silo Visualization ====== */}
+                {siloData && siloData.silos && siloData.silos.length > 0 && (
+                    <SiloVisualization
+                        silos={siloData.silos}
+                        totalHarvest={siloData.totalHarvest}
+                        totalValue={siloData.totalValue}
+                        totalInputSpent={siloData.totalInputSpent}
+                    />
+                )}
 
                 {/* ====== WhatsApp Pending Approval ====== */}
                 {pendingRomaneios.length > 0 && (
