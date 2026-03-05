@@ -206,9 +206,9 @@ export default function LandingPage() {
                         {/* Stats */}
                         <div style={{ display: "flex", gap: 40, marginTop: 48 }}>
                             {[
-                                { n: "100%", label: "Na Nuvem" },
-                                { n: "24/7", label: "WhatsApp Bot" },
-                                { n: "9+", label: "Relatórios" },
+                                { n: "+3", label: "Departamentos" },
+                                { n: "+110", label: "Produtores" },
+                                { n: "+50mil", label: "Hectares" },
                             ].map(s => (
                                 <div key={s.label}>
                                     <div style={{ fontSize: 28, fontWeight: 800, color: colors.yellow }}>{s.n}</div>
