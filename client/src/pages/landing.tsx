@@ -635,8 +635,8 @@ function CountUpStat({ target, prefix, suffix, label }: { target: number; prefix
 
     return (
         <div ref={ref}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: colors.yellow }}>{prefix}{count}{suffix}</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>{label}</div>
+            <div style={{ fontSize: 38, fontWeight: 800, color: colors.yellow }}>{prefix}{count}{suffix}</div>
+            <div style={{ fontSize: 15, color: "rgba(255,255,255,0.7)" }}>{label}</div>
         </div>
     );
 }
