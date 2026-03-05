@@ -4,7 +4,7 @@ import {
     Package, Sprout, FileBarChart, Tractor, BarChart3, TrendingUp,
     Map, FileText, DollarSign, Satellite, BookOpen, ArrowDownUp,
     ChevronDown, ChevronUp, MessageCircle, ArrowRight, Menu, X,
-    Shield, Zap, Smartphone, Globe, Bell, Users, CloudSun
+    Shield, Zap, Smartphone, Globe, Bell, Users, CloudSun, Target
 } from "lucide-react";
 
 // ===========================
@@ -319,10 +319,16 @@ export default function LandingPage() {
                             color: colors.green, image: "/feature-alertas.png",
                         },
                         {
+                            icon: Target, title: "Inteligência Estratégica de Romaneios",
+                            desc: "Descubra qual silo paga melhor e proteja-se contra descontos abusivos.",
+                            items: ["Ranking de Rentabilidade (Preço vs Frete vs Descontos)", "Alerta no WhatsApp de descontos fora do padrão histórico", "Comparativo de frete por distância do talhão ao armazém", "Análise de variação de umidade e impureza por empresa", "Cruzamento automático com faturas de insumos"],
+                            color: colors.greenLight, reverse: true, image: "/feature-inteligencia.png",
+                        },
+                        {
                             icon: Users, title: "Rede de Cotação Anônima",
                             desc: "Compare seus preços com outros agricultores. Negocie melhor.",
                             items: ["Comparativo anônimo de preços", "Média, menor e maior preço pago", "Ranking: você está acima ou abaixo?", "Privacidade garantida", "Poder de negociação na compra"],
-                            color: colors.greenLight, reverse: true, image: "/feature-cotacoes.png",
+                            color: colors.green, image: "/feature-cotacoes.png",
                         },
                     ].map((feature, idx) => {
                         const Icon = feature.icon;
