@@ -535,3 +535,178 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
         throw error;
     }
 }
+
+
+// ==================== ROMANEIO PARSER ====================
+
+export interface ParsedRomaneio {
+    ticketNumber: string;
+    buyer: string;          // Empresa compradora (C.Vale, Agridesa, etc.)
+    crop: string;           // Cultura (soja, milho, trigo, etc.)
+    deliveryDate: Date | null;
+    grossWeight: number;    // Peso Bruto (kg)
+    tare: number;           // Tara (kg)
+    netWeight: number;      // Peso Neto (kg)
+    finalWeight: number;    // Peso Líquido / Final (após descontos, kg)
+    moisture: number | null;       // Umidade %
+    impurities: number | null;     // Impureza %
+    moistureDiscount: number;      // Desconto por umidade (kg)
+    impurityDiscount: number;      // Desconto por impureza (kg)
+    pricePerTon: number | null;    // Preço por tonelada
+    totalValue: number | null;     // Valor total
+    currency: string;
+    truckPlate: string;
+    driver: string;
+    documentNumber: string;        // RUC/CNPJ
+    discounts: Record<string, number>; // Todos os descontos/análises do documento
+    notes: string;
+}
+
+/**
+ * Parse a romaneio (grain delivery ticket) photo/PDF using Gemini Vision.
+ * Handles any format: C.Vale, Agridesa, and others.
+ */
+export async function parseRomaneioImage(buffer: Buffer, mimeType: string): Promise<ParsedRomaneio> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        throw new Error("GEMINI_API_KEY not configured");
+    }
+
+    const base64Image = buffer.toString("base64");
+    const model = "gemini-2.0-flash";
+
+    const prompt = `
+    VOCÊ É UM EXTRATOR DE DADOS DE ROMANEIOS / NOTAS DE ROMANEIO / BOLETAS DE PESAJE AGRÍCOLAS.
+    
+    Um romaneio é um ticket de entrega de grãos (soja, milho, trigo) de uma fazenda para um silo/comprador.
+    Ele contém dados de pesagem (peso bruto, tara, peso neto/líquido) e análises de qualidade (umidade, impureza, etc).
+    
+    Analise esta imagem e extraia TODOS os dados possíveis.
+    
+    RETORNE APENAS UM JSON VÁLIDO. SEM MARKDOWN (\`\`\`). SEM COMENTÁRIOS. SEM EXPLICAÇÕES.
+    
+    ESTRUTURA JSON DESEJADA:
+    {
+      "ticketNumber": "string (número do romaneio/ticket/nota)",
+      "buyer": "string (empresa compradora: C.Vale, Agridesa, ADM, Cargill, etc.)",
+      "clientName": "string (nome do entregador/produtor/entidade)",
+      "documentNumber": "string (RUC/CNPJ/CPF do comprador ou emissor)",
+      "crop": "string (cultura: soja, milho, trigo, etc. Normalizar sempre para português)",
+      "deliveryDate": "YYYY-MM-DD (data de emissão ou entrega)",
+      "grossWeight": number (peso bruto em KG, sem separador de milhar),
+      "tare": number (tara em KG),
+      "netWeight": number (peso neto = bruto - tara, em KG),
+      "finalWeight": number (peso líquido/final após descontos, em KG. Se não encontrar, usar netWeight),
+      "moisture": number (umidade em %, ex: 14.5),
+      "impurities": number (impureza em %, ex: 1.7),
+      "moistureDiscount": number (desconto por umidade em KG, se indicado. 0 se não houver),
+      "impurityDiscount": number (desconto por impureza em KG, se indicado. 0 se não houver),
+      "totalDiscountKg": number (total de descontos em KG, se indicado),
+      "pricePerTon": number (preço por tonelada se indicado, null se não),
+      "totalValue": number (valor total se indicado, null se não),
+      "currency": "PYG" ou "USD" ou "BRL" (inferir pela moeda no documento),
+      "truckPlate": "string (placa do caminhão/veículo)",
+      "driver": "string (nome do motorista/chofer se indicado)",
+      "discounts": {
+        "umidade": number,
+        "cuerpo_extrano": number,
+        "impureza": number,
+        "avariado": number,
+        "imaturo": number,
+        "temperatura": number,
+        "densidade": number,
+        "verdoso": number,
+        "outros campos de análise encontrados": number
+      },
+      "notes": "string (observações ou dados extras não mapeados acima)"
+    }
+
+    REGRAS IMPORTANTES:
+    1. Pesos SEMPRE em KG (quilogramas). Se o documento mostra 43.320, significa 43320 kg (formato paraguaio/uruguaio usa ponto como separador de milhar).
+    2. Porcentagens de umidade, impureza, etc. como número decimal (14.50 → 14.5).
+    3. Datas no formato ISO YYYY-MM-DD.
+    4. Se algum campo não for encontrado no documento, use null ou string vazia.
+    5. O campo "discounts" deve conter TODOS os campos de análise encontrados no documento, mesmo se não mapeados acima.
+    6. ATENÇÃO: em formatos paraguaios, o ponto é separador de milhar (43.320 = 43320).
+    7. O crop/cultura pode estar como: SOJA, S1 SOJA COMERCIAL, MAIZ, TRIGO, etc. Normalize para: soja, milho, trigo.
+    8. Se o documento mostrar desconto percentual E em KG, preferir o valor em KG.
+    `;
+
+    try {
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [
+                        {
+                            parts: [
+                                { text: prompt },
+                                {
+                                    inline_data: {
+                                        mime_type: mimeType,
+                                        data: base64Image
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API Error: ${response.status} - ${errText}`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+
+        // Clean markdown code blocks if present
+        const jsonStr = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const parsed = JSON.parse(jsonStr);
+
+        const grossWeight = Number(parsed.grossWeight) || 0;
+        const tare = Number(parsed.tare) || 0;
+        const netWeight = Number(parsed.netWeight) || (grossWeight - tare);
+        const finalWeight = Number(parsed.finalWeight) || netWeight;
+
+        // Normalize crop name
+        let crop = (parsed.crop || "soja").toLowerCase().trim();
+        if (crop.includes("soja") || crop.includes("soy")) crop = "soja";
+        else if (crop.includes("milho") || crop.includes("maiz") || crop.includes("corn")) crop = "milho";
+        else if (crop.includes("trigo") || crop.includes("wheat")) crop = "trigo";
+        else if (crop.includes("arroz") || crop.includes("rice")) crop = "arroz";
+        else if (crop.includes("algodão") || crop.includes("algodón") || crop.includes("cotton")) crop = "algodão";
+
+        return {
+            ticketNumber: parsed.ticketNumber || "",
+            buyer: parsed.buyer || "Comprador Desconhecido",
+            crop,
+            deliveryDate: parsed.deliveryDate ? new Date(parsed.deliveryDate) : new Date(),
+            grossWeight,
+            tare,
+            netWeight,
+            finalWeight,
+            moisture: parsed.moisture != null ? Number(parsed.moisture) : null,
+            impurities: parsed.impurities != null ? Number(parsed.impurities) : null,
+            moistureDiscount: Number(parsed.moistureDiscount) || 0,
+            impurityDiscount: Number(parsed.impurityDiscount) || 0,
+            pricePerTon: parsed.pricePerTon != null ? Number(parsed.pricePerTon) : null,
+            totalValue: parsed.totalValue != null ? Number(parsed.totalValue) : null,
+            currency: parsed.currency || "USD",
+            truckPlate: parsed.truckPlate || "",
+            driver: parsed.driver || "",
+            documentNumber: parsed.documentNumber || "",
+            discounts: parsed.discounts || {},
+            notes: parsed.notes || "",
+        };
+
+    } catch (error) {
+        console.error("Error parsing romaneio image:", error);
+        throw error;
+    }
+}
+

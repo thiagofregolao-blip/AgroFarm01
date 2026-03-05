@@ -1408,6 +1408,11 @@ export const farmRomaneios = pgTable("farm_romaneios", {
   totalValue: decimal("total_value", { precision: 15, scale: 2 }),
   truckPlate: text("truck_plate"),
   ticketNumber: text("ticket_number"),
+  driver: text("driver"),
+  documentNumber: text("document_number"), // RUC/CNPJ do comprador
+  discounts: jsonb("discounts"), // JSON flexível: {umidade: 14.5, cuerpo_extrano: 0.96, impureza: 1.70, temperatura: 32.10, ...}
+  source: text("source").notNull().default("manual"), // manual, whatsapp, import
+  status: text("status").notNull().default("confirmed"), // pending (WhatsApp), confirmed
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });

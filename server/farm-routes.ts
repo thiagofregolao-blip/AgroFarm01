@@ -3171,6 +3171,76 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
+    // ===== ROMANEIO AI IMPORT (Photo/PDF) =====
+    app.post("/api/farm/romaneios/import", requireFarmer, upload.single("file"), async (req, res) => {
+        try {
+            const { farmRomaneios } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+            const file = req.file;
+
+            if (!file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
+
+            console.log(`[ROMANEIO_IMPORT] Parsing ${file.originalname} (${file.mimetype}, ${Math.round(file.size / 1024)}KB)`);
+
+            const { parseRomaneioImage } = await import("./parse-farm-invoice");
+            const parsed = await parseRomaneioImage(file.buffer, file.mimetype);
+
+            console.log(`[ROMANEIO_IMPORT] Parsed: ticket=${parsed.ticketNumber}, buyer=${parsed.buyer}, crop=${parsed.crop}, gross=${parsed.grossWeight}kg`);
+
+            // Return parsed data for frontend preview (don't save yet)
+            res.json({
+                message: "Romaneio extraído com sucesso!",
+                parsed,
+            });
+        } catch (error) {
+            console.error("[ROMANEIO_IMPORT]", error);
+            res.status(500).json({ error: "Falha ao processar romaneio. Tente novamente." });
+        }
+    });
+
+    // ===== CONFIRM WhatsApp Romaneio =====
+    app.post("/api/farm/romaneios/:id/confirm", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios, farmAccountsReceivable } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            // Update romaneio fields + set status to confirmed
+            const updateData: any = { status: "confirmed", ...req.body };
+            delete updateData.id; // safety
+
+            const [romaneio] = await db.update(farmRomaneios)
+                .set(updateData)
+                .where(and(eq(farmRomaneios.id, req.params.id), eq(farmRomaneios.farmerId, farmerId)))
+                .returning();
+
+            if (!romaneio) return res.status(404).json({ error: "Romaneio not found" });
+
+            // Auto-generate Conta a Receber if price is provided
+            if (romaneio.totalValue && parseFloat(romaneio.totalValue) > 0) {
+                const dueDate = new Date(romaneio.deliveryDate);
+                dueDate.setDate(dueDate.getDate() + 30);
+                await db.insert(farmAccountsReceivable).values({
+                    farmerId,
+                    romaneioId: romaneio.id,
+                    buyer: romaneio.buyer,
+                    description: `${romaneio.crop} - Ticket ${romaneio.ticketNumber || 'S/N'} - ${(parseFloat(romaneio.finalWeight) / 1000).toFixed(2)} ton`,
+                    totalAmount: romaneio.totalValue,
+                    currency: romaneio.currency,
+                    dueDate: dueDate.toISOString(),
+                    status: "pendente",
+                });
+            }
+
+            res.json({ success: true, romaneio });
+        } catch (error) {
+            console.error("[ROMANEIO_CONFIRM]", error);
+            res.status(500).json({ error: "Failed to confirm romaneio" });
+        }
+    });
+
     app.put("/api/farm/romaneios/:id", requireFarmer, async (req, res) => {
         try {
             const { farmRomaneios } = await import("../shared/schema");
@@ -3202,6 +3272,128 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         } catch (error) {
             console.error("[ROMANEIO_DELETE]", error);
             res.status(500).json({ error: "Failed to delete romaneio" });
+        }
+    });
+
+    // ===== N8N/WhatsApp Webhook: Romaneio Photo Import =====
+    app.post("/api/farm/webhook/n8n/romaneio", async (req, res) => {
+        try {
+            const { whatsapp_number, imageUrl, caption } = req.body;
+            if (!whatsapp_number || !imageUrl) {
+                return res.status(400).json({ error: "whatsapp_number and imageUrl are required" });
+            }
+
+            const { users, farmRomaneios, farmPlots } = await import("../shared/schema");
+            const { eq, or, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            // Find farmer by phone
+            const formattedPhone = ZApiClient.formatPhoneNumber(whatsapp_number);
+            const last9 = formattedPhone.slice(-9);
+
+            let farmers = await db.select().from(users).where(
+                or(
+                    eq(users.whatsapp_number, formattedPhone),
+                    sql`${users.whatsapp_extra_numbers} LIKE ${'%' + formattedPhone + '%'}`
+                )
+            ).limit(1);
+
+            if (farmers.length === 0 && last9.length === 9) {
+                farmers = await db.select().from(users).where(
+                    or(
+                        sql`${users.whatsapp_number} LIKE ${'%' + last9}`,
+                        sql`${users.whatsapp_extra_numbers} LIKE ${'%' + last9 + '%'}`
+                    )
+                ).limit(1);
+            }
+
+            if (farmers.length === 0) {
+                return res.status(404).json({ error: "Farmer not found" });
+            }
+
+            const farmerId = farmers[0].id;
+
+            console.log(`[WEBHOOK_N8N_ROMANEIO] phone=${whatsapp_number}, imageUrl=${imageUrl?.substring(0, 60)}...`);
+
+            // Download image
+            const imageResponse = await fetch(imageUrl);
+            if (!imageResponse.ok) {
+                return res.status(400).json({ error: "Failed to download romaneio image" });
+            }
+
+            const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+
+            // Parse with AI
+            const { parseRomaneioImage } = await import("./parse-farm-invoice");
+            const parsed = await parseRomaneioImage(buffer, contentType);
+
+            console.log(`[WEBHOOK_N8N_ROMANEIO] Parsed: ticket=${parsed.ticketNumber}, buyer=${parsed.buyer}, gross=${parsed.grossWeight}kg`);
+
+            // Get farmer's plots for context
+            const plots = await db.select({ id: farmPlots.id, name: farmPlots.name })
+                .from(farmPlots)
+                .where(sql`${farmPlots.propertyId} IN (
+                    SELECT id FROM farm_properties WHERE farmer_id = ${farmerId}
+                )`);
+
+            // Create pending romaneio
+            const [romaneio] = await db.insert(farmRomaneios).values({
+                farmerId,
+                buyer: parsed.buyer,
+                crop: parsed.crop,
+                deliveryDate: parsed.deliveryDate || new Date(),
+                grossWeight: String(parsed.grossWeight),
+                tare: String(parsed.tare),
+                netWeight: String(parsed.netWeight),
+                finalWeight: String(parsed.finalWeight),
+                moisture: parsed.moisture != null ? String(parsed.moisture) : null,
+                impurities: parsed.impurities != null ? String(parsed.impurities) : null,
+                moistureDiscount: String(parsed.moistureDiscount),
+                impurityDiscount: String(parsed.impurityDiscount),
+                pricePerTon: parsed.pricePerTon != null ? String(parsed.pricePerTon) : null,
+                totalValue: parsed.totalValue != null ? String(parsed.totalValue) : null,
+                currency: parsed.currency,
+                truckPlate: parsed.truckPlate,
+                ticketNumber: parsed.ticketNumber,
+                driver: parsed.driver,
+                documentNumber: parsed.documentNumber,
+                discounts: parsed.discounts,
+                source: "whatsapp",
+                status: "pending",
+                notes: caption || parsed.notes || "",
+            }).returning();
+
+            // Format response message for WhatsApp
+            const plotList = plots.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
+            const summary = [
+                `✅ *Romaneio #${parsed.ticketNumber || 'S/N'} recebido!*`,
+                ``,
+                `🏢 Comprador: *${parsed.buyer}*`,
+                `🌾 Cultura: *${parsed.crop}*`,
+                `📅 Data: ${parsed.deliveryDate ? new Date(parsed.deliveryDate).toLocaleDateString("pt-BR") : "Hoje"}`,
+                ``,
+                `⚖️ Peso Bruto: ${parsed.grossWeight.toLocaleString()} kg`,
+                `📦 Tara: ${parsed.tare.toLocaleString()} kg`,
+                `📊 Peso Neto: ${parsed.netWeight.toLocaleString()} kg`,
+                parsed.moisture != null ? `💧 Umidade: ${parsed.moisture}%` : null,
+                parsed.impurities != null ? `🔬 Impureza: ${parsed.impurities}%` : null,
+                `✨ Peso Líquido: *${parsed.finalWeight.toLocaleString()} kg* (${(parsed.finalWeight / 1000).toFixed(2)} ton)`,
+                parsed.truckPlate ? `🚛 Placa: ${parsed.truckPlate}` : null,
+                ``,
+                plots.length > 0 ? `📍 *De qual talhão é esse romaneio?*\n${plotList}` : `⚠️ Nenhum talhão cadastrado. Confirme pelo sistema.`,
+            ].filter(Boolean).join("\n");
+
+            res.json({
+                message: summary,
+                romaneioId: romaneio.id,
+                plots: plots.map(p => ({ id: p.id, name: p.name })),
+                parsed,
+            });
+        } catch (error) {
+            console.error("[WEBHOOK_N8N_ROMANEIO]", error);
+            res.status(500).json({ error: "Internal server error" });
         }
     });
 
