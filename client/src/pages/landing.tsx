@@ -203,17 +203,14 @@ export default function LandingPage() {
                             </a>
                         </div>
 
-                        {/* Stats */}
+                        {/* Stats — animated count-up */}
                         <div style={{ display: "flex", gap: 40, marginTop: 48 }}>
                             {[
-                                { n: "+3", label: "Departamentos" },
-                                { n: "+110", label: "Produtores" },
-                                { n: "+50mil", label: "Hectares" },
+                                { target: 3, prefix: "+", suffix: "", label: "Departamentos" },
+                                { target: 110, prefix: "+", suffix: "", label: "Produtores" },
+                                { target: 50, prefix: "+", suffix: "mil", label: "Hectares" },
                             ].map(s => (
-                                <div key={s.label}>
-                                    <div style={{ fontSize: 28, fontWeight: 800, color: colors.yellow }}>{s.n}</div>
-                                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>{s.label}</div>
-                                </div>
+                                <CountUpStat key={s.label} target={s.target} prefix={s.prefix} suffix={s.suffix} label={s.label} />
                             ))}
                         </div>
                     </div>
@@ -598,6 +595,48 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
                     {answer}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ===========================
+// COUNT-UP STAT COMPONENT
+// ===========================
+function CountUpStat({ target, prefix, suffix, label }: { target: number; prefix: string; suffix: string; label: string }) {
+    const [count, setCount] = useState(0);
+    const ref = useRef<HTMLDivElement>(null);
+    const hasAnimated = useRef(false);
+
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting && !hasAnimated.current) {
+                hasAnimated.current = true;
+                const duration = 2000;
+                const start = performance.now();
+
+                const animate = (now: number) => {
+                    const elapsed = now - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    // easeOutQuad
+                    const eased = 1 - (1 - progress) * (1 - progress);
+                    setCount(Math.round(eased * target));
+                    if (progress < 1) requestAnimationFrame(animate);
+                };
+                requestAnimationFrame(animate);
+            }
+        }, { threshold: 0.3 });
+
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [target]);
+
+    return (
+        <div ref={ref}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: colors.yellow }}>{prefix}{count}{suffix}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>{label}</div>
         </div>
     );
 }
