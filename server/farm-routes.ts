@@ -3143,8 +3143,13 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
 
+            const body = { ...req.body };
+            if (body.deliveryDate && typeof body.deliveryDate === "string") {
+                body.deliveryDate = new Date(body.deliveryDate);
+            }
+
             const [romaneio] = await db.insert(farmRomaneios).values({
-                ...req.body,
+                ...body,
                 farmerId,
             }).returning();
 

@@ -303,6 +303,15 @@ const runMigration = async () => {
             await sql.unsafe(paymentCatSql);
             console.log('✅ Migração payment_categories concluída!');
         }
+        // Migration 26: Romaneio AI Import (table + new columns)
+        const romaneioImportPath = path.join(process.cwd(), 'migration_romaneio_ai_import.sql');
+        if (fs.existsSync(romaneioImportPath)) {
+            const romaneioImportSql = fs.readFileSync(romaneioImportPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', romaneioImportPath);
+            console.log('🚀 Executando SQL (romaneio_ai_import)...');
+            await sql.unsafe(romaneioImportSql);
+            console.log('✅ Migração romaneio_ai_import concluída!');
+        }
 
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
