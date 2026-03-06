@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 
 const CROP_COLORS: Record<string, { fill: string; label: string; emoji: string }> = {
-    soja: { fill: "#c89520", label: "Soja", emoji: "🌾" },
-    milho: { fill: "#dbb830", label: "Milho", emoji: "🌽" },
-    trigo: { fill: "#b87030", label: "Trigo", emoji: "🌾" },
-    girassol: { fill: "#d4c040", label: "Girassol", emoji: "🌻" },
+    soja: { fill: "#2d8a4e", label: "Soja", emoji: "🌾" },
+    milho: { fill: "#e6a817", label: "Milho", emoji: "🌽" },
+    trigo: { fill: "#c2722a", label: "Trigo", emoji: "🌾" },
+    girassol: { fill: "#e8c820", label: "Girassol", emoji: "🌻" },
     arroz: { fill: "#7da830", label: "Arroz", emoji: "🌾" },
 };
 
@@ -260,24 +260,33 @@ function SiloCard({ silo, totalHarvest, isSelected, onClick }: { silo: SiloData;
             </div>
 
             <div className="px-3 pb-3 pt-0 text-center">
-                <p className="font-bold text-xs text-gray-800 truncate mb-0.5" title={silo.buyer}>{silo.buyer}</p>
-                <p className="text-lg font-extrabold text-emerald-700 leading-tight">
+                <p className="font-bold text-sm text-gray-800 truncate mb-0.5" title={silo.buyer}>{silo.buyer}</p>
+                <p className="text-xl font-extrabold text-emerald-700 leading-tight">
                     {tons < 10 ? tons.toFixed(2) : tons.toFixed(1)} <span className="text-xs font-normal text-gray-500">ton</span>
                 </p>
-                <div className="flex justify-center gap-1 mt-1 flex-wrap">
+                <p className="text-[10px] text-gray-500 mt-0.5">{silo.deliveryCount} {silo.deliveryCount === 1 ? "entrega" : "entregas"}</p>
+
+                {/* Crop breakdown with tonnage and count */}
+                <div className="flex flex-col items-center gap-0.5 mt-2">
                     {cropSegments.map(seg => (
-                        <span key={seg.crop} className="px-1.5 py-0 rounded text-[9px] font-semibold text-white shadow-sm"
-                            style={{ backgroundColor: seg.color.fill }}
-                            title={`${seg.color.emoji} ${seg.crop}: ${(seg.weight / 1000).toFixed(1)} ton`}>
-                            {seg.color.emoji} {seg.crop}
-                        </span>
+                        <div key={seg.crop} className="flex items-center gap-1.5 w-full justify-center">
+                            <span className="w-2.5 h-2.5 rounded-full inline-block shadow-sm flex-shrink-0" style={{ backgroundColor: seg.color.fill }} />
+                            <span className="text-[11px] font-medium text-gray-700">{seg.color.emoji} {seg.crop}</span>
+                            <span className="text-[10px] text-gray-500">{(seg.weight / 1000).toFixed(1)}t</span>
+                            <span className="text-[9px] text-gray-400">({seg.deliveryCount}x)</span>
+                        </div>
                     ))}
                 </div>
-                <div className="mt-1.5 space-y-0.5 text-[10px]">
-                    {silo.totalValue > 0 && <p className="text-emerald-600">💰 $ {silo.totalValue.toLocaleString("en", { maximumFractionDigits: 0 })}</p>}
+
+                <div className="mt-2 space-y-0.5 text-[10px] border-t border-gray-100 pt-1.5">
+                    {silo.totalValue > 0 && <p className="text-emerald-600 font-medium">💰 $ {silo.totalValue.toLocaleString("en", { maximumFractionDigits: 0 })}</p>}
                     {hasInputs && <p className="text-red-500">🧪 Insumos: $ {silo.inputSpent.toLocaleString("en", { maximumFractionDigits: 0 })}</p>}
+                    {hasInputs && silo.totalValue > 0 && (
+                        <p className={`font-bold ${silo.balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                            {silo.balance >= 0 ? "📈" : "📉"} Saldo: $ {Math.abs(silo.balance).toLocaleString("en", { maximumFractionDigits: 0 })}
+                        </p>
+                    )}
                 </div>
-                <p className="text-[9px] text-gray-400 mt-0.5">{silo.deliveryCount} entregas</p>
             </div>
         </div>
     );
