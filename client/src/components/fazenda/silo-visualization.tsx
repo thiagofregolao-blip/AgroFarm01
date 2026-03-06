@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 
 const CROP_COLORS: Record<string, { fill: string; label: string; emoji: string }> = {
-    soja: { fill: "#2d8a4e", label: "Soja", emoji: "🌾" },
-    milho: { fill: "#e6a817", label: "Milho", emoji: "🌽" },
-    trigo: { fill: "#c2722a", label: "Trigo", emoji: "🌾" },
-    girassol: { fill: "#e8c820", label: "Girassol", emoji: "🌻" },
+    soja: { fill: "#c89520", label: "Soja", emoji: "🌾" },
+    milho: { fill: "#dbb830", label: "Milho", emoji: "🌽" },
+    trigo: { fill: "#b87030", label: "Trigo", emoji: "🌾" },
+    girassol: { fill: "#d4c040", label: "Girassol", emoji: "🌻" },
     arroz: { fill: "#7da830", label: "Arroz", emoji: "🌾" },
 };
 
