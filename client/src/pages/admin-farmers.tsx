@@ -30,10 +30,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers, Map } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers, Map, MapPin } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProductsManagement } from "./admin-products";
 import { ManualsManagement } from "./admin-manuals";
+import { GlobalSilosManagement } from "@/components/admin/global-silos-management";
 import { FileText } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -44,6 +45,7 @@ const NAV_ITEMS = [
     { value: "products", icon: Sprout, label: "Catálogo" },
     { value: "manuals", icon: FileText, label: "Manuais" },
     { value: "modules", icon: Layers, label: "Módulos" },
+    { value: "silos", icon: MapPin, label: "Silos Globais" },
 ];
 
 export default function AdminFarmersPage() {
@@ -120,6 +122,7 @@ export default function AdminFarmersPage() {
                     {activeTab === "products" && <ProductsManagement />}
                     {activeTab === "manuals" && <ManualsManagement />}
                     {activeTab === "modules" && <ModulesManagement />}
+                    {activeTab === "silos" && <GlobalSilosManagement />}
                 </main>
             )}
         </div>

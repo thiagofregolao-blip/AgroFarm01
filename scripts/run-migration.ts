@@ -323,6 +323,16 @@ const runMigration = async () => {
             console.log('✅ Migração global_silos concluída!');
         }
 
+        // Migration 28: Fix global_silos latitude/longitude to be nullable
+        const fixSilosNullablePath = path.join(process.cwd(), 'migration_fix_global_silos_nullable.sql');
+        if (fs.existsSync(fixSilosNullablePath)) {
+            const fixSilosNullableSql = fs.readFileSync(fixSilosNullablePath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', fixSilosNullablePath);
+            console.log('🚀 Executando SQL (fix_global_silos_nullable)...');
+            await sql.unsafe(fixSilosNullableSql);
+            console.log('✅ Migração fix_global_silos_nullable concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

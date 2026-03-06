@@ -1427,8 +1427,8 @@ export const globalSilos = pgTable("global_silos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyName: text("company_name").notNull(),
   branchName: text("branch_name"),
-  latitude: text("latitude").notNull(),
-  longitude: text("longitude").notNull(),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });

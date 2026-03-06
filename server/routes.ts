@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema, farmProductsCatalog } from "@shared/schema";
+import { insertSaleSchema, insertClientSchema, insertCategorySchema, insertProductSchema, insertSeasonGoalSchema, insertSeasonSchema, insertExternalPurchaseSchema, insertClientFamilyRelationSchema, insertAlertSettingsSchema, insertAlertSchema, insertPurchaseHistorySchema, insertPurchaseHistoryItemSchema, insertFarmSchema, insertFieldSchema, subcategories, clients, sales, seasons, seasonGoals, categories, products, clientMarketRates, externalPurchases, purchaseHistory, marketBenchmarks, userClientLinks, masterClients, salesHistory, clientFamilyRelations, purchaseHistoryItems, barterSimulations, barterSimulationItems, farms, fields, passwordResetTokens, users, productsPriceTable, globalManagementApplications, clientApplicationTracking, insertClientApplicationTrackingSchema, clientCategoryPipeline, systemSettings, insertPlanningGlobalConfigurationSchema, farmProductsCatalog, globalSilos, insertGlobalSiloSchema } from "@shared/schema";
 import { visits } from "@shared/schema.crm";
 import { z } from "zod";
 import multer from "multer";
@@ -2619,6 +2619,62 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     } catch (error) {
       console.error("Error deleting global product (it might be in use):", error);
       res.status(400).json({ error: "Não é possível excluir o produto porque ele está sendo usado em faturas ou estoques." });
+    }
+  });
+
+  // ==================== GLOBAL SILOS (ADMIN + FARM ADMIN) ====================
+  app.get("/api/admin/global-silos", requireFarmAdmin, async (req, res) => {
+    try {
+      const silos = await db.select().from(globalSilos).orderBy(globalSilos.companyName);
+      res.json(silos);
+    } catch (error) {
+      console.error("Error fetching global silos:", error);
+      res.status(500).json({ error: "Failed to fetch global silos" });
+    }
+  });
+
+  app.post("/api/admin/global-silos", requireFarmAdmin, async (req, res) => {
+    try {
+      const siloData = insertGlobalSiloSchema.parse(req.body);
+      const [newSilo] = await db.insert(globalSilos).values(siloData).returning();
+      res.status(201).json(newSilo);
+    } catch (error) {
+      console.error("Error creating global silo:", error);
+      res.status(400).json({ error: "Invalid silo data" });
+    }
+  });
+
+  app.patch("/api/admin/global-silos/:id", requireFarmAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const [updatedSilo] = await db
+        .update(globalSilos)
+        .set(updates)
+        .where(eq(globalSilos.id, id))
+        .returning();
+
+      if (!updatedSilo) {
+        return res.status(404).json({ error: "Global Silo not found" });
+      }
+      res.json(updatedSilo);
+    } catch (error) {
+      console.error("Error updating global silo:", error);
+      res.status(400).json({ error: "Failed to update global silo" });
+    }
+  });
+
+  app.delete("/api/admin/global-silos/:id", requireFarmAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const [deleted] = await db.delete(globalSilos).where(eq(globalSilos.id, id)).returning();
+      if (!deleted) {
+        return res.status(404).json({ error: "Global Silo not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting global silo (might be in use by romaneios):", error);
+      res.status(400).json({ error: "Não é possível excluir este Silo pois estã em uso por romaneios de produtores." });
     }
   });
 
