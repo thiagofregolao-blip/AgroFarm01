@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Scale, Loader2, Wheat, TrendingUp, Truck, Upload, Camera, Check, X, Clock, MessageSquare, FileImage } from "lucide-react";
+import { Plus, Scale, Loader2, Wheat, TrendingUp, Truck, Upload, Camera, Check, X, Clock, MessageSquare, FileImage, MapPin, Calculator, ShieldAlert, Award } from "lucide-react";
 import SiloVisualization from "@/components/fazenda/silo-visualization";
 export default function FarmRomaneios() {
     const queryClient = useQueryClient();
@@ -54,6 +54,18 @@ export default function FarmRomaneios() {
     const { data: siloData } = useQuery({
         queryKey: ["/api/farm/romaneios/silos"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/romaneios/silos"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: globalSilos = [] } = useQuery({
+        queryKey: ["/api/farm/global-silos"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/global-silos"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: siloViability, isLoading: viabilityLoading } = useQuery({
+        queryKey: ["/api/farm/silos/viability"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/silos/viability"); return r.json(); },
         enabled: !!user,
     });
 
@@ -182,6 +194,7 @@ export default function FarmRomaneios() {
                                         plots={plots}
                                         properties={properties}
                                         seasons={seasons}
+                                        globalSilos={globalSilos}
                                         onSave={(data: any) => save.mutate(data)}
                                         saving={save.isPending}
                                         initialData={importedData}
@@ -197,7 +210,7 @@ export default function FarmRomaneios() {
                             </DialogTrigger>
                             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                                 <DialogHeader><DialogTitle>Novo Romaneio (Boleta)</DialogTitle></DialogHeader>
-                                <RomaneioForm plots={plots} properties={properties} seasons={seasons} onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
+                                <RomaneioForm plots={plots} properties={properties} seasons={seasons} globalSilos={globalSilos} onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
                             </DialogContent>
                         </Dialog>
                     </div>
@@ -210,7 +223,13 @@ export default function FarmRomaneios() {
                         totalHarvest={siloData.totalHarvest}
                         totalValue={siloData.totalValue}
                         totalInputSpent={siloData.totalInputSpent}
+                        romaneios={confirmedRomaneios}
                     />
+                )}
+
+                {/* ====== Silo Viability Dashboard ====== */}
+                {siloViability && siloViability.silos && siloViability.silos.length > 0 && (
+                    <SiloViabilityDashboard data={siloViability} isLoading={viabilityLoading} />
                 )}
 
                 {/* ====== WhatsApp Pending Approval ====== */}
@@ -229,6 +248,7 @@ export default function FarmRomaneios() {
                                     romaneio={r}
                                     plots={plots}
                                     seasons={seasons}
+                                    globalSilos={globalSilos}
                                     onConfirm={(data: any) => confirmMutation.mutate({ id: r.id, data })}
                                     onReject={() => { if (confirm("Descartar este romaneio?")) del.mutate(r.id); }}
                                     saving={confirmMutation.isPending}
@@ -308,10 +328,120 @@ export default function FarmRomaneios() {
     );
 }
 
+// ====== Silo Viability Dashboard ======
+function SiloViabilityDashboard({ data, isLoading }: { data: any, isLoading: boolean }) {
+    if (isLoading) return null;
+
+    // Calculate score for each silo. 
+    // Score mechanism: Starts at 100.
+    // Penalty for distance: -1 pt per 10km.
+    // Penalty for moisture discount: -2 pts per kg.
+    // Penalty for impurity discount: -5 pts per kg.
+    const scoredSilos = data.silos.map((silo: any) => {
+        let score = 100;
+
+        if (silo.distanceKm) {
+            score -= (silo.distanceKm / 10);
+        }
+
+        if (silo.historicalAvgMoistureDiscountKg) {
+            score -= (silo.historicalAvgMoistureDiscountKg * 2);
+        }
+
+        if (silo.historicalAvgImpurityDiscountKg) {
+            score -= (silo.historicalAvgImpurityDiscountKg * 5);
+        }
+
+        return {
+            ...silo,
+            score: Math.max(0, Math.round(score))
+        };
+    }).sort((a: any, b: any) => b.score - a.score);
+
+    return (
+        <Card className="border-emerald-100 mb-6 bg-gradient-to-br from-white to-emerald-50/30">
+            <CardHeader className="pb-3 border-b border-emerald-50 bg-white/50">
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2 text-emerald-800">
+                        <Calculator className="h-5 w-5 text-emerald-600" />
+                        Radar de Viabilidade de Silos
+                    </CardTitle>
+                    {!data.hasLocation && (
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                            <ShieldAlert className="h-3.5 w-3.5" /> Sem coordenadas dos talhões (distância não calculada)
+                        </span>
+                    )}
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                    Análise inteligente baseada na distância da sua propriedade e histórico de descontos (Umidade/Impureza) em romaneios anteriores.
+                </p>
+            </CardHeader>
+            <CardContent className="pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {scoredSilos.map((silo: any, idx: number) => (
+                        <div key={silo.id} className="relative bg-white border border-emerald-100 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow group">
+
+                            {/* Ranking Badge */}
+                            <div className="absolute -top-3 -right-3 h-8 w-8 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center font-bold text-sm border-2 border-white shadow-sm">
+                                #{idx + 1}
+                            </div>
+
+                            <div className="flex flex-col h-full justify-between">
+                                <div>
+                                    <h4 className="font-bold text-gray-800 text-base">{silo.companyName}</h4>
+                                    {silo.branchName && <p className="text-xs text-gray-500 mb-2">{silo.branchName}</p>}
+
+                                    <div className="space-y-2 mt-3 text-sm">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-gray-500 flex items-center gap-1.5">
+                                                <MapPin className="h-3.5 w-3.5 text-blue-400" /> Distância
+                                            </span>
+                                            <span className="font-medium text-gray-700">
+                                                {silo.distanceKm ? `${silo.distanceKm} km` : 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-gray-500 flex items-center gap-1.5">
+                                                <TrendingUp className="h-3.5 w-3.5 text-red-400" /> Méd. Descontos
+                                            </span>
+                                            <span className="font-medium text-gray-700">
+                                                {(silo.historicalAvgMoistureDiscountKg || silo.historicalAvgImpurityDiscountKg) ? (
+                                                    <span className="text-red-600">
+                                                        {((silo.historicalAvgMoistureDiscountKg || 0) + (silo.historicalAvgImpurityDiscountKg || 0))} kg/romaneio
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-400 italic">Sem histórico</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+                                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                                        <Truck className="h-3 w-3" /> {silo.romaneiosCount} entregas
+                                    </div>
+                                    <div className="flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-full">
+                                        <Award className={`h-4 w-4 ${silo.score >= 80 ? 'text-emerald-500' : silo.score >= 50 ? 'text-amber-500' : 'text-red-500'}`} />
+                                        <span className={`font-bold text-sm ${silo.score >= 80 ? 'text-emerald-700' : silo.score >= 50 ? 'text-amber-700' : 'text-red-700'}`}>
+                                            Score: {silo.score}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 // ====== Pending Romaneio Card (WhatsApp approval) ======
-function PendingRomaneioCard({ romaneio, plots, seasons, onConfirm, onReject, saving }: any) {
+function PendingRomaneioCard({ romaneio, plots, seasons, globalSilos, onConfirm, onReject, saving }: any) {
     const [plotId, setPlotId] = useState(romaneio.plotId || "");
     const [seasonId, setSeasonId] = useState(romaneio.seasonId || "");
+    const [globalSiloId, setGlobalSiloId] = useState(romaneio.globalSiloId || "");
 
     return (
         <div className="bg-white rounded-lg border border-amber-200 p-4 shadow-sm">
@@ -369,6 +499,21 @@ function PendingRomaneioCard({ romaneio, plots, seasons, onConfirm, onReject, sa
                             </Select>
                         </div>
                     </div>
+
+                    <div className="mt-2">
+                        <Label className="text-xs text-gray-500">Silo Recebedor (IA Match)</Label>
+                        <Select value={globalSiloId} onValueChange={setGlobalSiloId}>
+                            <SelectTrigger className="h-8 text-sm">
+                                <SelectValue placeholder="Selecione o silo para cálculo de frete..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Nenhum (Ignorar cálculo)</SelectItem>
+                                {globalSilos.map((s: any) => (
+                                    <SelectItem key={s.id} value={s.id}>{s.companyName} {s.branchName ? `- ${s.branchName}` : ""}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -376,7 +521,7 @@ function PendingRomaneioCard({ romaneio, plots, seasons, onConfirm, onReject, sa
                         size="sm"
                         className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1"
                         disabled={!plotId || saving}
-                        onClick={() => onConfirm({ plotId, seasonId: seasonId || null })}
+                        onClick={() => onConfirm({ plotId, seasonId: seasonId || null, globalSiloId: globalSiloId === "none" ? null : globalSiloId || null })}
                     >
                         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         Aprovar
@@ -396,13 +541,14 @@ function PendingRomaneioCard({ romaneio, plots, seasons, onConfirm, onReject, sa
 }
 
 // ====== Romaneio Form (Manual + AI pre-filled) ======
-function RomaneioForm({ plots, properties, seasons, onSave, saving, initialData }: any) {
+function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving, initialData }: any) {
     const d = initialData || {};
     const [buyer, setBuyer] = useState(d.buyer || "");
     const [crop, setCrop] = useState(d.crop ? d.crop.charAt(0).toUpperCase() + d.crop.slice(1) : "");
     const [plotId, setPlotId] = useState("");
     const [propertyId, setPropertyId] = useState("");
     const [seasonId, setSeasonId] = useState("");
+    const [globalSiloId, setGlobalSiloId] = useState(d.globalSiloId || "");
     const [deliveryDate, setDeliveryDate] = useState(
         d.deliveryDate ? new Date(d.deliveryDate).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10)
     );
@@ -426,6 +572,7 @@ function RomaneioForm({ plots, properties, seasons, onSave, saving, initialData 
         e.preventDefault();
         onSave({
             buyer, crop, plotId: plotId || null, propertyId: propertyId || null, seasonId: seasonId || null,
+            globalSiloId: globalSiloId === "none" ? null : globalSiloId || null,
             deliveryDate, grossWeight, tare, netWeight: String(netWeight),
             moisture: moisture || null, impurities: impurities || null,
             moistureDiscount: String(moistureDisc), impurityDiscount: String(impurityDisc),
@@ -479,6 +626,15 @@ function RomaneioForm({ plots, properties, seasons, onSave, saving, initialData 
                     <Select value={seasonId} onValueChange={setSeasonId}>
                         <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                         <SelectContent>{seasons.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                </div>
+                <div><Label>Silo Destino (Referência IA)</Label>
+                    <Select value={globalSiloId} onValueChange={setGlobalSiloId}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none">Nenhum (Ignorar Cálculo)</SelectItem>
+                            {globalSilos.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.companyName} {s.branchName ? `- ${s.branchName}` : ""}</SelectItem>)}
+                        </SelectContent>
                     </Select>
                 </div>
                 <div><Label>Data de Entrega *</Label><Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} required /></div>
