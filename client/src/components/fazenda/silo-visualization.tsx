@@ -238,10 +238,10 @@ function SiloCard({ silo, totalHarvest, isSelected, onClick }: { silo: SiloData;
     // SVG canvas
     const W = 160, H = 190;
 
-    // Front silo (larger, in front)
-    const fW = 85, fX = 30, fTop = 55, fBot = 165, fRoof = 14;
-    // Back silo (smaller, behind and to the right, partially hidden)
-    const bW = 70, bX = 65, bTop = 48, bBot = 158, bRoof = 10;
+    // Front silo (larger, in front-left)
+    const fW = 82, fX = 10, fTop = 55, fBot = 165, fRoof = 14;
+    // Back silo (smaller, to the right and slightly behind)
+    const bW = 68, bX = 82, bTop = 45, bBot = 155, bRoof = 8;
 
     return (
         <div

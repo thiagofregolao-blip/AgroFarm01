@@ -282,45 +282,47 @@ export default function FarmRomaneios() {
                     </CardContent></Card>
                 ) : (
                     <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead className="bg-emerald-50">
-                                <tr>
-                                    <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
-                                    <th className="text-left p-3 font-semibold text-emerald-800">Comprador</th>
-                                    <th className="text-left p-3 font-semibold text-emerald-800">Cultura</th>
-                                    <th className="text-left p-3 font-semibold text-emerald-800">Talhão</th>
-                                    <th className="text-right p-3 font-semibold text-emerald-800">Peso Líquido</th>
-                                    <th className="text-right p-3 font-semibold text-emerald-800">Peso Final</th>
-                                    <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
-                                    <th className="p-3"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {confirmedRomaneios.map((r: any) => (
-                                    <tr key={r.id} className="border-t border-gray-100">
-                                        <td className="p-3">{new Date(r.deliveryDate).toLocaleDateString("pt-BR")}</td>
-                                        <td className="p-3 font-medium">{r.buyer}</td>
-                                        <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">{r.crop}</span></td>
-                                        <td className="p-3">{r.plotName || "—"}</td>
-                                        <td className="text-right p-3 font-mono">{parseFloat(r.netWeight).toLocaleString()} kg</td>
-                                        <td className="text-right p-3 font-mono font-semibold">{parseFloat(r.finalWeight).toLocaleString()} kg</td>
-                                        <td className="text-right p-3 font-mono font-semibold text-emerald-700">
-                                            {r.totalValue ? `$ ${parseFloat(r.totalValue).toFixed(2)}` : "—"}
-                                        </td>
-                                        <td className="p-3">
-                                            <div className="flex items-center gap-1">
-                                                {r.source === "whatsapp" && <MessageSquare className="h-3.5 w-3.5 text-green-500" title="Via WhatsApp" />}
-                                                {r.source === "import" && <Camera className="h-3.5 w-3.5 text-blue-500" title="Via Import IA" />}
-                                                <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
-                                                    onClick={() => { if (confirm("Remover este romaneio?")) del.mutate(r.id); }}>
-                                                    Excluir
-                                                </Button>
-                                            </div>
-                                        </td>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[640px]">
+                                <thead className="bg-emerald-50">
+                                    <tr>
+                                        <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Data</th>
+                                        <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Comprador</th>
+                                        <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Cultura</th>
+                                        <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Talhão</th>
+                                        <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Peso Líq.</th>
+                                        <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Peso Final</th>
+                                        <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Valor</th>
+                                        <th className="p-3"></th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {confirmedRomaneios.map((r: any) => (
+                                        <tr key={r.id} className="border-t border-gray-100">
+                                            <td className="p-3 whitespace-nowrap">{new Date(r.deliveryDate).toLocaleDateString("pt-BR")}</td>
+                                            <td className="p-3 font-medium whitespace-nowrap">{r.buyer}</td>
+                                            <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700 whitespace-nowrap">{r.crop}</span></td>
+                                            <td className="p-3 whitespace-nowrap">{r.plotName || "—"}</td>
+                                            <td className="text-right p-3 font-mono whitespace-nowrap">{parseFloat(r.netWeight).toLocaleString()} kg</td>
+                                            <td className="text-right p-3 font-mono font-semibold whitespace-nowrap">{parseFloat(r.finalWeight).toLocaleString()} kg</td>
+                                            <td className="text-right p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                                                {r.totalValue ? `$ ${parseFloat(r.totalValue).toFixed(2)}` : "—"}
+                                            </td>
+                                            <td className="p-3">
+                                                <div className="flex items-center gap-1">
+                                                    {r.source === "whatsapp" && <MessageSquare className="h-3.5 w-3.5 text-green-500" />}
+                                                    {r.source === "import" && <Camera className="h-3.5 w-3.5 text-blue-500" />}
+                                                    <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
+                                                        onClick={() => { if (confirm("Remover este romaneio?")) del.mutate(r.id); }}>
+                                                        Excluir
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>
