@@ -71,6 +71,135 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    // /api/farm/global-silos → returns active global silos for farmers to select
+    app.get("/api/farm/global-silos", requireFarmer, async (req, res) => {
+        try {
+            const { globalSilos } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq } = await import("drizzle-orm");
+
+            const silos = await db
+                .select()
+                .from(globalSilos)
+                .where(eq(globalSilos.active, true))
+                .orderBy(globalSilos.companyName);
+
+            res.json(silos);
+        } catch (error) {
+            console.error("Failed to fetch global silos for farmer:", error);
+            res.status(500).json({ error: "Failed to fetch silos" });
+        }
+    });
+
+    // /api/farm/silos/viability → Calculates distance and avg discounts for Silos
+    app.get("/api/farm/silos/viability", requireFarmer, async (req, res) => {
+        try {
+            const { globalSilos, farmPlots, farmRomaneios } = await import("../shared/schema");
+            const { eq, and, isNotNull } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            // 1. Get all active global silos
+            const silos = await db.select().from(globalSilos).where(eq(globalSilos.active, true));
+
+            // 2. Get the farmer's most central/first plot to determine their base location
+            const plots = await db.select().from(farmPlots)
+                .innerJoin(await import("../shared/schema").then(sch => sch.farmProperties), eq(farmPlots.propertyId, (await import("../shared/schema")).farmProperties.id))
+                .where(eq((await import("../shared/schema")).farmProperties.farmerId, farmerId));
+
+            let referenceLat = 0;
+            let referenceLng = 0;
+            let hasLocation = false;
+
+            for (const { farm_plots: plot } of plots) {
+                if (plot.coordinates) {
+                    try {
+                        const coords = JSON.parse(plot.coordinates);
+                        if (coords && coords.length > 0) {
+                            referenceLat = coords[0].lat;
+                            referenceLng = coords[0].lng;
+                            hasLocation = true;
+                            break; // use the first valid plot location
+                        }
+                    } catch (e) { }
+                }
+            }
+
+            // Haversine distance formula
+            const getDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+                const R = 6371; // km
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            };
+
+            // 3. Get all confirmed romaneios for this farmer to calculate historical discounts
+            const romaneios = await db.select().from(farmRomaneios)
+                .where(and(eq(farmRomaneios.farmerId, farmerId), eq(farmRomaneios.status, "confirmed"), isNotNull(farmRomaneios.globalSiloId)));
+
+            const viabilityData = silos.map(silo => {
+                // Distance
+                let distanceKm = null;
+                if (hasLocation && silo.latitude && silo.longitude) {
+                    const sLat = parseFloat(silo.latitude);
+                    const sLng = parseFloat(silo.longitude);
+                    if (!isNaN(sLat) && !isNaN(sLng)) {
+                        distanceKm = getDistanceKm(referenceLat, referenceLng, sLat, sLng);
+                    }
+                }
+
+                // Historical Discounts
+                const siloRomaneios = romaneios.filter(r => r.globalSiloId === silo.id);
+                let totalMoistureDisc = 0;
+                let totalImpurityDisc = 0;
+                let countMoisture = 0;
+                let countImpurity = 0;
+
+                siloRomaneios.forEach(r => {
+                    if (r.moistureDiscount) {
+                        totalMoistureDisc += parseFloat(r.moistureDiscount);
+                        countMoisture++;
+                    }
+                    if (r.impurityDiscount) {
+                        totalImpurityDisc += parseFloat(r.impurityDiscount);
+                        countImpurity++;
+                    }
+                });
+
+                return {
+                    id: silo.id,
+                    companyName: silo.companyName,
+                    branchName: silo.branchName,
+                    distanceKm: distanceKm ? Math.round(distanceKm * 10) / 10 : null,
+                    historicalAvgMoistureDiscountKg: countMoisture ? Math.round(totalMoistureDisc / countMoisture) : null,
+                    historicalAvgImpurityDiscountKg: countImpurity ? Math.round(totalImpurityDisc / countImpurity) : null,
+                    romaneiosCount: siloRomaneios.length,
+                    score: 0 // Will be calculated dynamically on the frontend based on freight cost, etc.
+                };
+            });
+
+            // Sort by distance if available
+            viabilityData.sort((a, b) => {
+                if (a.distanceKm === null && b.distanceKm === null) return 0;
+                if (a.distanceKm === null) return 1;
+                if (b.distanceKm === null) return -1;
+                return a.distanceKm - b.distanceKm;
+            });
+
+            res.json({
+                hasLocation,
+                silos: viabilityData
+            });
+        } catch (error) {
+            console.error("Failed to fetch silo viability:", error);
+            res.status(500).json({ error: "Failed to calculate silo viability" });
+        }
+    });
+
     // /api/farm/me → returns current user info (no separate login needed)
     app.get("/api/farm/me", requireFarmer, async (req, res) => {
         try {
@@ -2365,6 +2494,104 @@ export function registerFarmRoutes(app: Express) {
                 return res.json({ handled: true, reply: sumS.join("\n") });
             }
 
+            // ===== ROMANEIO: Awaiting plot selection =====
+            if (ctx.step === "awaiting_romaneio_plot") {
+                const { farmPlots, farmRomaneios } = await import("../shared/schema");
+                const plots = await db.select({ id: farmPlots.id, name: farmPlots.name })
+                    .from(farmPlots)
+                    .where(sql`${farmPlots.propertyId} IN (
+                        SELECT id FROM farm_properties WHERE farmer_id = ${farmer.id}
+                    )`);
+
+                const pIdx = parseInt(search) - 1;
+                let selectedPlot: any = null;
+                if (!isNaN(pIdx) && pIdx >= 0 && pIdx < plots.length) {
+                    selectedPlot = plots[pIdx];
+                } else {
+                    selectedPlot = plots.find(p => p.name.toLowerCase().includes(search.toLowerCase()));
+                }
+
+                if (!selectedPlot) {
+                    const pList = plots.map((p, i) => `${i + 1}️⃣ ${p.name}`).join("\n");
+                    return res.json({ handled: true, reply: `Não entendi. Responda com o número do talhão:\n${pList}` });
+                }
+
+                // Update romaneio with plot and confirm
+                if (data.romaneioId) {
+                    await db.update(farmRomaneios).set({
+                        plotId: selectedPlot.id,
+                        status: "confirmed",
+                    }).where(eq(farmRomaneios.id, data.romaneioId));
+                }
+                await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+                return res.json({ handled: true, reply: `✅ Romaneio confirmado no talhão *${selectedPlot.name}*! 🌾\n\nJá está disponível no painel da AgroFarm.` });
+            }
+
+            // ===== UNKNOWN IMAGE: Awaiting user classification =====
+            if (ctx.step === "awaiting_image_type") {
+                const choice = parseInt(search);
+                
+                if (choice === 1) {
+                    // Fatura de insumos — re-process as invoice
+                    await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+                    const { farmExpenses } = await import("../shared/schema");
+                    const amt = data.amount ? parseFloat(data.amount) : 0;
+                    const desc = data.caption || "Fatura via WhatsApp (classificação manual)";
+                    
+                    // Create as a generic pending invoice for review
+                    const { farmInvoices } = await import("../shared/schema");
+                    await db.insert(farmInvoices).values({
+                        farmerId: farmer.id,
+                        totalAmount: String(amt || 0),
+                        notes: `[Via WhatsApp - Manual] ${desc}`,
+                        status: 'pending',
+                        supplier: "Via WhatsApp",
+                        invoiceNumber: `WPP-${Date.now().toString().slice(-6)}`
+                    });
+                    return res.json({ handled: true, reply: `✅ Registrado como *fatura de insumos*! Revise os detalhes no painel da AgroFarm. 🌾` });
+                }
+                
+                if (choice === 2) {
+                    // Despesa — create expense
+                    await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+                    const desc = data.caption || "Despesa via WhatsApp (classificação manual)";
+                    
+                    await db.insert(farmExpenses).values({
+                        farmerId: farmer.id,
+                        amount: String(data.amount || 0),
+                        description: `[Via WhatsApp - Manual] ${desc}`,
+                        category: 'outro',
+                        imageBase64: data.imageBase64 || null,
+                        status: 'pending',
+                    });
+                    return res.json({ handled: true, reply: `✅ Registrado como *despesa*! Revise os detalhes no painel da AgroFarm. 🌾` });
+                }
+                
+                if (choice === 3) {
+                    // Romaneio — tell user to send via romaneio flow
+                    await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+                    return res.json({ handled: true, reply: `📦 Para romaneios, envie a foto novamente e eu vou tentar extrair os dados de pesagem automaticamente! 🌾` });
+                }
+                
+                if (choice === 4) {
+                    // Outro recibo — create generic expense
+                    await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
+                    const desc = data.caption || "Recibo via WhatsApp";
+                    
+                    await db.insert(farmExpenses).values({
+                        farmerId: farmer.id,
+                        amount: String(data.amount || 0),
+                        description: `[Via WhatsApp - Recibo] ${desc}`,
+                        category: 'outro',
+                        imageBase64: data.imageBase64 || null,
+                        status: 'pending',
+                    });
+                    return res.json({ handled: true, reply: `✅ Recibo registrado! Revise os detalhes no painel da AgroFarm. 🌾` });
+                }
+
+                return res.json({ handled: true, reply: `Responda com o número:\n1️⃣ Fatura de insumos\n2️⃣ Despesa (peças/serviços)\n3️⃣ Romaneio (grãos)\n4️⃣ Outro recibo` });
+            }
+
             return res.json({ handled: false });
         } catch (error) {
             console.error("[CHECK_PENDING_CONTEXT]", error);
@@ -2429,6 +2656,13 @@ export function registerFarmRoutes(app: Express) {
 
 REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
 
+**romaneio** (Ticket/Boleta de Entrega de Grãos) — use quando a imagem contém:
+- Ticket de pesagem de grãos (soja, milho, trigo, sorgo, girassol, arroz)
+- Boleta de entrega em silo/cerealista/cooperativa (C.Vale, Agridesa, ADM, Cargill, Bunge, Coamo, etc.)
+- Dados de pesagem: peso bruto, tara, peso líquido/neto
+- Dados de classificação: umidade, impureza, avariados, corpo estranho
+- Número de ticket/romaneio, placa de caminhão, motorista
+
 **expense** (Despesa de Frota/Manutenção) — use quando os itens são:
 - Peças de máquinas/veículos (porcas, parafusos, rolamentos, correias, filtros, ponta de eixo, etc.)
 - Óleo de motor, lubrificantes, graxas
@@ -2444,13 +2678,15 @@ REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
 - Adjuvantes, espalhantes, reguladores de crescimento
 - Produtos fitossanitários em geral
 
-**unknown** — quando não for possível determinar.
+**unknown** — quando não for possível determinar com certeza.
 
 Se for 'invoice', extraia TAMBÉM o fornecedor, o número da nota (se houver) e TODOS os produtos com quantidades, unidades e valores.
 
+Se for 'romaneio', extraia os dados de pesagem no campo "romaneioData".
+
 Retorne APENAS UM JSON VÁLIDO no formato exato:
 {
-  "type": "expense" | "invoice" | "unknown",
+  "type": "expense" | "invoice" | "romaneio" | "unknown",
   "totalAmount": 150.50,
   "description": "Breve resumo geral (ex: Compra de peças para trator)",
   "category": "diesel" | "pecas" | "frete" | "mao_de_obra" | "outro",
@@ -2464,7 +2700,24 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
       "unitPrice": 15.00,
       "totalPrice": 157.50
     }
-  ]
+  ],
+  "romaneioData": {
+    "ticketNumber": "12345",
+    "buyer": "C.Vale / Agridesa / etc",
+    "crop": "Soja",
+    "grossWeight": 43000,
+    "tare": 15000,
+    "netWeight": 28000,
+    "moisture": 14.5,
+    "impurities": 0.8,
+    "finalWeight": 27500,
+    "truckPlate": "ABC-1234",
+    "driver": "Nome do Motorista",
+    "deliveryDate": "2026-01-15",
+    "pricePerTon": null,
+    "currency": "USD",
+    "discounts": {}
+  }
 }`;
 
             const response = await fetch(
@@ -2710,8 +2963,103 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
                 return res.json({ message: `✅ Fatura de R$ ${amount.toFixed(2)} recebida da ${parsed.supplier || 'empresa'} com ${itemsCount} itens! Eles já estão aguardando sua revisão no painel AgroFarm.` });
             }
+            else if (parsed.type === "romaneio") {
+                // ===== ROMANEIO (Grain Delivery Ticket) =====
+                const rd = parsed.romaneioData || {};
+                const { farmRomaneios, farmPlots, farmWhatsappPendingContext } = await import("../shared/schema");
+
+                const grossW = parseFloat(rd.grossWeight) || 0;
+                const tareW = parseFloat(rd.tare) || 0;
+                const netW = rd.netWeight ? parseFloat(rd.netWeight) : (grossW - tareW);
+                const moistureVal = rd.moisture != null ? parseFloat(rd.moisture) : null;
+                const impurityVal = rd.impurities != null ? parseFloat(rd.impurities) : null;
+                const moistureDisc = moistureVal != null && moistureVal > 14 ? netW * ((moistureVal - 14) / 100) : 0;
+                const impurityDisc = impurityVal != null && impurityVal > 1 ? netW * ((impurityVal - 1) / 100) : 0;
+                const finalW = rd.finalWeight ? parseFloat(rd.finalWeight) : Math.max(0, netW - moistureDisc - impurityDisc);
+
+                const [romaneio] = await db.insert(farmRomaneios).values({
+                    farmerId: farmer.id,
+                    buyer: rd.buyer || parsed.supplier || "Desconhecido",
+                    crop: rd.crop || "Soja",
+                    deliveryDate: rd.deliveryDate ? new Date(rd.deliveryDate) : new Date(),
+                    grossWeight: String(grossW),
+                    tare: String(tareW),
+                    netWeight: String(netW),
+                    finalWeight: String(finalW),
+                    moisture: moistureVal != null ? String(moistureVal) : null,
+                    impurities: impurityVal != null ? String(impurityVal) : null,
+                    moistureDiscount: String(moistureDisc),
+                    impurityDiscount: String(impurityDisc),
+                    pricePerTon: rd.pricePerTon != null ? String(rd.pricePerTon) : null,
+                    totalValue: rd.totalValue != null ? String(rd.totalValue) : null,
+                    currency: rd.currency || "USD",
+                    truckPlate: rd.truckPlate || null,
+                    ticketNumber: rd.ticketNumber || null,
+                    driver: rd.driver || null,
+                    discounts: rd.discounts || null,
+                    source: "whatsapp",
+                    status: "pending",
+                    notes: caption || "",
+                }).returning();
+
+                // Get plots for the farmer
+                const plots = await db.select({ id: farmPlots.id, name: farmPlots.name })
+                    .from(farmPlots)
+                    .where(sql`${farmPlots.propertyId} IN (
+                        SELECT id FROM farm_properties WHERE farmer_id = ${farmer.id}
+                    )`);
+
+                if (plots.length > 0) {
+                    // Save pending context to await plot selection
+                    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+                    await db.insert(farmWhatsappPendingContext).values({
+                        farmerId: farmer.id,
+                        phone: formattedPhone,
+                        step: "awaiting_romaneio_plot",
+                        expenseId: null,
+                        data: { romaneioId: romaneio.id },
+                        expiresAt,
+                    });
+                }
+
+                const plotList = plots.map((p, i) => `${i + 1}️⃣ ${p.name}`).join("\n");
+                const summary = [
+                    `✅ *Romaneio #${rd.ticketNumber || 'S/N'} recebido!*`,
+                    ``,
+                    `🏢 Comprador: *${rd.buyer || parsed.supplier || 'N/A'}*`,
+                    `🌾 Cultura: *${rd.crop || 'Soja'}*`,
+                    `📅 Data: ${rd.deliveryDate ? new Date(rd.deliveryDate).toLocaleDateString("pt-BR") : "Hoje"}`,
+                    ``,
+                    `⚖️ Peso Bruto: ${grossW.toLocaleString()} kg`,
+                    `📦 Tara: ${tareW.toLocaleString()} kg`,
+                    `📊 Peso Neto: ${netW.toLocaleString()} kg`,
+                    moistureVal != null ? `💧 Umidade: ${moistureVal}%` : null,
+                    impurityVal != null ? `🔬 Impureza: ${impurityVal}%` : null,
+                    `✨ Peso Final: *${finalW.toLocaleString()} kg* (${(finalW / 1000).toFixed(2)} ton)`,
+                    rd.truckPlate ? `🚛 Placa: ${rd.truckPlate}` : null,
+                    ``,
+                    plots.length > 0 ? `📍 *De qual talhão é esse romaneio?*\n${plotList}` : `Romaneio salvo! Confirme o talhão pelo painel. 🌾`,
+                ].filter(Boolean).join("\n");
+
+                return res.json({ message: summary });
+            }
             else {
-                return res.json({ message: `🤔 Hum, não consegui entender essa imagem. Parece um comprovante? Se sim, tente tirar uma foto mais nítida dos valores.` });
+                // ===== UNKNOWN — Ask user what type it is =====
+                const { farmWhatsappPendingContext } = await import("../shared/schema");
+                const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+                await db.insert(farmWhatsappPendingContext).values({
+                    farmerId: farmer.id,
+                    phone: formattedPhone,
+                    step: "awaiting_image_type",
+                    expenseId: null,
+                    data: { imageBase64: base64Image, mimeType, caption: caption || "" },
+                    expiresAt,
+                });
+
+                return res.json({
+                    message: `🤔 Não consegui identificar automaticamente essa imagem.\n\nQue tipo de documento é?\n1️⃣ Fatura de insumos (defensivos, sementes, fertilizantes)\n2️⃣ Despesa (peças, serviços, diesel)\n3️⃣ Romaneio (ticket de grãos)\n4️⃣ Outro recibo/comprovante`
+                });
             }
 
         } catch (error) {
@@ -3179,7 +3527,8 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
     // ===== ROMANEIO AI IMPORT (Photo/PDF) =====
     app.post("/api/farm/romaneios/import", requireFarmer, upload.single("file"), async (req, res) => {
         try {
-            const { farmRomaneios } = await import("../shared/schema");
+            const { farmRomaneios, globalSilos } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
             const file = req.file;
@@ -3192,6 +3541,23 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const parsed = await parseRomaneioImage(file.buffer, file.mimetype);
 
             console.log(`[ROMANEIO_IMPORT] Parsed: ticket=${parsed.ticketNumber}, buyer=${parsed.buyer}, crop=${parsed.crop}, gross=${parsed.grossWeight}kg`);
+
+            // Check if there's a match for globalSiloId
+            let matchedSiloId = null;
+            if (parsed.buyer) {
+                const normalizedBuyer = parsed.buyer.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const silos = await db.select().from(globalSilos).where(eq(globalSilos.active, true));
+
+                for (const s of silos) {
+                    const normSilo = s.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (normalizedBuyer.includes(normSilo) || normSilo.includes(normalizedBuyer)) {
+                        matchedSiloId = s.id;
+                        console.log(`[ROMANEIO_IMPORT] Fuzzy matched buyer '${parsed.buyer}' to Silo: ${s.companyName}`);
+                        break;
+                    }
+                }
+            }
+            parsed.globalSiloId = matchedSiloId;
 
             // Return parsed data for frontend preview (don't save yet)
             res.json({
