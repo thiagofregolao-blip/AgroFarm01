@@ -1414,12 +1414,27 @@ export const farmRomaneios = pgTable("farm_romaneios", {
   source: text("source").notNull().default("manual"), // manual, whatsapp, import
   status: text("status").notNull().default("confirmed"), // pending (WhatsApp), confirmed
   notes: text("notes"),
+  globalSiloId: varchar("global_silo_id").references(() => globalSilos.id), // Vinculo Inteligência de Romaneios
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
 export const insertFarmRomaneioSchema = createInsertSchema(farmRomaneios).omit({ id: true, createdAt: true });
 export type InsertFarmRomaneio = z.infer<typeof insertFarmRomaneioSchema>;
 export type FarmRomaneio = typeof farmRomaneios.$inferSelect;
+
+// ==================== GLOBAL SILOS (ADMIN) ====================
+export const globalSilos = pgTable("global_silos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyName: text("company_name").notNull(),
+  branchName: text("branch_name"),
+  latitude: text("latitude").notNull(),
+  longitude: text("longitude").notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+export const insertGlobalSiloSchema = createInsertSchema(globalSilos).omit({ id: true, createdAt: true });
+export type GlobalSilo = typeof globalSilos.$inferSelect;
+export type InsertGlobalSilo = z.infer<typeof insertGlobalSiloSchema>;
 
 // ==================== CONTAS A PAGAR ====================
 

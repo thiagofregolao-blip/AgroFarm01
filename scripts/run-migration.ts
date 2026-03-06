@@ -313,6 +313,16 @@ const runMigration = async () => {
             console.log('✅ Migração romaneio_ai_import concluída!');
         }
 
+        // Migration 27: Global Silos (Admin managed silos for profitability)
+        const globalSilosPath = path.join(process.cwd(), 'migration_global_silos.sql');
+        if (fs.existsSync(globalSilosPath)) {
+            const globalSilosSql = fs.readFileSync(globalSilosPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', globalSilosPath);
+            console.log('🚀 Executando SQL (global_silos)...');
+            await sql.unsafe(globalSilosSql);
+            console.log('✅ Migração global_silos concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
