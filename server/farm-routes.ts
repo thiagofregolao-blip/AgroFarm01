@@ -911,7 +911,7 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
-    // Confirm invoice → push items to stock
+    // Confirm invoice → push items to stock + create accounts payable entry
     app.post("/api/farm/invoices/:id/confirm", requireFarmer, async (req, res) => {
         try {
             const invoice = await farmStorage.getInvoiceById(req.params.id);
@@ -920,7 +920,41 @@ export function registerFarmRoutes(app: Express) {
                 return res.status(400).json({ error: "Invoice already confirmed" });
             }
 
-            await farmStorage.confirmInvoice(req.params.id, (req.user as any).id);
+            const farmerId = (req.user as any).id;
+            await farmStorage.confirmInvoice(req.params.id, farmerId);
+
+            // Auto-create accounts payable entry linked to this invoice
+            try {
+                const { farmAccountsPayable } = await import("../shared/schema");
+                const { eq, and } = await import("drizzle-orm");
+                const { db } = await import("./db");
+
+                // Check if an AP entry already exists for this invoice
+                const existing = await db.select().from(farmAccountsPayable).where(
+                    and(eq(farmAccountsPayable.invoiceId, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+                );
+
+                if (existing.length === 0 && invoice.totalAmount) {
+                    const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
+                    const dueDate = new Date(issueDate);
+                    dueDate.setDate(dueDate.getDate() + 30); // Default: 30 days payment term
+
+                    await db.insert(farmAccountsPayable).values({
+                        farmerId,
+                        invoiceId: req.params.id,
+                        supplier: invoice.supplier || "Fornecedor",
+                        description: `Fatura #${invoice.invoiceNumber || req.params.id.slice(0, 8)}`,
+                        totalAmount: String(invoice.totalAmount),
+                        currency: invoice.currency || "USD",
+                        dueDate,
+                        status: "aberto",
+                    });
+                    console.log(`[ACCOUNTS_PAYABLE] Auto-created AP entry for invoice ${req.params.id}`);
+                }
+            } catch (apErr) {
+                console.error("[ACCOUNTS_PAYABLE_AUTO_CREATE]", apErr);
+                // Don't fail the confirm if AP creation fails
+            }
 
             // Check if this invoice should skip stock entry
             const updatedInvoice = await farmStorage.getInvoiceById(req.params.id);
@@ -4092,6 +4126,57 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_DELETE]", error);
             res.status(500).json({ error: "Failed to delete account payable" });
+        }
+    });
+
+    // Backfill: sync all confirmed invoices into accounts payable
+    app.post("/api/farm/accounts-payable/backfill-invoices", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable, farmInvoices } = await import("../shared/schema");
+            const { eq, and, isNull } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            // Get all confirmed invoices for this farmer
+            const confirmedInvoices = await db.select().from(farmInvoices)
+                .where(and(eq(farmInvoices.farmerId, farmerId), eq(farmInvoices.status, "confirmed")));
+
+            // Get all existing AP entries with invoice links
+            const existingAPs = await db.select().from(farmAccountsPayable)
+                .where(eq(farmAccountsPayable.farmerId, farmerId));
+            const linkedInvoiceIds = new Set(existingAPs.filter(ap => ap.invoiceId).map(ap => ap.invoiceId));
+
+            let created = 0;
+            for (const invoice of confirmedInvoices) {
+                if (linkedInvoiceIds.has(invoice.id)) continue;
+                if (!invoice.totalAmount || parseFloat(invoice.totalAmount) <= 0) continue;
+
+                const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
+                const dueDate = new Date(issueDate);
+                dueDate.setDate(dueDate.getDate() + 30);
+
+                await db.insert(farmAccountsPayable).values({
+                    farmerId,
+                    invoiceId: invoice.id,
+                    supplier: invoice.supplier || "Fornecedor",
+                    description: `Fatura #${invoice.invoiceNumber || invoice.id.slice(0, 8)}`,
+                    totalAmount: String(invoice.totalAmount),
+                    currency: invoice.currency || "USD",
+                    dueDate,
+                    status: "aberto",
+                });
+                created++;
+            }
+
+            res.json({
+                message: `Backfill concluído: ${created} fatura(s) adicionadas ao Contas a Pagar.`,
+                total: confirmedInvoices.length,
+                created,
+                alreadyLinked: confirmedInvoices.length - created,
+            });
+        } catch (error) {
+            console.error("[ACCOUNTS_PAYABLE_BACKFILL]", error);
+            res.status(500).json({ error: "Failed to backfill invoices" });
         }
     });
 

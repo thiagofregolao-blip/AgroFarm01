@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -18,12 +18,27 @@ export default function AccountsPayable() {
     const [openCreate, setOpenCreate] = useState(false);
     const [payingItem, setPayingItem] = useState<any>(null);
     const { user } = useAuth();
+    const backfillDone = useRef(false);
 
     const { data: items = [], isLoading } = useQuery({
         queryKey: ["/api/farm/accounts-payable"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/accounts-payable"); return r.json(); },
         enabled: !!user,
     });
+
+    // Auto-backfill: sync confirmed invoices into accounts payable on first load
+    useEffect(() => {
+        if (!user || backfillDone.current) return;
+        backfillDone.current = true;
+        apiRequest("POST", "/api/farm/accounts-payable/backfill-invoices")
+            .then(r => r.json())
+            .then(result => {
+                if (result.created > 0) {
+                    queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
+                }
+            })
+            .catch(() => { /* silently ignore */ });
+    }, [user]);
 
     const { data: accounts = [] } = useQuery({
         queryKey: ["/api/farm/cash-accounts"],
