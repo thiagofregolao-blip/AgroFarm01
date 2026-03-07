@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
     Wallet, Plus, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
     Loader2, Trash2, Building2, Banknote, CreditCard, Landmark, DollarSign,
-    AlertTriangle, Calendar, Tag, CreditCard as CardIcon
+    Calendar, Tag, CreditCard as CardIcon
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
@@ -92,8 +92,6 @@ export default function FarmCashFlow() {
     const month = summary?.monthSummary || { totalEntradas: 0, totalSaidas: 0, saldoLiquido: 0 };
     const chartData: any[] = summary?.chartData || [];
     const byCategory: any[] = summary?.byCategory || [];
-    const contasAPagar: any[] = summary?.contasAPagar || [];
-    const totalAPagar = contasAPagar.reduce((sum: number, c: any) => sum + c.remaining, 0);
     const PIE_COLORS = ["#059669", "#0891b2", "#d97706", "#dc2626", "#7c3aed", "#db2777", "#65a30d", "#ea580c", "#4f46e5", "#0d9488"];
 
     const deleteTransaction = useMutation({
@@ -255,71 +253,6 @@ export default function FarmCashFlow() {
                                     </CardContent>
                                 </Card>
                             </div>
-
-                            {/* Contas a Pagar */}
-                            {contasAPagar.length > 0 && (
-                                <Card className="border-amber-200 bg-amber-50/30">
-                                    <CardHeader>
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-amber-800 flex items-center gap-2">
-                                                <AlertTriangle className="h-5 w-5" /> Contas a Pagar
-                                            </CardTitle>
-                                            <span className="text-sm font-bold text-amber-700">Total: $ {totalAPagar.toFixed(2)}</span>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="bg-white rounded-xl border border-amber-200 overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                                <thead className="bg-amber-50">
-                                                    <tr>
-                                                        <th className="text-left p-3 font-semibold text-amber-700">Fornecedor</th>
-                                                        <th className="text-left p-3 font-semibold text-amber-700">Categoria</th>
-                                                        <th className="text-left p-3 font-semibold text-amber-700">Descrição</th>
-                                                        <th className="text-center p-3 font-semibold text-amber-700">Tipo</th>
-                                                        <th className="text-center p-3 font-semibold text-amber-700">Vencimento</th>
-                                                        <th className="text-center p-3 font-semibold text-amber-700">Parcelas</th>
-                                                        <th className="text-right p-3 font-semibold text-amber-700">Total</th>
-                                                        <th className="text-right p-3 font-semibold text-amber-700">Pago</th>
-                                                        <th className="text-right p-3 font-semibold text-amber-700">Restante</th>
-                                                        <th className="text-center p-3 font-semibold text-amber-700">Ação</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {contasAPagar.map((c: any) => {
-                                                        const isOverdue = c.dueDate && new Date(c.dueDate) < new Date();
-                                                        return (
-                                                            <tr key={c.id} className={`border-t border-amber-100 ${isOverdue ? 'bg-red-50' : ''}`}>
-                                                                <td className="p-3 font-medium">{c.supplier || "—"}</td>
-                                                                <td className="p-3">{c.category}</td>
-                                                                <td className="p-3 max-w-[150px] truncate">{c.description || "—"}</td>
-                                                                <td className="p-3 text-center">
-                                                                    <span className={`px-2 py-0.5 rounded-full text-xs ${c.paymentType === 'a_prazo' ? 'bg-amber-100 text-amber-700' : c.paymentType === 'financiado' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
-                                                                        {c.paymentType === "a_prazo" ? "A Prazo" : c.paymentType === "financiado" ? "Financiado" : "À Vista"}
-                                                                    </span>
-                                                                </td>
-                                                                <td className={`p-3 text-center ${isOverdue ? 'text-red-600 font-bold' : ''}`}>
-                                                                    {c.dueDate ? new Date(c.dueDate).toLocaleDateString("pt-BR") : "—"}
-                                                                    {isOverdue && " ⚠️"}
-                                                                </td>
-                                                                <td className="p-3 text-center">{c.installmentsPaid || 0}/{c.installments || 1}</td>
-                                                                <td className="p-3 text-right font-mono">$ {c.amount.toFixed(2)}</td>
-                                                                <td className="p-3 text-right font-mono text-emerald-600">$ {c.paidAmount.toFixed(2)}</td>
-                                                                <td className="p-3 text-right font-mono font-bold text-red-600">$ {c.remaining.toFixed(2)}</td>
-                                                                <td className="p-3 text-center">
-                                                                    <PayExpenseButton expenseId={c.id} remaining={c.remaining} accounts={accounts} onSuccess={() => {
-                                                                        queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
-                                                                        queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
-                                                                    }} />
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )}
 
                             {/* Últimas movimentações */}
                             <Card className="border-emerald-100">
@@ -562,66 +495,6 @@ function CreateAccountDialog({ onSuccess }: { onSuccess: () => void }) {
     );
 }
 
-function PayExpenseButton({ expenseId, remaining, accounts, onSuccess }: { expenseId: string; remaining: number; accounts: any[]; onSuccess: () => void }) {
-    const [open, setOpen] = useState(false);
-    const [accountId, setAccountId] = useState("");
-    const [payAmount, setPayAmount] = useState(String(remaining));
-    const [paymentMethod, setPaymentMethod] = useState("efetivo");
-    const { toast } = useToast();
-
-    const pay = useMutation({
-        mutationFn: () => apiRequest("POST", `/api/farm/expenses/${expenseId}/pay`, {
-            accountId, paymentMethod, amount: parseFloat(payAmount),
-        }),
-        onSuccess: () => {
-            toast({ title: "Pagamento registrado!" });
-            setOpen(false);
-            onSuccess();
-        },
-        onError: () => toast({ title: "Erro ao pagar", variant: "destructive" }),
-    });
-
-    return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs">Pagar</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-sm">
-                <DialogHeader><DialogTitle>Registrar Pagamento</DialogTitle></DialogHeader>
-                <div className="space-y-3 py-2">
-                    <div>
-                        <Label>Valor a Pagar</Label>
-                        <Input type="number" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} />
-                        <p className="text-xs text-gray-500 mt-1">Restante: $ {remaining.toFixed(2)}</p>
-                    </div>
-                    <div>
-                        <Label>Conta</Label>
-                        <Select value={accountId} onValueChange={setAccountId}>
-                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                            <SelectContent>
-                                {accounts.map((a: any) => (
-                                    <SelectItem key={a.id} value={a.id}>{a.name} ({formatMoney(parseFloat(a.currentBalance), a.currency)})</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div>
-                        <Label>Forma de Pagamento</Label>
-                        <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                {PAYMENT_METHODS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => pay.mutate()} disabled={pay.isPending || !accountId}>
-                        {pay.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Confirmar Pagamento"}
-                    </Button>
-                </div>
-            </DialogContent>
-        </Dialog>
-    );
-}
 
 function CategoriesManager({ categories, onRefresh }: { categories: any[]; onRefresh: () => void }) {
     const { toast } = useToast();
