@@ -355,7 +355,7 @@ function SiloViabilityDashboard({ data, isLoading }: { data: any, isLoading: boo
     // Penalty for discounts: total discount kg / 20
     //   ex: 100kg → -5pts (ótimo), 500kg → -25pts (médio), 1000kg → -50pts (ruim), 1500kg → -75pts (péssimo)
     // Silos sem histórico mantêm score alto (incerteza, não penalidade).
-    const scoredSilos = data.silos.map((silo: any) => {
+    const scoredSilos = data.silos.filter((silo: any) => silo.romaneiosCount > 0).map((silo: any) => {
         let score = 100;
 
         if (silo.distanceKm) {
