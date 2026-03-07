@@ -353,6 +353,16 @@ const runMigration = async () => {
             console.log('✅ Migração is_active concluída!');
         }
 
+        // Migration 31: Add due_date to farm_invoices
+        const dueDatePath = path.join(process.cwd(), 'migration_add_due_date.sql');
+        if (fs.existsSync(dueDatePath)) {
+            const dueDateSql = fs.readFileSync(dueDatePath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', dueDatePath);
+            console.log('🚀 Executando SQL (due_date)...');
+            await sql.unsafe(dueDateSql);
+            console.log('✅ Migração due_date concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
