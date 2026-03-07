@@ -66,22 +66,23 @@ export function registerInvoiceEmailRoutes(app: Express) {
                 return res.status(200).json({ status: "ignored", reason: "no_pdf" });
             }
 
+            // Respond immediately to Mailgun (10s timeout) — process async in background
+            res.status(200).json({ status: "received", pdfs: pdfFiles.length });
+
+            // Process each PDF in background (after responding)
+            (async () => {
             const results = [];
 
-            // Process each PDF attachment
             for (const pdf of pdfFiles) {
                 try {
                     console.log(`[Invoice Webhook] Processing PDF: ${pdf.originalname} (${pdf.size} bytes)`);
 
-                    // Convert to base64 for Gemini
                     const pdfBase64 = pdf.buffer.toString("base64");
 
-                    // Extract invoice data using Gemini AI
                     const extracted = await extractInvoiceFromPdf(pdfBase64);
 
                     console.log(`[Invoice Webhook] Extracted: ${extracted.supplier}, ${extracted.items.length} items, ${extracted.currency} ${extracted.totalAmount}`);
 
-                    // Create draft invoice (includes PDF storage)
                     const result = await createDraftInvoice(
                         farmer.id,
                         extracted,
@@ -94,7 +95,6 @@ export function registerInvoiceEmailRoutes(app: Express) {
                     if (result) {
                         results.push(result);
 
-                        // Send WhatsApp notification
                         console.log(`[Invoice Webhook] Attempting WhatsApp notification...`);
                         console.log(`[Invoice Webhook] Farmer WhatsApp: ${farmer.whatsapp_number || 'NOT SET'}`);
                         console.log(`[Invoice Webhook] ZAPI_INSTANCE_ID: ${process.env.ZAPI_INSTANCE_ID ? 'SET' : 'NOT SET'}`);
@@ -128,13 +128,10 @@ export function registerInvoiceEmailRoutes(app: Express) {
                     }
                 } catch (pdfError) {
                     console.error(`[Invoice Webhook] Error processing PDF ${pdf.originalname}:`, pdfError);
-                    results.push({ error: `Failed to process ${pdf.originalname}: ${(pdfError as Error).message}` });
                 }
             }
 
-            res.status(200).json({ status: "processed", results });
-
-            // After responding to Mailgun, forward to accountant (async, non-blocking)
+            // Forward to accountant (async, non-blocking)
             try {
                 if (farmer.accountantEmail) {
                     console.log(`[Invoice Webhook] Forwarding invoice to accountant: ${farmer.accountantEmail}`);
@@ -166,10 +163,12 @@ export function registerInvoiceEmailRoutes(app: Express) {
                 console.error("[Invoice Webhook] Error forwarding to accountant:", fwdError);
             }
 
+            })().catch(err => console.error("[Invoice Webhook] Background processing error:", err));
+
         } catch (error) {
             console.error("[Invoice Webhook] Fatal error:", error);
             // Always return 200 to Mailgun to prevent retries
-            res.status(200).json({ status: "error", message: (error as Error).message });
+            if (!res.headersSent) res.status(200).json({ status: "error", message: (error as Error).message });
         }
     });
 
