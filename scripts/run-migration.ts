@@ -343,6 +343,16 @@ const runMigration = async () => {
             console.log('✅ Migração financial_accounts concluída!');
         }
 
+        // Migration 30: Add is_active to users (activate/deactivate farmer access)
+        const isActivePath = path.join(process.cwd(), 'migration_add_is_active.sql');
+        if (fs.existsSync(isActivePath)) {
+            const isActiveSql = fs.readFileSync(isActivePath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', isActivePath);
+            console.log('🚀 Executando SQL (is_active)...');
+            await sql.unsafe(isActiveSql);
+            console.log('✅ Migração is_active concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
