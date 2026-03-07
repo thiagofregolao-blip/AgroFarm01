@@ -363,6 +363,16 @@ const runMigration = async () => {
             console.log('✅ Migração due_date concluída!');
         }
 
+        // Migration 32: Add crop and payment dates to farm_seasons
+        const seasonsCropPath = path.join(process.cwd(), 'migration_add_seasons_crop.sql');
+        if (fs.existsSync(seasonsCropPath)) {
+            const seasonsCropSql = fs.readFileSync(seasonsCropPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', seasonsCropPath);
+            console.log('🚀 Executando SQL (seasons_crop)...');
+            await sql.unsafe(seasonsCropSql);
+            console.log('✅ Migração seasons_crop concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
