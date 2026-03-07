@@ -3997,6 +3997,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const [ap] = await db.insert(farmAccountsPayable).values({
                 ...req.body,
                 farmerId,
+                dueDate: req.body.dueDate ? new Date(req.body.dueDate) : new Date(),
             }).returning();
             res.json(ap);
         } catch (error) {
@@ -4065,7 +4066,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const newStatus = newPaidTotal >= totalDue ? "pago" : "parcial";
             await db.update(farmAccountsPayable).set({
                 paidAmount: String(newPaidTotal),
-                paidDate: new Date().toISOString(),
+                paidDate: new Date(),
                 status: newStatus,
                 cashTransactionId: tx.id,
             }).where(eq(farmAccountsPayable.id, req.params.id));
@@ -4127,6 +4128,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const [ar] = await db.insert(farmAccountsReceivable).values({
                 ...req.body,
                 farmerId,
+                dueDate: req.body.dueDate ? new Date(req.body.dueDate) : new Date(),
             }).returning();
             res.json(ar);
         } catch (error) {
@@ -4177,7 +4179,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const newStatus = newReceivedTotal >= totalExpected ? "recebido" : "parcial";
             await db.update(farmAccountsReceivable).set({
                 receivedAmount: String(newReceivedTotal),
-                receivedDate: new Date().toISOString(),
+                receivedDate: new Date(),
                 status: newStatus,
                 cashTransactionId: tx.id,
             }).where(eq(farmAccountsReceivable.id, req.params.id));

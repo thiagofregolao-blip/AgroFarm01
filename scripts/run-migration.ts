@@ -333,6 +333,16 @@ const runMigration = async () => {
             console.log('✅ Migração fix_global_silos_nullable concluída!');
         }
 
+        // Migration 29: Financial accounts (Contas a Pagar + Contas a Receber)
+        const financialAccountsPath = path.join(process.cwd(), 'migration_add_financial_accounts.sql');
+        if (fs.existsSync(financialAccountsPath)) {
+            const financialAccountsSql = fs.readFileSync(financialAccountsPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', financialAccountsPath);
+            console.log('🚀 Executando SQL (financial_accounts)...');
+            await sql.unsafe(financialAccountsSql);
+            console.log('✅ Migração financial_accounts concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

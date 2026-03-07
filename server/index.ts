@@ -95,6 +95,54 @@ app.use((req, res, next) => {
     log(`⚠️  Migration check for farm_price_history table: ${migErr.message}`);
   }
 
+  // Inline migration: ensure the financial accounts tables exist
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_accounts_payable (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        invoice_id varchar REFERENCES farm_invoices(id),
+        expense_id varchar REFERENCES farm_expenses(id),
+        supplier text NOT NULL,
+        description text,
+        total_amount numeric(15, 2) NOT NULL,
+        paid_amount numeric(15, 2) DEFAULT 0,
+        currency text NOT NULL DEFAULT 'USD',
+        installment_number integer DEFAULT 1,
+        total_installments integer DEFAULT 1,
+        due_date timestamp NOT NULL,
+        paid_date timestamp,
+        status text NOT NULL DEFAULT 'aberto',
+        cash_transaction_id varchar REFERENCES farm_cash_transactions(id),
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_accounts_receivable (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        romaneio_id varchar REFERENCES farm_romaneios(id),
+        buyer text NOT NULL,
+        description text,
+        total_amount numeric(15, 2) NOT NULL,
+        received_amount numeric(15, 2) DEFAULT 0,
+        currency text NOT NULL DEFAULT 'USD',
+        due_date timestamp NOT NULL,
+        received_date timestamp,
+        status text NOT NULL DEFAULT 'pendente',
+        cash_transaction_id varchar REFERENCES farm_cash_transactions(id),
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS received_amount numeric(15, 2) DEFAULT 0`);
+    log("✅ Migration: financial accounts tables ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration check for financial accounts: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes
