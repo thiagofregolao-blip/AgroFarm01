@@ -1306,18 +1306,57 @@ export function registerFarmRoutes(app: Express) {
 
     app.post("/api/farm/expenses", requireFarmer, async (req, res) => {
         try {
-            const { plotId, propertyId, category, description, amount, expenseDate } = req.body;
+            const { plotId, propertyId, category, description, amount, expenseDate, paymentType, dueDate, installments, supplier } = req.body;
             if (!category || !amount) return res.status(400).json({ error: "Category and amount required" });
 
+            const farmerId = (req.user as any).id;
             const expense = await farmStorage.createExpense({
-                farmerId: (req.user as any).id,
+                farmerId,
                 plotId: plotId || null,
                 propertyId: propertyId || null,
                 category,
                 description,
                 amount: String(amount),
                 expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
+                paymentType: paymentType || "a_vista",
+                dueDate: dueDate ? new Date(dueDate) : undefined,
+                installments: installments ? parseInt(installments) : 1,
+                supplier: supplier || undefined,
             });
+
+            // AUTO: Despesa a prazo → Conta a Pagar automática
+            if (paymentType === "a_prazo") {
+                try {
+                    const { farmAccountsPayable } = await import("../shared/schema");
+                    const { db } = await import("./db");
+                    const apDueDate = dueDate ? new Date(dueDate) : new Date();
+                    if (!dueDate) apDueDate.setDate(apDueDate.getDate() + 30);
+
+                    const totalInst = installments ? parseInt(installments) : 1;
+                    const instAmount = parseFloat(String(amount)) / totalInst;
+
+                    for (let i = 0; i < totalInst; i++) {
+                        const instDue = new Date(apDueDate);
+                        instDue.setMonth(instDue.getMonth() + i);
+                        await db.insert(farmAccountsPayable).values({
+                            farmerId,
+                            expenseId: expense.id,
+                            supplier: supplier || category,
+                            description: totalInst > 1 ? `${description || category} - Parcela ${i + 1}/${totalInst}` : (description || category),
+                            totalAmount: String(instAmount.toFixed(2)),
+                            currency: "USD",
+                            installmentNumber: i + 1,
+                            totalInstallments: totalInst,
+                            dueDate: instDue,
+                            status: "aberto",
+                        });
+                    }
+                    console.log(`[EXPENSE→AP] Auto-created ${totalInst} AP entries for expense ${expense.id}`);
+                } catch (apErr) {
+                    console.error("[EXPENSE→AP_ERROR]", apErr);
+                }
+            }
+
             res.status(201).json(expense);
         } catch (error) {
             console.error("[FARM_EXPENSE_CREATE]", error);
@@ -3521,7 +3560,8 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.post("/api/farm/romaneios", requireFarmer, async (req, res) => {
         try {
-            const { farmRomaneios, farmAccountsReceivable } = await import("../shared/schema");
+            const { farmRomaneios, farmAccountsReceivable, farmGrainStock } = await import("../shared/schema");
+            const { eq, and, sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
 
@@ -3535,10 +3575,10 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 farmerId,
             }).returning();
 
-            // Auto-generate Conta a Receber if price is provided
+            // AUTO: Romaneio → Conta a Receber
             if (romaneio.totalValue && parseFloat(romaneio.totalValue) > 0) {
                 const dueDate = new Date(romaneio.deliveryDate);
-                dueDate.setDate(dueDate.getDate() + 30); // 30 days to receive
+                dueDate.setDate(dueDate.getDate() + 30);
                 await db.insert(farmAccountsReceivable).values({
                     farmerId,
                     romaneioId: romaneio.id,
@@ -3549,6 +3589,30 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     dueDate: dueDate.toISOString(),
                     status: "pendente",
                 });
+            }
+
+            // AUTO: Romaneio → Estoque de Grãos (entrada)
+            if (romaneio.crop && romaneio.finalWeight) {
+                try {
+                    const cropNorm = romaneio.crop.toLowerCase().trim();
+                    const qty = parseFloat(romaneio.finalWeight);
+                    const existing = await db.select().from(farmGrainStock).where(
+                        and(eq(farmGrainStock.farmerId, farmerId), eq(farmGrainStock.crop, cropNorm), eq(farmGrainStock.seasonId, romaneio.seasonId || ''))
+                    );
+                    if (existing.length > 0) {
+                        await db.update(farmGrainStock)
+                            .set({ quantity: sqlFn`CAST(${farmGrainStock.quantity} AS NUMERIC) + ${qty}`, updatedAt: new Date() })
+                            .where(eq(farmGrainStock.id, existing[0].id));
+                    } else {
+                        await db.insert(farmGrainStock).values({
+                            farmerId, crop: cropNorm, seasonId: romaneio.seasonId || null,
+                            quantity: String(qty),
+                        });
+                    }
+                    console.log(`[ROMANEIO→GRAIN_STOCK] +${qty}kg ${cropNorm}`);
+                } catch (gsErr) {
+                    console.error("[ROMANEIO→GRAIN_STOCK_ERROR]", gsErr);
+                }
             }
 
             res.json(romaneio);
@@ -3624,8 +3688,8 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
     // ===== CONFIRM WhatsApp Romaneio =====
     app.post("/api/farm/romaneios/:id/confirm", requireFarmer, async (req, res) => {
         try {
-            const { farmRomaneios, farmAccountsReceivable } = await import("../shared/schema");
-            const { eq, and } = await import("drizzle-orm");
+            const { farmRomaneios, farmAccountsReceivable, farmGrainStock } = await import("../shared/schema");
+            const { eq, and, sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
 
@@ -3640,7 +3704,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
             if (!romaneio) return res.status(404).json({ error: "Romaneio not found" });
 
-            // Auto-generate Conta a Receber if price is provided
+            // AUTO: Romaneio → Conta a Receber
             if (romaneio.totalValue && parseFloat(romaneio.totalValue) > 0) {
                 const dueDate = new Date(romaneio.deliveryDate);
                 dueDate.setDate(dueDate.getDate() + 30);
@@ -3654,6 +3718,30 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     dueDate: dueDate.toISOString(),
                     status: "pendente",
                 });
+            }
+
+            // AUTO: Romaneio → Estoque de Grãos (entrada)
+            if (romaneio.crop && romaneio.finalWeight) {
+                try {
+                    const cropNorm = romaneio.crop.toLowerCase().trim();
+                    const qty = parseFloat(romaneio.finalWeight);
+                    const existing = await db.select().from(farmGrainStock).where(
+                        and(eq(farmGrainStock.farmerId, farmerId), eq(farmGrainStock.crop, cropNorm), eq(farmGrainStock.seasonId, romaneio.seasonId || ''))
+                    );
+                    if (existing.length > 0) {
+                        await db.update(farmGrainStock)
+                            .set({ quantity: sqlFn`CAST(${farmGrainStock.quantity} AS NUMERIC) + ${qty}`, updatedAt: new Date() })
+                            .where(eq(farmGrainStock.id, existing[0].id));
+                    } else {
+                        await db.insert(farmGrainStock).values({
+                            farmerId, crop: cropNorm, seasonId: romaneio.seasonId || null,
+                            quantity: String(qty),
+                        });
+                    }
+                    console.log(`[ROMANEIO_CONFIRM→GRAIN_STOCK] +${qty}kg ${cropNorm}`);
+                } catch (gsErr) {
+                    console.error("[ROMANEIO_CONFIRM→GRAIN_STOCK_ERROR]", gsErr);
+                }
             }
 
             res.json({ success: true, romaneio });
@@ -4420,7 +4508,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const {
                 farmAccountsReceivable, farmAccountsPayable,
                 farmExpenses, farmApplications, farmStock,
-                farmCashTransactions
+                farmCashTransactions, farmGrainContracts
             } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
@@ -4430,6 +4518,13 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const [receivableSum] = await db.select({
                 total: sql<string>`COALESCE(SUM(CAST(${farmAccountsReceivable.receivedAmount} AS NUMERIC)), 0)`,
             }).from(farmAccountsReceivable).where(eq(farmAccountsReceivable.farmerId, farmerId));
+
+            // RECEITAS: Contratos de grãos (valor total dos concluídos/parciais)
+            const [contractRevenueSum] = await db.select({
+                total: sql<string>`COALESCE(SUM(CAST(${farmGrainContracts.totalValue} AS NUMERIC) * CAST(${farmGrainContracts.deliveredQuantity} AS NUMERIC) / NULLIF(CAST(${farmGrainContracts.totalQuantity} AS NUMERIC), 0)), 0)`,
+            }).from(farmGrainContracts).where(
+                and(eq(farmGrainContracts.farmerId, farmerId), sql`${farmGrainContracts.status} != 'cancelado'`)
+            );
 
             // CUSTOS DE PRODUÇÃO: applications × avg cost
             const [appCostSum] = await db.select({
@@ -4460,12 +4555,14 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 total: sql<string>`COALESCE(SUM(CAST(${farmAccountsPayable.paidAmount} AS NUMERIC)), 0)`,
             }).from(farmAccountsPayable).where(eq(farmAccountsPayable.farmerId, farmerId));
 
-            const receitas = parseFloat(receivableSum.total);
+            const receitasAR = parseFloat(receivableSum.total);
+            const receitasContratos = parseFloat(contractRevenueSum.total);
+            const receitas = receitasAR + receitasContratos;
             const custoProducao = parseFloat(appCostSum.total) + parseFloat(plotExpenseSum.total);
             const lucroBruto = receitas - custoProducao;
             const despesasOp = parseFloat(opExpenseSum.total);
             const resultadoOp = lucroBruto - despesasOp;
-            const resultadoLiquido = resultadoOp; // Can add financial items later
+            const resultadoLiquido = resultadoOp;
 
             res.json({
                 receitas,
@@ -4475,7 +4572,8 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 resultadoOperacional: resultadoOp,
                 resultadoLiquido,
                 detail: {
-                    receitasRecebidas: parseFloat(receivableSum.total),
+                    receitasRecebidas: receitasAR,
+                    receitasContratos,
                     custoInsumos: parseFloat(appCostSum.total),
                     despesasTalhao: parseFloat(plotExpenseSum.total),
                     despesasGerais: despesasOp,
@@ -4646,6 +4744,302 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         } catch (error) {
             console.error("[BANK_STATEMENT_MATCH]", error);
             res.status(500).json({ error: "Failed to match statement" });
+        }
+    });
+
+    // ============================================================================
+    // ESTOQUE DE GRÃOS
+    // ============================================================================
+
+    app.get("/api/farm/grain-stock", requireFarmer, async (req, res) => {
+        try {
+            const { farmGrainStock } = await import("../shared/schema");
+            const { eq, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const stock = await db.select().from(farmGrainStock)
+                .where(eq(farmGrainStock.farmerId, farmerId))
+                .orderBy(desc(farmGrainStock.updatedAt));
+            res.json(stock);
+        } catch (error) {
+            console.error("[GRAIN_STOCK_GET]", error);
+            res.status(500).json({ error: "Failed to get grain stock" });
+        }
+    });
+
+    // ============================================================================
+    // COMERCIALIZAÇÃO — CONTRATOS DE GRÃOS
+    // ============================================================================
+
+    app.get("/api/farm/grain-contracts", requireFarmer, async (req, res) => {
+        try {
+            const { farmGrainContracts } = await import("../shared/schema");
+            const { eq, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const contracts = await db.select().from(farmGrainContracts)
+                .where(eq(farmGrainContracts.farmerId, farmerId))
+                .orderBy(desc(farmGrainContracts.createdAt));
+            res.json(contracts);
+        } catch (error) {
+            console.error("[GRAIN_CONTRACTS_GET]", error);
+            res.status(500).json({ error: "Failed to get grain contracts" });
+        }
+    });
+
+    app.post("/api/farm/grain-contracts", requireFarmer, async (req, res) => {
+        try {
+            const { farmGrainContracts } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const { buyer, crop, contractNumber, contractType, totalQuantity, pricePerTon, currency, deliveryStartDate, deliveryEndDate, seasonId, notes } = req.body;
+            if (!buyer || !crop || !totalQuantity || !pricePerTon) {
+                return res.status(400).json({ error: "buyer, crop, totalQuantity, pricePerTon são obrigatórios" });
+            }
+
+            const qty = parseFloat(totalQuantity);
+            const price = parseFloat(pricePerTon);
+            const totalValue = (qty / 1000) * price; // kg → ton × price/ton
+
+            const [contract] = await db.insert(farmGrainContracts).values({
+                farmerId,
+                buyer, crop,
+                contractNumber: contractNumber || null,
+                contractType: contractType || "spot",
+                totalQuantity: String(qty),
+                pricePerTon: String(price),
+                currency: currency || "USD",
+                totalValue: String(totalValue.toFixed(2)),
+                deliveryStartDate: deliveryStartDate ? new Date(deliveryStartDate) : null,
+                deliveryEndDate: deliveryEndDate ? new Date(deliveryEndDate) : null,
+                seasonId: seasonId || null,
+                notes: notes || null,
+            }).returning();
+
+            res.json(contract);
+        } catch (error) {
+            console.error("[GRAIN_CONTRACT_CREATE]", error);
+            res.status(500).json({ error: "Failed to create grain contract" });
+        }
+    });
+
+    app.put("/api/farm/grain-contracts/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmGrainContracts } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const updateData = { ...req.body };
+            delete updateData.id;
+            delete updateData.farmerId;
+
+            // Recalculate totalValue if quantity or price changed
+            if (updateData.totalQuantity || updateData.pricePerTon) {
+                const qty = parseFloat(updateData.totalQuantity || req.body.totalQuantity);
+                const price = parseFloat(updateData.pricePerTon || req.body.pricePerTon);
+                if (qty && price) updateData.totalValue = String(((qty / 1000) * price).toFixed(2));
+            }
+
+            const [updated] = await db.update(farmGrainContracts).set(updateData).where(
+                and(eq(farmGrainContracts.id, req.params.id), eq(farmGrainContracts.farmerId, farmerId))
+            ).returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[GRAIN_CONTRACT_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update grain contract" });
+        }
+    });
+
+    app.delete("/api/farm/grain-contracts/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmGrainContracts } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            await db.delete(farmGrainContracts).where(
+                and(eq(farmGrainContracts.id, req.params.id), eq(farmGrainContracts.farmerId, farmerId))
+            );
+            res.status(204).send();
+        } catch (error) {
+            console.error("[GRAIN_CONTRACT_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete grain contract" });
+        }
+    });
+
+    // ============================================================================
+    // ENTREGAS DE GRÃOS (abate contrato + saída estoque + AR automática)
+    // ============================================================================
+
+    app.get("/api/farm/grain-deliveries", requireFarmer, async (req, res) => {
+        try {
+            const { farmGrainDeliveries } = await import("../shared/schema");
+            const { eq, desc } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const deliveries = await db.select().from(farmGrainDeliveries)
+                .where(eq(farmGrainDeliveries.farmerId, farmerId))
+                .orderBy(desc(farmGrainDeliveries.deliveryDate));
+            res.json(deliveries);
+        } catch (error) {
+            console.error("[GRAIN_DELIVERIES_GET]", error);
+            res.status(500).json({ error: "Failed to get grain deliveries" });
+        }
+    });
+
+    app.post("/api/farm/grain-deliveries", requireFarmer, async (req, res) => {
+        try {
+            const { farmGrainDeliveries, farmGrainContracts, farmGrainStock, farmAccountsReceivable } = await import("../shared/schema");
+            const { eq, and, sql: sqlFn } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const { contractId, romaneioId, quantity, deliveryDate, notes } = req.body;
+            if (!contractId || !quantity) {
+                return res.status(400).json({ error: "contractId e quantity são obrigatórios" });
+            }
+
+            // Get the contract
+            const [contract] = await db.select().from(farmGrainContracts).where(
+                and(eq(farmGrainContracts.id, contractId), eq(farmGrainContracts.farmerId, farmerId))
+            );
+            if (!contract) return res.status(404).json({ error: "Contrato não encontrado" });
+
+            const deliverQty = parseFloat(quantity);
+
+            // 1. Create delivery record
+            const [delivery] = await db.insert(farmGrainDeliveries).values({
+                farmerId,
+                contractId,
+                romaneioId: romaneioId || null,
+                quantity: String(deliverQty),
+                deliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
+                notes: notes || null,
+            }).returning();
+
+            // 2. AUTO: Update contract delivered quantity + status
+            const newDelivered = parseFloat(contract.deliveredQuantity) + deliverQty;
+            const totalQty = parseFloat(contract.totalQuantity);
+            const newStatus = newDelivered >= totalQty ? "concluido" : "parcial";
+
+            await db.update(farmGrainContracts).set({
+                deliveredQuantity: String(newDelivered),
+                status: newStatus,
+            }).where(eq(farmGrainContracts.id, contractId));
+
+            // 3. AUTO: Saída do estoque de grãos
+            try {
+                const cropNorm = contract.crop.toLowerCase().trim();
+                const existing = await db.select().from(farmGrainStock).where(
+                    and(eq(farmGrainStock.farmerId, farmerId), eq(farmGrainStock.crop, cropNorm))
+                );
+                if (existing.length > 0) {
+                    await db.update(farmGrainStock)
+                        .set({ quantity: sqlFn`GREATEST(CAST(${farmGrainStock.quantity} AS NUMERIC) - ${deliverQty}, 0)`, updatedAt: new Date() })
+                        .where(eq(farmGrainStock.id, existing[0].id));
+                }
+                console.log(`[DELIVERY→GRAIN_STOCK] -${deliverQty}kg ${cropNorm}`);
+            } catch (gsErr) {
+                console.error("[DELIVERY→GRAIN_STOCK_ERROR]", gsErr);
+            }
+
+            // 4. AUTO: Criar Conta a Receber proporcional
+            try {
+                const deliveryValue = (deliverQty / 1000) * parseFloat(contract.pricePerTon);
+                const dueDate = new Date();
+                dueDate.setDate(dueDate.getDate() + 30);
+
+                await db.insert(farmAccountsReceivable).values({
+                    farmerId,
+                    buyer: contract.buyer,
+                    description: `Entrega ${contract.crop} - Contrato #${contract.contractNumber || contract.id.slice(0, 8)} - ${(deliverQty / 1000).toFixed(2)} ton`,
+                    totalAmount: String(deliveryValue.toFixed(2)),
+                    currency: contract.currency,
+                    dueDate,
+                    status: "pendente",
+                });
+                console.log(`[DELIVERY→AR] Auto-created AR for ${deliveryValue.toFixed(2)} ${contract.currency}`);
+            } catch (arErr) {
+                console.error("[DELIVERY→AR_ERROR]", arErr);
+            }
+
+            res.json({ success: true, delivery, contractStatus: newStatus, deliveredTotal: newDelivered });
+        } catch (error) {
+            console.error("[GRAIN_DELIVERY_CREATE]", error);
+            res.status(500).json({ error: "Failed to create grain delivery" });
+        }
+    });
+
+    // ============================================================================
+    // ALERTAS FINANCEIROS (AP/AR vencimento)
+    // ============================================================================
+
+    app.get("/api/farm/financial-alerts", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable, farmAccountsReceivable } = await import("../shared/schema");
+            const { eq, and, lte, sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const now = new Date();
+            const in7days = new Date();
+            in7days.setDate(in7days.getDate() + 7);
+
+            // AP vencidas ou vencendo em 7 dias
+            const apAlerts = await db.select().from(farmAccountsPayable).where(
+                and(
+                    eq(farmAccountsPayable.farmerId, farmerId),
+                    sql`${farmAccountsPayable.status} IN ('aberto', 'parcial')`,
+                    lte(farmAccountsPayable.dueDate, in7days)
+                )
+            );
+
+            // AR vencidas ou vencendo em 7 dias
+            const arAlerts = await db.select().from(farmAccountsReceivable).where(
+                and(
+                    eq(farmAccountsReceivable.farmerId, farmerId),
+                    sql`${farmAccountsReceivable.status} IN ('pendente', 'parcial')`,
+                    lte(farmAccountsReceivable.dueDate, in7days)
+                )
+            );
+
+            const alerts = [
+                ...apAlerts.map((ap: any) => ({
+                    type: "ap" as const,
+                    id: ap.id,
+                    description: ap.description || ap.supplier,
+                    amount: ap.totalAmount,
+                    paidAmount: ap.paidAmount,
+                    dueDate: ap.dueDate,
+                    isOverdue: new Date(ap.dueDate) < now,
+                    daysUntilDue: Math.ceil((new Date(ap.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+                })),
+                ...arAlerts.map((ar: any) => ({
+                    type: "ar" as const,
+                    id: ar.id,
+                    description: ar.description || ar.buyer,
+                    amount: ar.totalAmount,
+                    receivedAmount: ar.receivedAmount,
+                    dueDate: ar.dueDate,
+                    isOverdue: new Date(ar.dueDate) < now,
+                    daysUntilDue: Math.ceil((new Date(ar.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+                })),
+            ].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+            res.json({
+                total: alerts.length,
+                overdue: alerts.filter(a => a.isOverdue).length,
+                upcoming: alerts.filter(a => !a.isOverdue).length,
+                alerts,
+            });
+        } catch (error) {
+            console.error("[FINANCIAL_ALERTS]", error);
+            res.status(500).json({ error: "Failed to get financial alerts" });
         }
     });
 

@@ -1534,3 +1534,61 @@ export const userModules = pgTable("user_modules", {
   uniqueUserModule: unique().on(table.userId, table.moduleKey),
 }));
 
+// ==================== ESTOQUE DE GRÃOS ====================
+
+export const farmGrainStock = pgTable("farm_grain_stock", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  crop: text("crop").notNull(), // soja, milho, trigo, etc.
+  seasonId: varchar("season_id").references(() => farmSeasons.id),
+  quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull().default("0"), // kg total
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  uniqueGrain: unique().on(table.farmerId, table.crop, table.seasonId),
+}));
+
+export const insertFarmGrainStockSchema = createInsertSchema(farmGrainStock).omit({ id: true, updatedAt: true });
+export type InsertFarmGrainStock = z.infer<typeof insertFarmGrainStockSchema>;
+export type FarmGrainStock = typeof farmGrainStock.$inferSelect;
+
+// ==================== COMERCIALIZAÇÃO DE GRÃOS ====================
+
+export const farmGrainContracts = pgTable("farm_grain_contracts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  seasonId: varchar("season_id").references(() => farmSeasons.id),
+  buyer: text("buyer").notNull(),
+  crop: text("crop").notNull(),
+  contractNumber: text("contract_number"),
+  contractType: text("contract_type").notNull().default("spot"), // spot, futuro, barter
+  totalQuantity: decimal("total_quantity", { precision: 15, scale: 2 }).notNull(), // kg contratados
+  deliveredQuantity: decimal("delivered_quantity", { precision: 15, scale: 2 }).notNull().default("0"), // kg entregues
+  pricePerTon: decimal("price_per_ton", { precision: 15, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("USD"),
+  totalValue: decimal("total_value", { precision: 15, scale: 2 }).notNull(), // totalQuantity/1000 * pricePerTon
+  deliveryStartDate: timestamp("delivery_start_date"),
+  deliveryEndDate: timestamp("delivery_end_date"),
+  status: text("status").notNull().default("aberto"), // aberto, parcial, concluido, cancelado
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFarmGrainContractSchema = createInsertSchema(farmGrainContracts).omit({ id: true, createdAt: true });
+export type InsertFarmGrainContract = z.infer<typeof insertFarmGrainContractSchema>;
+export type FarmGrainContract = typeof farmGrainContracts.$inferSelect;
+
+export const farmGrainDeliveries = pgTable("farm_grain_deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  contractId: varchar("contract_id").notNull().references(() => farmGrainContracts.id, { onDelete: "cascade" }),
+  romaneioId: varchar("romaneio_id").references(() => farmRomaneios.id),
+  quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull(), // kg entregues
+  deliveryDate: timestamp("delivery_date").notNull().default(sql`now()`),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFarmGrainDeliverySchema = createInsertSchema(farmGrainDeliveries).omit({ id: true, createdAt: true });
+export type InsertFarmGrainDelivery = z.infer<typeof insertFarmGrainDeliverySchema>;
+export type FarmGrainDelivery = typeof farmGrainDeliveries.$inferSelect;
+
