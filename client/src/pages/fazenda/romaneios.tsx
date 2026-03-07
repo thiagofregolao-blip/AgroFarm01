@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,6 +20,21 @@ export default function FarmRomaneios() {
     const [importedData, setImportedData] = useState<any>(null);
     const [uploading, setUploading] = useState(false);
     const { user } = useAuth();
+
+    // Auto-normalize buyer names on first load (one-time data fix)
+    useEffect(() => {
+        if (!user) return;
+        fetch("/api/farm/romaneios/normalize-buyers", { method: "POST", credentials: "include" })
+            .then(r => r.json())
+            .then(data => {
+                if (data.updatedCount > 0) {
+                    console.log(`[NORMALIZE] Fixed ${data.updatedCount} romaneio buyer names`);
+                    queryClient.invalidateQueries({ queryKey: ["/api/farm/romaneios"] });
+                    queryClient.invalidateQueries({ queryKey: ["/api/farm/romaneios/silos"] });
+                }
+            })
+            .catch(() => { });
+    }, [user]);
 
     const { data: romaneios = [], isLoading } = useQuery({
         queryKey: ["/api/farm/romaneios"],

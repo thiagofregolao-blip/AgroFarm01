@@ -3562,7 +3562,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
     app.post("/api/farm/romaneios/import", requireFarmer, upload.single("file"), async (req, res) => {
         try {
             const { farmRomaneios, globalSilos } = await import("../shared/schema");
-            const { eq } = await import("drizzle-orm");
+            const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
             const file = req.file;
@@ -3576,7 +3576,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
             console.log(`[ROMANEIO_IMPORT] Parsed: ticket=${parsed.ticketNumber}, buyer=${parsed.buyer}, crop=${parsed.crop}, gross=${parsed.grossWeight}kg`);
 
-            // Check if there's a match for globalSiloId
+            // Check if there's a match for globalSiloId + normalize buyer name
             let matchedSiloId = null;
             if (parsed.buyer) {
                 const normalizedBuyer = parsed.buyer.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -3586,8 +3586,25 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     const normSilo = s.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
                     if (normalizedBuyer.includes(normSilo) || normSilo.includes(normalizedBuyer)) {
                         matchedSiloId = s.id;
-                        console.log(`[ROMANEIO_IMPORT] Fuzzy matched buyer '${parsed.buyer}' to Silo: ${s.companyName}`);
+                        parsed.buyer = s.companyName; // Use the registered name!
+                        console.log(`[ROMANEIO_IMPORT] Fuzzy matched buyer → using registered name: ${s.companyName}`);
                         break;
+                    }
+                }
+
+                // Also match against existing confirmed romaneio buyer names
+                if (!matchedSiloId) {
+                    const existingBuyers = await db.selectDistinct({ buyer: farmRomaneios.buyer })
+                        .from(farmRomaneios)
+                        .where(and(eq(farmRomaneios.farmerId, farmerId), eq(farmRomaneios.status, "confirmed")));
+                    const normKey = (s: string) => s.toUpperCase().replace(/\b(SA|S\.?A\.?|SRL|S\.?R\.?L\.?|LTDA|CIA|CO|INC)\b/gi, '').replace(/[^A-Z0-9]/g, '').trim();
+                    const aiKey = normKey(parsed.buyer);
+                    for (const row of existingBuyers) {
+                        if (normKey(row.buyer) === aiKey) {
+                            console.log(`[ROMANEIO_IMPORT] Buyer '${parsed.buyer}' matched existing '${row.buyer}'`);
+                            parsed.buyer = row.buyer;
+                            break;
+                        }
                     }
                 }
             }
@@ -3646,6 +3663,68 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
+    // ===== DATA-FIX: Normalize existing buyer names =====
+    app.post("/api/farm/romaneios/normalize-buyers", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            // Normalization key: strip legal suffixes + punctuation
+            const normKey = (s: string) => s.toUpperCase()
+                .replace(/\b(SA|S\.?A\.?|SRL|S\.?R\.?L\.?|LTDA|CIA|CO|INC)\b/gi, '')
+                .replace(/[^A-Z0-9]/g, '')
+                .trim();
+
+            // Get all romaneios for this farmer
+            const all = await db.select({ id: farmRomaneios.id, buyer: farmRomaneios.buyer })
+                .from(farmRomaneios)
+                .where(eq(farmRomaneios.farmerId, farmerId));
+
+            // Group by normalized key, track name frequencies
+            const groups: Record<string, { names: Record<string, number>; ids: string[] }> = {};
+            for (const r of all) {
+                if (!r.buyer) continue;
+                const key = normKey(r.buyer);
+                if (!groups[key]) groups[key] = { names: {}, ids: [] };
+                groups[key].names[r.buyer] = (groups[key].names[r.buyer] || 0) + 1;
+                groups[key].ids.push(r.id);
+            }
+
+            // For each group, pick the most frequent name and update all others
+            let updatedCount = 0;
+            for (const key of Object.keys(groups)) {
+                const g = groups[key];
+                const nameEntries = Object.entries(g.names);
+                if (nameEntries.length <= 1) continue; // No duplicates
+
+                // Pick best name (most frequent)
+                let bestName = nameEntries[0][0];
+                let bestCount = nameEntries[0][1];
+                for (const [name, count] of nameEntries) {
+                    if (count > bestCount) { bestName = name; bestCount = count; }
+                }
+
+                // Update all romaneios in this group to use the best name
+                for (const id of g.ids) {
+                    const currentBuyer = all.find(r => r.id === id)?.buyer;
+                    if (currentBuyer !== bestName) {
+                        await db.update(farmRomaneios).set({ buyer: bestName }).where(eq(farmRomaneios.id, id));
+                        updatedCount++;
+                    }
+                }
+
+                console.log(`[NORMALIZE_BUYERS] Merged ${nameEntries.map(([n, c]) => `"${n}"(${c})`).join(', ')} → "${bestName}"`);
+            }
+
+            res.json({ success: true, message: `Normalized ${updatedCount} romaneios`, updatedCount });
+        } catch (error) {
+            console.error("[NORMALIZE_BUYERS]", error);
+            res.status(500).json({ error: "Failed to normalize buyer names" });
+        }
+    });
+
     app.put("/api/farm/romaneios/:id", requireFarmer, async (req, res) => {
         try {
             const { farmRomaneios } = await import("../shared/schema");
@@ -3689,7 +3768,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             }
 
             const { users, farmRomaneios, farmPlots } = await import("../shared/schema");
-            const { eq, or, sql } = await import("drizzle-orm");
+            const { eq, and, or, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
 
             // Find farmer by phone
@@ -3742,6 +3821,39 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 .where(sql`${farmPlots.propertyId} IN (
                     SELECT id FROM farm_properties WHERE farmer_id = ${farmerId}
                 )`);
+
+            // Normalize buyer name against existing confirmed romaneio buyers
+            if (parsed.buyer) {
+                // First try globalSilos match
+                const { globalSilos } = await import("../shared/schema");
+                const silos = await db.select().from(globalSilos).where(eq(globalSilos.active, true));
+                let matched = false;
+                const normalizedBuyer = parsed.buyer.toLowerCase().replace(/[^a-z0-9]/g, '');
+                for (const s of silos) {
+                    const normSilo = s.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    if (normalizedBuyer.includes(normSilo) || normSilo.includes(normalizedBuyer)) {
+                        parsed.buyer = s.companyName;
+                        matched = true;
+                        console.log(`[WEBHOOK_N8N_ROMANEIO] Buyer matched to globalSilo: ${s.companyName}`);
+                        break;
+                    }
+                }
+                // Then try matching against existing confirmed romaneio buyer names
+                if (!matched) {
+                    const existingBuyers = await db.selectDistinct({ buyer: farmRomaneios.buyer })
+                        .from(farmRomaneios)
+                        .where(and(eq(farmRomaneios.farmerId, farmerId), eq(farmRomaneios.status, "confirmed")));
+                    const normKey = (s: string) => s.toUpperCase().replace(/\b(SA|S\.?A\.?|SRL|S\.?R\.?L\.?|LTDA|CIA|CO|INC)\b/gi, '').replace(/[^A-Z0-9]/g, '').trim();
+                    const aiKey = normKey(parsed.buyer);
+                    for (const row of existingBuyers) {
+                        if (normKey(row.buyer) === aiKey) {
+                            console.log(`[WEBHOOK_N8N_ROMANEIO] Buyer '${parsed.buyer}' → matched existing '${row.buyer}'`);
+                            parsed.buyer = row.buyer;
+                            break;
+                        }
+                    }
+                }
+            }
 
             // Create pending romaneio
             const [romaneio] = await db.insert(farmRomaneios).values({
@@ -3860,8 +3972,14 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 conditions.push(eq(farmRomaneios.seasonId, req.query.seasonId as string));
             }
 
-            // Helper: normalize buyer name for grouping (case-insensitive, trimmed, collapse whitespace)
-            const normalizeBuyerKey = (name: string) => name.toUpperCase().trim().replace(/\s+/g, ' ');
+            // Helper: normalize buyer name for grouping
+            // Strips legal suffixes (SA, S.A., SRL, LTDA, etc.), removes all punctuation, uppercases
+            // So "C.Vale", "C.VALE SA", "C.VALE S.A." → "CVALE" (same key!)
+            const normalizeBuyerKey = (name: string) => name
+                .toUpperCase()
+                .replace(/\b(SA|S\.?A\.?|SRL|S\.?R\.?L\.?|LTDA|CIA|CO|INC)\b/gi, '')
+                .replace(/[^A-Z0-9]/g, '')
+                .trim();
 
             // 1. Aggregate romaneios by buyer + crop
             const romaneioAgg = await db.select({
