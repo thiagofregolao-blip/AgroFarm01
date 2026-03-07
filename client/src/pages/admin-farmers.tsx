@@ -30,7 +30,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers, Map, MapPin } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers, Map, MapPin, PowerOff, Power } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ProductsManagement } from "./admin-products";
 import { ManualsManagement } from "./admin-manuals";
@@ -619,6 +619,28 @@ function FarmersManagement() {
         }
     });
 
+    const toggleActiveMutation = useMutation({
+        mutationFn: async (id: string) => {
+            return apiRequest("PATCH", `/api/admin/farmers/${id}/toggle-active`);
+        },
+        onSuccess: (data: any) => {
+            queryClient.invalidateQueries({ queryKey: ['/api/admin/farmers'] });
+            toast({
+                title: data.isActive ? "Agricultor ativado" : "Agricultor desativado",
+                description: data.isActive
+                    ? `${data.name} voltou a ter acesso ao sistema.`
+                    : `${data.name} foi suspenso e não conseguirá logar.`,
+            });
+        },
+        onError: (error: any) => {
+            toast({
+                title: "Erro ao alterar status",
+                description: error.message,
+                variant: "destructive"
+            });
+        }
+    });
+
     const resetForm = () => {
         setName("");
         setUsername("");
@@ -706,12 +728,32 @@ function FarmersManagement() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredFarmers.map((farmer) => (
-                        <Card key={farmer.id} className="hover:shadow-lg transition-shadow border-l-4 border-l-green-500">
+                    {filteredFarmers.map((farmer) => {
+                        const isActive = farmer.isActive !== false;
+                        return (
+                        <Card key={farmer.id} className={`hover:shadow-lg transition-shadow border-l-4 ${isActive ? "border-l-green-500" : "border-l-gray-400 opacity-75"}`}>
                             <CardHeader className="pb-2">
                                 <CardTitle className="flex justify-between items-start">
-                                    <span>{farmer.name}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={isActive ? "" : "text-gray-400"}>{farmer.name}</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isActive ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"}`}>
+                                            {isActive ? "Ativo" : "Inativo"}
+                                        </span>
+                                    </div>
                                     <div className="flex gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            title={isActive ? "Desativar acesso" : "Ativar acesso"}
+                                            onClick={() => toggleActiveMutation.mutate(farmer.id)}
+                                            disabled={toggleActiveMutation.isPending}
+                                        >
+                                            {isActive
+                                                ? <PowerOff className="h-4 w-4 text-orange-500" />
+                                                : <Power className="h-4 w-4 text-green-500" />
+                                            }
+                                        </Button>
                                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(farmer)}>
                                             <Edit className="h-4 w-4 text-blue-500" />
                                         </Button>
@@ -743,7 +785,8 @@ function FarmersManagement() {
                                 </div>
                             </CardContent>
                         </Card>
-                    ))}
+                        );
+                    })}
                     {filteredFarmers.length === 0 && (
                         <div className="col-span-full text-center py-12 text-muted-foreground">
                             Nenhum agricultor encontrado.
@@ -856,7 +899,10 @@ function FarmersManagement() {
                         <DialogTitle>Confirmar Exclusão</DialogTitle>
                         <DialogDescription>
                             Tem certeza que deseja remover o agricultor <b>{deletingFarmer?.name}</b>?
-                            Esta ação removerá também o acesso do usuário e não pode ser desfeita.
+                            <br /><br />
+                            <span className="text-red-600 font-medium">Esta ação é irreversível</span> e irá apagar permanentemente todos os dados do agricultor: faturas, romaneios, talhões, silos, safras, estoque, despesas, fluxo de caixa e demais registros.
+                            <br /><br />
+                            Se quiser apenas suspender o acesso, use o botão de <b>desativar</b> no card do agricultor.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

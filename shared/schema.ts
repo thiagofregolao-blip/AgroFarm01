@@ -33,6 +33,7 @@ export const users = pgTable("users", {
   farmCity: text("farm_city"),
   bulletinEnabled: boolean("bulletin_enabled").default(false),
   language: text("language").default("pt-BR"),
+  isActive: boolean("is_active").notNull().default(true),
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {

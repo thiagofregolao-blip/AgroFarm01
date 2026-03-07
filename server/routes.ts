@@ -9038,6 +9038,26 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
+  app.patch("/api/admin/farmers/:id/toggle-active", requireFarmAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const farmer = await db.select().from(users).where(eq(users.id, id)).limit(1);
+      if (!farmer[0]) {
+        return res.status(404).json({ error: "Farmer not found" });
+      }
+      const newStatus = !farmer[0].isActive;
+      const [updated] = await db.update(users)
+        .set({ isActive: newStatus })
+        .where(eq(users.id, id))
+        .returning();
+      const { password: _, ...safe } = updated;
+      res.json(safe);
+    } catch (error) {
+      console.error("Failed to toggle farmer status:", error);
+      res.status(500).json({ error: "Failed to toggle farmer status" });
+    }
+  });
+
   app.delete("/api/admin/farmers/:id", requireFarmAdmin, async (req, res) => {
     try {
       const { id } = req.params;

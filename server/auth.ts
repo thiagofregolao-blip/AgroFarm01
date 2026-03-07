@@ -68,6 +68,8 @@ export function setupAuth(app: Express) {
         const user = await storage.getUserByUsername(username);
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
+        } else if (user.isActive === false) {
+          return done(null, false, { message: "Conta desativada" });
         } else {
           return done(null, user);
         }
