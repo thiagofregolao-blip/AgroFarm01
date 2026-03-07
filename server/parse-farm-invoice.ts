@@ -32,6 +32,7 @@ export interface ParsedInvoice {
     clientName: string;
     clientDocument: string;
     issueDate: Date | null;
+    dueDate: Date | null; // Data de vencimento da fatura
     currency: string;
     subtotal: number;
     totalAmount: number;
@@ -54,6 +55,7 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
     let clientName = '';
     let clientDocument = '';
     let issueDate: Date | null = null;
+    let dueDate: Date | null = null;
     let currency = 'USD';
     let subtotal = 0;
     let totalAmount = 0;
@@ -125,6 +127,26 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         const totalMatch = line.match(/Total\s*a\s*pagar.*?([\d.,]+)\s*$/i);
         if (totalMatch) {
             totalAmount = parseNumber(totalMatch[1]);
+        }
+
+        // Due date: "Fecha de Vencimiento:", "Vencimiento:", "Fecha Venc.:", "Plazo:"
+        if (!dueDate) {
+            const dueDateMatch = line.match(/(?:Fecha\s*(?:de\s*)?Venc(?:imiento)?|Vencimiento|Plazo\s*de\s*pago)\s*:?\s*(\d{2}[-/]\d{2}[-/]\d{4})/i);
+            if (dueDateMatch) {
+                const sep = dueDateMatch[1].includes('/') ? '/' : '-';
+                const parts = dueDateMatch[1].split(sep);
+                dueDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+            }
+        }
+
+        // Payment terms: "Condición de Pago: 30 DDL" → issueDate + 30 days
+        if (!dueDate && issueDate) {
+            const termsMatch = line.match(/(?:Condici[oó]n\s*de\s*Pago|Forma\s*de\s*Pago)\s*:?\s*(\d+)\s*(?:DDL|dias|días|d)/i);
+            if (termsMatch) {
+                const days = parseInt(termsMatch[1]);
+                dueDate = new Date(issueDate);
+                dueDate.setDate(dueDate.getDate() + days);
+            }
         }
     }
 
@@ -270,6 +292,7 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         clientName,
         clientDocument,
         issueDate,
+        dueDate,
         currency,
         subtotal: subtotal || totalAmount,
         totalAmount: totalAmount || subtotal,
@@ -427,6 +450,8 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
       "clientName": "string (nome do cliente/comprador)",
       "clientDocument": "string (CPF/CNPJ/RUC do cliente)",
       "issueDate": "YYYY-MM-DD (data de emissão)",
+      "dueDate": "YYYY-MM-DD (data de vencimento / fecha de vencimiento. Se não encontrar, retorne null)",
+      "paymentTerms": "string (condições de pagamento, ex: '30 DDL', 'A Vista', '60 dias'. Se não encontrar, retorne null)",
       "currency": "USD" ou "BRL" ou "PYG",
       "totalAmount": number (valor total da nota, numérico),
       "items": [
@@ -447,6 +472,7 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
     3. Datas no formato ISO (YYYY-MM-DD).
     4. Valores numéricos: use ponto para decimal (ex: 1500.50), sem separador de milhar.
     5. Se a imagem não for legível ou não for nota fiscal, retorne JSON com campos vazios ou nulos, mas tente extrair o máximo possível.
+    6. IMPORTANTE: Procure a data de vencimento ("Fecha de Vencimiento", "Vecto.", "Due Date") e condições de pagamento ("Condición de Pago", "30 DDL", "A Vista").
     `;
 
     try {
@@ -486,12 +512,25 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
         const parsed = JSON.parse(jsonStr);
 
         // Sanitize and validate fields
+        // Determine dueDate: from explicit field, from payment terms + issueDate, or null
+        let parsedDueDate: Date | null = null;
+        if (parsed.dueDate) {
+            parsedDueDate = new Date(parsed.dueDate);
+        } else if (parsed.paymentTerms && parsed.issueDate) {
+            const daysMatch = String(parsed.paymentTerms).match(/(\d+)\s*(?:DDL|dias|días|d)/i);
+            if (daysMatch) {
+                parsedDueDate = new Date(parsed.issueDate);
+                parsedDueDate.setDate(parsedDueDate.getDate() + parseInt(daysMatch[1]));
+            }
+        }
+
         return {
             invoiceNumber: parsed.invoiceNumber || "",
             supplier: parsed.supplier || "Fornecedor Desconhecido",
             clientName: parsed.clientName || "",
             clientDocument: parsed.clientDocument || "",
             issueDate: parsed.issueDate ? new Date(parsed.issueDate) : new Date(),
+            dueDate: parsedDueDate,
             currency: parsed.currency || "USD",
             subtotal: Number(parsed.totalAmount) || 0,
             totalAmount: Number(parsed.totalAmount) || 0,

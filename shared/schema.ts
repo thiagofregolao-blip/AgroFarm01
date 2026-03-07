@@ -1094,8 +1094,11 @@ export const farmSeasons = pgTable("farm_seasons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  crop: text("crop"), // Cultura: soja, milho, trigo, etc.
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
+  paymentStartDate: timestamp("payment_start_date"), // Início do período de pagamento da safra
+  paymentEndDate: timestamp("payment_end_date"), // Fim do período de pagamento da safra
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
@@ -1117,6 +1120,7 @@ export const farmInvoices = pgTable("farm_invoices", {
   invoiceNumber: text("invoice_number"),
   supplier: text("supplier"),
   issueDate: timestamp("issue_date"),
+  dueDate: timestamp("due_date"), // Data de vencimento da fatura
   currency: text("currency").default("USD"),
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }),
   status: text("status").notNull().default("pending"), // pending, confirmed, cancelled

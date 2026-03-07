@@ -832,8 +832,34 @@ export function registerFarmRoutes(app: Express) {
                 });
             }
 
+            // Determine dueDate: from parser, or fallback to issueDate + 30 days
+            let invoiceDueDate: Date | null = parsed.dueDate;
+            if (!invoiceDueDate && parsed.issueDate) {
+                invoiceDueDate = new Date(parsed.issueDate);
+                invoiceDueDate.setDate(invoiceDueDate.getDate() + 30);
+            }
+
+            // Auto-link to season: find which season's payment period contains the invoice due date
+            let seasonId = req.body?.seasonId || null;
+            if (!seasonId && invoiceDueDate) {
+                try {
+                    const seasons = await farmStorage.getSeasons(farmerId);
+                    const matchedSeason = seasons.find((s: any) => {
+                        if (!s.paymentStartDate || !s.paymentEndDate) return false;
+                        const start = new Date(s.paymentStartDate);
+                        const end = new Date(s.paymentEndDate);
+                        return invoiceDueDate! >= start && invoiceDueDate! <= end;
+                    });
+                    if (matchedSeason) {
+                        seasonId = matchedSeason.id;
+                        console.log(`[INVOICE→SEASON] Auto-linked invoice to season "${matchedSeason.name}" (dueDate: ${invoiceDueDate.toISOString().slice(0, 10)})`);
+                    }
+                } catch (err) {
+                    console.error("[INVOICE→SEASON] Error auto-linking:", err);
+                }
+            }
+
             // Create invoice record
-            const seasonId = req.body?.seasonId || null;
             const skipStockEntry = req.body?.skipStockEntry === "true";
             const invoice = await farmStorage.createInvoice({
                 farmerId,
@@ -841,6 +867,7 @@ export function registerFarmRoutes(app: Express) {
                 invoiceNumber: parsed.invoiceNumber,
                 supplier: parsed.supplier,
                 issueDate: parsed.issueDate,
+                dueDate: invoiceDueDate,
                 currency: parsed.currency,
                 totalAmount: String(parsed.totalAmount),
                 status: "pending",
@@ -936,8 +963,14 @@ export function registerFarmRoutes(app: Express) {
 
                 if (existing.length === 0 && invoice.totalAmount) {
                     const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
-                    const dueDate = new Date(issueDate);
-                    dueDate.setDate(dueDate.getDate() + 30); // Default: 30 days payment term
+                    // Use invoice's actual dueDate if available, otherwise fallback to issueDate + 30
+                    let dueDate: Date;
+                    if (invoice.dueDate) {
+                        dueDate = new Date(invoice.dueDate);
+                    } else {
+                        dueDate = new Date(issueDate);
+                        dueDate.setDate(dueDate.getDate() + 30);
+                    }
 
                     await db.insert(farmAccountsPayable).values({
                         farmerId,
@@ -2309,8 +2342,11 @@ export function registerFarmRoutes(app: Express) {
             const season = await farmStorage.createSeason({
                 farmerId: (req.user as any).id,
                 name: req.body.name,
+                crop: req.body.crop || null,
                 startDate: req.body.startDate ? new Date(req.body.startDate) : null,
                 endDate: req.body.endDate ? new Date(req.body.endDate) : null,
+                paymentStartDate: req.body.paymentStartDate ? new Date(req.body.paymentStartDate) : null,
+                paymentEndDate: req.body.paymentEndDate ? new Date(req.body.paymentEndDate) : null,
                 isActive: req.body.isActive ?? true,
             });
             res.json(season);
@@ -2324,8 +2360,11 @@ export function registerFarmRoutes(app: Express) {
         try {
             const data: any = {};
             if (req.body.name !== undefined) data.name = req.body.name;
+            if (req.body.crop !== undefined) data.crop = req.body.crop || null;
             if (req.body.startDate !== undefined) data.startDate = req.body.startDate ? new Date(req.body.startDate) : null;
             if (req.body.endDate !== undefined) data.endDate = req.body.endDate ? new Date(req.body.endDate) : null;
+            if (req.body.paymentStartDate !== undefined) data.paymentStartDate = req.body.paymentStartDate ? new Date(req.body.paymentStartDate) : null;
+            if (req.body.paymentEndDate !== undefined) data.paymentEndDate = req.body.paymentEndDate ? new Date(req.body.paymentEndDate) : null;
             if (req.body.isActive !== undefined) data.isActive = req.body.isActive;
             const season = await farmStorage.updateSeason(req.params.id, data);
             res.json(season);
