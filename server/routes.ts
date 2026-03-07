@@ -6,7 +6,7 @@ import { visits } from "@shared/schema.crm";
 import { z } from "zod";
 import multer from "multer";
 import { importExcelFile, importClientsFromExcel, importPlanningProducts } from "./import-excel";
-import { setupAuth, requireAuth, requireSuperAdmin, requireManager, requireFarmAdmin } from "./auth";
+import { setupAuth, requireAuth, requireSuperAdmin, requireManager, requireFarmAdmin, hashPassword } from "./auth";
 import { db } from "./db";
 import { eq, sql, and, gt, gte, desc, inArray, or, sum, count } from "drizzle-orm";
 import { parseCVALEPDF } from "./parse-cvale-pdf";
@@ -16,11 +16,7 @@ import { promisify } from "util";
 
 const scryptAsync = promisify(scrypt);
 
-async function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${buf.toString("hex")}.${salt} `;
-}
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Blueprint: javascript_auth_all_persistance - Setup auth routes
