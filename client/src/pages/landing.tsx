@@ -320,8 +320,8 @@ export default function LandingPage() {
                         },
                         {
                             icon: Target, title: "Inteligência Estratégica de Romaneios",
-                            desc: "Descubra qual silo paga melhor e proteja-se contra descontos abusivos.",
-                            items: ["Ranking de Rentabilidade (Preço vs Frete vs Descontos)", "Alerta no WhatsApp de descontos fora do padrão histórico", "Comparativo de frete por distância do talhão ao armazém", "Análise de variação de umidade e impureza por empresa", "Cruzamento automático com faturas de insumos"],
+                            desc: "Descubra qual silo entrega a melhor viabilidade e proteja-se contra descontos abusivos.",
+                            items: ["Ranking de Eficiência Real (Distância de Frete vs % de Desconto)", "Alerta no WhatsApp de quebras de peso fora do padrão histórico", "Comparativo inteligente de proximidade do seu talhão (Lat/Lng)", "Análise de variação de umidade e impureza por destinatário"],
                             color: colors.greenLight, reverse: true, image: "/feature-inteligencia.png",
                         },
                         {

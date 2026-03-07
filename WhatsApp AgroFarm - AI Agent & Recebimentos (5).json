@@ -1,0 +1,782 @@
+{
+  "name": "WhatsApp AgroFarm - AI Agent & Recebimentos",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.body?.audio?.audioUrl }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "8018cdc7-11a8-4ad3-96e8-74c1ecad0a3a",
+      "name": "É Áudio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        944,
+        4464
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/transcribe-audio",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"audioUrl\": \"{{ $('Webhook Z-API').first().json.body.audio.audioUrl }}\" }",
+        "options": {}
+      },
+      "id": "dcb24846-c8e5-42a0-b31b-85e4144e5ff7",
+      "name": "Transcrever Áudio (Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1136,
+        4304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta o payload como se fosse uma mensagem de texto normal\n// para o AI Agent processar a transcrição do áudio\nconst webhookData = $('Webhook Z-API').first().json;\nconst transcription = $input.first().json.transcription || 'Não consegui entender o áudio';\n\nreturn [{\n  json: {\n    body: {\n      phone: webhookData.body.phone,\n      text: { message: transcription },\n      message: transcription,\n      isAudioTranscription: true\n    }\n  }\n}];"
+      },
+      "id": "e4659df1-2cd5-4226-9ea6-af9c0aa90d6f",
+      "name": "Montar Texto do Áudio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        4304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.body?.image?.imageUrl || !!$json.body?.document?.documentUrl }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "e1ab7a28-119d-4540-9517-44b486ef38fe",
+      "name": "É Imagem?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        4480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/receipt",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"whatsapp_number\": \"{{ $json.body.phone }}\", \"imageUrl\": \"{{ $json.body.image?.imageUrl || $json.body.document?.documentUrl }}\", \"caption\": \"{{ $json.body.image?.caption || $json.body.document?.caption || $json.body.text?.message || $json.body.message || '' }}\" }",
+        "options": {}
+      },
+      "id": "63a827ab-dbd1-4300-ae17-7e5197c6cdf4",
+      "name": "Processar Recibo Inteligente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1360,
+        4480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.z-api.io/instances/3EE9E067CA2DB1B055091AD735EF201A/token/9938EA066A5F1A693D48545A/send-text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client-token",
+              "value": "F0c71a32439a246c9adf3d7b6cce6dc21S"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{ $node[\"Webhook Z-API\"].json.body.phone }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "be04dfec-5367-4f99-94db-f82224cd5750",
+      "name": "Responder (Sucesso Imagem)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1536,
+        4480
+      ]
+    },
+    {
+      "parameters": {
+        "text": "=Mensagem: {{ $('Webhook Z-API').first().json.body.text.message || $('Webhook Z-API').first().json.body.message }} | Celular Autorizado: {{ $('Webhook Z-API').first().json.body.phone }}\n",
+        "options": {
+          "systemMessage": "=Você é o *AgroZap* 🌾🤖, assistente virtual da AgroFarm Digital. Você é simpático, próximo e entende o dia a dia do agricultor. Fale como um parceiro de confiança — nunca robótico.\n\n## PERSONALIDADE\n- Seja caloroso e amigável, como alguém que trabalha junto no campo\n- Use linguagem natural do agro (safra, talhão, lavoura, aplicação, defensivo)\n- Use emojis com moderação: 🌾🚜💰📦🌿✅ (máximo 2-3 por mensagem)\n- Responda de forma CURTA (máximo 3-4 linhas), exceto quando listar dados\n- Trate o agricultor pelo nome se possível\n- Se não souber algo, diga \"não encontrei\" de forma gentil e sugira o que ele pode fazer\n\n## TOM DE VOZ\n- ❌ \"Não encontrei resultados para sua consulta\" → ❌ Robótico\n- ✅ \"Hmm, não achei esse produto no seu histórico 🤔 Tenta me dizer o nome completo?\" → ✅ Humano\n- ❌ \"Aqui estão os dados solicitados:\" → ❌ Formal demais\n- ✅ \"Achei! Olha só os preços que você pagou:\" → ✅ Natural\n\n## FORMATO DAS RESPOSTAS\n- Para LISTAS de produtos/preços/estoque: use formato de lista com quebras de linha\n  📦 *Produto:* nome\n  💰 *Preço:* R$ X,XX\n  📅 *Data:* DD/MM/YYYY\n  🏪 *Fornecedor:* nome\n- Para respostas SIMPLES: texto corrido natural\n- Use *negrito* para destaque (padrão WhatsApp)\n- NUNCA use markdown com # ou ```\n\n## INTELIGÊNCIA CONVERSACIONAL\n- Se o agricultor fizer uma saudação (oi, olá, bom dia), cumprimente de volta e pergunte como pode ajudar\n- Se perguntar algo vago como \"preço\", pergunte: \"De qual produto você quer saber o preço? 🌾\"\n- Se o dado retornado estiver vazio, sugira alternativas: \"Não encontrei esse produto. Quer que eu busque por outro nome?\"\n- SEMPRE interprete os dados retornados pelas ferramentas e responda de forma resumida e útil\n- Se houver vários resultados, destaque o mais recente como referência principal\n- Compare preços quando houver histórico: \"O Flumitop custou R$ 94,00 em setembro. Quer que eu veja se tem mais recente?\"\n\n## FERRAMENTAS DISPONÍVEIS\nVocê tem 5 ferramentas. Use a mais adequada para cada pergunta:\n1. *ConsultarEstoque* → \"quanto tenho de...\", \"tem X no estoque?\"\n2. *ConsultarAplicacoes* → \"últimas aplicações\", \"o que foi aplicado?\"\n3. *ConsultarPrecoProduto* → \"preço do glifosato\", \"quanto paguei por...\", \"histórico de compra\"\n4. *Tool_ConsultarFaturas* → \"faturas\", \"despesas\", \"notas fiscais\"\n5. *ConsultarManuaisAgronomicos* → \"como aplicar X?\", \"bula do produto\", \"dose recomendada\"\n\n## REGRAS TÉCNICAS\n- WhatsApp do agricultor: {{$json.body.phone}}\n- Passe sempre como STRING ao chamar tools\n- Para preços, envie o nome do produto no parâmetro 'search'\n- Se os dados retornados pela tool estiverem vazios, NÃO invente dados"
+        }
+      },
+      "id": "a8c2ff3d-7f72-4110-859b-a8297384f9d1",
+      "name": "AgroFarm AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        4352
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.5
+        }
+      },
+      "id": "0d9094ac-511d-4939-bae2-fd5078961b3e",
+      "name": "Google Gemini Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1536,
+        4736
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "kZk7EVTfZ0vJ6Gfu",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.z-api.io/instances/3EE9E067CA2DB1B055091AD735EF201A/token/9938EA066A5F1A693D48545A/send-text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client-token",
+              "value": "F0c71a32439a246c9adf3d7b6cce6dc21S"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.output }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2f68e3e6-5b1f-40cc-a7bf-ee59765990f5",
+      "name": "Responder (IA Agent Text)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2032,
+        4352
+      ]
+    },
+    {
+      "parameters": {
+        "sessionKey": "={{ $('Webhook Z-API').first().json.body.phone }}"
+      },
+      "id": "cc2df628-b3fe-4014-b1ea-2ef6e6bf2f9a",
+      "name": "Memória (Window Buffer)",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        4736
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta para consultar despesas e faturas recentes do agricultor. Retorna fornecedor, valor total, data e status de cada fatura.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/invoices",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "d7402b13-d56a-4958-8f4e-230858e49c1d",
+      "name": "Tool_ConsultarFaturas",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        2352,
+        4608
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta para verificar a quantidade de produtos disponíveis no estoque do usuário (fazenda) no momento.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/stock",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "b1e941e6-b105-44d5-99b1-c1a32062c4d2",
+      "name": "ConsultarEstoque",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        4784
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta para consultar as aplicações de produtos realizadas no campo pelo agricultor.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/applications",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "18ed85af-8c78-4869-bb5a-e93bcc9d440c",
+      "name": "ConsultarAplicacoes",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        4768
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta para consultar manuais e bulas agronômicas dos produtos. Envie o nome do produto a ser pesquisado.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/manuals",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            },
+            {
+              "name": "search",
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI('search', 'Nome do produto para buscar o manual/bula', 'string') }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "006e38ef-d55c-4e1f-ad88-5db17b2ce721",
+      "name": "ConsultarManuaisAgronomicos",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        2208,
+        4784
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta para consultar o PREÇO de um produto específico comprado pelo agricultor. Envie o nome do produto no parâmetro 'search'. Retorna data da compra, fornecedor, produto, quantidade e preço unitário.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/prices",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            },
+            {
+              "name": "search",
+              "valueProvider": "fieldValue",
+              "value": "={{ $fromAI('search', 'Nome do produto a buscar. Ex: glifosato, flumitop, semente', 'string') }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "2703ab14-30f4-4751-a5a4-c2ecce0eb09f",
+      "name": "ConsultarPrecoProduto",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        4608
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta quando o agricultor perguntar sobre o TEMPO, CLIMA ou PREVISÃO. Retorna temperatura máxima/mínima, condição do tempo e previsão para os próximos dias.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/weather",
+        "sendQuery": true,
+        "parametersQuery": {
+          "values": [
+            {
+              "name": "whatsapp_number",
+              "valueProvider": "fieldValue",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "45f5edb8-d56c-4e16-a92f-ef3a11d64e25",
+      "name": "ConsultarClima",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        2032,
+        4608
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Usa esta ferramenta quando o agricultor perguntar sobre COTAÇÃO, PREÇO DA SOJA, CÂMBIO ou DÓLAR. Retorna cotação da soja na CBOT em bushel e câmbio USD/BRL e USD/PYG.",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/commodity",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": [
+            {
+              "name": "User-Agent",
+              "valueProvider": "fieldValue",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        }
+      },
+      "id": "b3370d4f-0c1b-4185-92d7-91f1a47f0401",
+      "name": "ConsultarCotacao",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        2192,
+        4608
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-recebido",
+        "options": {}
+      },
+      "id": "dd6df755-5123-471e-8749-70e40eaf92b8",
+      "name": "Webhook Z-API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        736,
+        4464
+      ],
+      "webhookId": "c9cb34e7-772f-4587-9910-bb4c4b57570b"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://agrofarm01-production.up.railway.app/api/farm/webhook/n8n/check-pending-equipment",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"whatsapp_number\": \"{{ $('Webhook Z-API').first().json.body.phone }}\", \"message\": \"{{ $json.body?.text?.message || $json.body?.message || '' }}\" }",
+        "options": {}
+      },
+      "id": "bf4e97a6-d8f0-48cf-a592-45dcfe6d9456",
+      "name": "Verificar Despesa Pendente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        864,
+        4800
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.handled }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "08acd4ba-9018-4e04-8d52-68cadc6a44c4",
+      "name": "Despesa Vinculada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        4800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.z-api.io/instances/3EE9E067CA2DB1B055091AD735EF201A/token/9938EA066A5F1A693D48545A/send-text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client-token",
+              "value": "F0c71a32439a246c9adf3d7b6cce6dc21S"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "phone",
+              "value": "={{ $('Webhook Z-API').first().json.body.phone }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.reply }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a637ba64-b12c-4f36-8763-575127907f3b",
+      "name": "Responder (Vínculo Frota)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1296,
+        4800
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "É Áudio?": {
+      "main": [
+        [
+          {
+            "node": "Transcrever Áudio (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "É Imagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcrever Áudio (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Montar Texto do Áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Imagem?": {
+      "main": [
+        [
+          {
+            "node": "Processar Recibo Inteligente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verificar Despesa Pendente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Despesa Pendente": {
+      "main": [
+        [
+          {
+            "node": "Despesa Vinculada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Despesa Vinculada?": {
+      "main": [
+        [
+          {
+            "node": "Responder (Vínculo Frota)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Recibo Inteligente": {
+      "main": [
+        [
+          {
+            "node": "Responder (Sucesso Imagem)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Texto do Áudio": {
+      "main": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AgroFarm AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Responder (IA Agent Text)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memória (Window Buffer)": {
+      "ai_memory": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool_ConsultarFaturas": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarEstoque": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarAplicacoes": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarManuaisAgronomicos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarPrecoProduto": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarClima": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarCotacao": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgroFarm AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Z-API": {
+      "main": [
+        [
+          {
+            "node": "É Áudio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6720743a-8a6d-47a8-9e01-5fe6df6896a9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a939899d1215f1aae302cbc8a068b07f3522ec7c828451b54c395d8f2a932836"
+  },
+  "id": "xQ3HPqxlxhOf5k0J",
+  "tags": []
+}

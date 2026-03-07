@@ -10,7 +10,8 @@ import {
   Calendar,
   DollarSign,
   Shield,
-  Upload
+  Upload,
+  MapPin
 } from "lucide-react";
 
 interface AdminNavbarProps {
@@ -32,6 +33,7 @@ const menuItems = [
   { id: "barter", icon: Repeat, label: "Barter" },
   { id: "timac", icon: Target, label: "Timac" },
   { id: "planning-import", icon: Upload, label: "Importar Planejamento" },
+  { id: "global-silos", icon: MapPin, label: "Silos Globais" },
   { id: "system", icon: Shield, label: "Sistema" },
 ];
 

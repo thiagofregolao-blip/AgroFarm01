@@ -20,6 +20,7 @@ import type { Category, User, Subcategory, Product, MasterClient, Region, Barter
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format } from "date-fns";
 import { Progress } from "@/components/ui/progress";
+import { GlobalSilosManagement } from "@/components/admin/global-silos-management";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("users");
@@ -27,7 +28,7 @@ export default function AdminPage() {
   // Read hash from URL to determine active tab
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['dashboard', 'users', 'master-clients', 'seasons', 'categories', 'subcategories', 'products', 'price-table', 'commissions', 'parameters', 'barter', 'timac', 'system'].includes(hash)) {
+    if (hash && ['dashboard', 'users', 'master-clients', 'seasons', 'categories', 'subcategories', 'products', 'price-table', 'commissions', 'parameters', 'barter', 'timac', 'planning-import', 'global-silos', 'system'].includes(hash)) {
       setActiveTab(hash);
     } else {
       setActiveTab('dashboard');
@@ -35,7 +36,7 @@ export default function AdminPage() {
 
     const handleHashChange = () => {
       const newHash = window.location.hash.replace('#', '');
-      if (newHash && ['dashboard', 'users', 'master-clients', 'seasons', 'categories', 'subcategories', 'products', 'price-table', 'commissions', 'parameters', 'barter', 'timac', 'system'].includes(newHash)) {
+      if (newHash && ['dashboard', 'users', 'master-clients', 'seasons', 'categories', 'subcategories', 'products', 'price-table', 'commissions', 'parameters', 'barter', 'timac', 'planning-import', 'global-silos', 'system'].includes(newHash)) {
         setActiveTab(newHash);
       } else {
         setActiveTab('dashboard');
@@ -78,6 +79,7 @@ export default function AdminPage() {
         {activeTab === 'barter' && <BarterManagement />}
         {activeTab === 'timac' && <TimacManagement />}
         {activeTab === 'planning-import' && <PlanningImportManagement />}
+        {activeTab === 'global-silos' && <GlobalSilosManagement />}
         {activeTab === 'system' && <SystemManagement />}
       </main>
     </div>

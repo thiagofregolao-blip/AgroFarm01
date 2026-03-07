@@ -2530,14 +2530,14 @@ export function registerFarmRoutes(app: Express) {
             // ===== UNKNOWN IMAGE: Awaiting user classification =====
             if (ctx.step === "awaiting_image_type") {
                 const choice = parseInt(search);
-                
+
                 if (choice === 1) {
                     // Fatura de insumos — re-process as invoice
                     await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
                     const { farmExpenses } = await import("../shared/schema");
                     const amt = data.amount ? parseFloat(data.amount) : 0;
                     const desc = data.caption || "Fatura via WhatsApp (classificação manual)";
-                    
+
                     // Create as a generic pending invoice for review
                     const { farmInvoices } = await import("../shared/schema");
                     await db.insert(farmInvoices).values({
@@ -2550,12 +2550,12 @@ export function registerFarmRoutes(app: Express) {
                     });
                     return res.json({ handled: true, reply: `✅ Registrado como *fatura de insumos*! Revise os detalhes no painel da AgroFarm. 🌾` });
                 }
-                
+
                 if (choice === 2) {
                     // Despesa — create expense
                     await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
                     const desc = data.caption || "Despesa via WhatsApp (classificação manual)";
-                    
+
                     await db.insert(farmExpenses).values({
                         farmerId: farmer.id,
                         amount: String(data.amount || 0),
@@ -2566,18 +2566,18 @@ export function registerFarmRoutes(app: Express) {
                     });
                     return res.json({ handled: true, reply: `✅ Registrado como *despesa*! Revise os detalhes no painel da AgroFarm. 🌾` });
                 }
-                
+
                 if (choice === 3) {
                     // Romaneio — tell user to send via romaneio flow
                     await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
                     return res.json({ handled: true, reply: `📦 Para romaneios, envie a foto novamente e eu vou tentar extrair os dados de pesagem automaticamente! 🌾` });
                 }
-                
+
                 if (choice === 4) {
                     // Outro recibo — create generic expense
                     await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
                     const desc = data.caption || "Recibo via WhatsApp";
-                    
+
                     await db.insert(farmExpenses).values({
                         farmerId: farmer.id,
                         amount: String(data.amount || 0),
@@ -3826,6 +3826,9 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 conditions.push(eq(farmRomaneios.seasonId, req.query.seasonId as string));
             }
 
+            // Helper: normalize buyer name for grouping (case-insensitive, trimmed, collapse whitespace)
+            const normalizeBuyerKey = (name: string) => name.toUpperCase().trim().replace(/\s+/g, ' ');
+
             // 1. Aggregate romaneios by buyer + crop
             const romaneioAgg = await db.select({
                 buyer: farmRomaneios.buyer,
@@ -3840,7 +3843,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 .groupBy(farmRomaneios.buyer, farmRomaneios.crop);
 
             // 2. Get total harvest across all buyers
-            const totalHarvest = romaneioAgg.reduce((s, r) => s + parseFloat(r.totalWeight || "0"), 0);
+            const totalHarvest = romaneioAgg.reduce((s: number, r: any) => s + parseFloat(r.totalWeight || "0"), 0);
 
             // 3. Aggregate invoices by supplier (for input spend cross-reference)
             const invoiceConditions: any[] = [eq(farmInvoices.farmerId, farmerId)];
@@ -3857,14 +3860,16 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 .where(and(...invoiceConditions))
                 .groupBy(farmInvoices.supplier);
 
-            // 4. Build silos: group by buyer, with crop breakdown + invoice match
+            // 4. Build silos: group by NORMALIZED buyer name (case-insensitive merge)
             const buyerMap: Record<string, any> = {};
+            // Track original name frequencies to pick the best display name
+            const buyerNameFreq: Record<string, Record<string, number>> = {};
 
             for (const row of romaneioAgg) {
-                const buyer = row.buyer;
-                if (!buyerMap[buyer]) {
-                    buyerMap[buyer] = {
-                        buyer,
+                const key = normalizeBuyerKey(row.buyer);
+                if (!buyerMap[key]) {
+                    buyerMap[key] = {
+                        buyer: row.buyer, // will be replaced by most-frequent original name later
                         crops: [],
                         totalWeight: 0,
                         totalGrossWeight: 0,
@@ -3874,23 +3879,51 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                         invoiceCount: 0,
                         percentOfHarvest: 0,
                     };
+                    buyerNameFreq[key] = {};
                 }
+
+                // Track which original buyer name spelling appears most
+                const count = parseInt(row.deliveryCount || "0");
+                buyerNameFreq[key][row.buyer] = (buyerNameFreq[key][row.buyer] || 0) + count;
+
                 const weight = parseFloat(row.totalWeight || "0");
                 const gross = parseFloat(row.grossWeight || "0");
                 const value = parseFloat(row.totalValue || "0");
-                const count = parseInt(row.deliveryCount || "0");
 
-                buyerMap[buyer].crops.push({
-                    crop: row.crop,
-                    weight,
-                    grossWeight: gross,
-                    value,
-                    deliveryCount: count,
-                });
-                buyerMap[buyer].totalWeight += weight;
-                buyerMap[buyer].totalGrossWeight += gross;
-                buyerMap[buyer].totalValue += value;
-                buyerMap[buyer].deliveryCount += count;
+                // Merge crops: check if same crop already exists in this normalized buyer
+                const existingCrop = buyerMap[key].crops.find((c: any) => c.crop?.toUpperCase() === row.crop?.toUpperCase());
+                if (existingCrop) {
+                    existingCrop.weight += weight;
+                    existingCrop.grossWeight += gross;
+                    existingCrop.value += value;
+                    existingCrop.deliveryCount += count;
+                } else {
+                    buyerMap[key].crops.push({
+                        crop: row.crop,
+                        weight,
+                        grossWeight: gross,
+                        value,
+                        deliveryCount: count,
+                    });
+                }
+                buyerMap[key].totalWeight += weight;
+                buyerMap[key].totalGrossWeight += gross;
+                buyerMap[key].totalValue += value;
+                buyerMap[key].deliveryCount += count;
+            }
+
+            // Pick best display name for each normalized buyer (most frequent original spelling)
+            for (const key of Object.keys(buyerMap)) {
+                const freqs = buyerNameFreq[key];
+                let bestName = buyerMap[key].buyer;
+                let bestCount = 0;
+                for (const [name, freq] of Object.entries(freqs)) {
+                    if (freq > bestCount) {
+                        bestCount = freq;
+                        bestName = name;
+                    }
+                }
+                buyerMap[key].buyer = bestName;
             }
 
             // 5. Match invoices to buyers (fuzzy match on supplier name)
