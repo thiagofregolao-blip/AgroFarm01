@@ -349,11 +349,12 @@ export default function FarmRomaneios() {
 function SiloViabilityDashboard({ data, isLoading }: { data: any, isLoading: boolean }) {
     if (isLoading) return null;
 
-    // Calculate score for each silo. 
+    // Calculate score for each silo.
     // Score mechanism: Starts at 100.
-    // Penalty for distance: -1 pt per 10km.
-    // Penalty for moisture discount: -2 pts per kg.
-    // Penalty for impurity discount: -5 pts per kg.
+    // Penalty for distance:  -1 pt per 10 km  (100km → -10pts)
+    // Penalty for discounts: total discount kg / 20
+    //   ex: 100kg → -5pts (ótimo), 500kg → -25pts (médio), 1000kg → -50pts (ruim), 1500kg → -75pts (péssimo)
+    // Silos sem histórico mantêm score alto (incerteza, não penalidade).
     const scoredSilos = data.silos.map((silo: any) => {
         let score = 100;
 
@@ -361,12 +362,9 @@ function SiloViabilityDashboard({ data, isLoading }: { data: any, isLoading: boo
             score -= (silo.distanceKm / 10);
         }
 
-        if (silo.historicalAvgMoistureDiscountKg) {
-            score -= (silo.historicalAvgMoistureDiscountKg * 2);
-        }
-
-        if (silo.historicalAvgImpurityDiscountKg) {
-            score -= (silo.historicalAvgImpurityDiscountKg * 5);
+        const totalDiscountKg = (silo.historicalAvgMoistureDiscountKg || 0) + (silo.historicalAvgImpurityDiscountKg || 0);
+        if (totalDiscountKg > 0) {
+            score -= (totalDiscountKg / 20);
         }
 
         return {
