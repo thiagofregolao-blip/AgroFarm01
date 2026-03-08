@@ -164,7 +164,32 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE company_stock ADD COLUMN IF NOT EXISTS reserved_quantity decimal(15,4) NOT NULL DEFAULT 0`);
     log("✅ Migration: company_stock.reserved_quantity column ensured");
   } catch (migErr: any) {
-    log(`⚠️  Migration check for company_products: ${migErr.message}`);
+    log(`⚠️  Migration check for company_stock.reserved_quantity: ${migErr.message}`);
+  }
+
+  // Inline migration: deduplicate company_clients and add unique index on (company_id, lower(name))
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+    // Remove duplicate clients (keep oldest), but only if not referenced by orders/invoices/pagares
+    await db.execute(sql`
+      DELETE FROM company_clients a
+      USING company_clients b
+      WHERE a.created_at > b.created_at
+        AND a.company_id = b.company_id
+        AND lower(a.name) = lower(b.name)
+        AND NOT EXISTS (SELECT 1 FROM sales_orders WHERE client_id = a.id)
+        AND NOT EXISTS (SELECT 1 FROM sales_invoices WHERE client_id = a.id)
+        AND NOT EXISTS (SELECT 1 FROM company_pagares WHERE client_id = a.id)
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_company_clients_unique_name
+      ON company_clients (company_id, lower(name))
+    `);
+    log("✅ Migration: company_clients deduplicated and unique name index ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration check for company_clients unique index: ${migErr.message}`);
   }
 
   const server = await registerRoutes(app);

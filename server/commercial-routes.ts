@@ -364,6 +364,11 @@ export function registerCommercialRoutes(app: Express) {
             const { name, ruc, cedula, clientType, address, city, department, phone, email, creditLimit, notes } = req.body;
             if (!name) return res.status(400).json({ error: "Nome é obrigatório" });
 
+            // Check for duplicate by name (case-insensitive)
+            const [existing] = await db.select({ id: companyClients.id }).from(companyClients)
+                .where(and(eq(companyClients.companyId, companyId), sql`lower(${companyClients.name}) = lower(${name})`));
+            if (existing) return res.status(409).json({ error: "Já existe um cliente com este nome" });
+
             const [client] = await db.insert(companyClients).values({
                 companyId,
                 name,
@@ -517,8 +522,15 @@ ${csvText}`;
             let created = 0;
             let skipped = 0;
 
+            // Load existing client names (lowercased) for this company to prevent duplicates
+            const existingClients = await db.select({ name: companyClients.name })
+                .from(companyClients).where(eq(companyClients.companyId, companyId));
+            const existingNames = new Set(existingClients.map((c: any) => c.name.toLowerCase()));
+
             for (const c of clientes) {
                 if (!c.nome) { skipped++; continue; }
+                const normalizedName = String(c.nome).trim().toLowerCase();
+                if (existingNames.has(normalizedName)) { skipped++; continue; }
                 try {
                     await db.insert(companyClients).values({
                         companyId,
@@ -536,6 +548,7 @@ ${csvText}`;
                         assignedConsultantId,
                         importBatch,
                     } as any);
+                    existingNames.add(normalizedName);
                     created++;
                 } catch {
                     skipped++;
