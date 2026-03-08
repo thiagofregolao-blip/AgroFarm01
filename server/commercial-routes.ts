@@ -426,11 +426,12 @@ export function registerCommercialRoutes(app: Express) {
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            const { code, name, unit, category } = req.body;
+            const { code, name, unit, category, activeIngredient, dose, description } = req.body;
             if (!name) return res.status(400).json({ error: "Nome é obrigatório" });
 
             const [product] = await db.insert(companyProducts).values({
                 companyId, code: code || null, name, unit: unit || "UNI", category: category || null,
+                activeIngredient: activeIngredient || null, dose: dose || null, description: description || null,
             }).returning();
             res.json(product);
         } catch (e) {
@@ -445,15 +446,90 @@ export function registerCommercialRoutes(app: Express) {
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            const { code, name, unit, category, isActive } = req.body;
+            const { code, name, unit, category, isActive, activeIngredient, dose, description } = req.body;
             const [product] = await db.update(companyProducts)
-                .set({ code, name, unit, category, isActive } as any)
+                .set({ code, name, unit, category, isActive, activeIngredient, dose, description } as any)
                 .where(and(eq(companyProducts.id, req.params.id), eq(companyProducts.companyId, companyId)))
                 .returning();
             if (!product) return res.status(404).json({ error: "Produto não encontrado" });
             res.json(product);
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    // AI import from image/PDF
+    app.post("/api/company/products/import-from-file", upload.single("file"), async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
+
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY não configurada" });
+
+            const base64Data = req.file.buffer.toString("base64");
+            const mimeType = req.file.mimetype;
+
+            const prompt = `Você é um especialista em catálogos de produtos agrícolas. Analise a imagem/PDF e extraia TODOS os produtos que encontrar.
+
+Para cada produto extraia:
+- nome: nome comercial do produto
+- principioAtivo: princípio ativo ou composição química (se houver)
+- dose: dosagem recomendada (ex: "1,5 L/ha", "200 ml/100L")
+- descricao: breve descrição do produto ou modo de uso
+- categoria: classifique como exatamente um dos valores: "inseticida", "fungicida", "herbicida", "ts", "curasementes", "fertilizante", "adjuvante", "outro"
+- unidade: unidade de medida principal ("LT", "KG", "SC", "UNI")
+
+Retorne APENAS um JSON válido, sem texto extra:
+{
+  "produtos": [
+    {
+      "nome": "Nome do Produto",
+      "principioAtivo": "Glyphosate 480 g/L",
+      "dose": "2-4 L/ha",
+      "descricao": "Herbicida sistêmico de amplo espectro",
+      "categoria": "herbicida",
+      "unidade": "LT"
+    }
+  ]
+}
+
+Se não encontrar produtos, retorne: {"produtos": []}`;
+
+            const body = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inline_data: { mime_type: mimeType, data: base64Data } },
+                    ],
+                }],
+                generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+            };
+
+            const geminiRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+            );
+            if (!geminiRes.ok) {
+                const errText = await geminiRes.text();
+                console.error("[AI Products] Gemini error:", errText);
+                return res.status(500).json({ error: "Erro ao chamar Gemini AI" });
+            }
+
+            const geminiData = await geminiRes.json() as any;
+            const text: string = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+            // Extract JSON from response
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) return res.status(422).json({ error: "IA não retornou JSON válido", raw: text });
+
+            const parsed = JSON.parse(jsonMatch[0]);
+            const produtos = parsed.produtos ?? [];
+
+            res.json({ produtos });
+        } catch (e: any) {
+            console.error("[AI Products] Error:", e);
+            res.status(500).json({ error: e.message || "Erro interno" });
         }
     });
 

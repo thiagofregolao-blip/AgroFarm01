@@ -143,6 +143,19 @@ app.use((req, res, next) => {
     log(`⚠️  Migration check for financial accounts: ${migErr.message}`);
   }
 
+  // Inline migration: add new fields to company_products
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+    await db.execute(sql`ALTER TABLE company_products ADD COLUMN IF NOT EXISTS active_ingredient text`);
+    await db.execute(sql`ALTER TABLE company_products ADD COLUMN IF NOT EXISTS dose text`);
+    await db.execute(sql`ALTER TABLE company_products ADD COLUMN IF NOT EXISTS description text`);
+    log("✅ Migration: company_products fields ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration check for company_products: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes

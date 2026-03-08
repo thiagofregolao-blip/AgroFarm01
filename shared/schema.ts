@@ -1653,6 +1653,9 @@ export const companyProducts = pgTable("company_products", {
   name: text("name").notNull(),
   unit: text("unit").notNull().default("UNI"),
   category: text("category"),
+  activeIngredient: text("active_ingredient"),
+  dose: text("dose"),
+  description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });

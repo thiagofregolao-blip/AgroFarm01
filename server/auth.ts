@@ -65,7 +65,8 @@ export function setupAuth(app: Express) {
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
-        const user = await storage.getUserByUsername(username);
+        const cleanUsername = username.trim();
+        const user = await storage.getUserByUsername(cleanUsername);
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
         } else if (user.isActive === false) {
