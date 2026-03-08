@@ -823,6 +823,67 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
         }
     });
 
+    /** Import stock from Excel: columns Deposito, Produto/Codigo, Quantidade */
+    app.post("/api/company/stock/import-excel", upload.single("file"), async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+            if (!req.file) return res.status(400).json({ error: "Envie um arquivo Excel (.xlsx)" });
+
+            const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+            if (rows.length === 0) return res.status(400).json({ error: "Planilha vazia ou sem dados" });
+
+            const warehouses = await db.select().from(companyWarehouses)
+                .where(eq(companyWarehouses.companyId, companyId));
+            const products = await db.select().from(companyProducts)
+                .where(and(eq(companyProducts.companyId, companyId), eq(companyProducts.isActive, true)));
+
+            let imported = 0;
+            let skipped = 0;
+            const errors: string[] = [];
+
+            for (const row of rows) {
+                const whName = String(row["Deposito"] || row["Depósito"] || row["deposito"] || row["Deposito"] || "").trim();
+                const prodName = String(row["Produto"] || row["produto"] || row["Product"] || "").trim();
+                const prodCode = String(row["Codigo"] || row["Código"] || row["codigo"] || "").trim();
+                const qty = parseFloat(String(row["Quantidade"] || row["quantidade"] || row["Qty"] || "0").replace(",", "."));
+
+                if (!whName || (!prodName && !prodCode) || isNaN(qty)) { skipped++; continue; }
+
+                const wh = warehouses.find(w => w.name.toLowerCase() === whName.toLowerCase());
+                if (!wh) { errors.push(`Depósito "${whName}" não encontrado`); skipped++; continue; }
+
+                const prod = products.find(p =>
+                    (prodCode && (p.code ?? "").toLowerCase() === prodCode.toLowerCase()) ||
+                    p.name.toLowerCase() === prodName.toLowerCase()
+                );
+                if (!prod) { errors.push(`Produto "${prodName || prodCode}" não encontrado`); skipped++; continue; }
+
+                await db.execute(sql`
+                    INSERT INTO company_stock (warehouse_id, product_id, quantity, updated_at)
+                    VALUES (${wh.id}, ${prod.id}, ${qty}, now())
+                    ON CONFLICT (warehouse_id, product_id)
+                    DO UPDATE SET quantity = ${qty}, updated_at = now()
+                `);
+                await db.insert(companyStockMovements).values({
+                    companyId, warehouseId: wh.id, productId: prod.id,
+                    type: "import", quantity: String(qty), notes: "Importação via planilha", createdBy: user.id,
+                });
+                imported++;
+            }
+
+            res.json({ success: true, imported, skipped, errors: errors.slice(0, 10) });
+        } catch (e: any) {
+            console.error("[Stock Import]", e);
+            res.status(500).json({ error: "Erro ao importar planilha" });
+        }
+    });
+
     // ──────────────────────────────────────────────────────────────────────────
     // SALES ORDERS
     // ──────────────────────────────────────────────────────────────────────────

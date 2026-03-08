@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import EmpresaLayout from "@/components/empresa/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,10 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Search, PackagePlus } from "lucide-react";
+import { Loader2, Search, PackagePlus, Upload } from "lucide-react";
 
 const api = (method: string, path: string, body?: any) =>
     fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
@@ -19,6 +18,7 @@ export default function EmpresaEstoque() {
     const { user } = useAuth();
     const { toast } = useToast();
     const qc = useQueryClient();
+    const fileRef = useRef<HTMLInputElement>(null);
     const [search, setSearch] = useState("");
     const [filterWh, setFilterWh] = useState("all");
     const [showAdjust, setShowAdjust] = useState(false);
@@ -53,13 +53,33 @@ export default function EmpresaEstoque() {
         onError: () => toast({ title: "Erro ao ajustar estoque", variant: "destructive" }),
     });
 
+    const importExcel = useMutation({
+        mutationFn: async (file: File) => {
+            const fd = new FormData();
+            fd.append("file", file);
+            const r = await fetch("/api/company/stock/import-excel", { method: "POST", credentials: "include", body: fd });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || "Erro ao importar");
+            return data;
+        },
+        onSuccess: (data) => {
+            qc.invalidateQueries({ queryKey: ["/api/company/stock"] });
+            const desc = data.errors?.length > 0 ? data.errors.join("; ") : undefined;
+            toast({
+                title: `${data.imported} item(ns) importado(s)${data.skipped > 0 ? `, ${data.skipped} ignorado(s)` : ""}`,
+                description: desc,
+                variant: data.errors?.length > 0 ? "destructive" : "default",
+            });
+        },
+        onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
+    });
+
     const filtered = stock.filter((s: any) => {
         const matchSearch = !search || s.productName.toLowerCase().includes(search.toLowerCase()) || (s.productCode ?? "").toLowerCase().includes(search.toLowerCase());
         const matchWh = filterWh === "all" || s.warehouseId === filterWh;
         return matchSearch && matchWh;
     });
 
-    // Group by warehouse for the tab view
     const byWarehouse: Record<string, any[]> = {};
     for (const s of filtered) {
         if (!byWarehouse[s.warehouseId]) byWarehouse[s.warehouseId] = [];
@@ -71,10 +91,22 @@ export default function EmpresaEstoque() {
             <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-slate-800">Estoque por Depósito</h1>
-                    <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowAdjust(true)}>
-                        <PackagePlus className="h-4 w-4 mr-2" /> Ajuste Manual
-                    </Button>
+                    <div className="flex gap-2">
+                        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden"
+                            onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
+                        <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importExcel.isPending}>
+                            {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                            Importar Planilha
+                        </Button>
+                        <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowAdjust(true)}>
+                            <PackagePlus className="h-4 w-4 mr-2" /> Ajuste Manual
+                        </Button>
+                    </div>
                 </div>
+
+                <p className="text-xs text-slate-400">
+                    Colunas esperadas na planilha de estoque: <strong>Deposito</strong>, <strong>Produto</strong> (ou <strong>Codigo</strong>), <strong>Quantidade</strong>
+                </p>
 
                 <div className="flex gap-3 items-center">
                     <div className="relative max-w-xs flex-1">

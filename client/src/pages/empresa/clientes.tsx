@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, Search, Pencil, Upload, Loader2, Phone, Mail, Building2 } from "lucide-react";
+import { Plus, Search, Pencil, Upload, Loader2, Phone, Mail, Building2, Trash2, EyeOff, Eye } from "lucide-react";
 
 const api = (method: string, path: string, body?: any) =>
-    fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+    fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined })
+        .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Erro"); return d; });
 
 const emptyForm = { name: "", ruc: "", cedula: "", clientType: "person", address: "", city: "", department: "", phone: "", email: "", creditLimit: "", notes: "" };
 
@@ -21,16 +22,19 @@ export default function EmpresaClientes() {
     const { toast } = useToast();
     const qc = useQueryClient();
     const [search, setSearch] = useState("");
+    const [showInactive, setShowInactive] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState<any>(null);
     const [form, setForm] = useState({ ...emptyForm });
     const fileRef = useRef<HTMLInputElement>(null);
 
-    const { data: clients = [], isLoading } = useQuery<any[]>({
+    const { data: allClients = [], isLoading } = useQuery<any[]>({
         queryKey: ["/api/company/clients"],
         queryFn: () => api("GET", "/api/company/clients"),
         enabled: !!user,
     });
+
+    const clients = allClients.filter((c: any) => showInactive ? true : c.isActive !== false);
 
     const save = useMutation({
         mutationFn: (data: any) => editing
@@ -41,20 +45,38 @@ export default function EmpresaClientes() {
             setShowForm(false); setEditing(null); setForm({ ...emptyForm });
             toast({ title: editing ? "Cliente atualizado" : "Cliente criado" });
         },
-        onError: () => toast({ title: "Erro ao salvar", variant: "destructive" }),
+        onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
+    });
+
+    const toggleActive = useMutation({
+        mutationFn: (c: any) => api("PUT", `/api/company/clients/${c.id}`, { ...c, isActive: !c.isActive }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/company/clients"] }),
+        onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+    });
+
+    const remove = useMutation({
+        mutationFn: (id: string) => api("DELETE", `/api/company/clients/${id}`),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["/api/company/clients"] });
+            toast({ title: "Cliente excluído" });
+        },
+        onError: (e: any) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
     });
 
     const importExcel = useMutation({
         mutationFn: async (file: File) => {
-            const fd = new FormData(); fd.append("file", file);
+            const fd = new FormData();
+            fd.append("file", file);
             const r = await fetch("/api/company/clients/import-excel", { method: "POST", credentials: "include", body: fd });
-            return r.json();
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || "Erro ao importar");
+            return data;
         },
         onSuccess: (data) => {
             qc.invalidateQueries({ queryKey: ["/api/company/clients"] });
-            toast({ title: `Importados: ${data.created} clientes (${data.skipped} ignorados)` });
+            toast({ title: `${data.created} cliente(s) importado(s)`, description: data.skipped > 0 ? `${data.skipped} linha(s) ignorada(s)` : undefined });
         },
-        onError: () => toast({ title: "Erro na importação", variant: "destructive" }),
+        onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
     });
 
     const openEdit = (client: any) => {
@@ -73,8 +95,8 @@ export default function EmpresaClientes() {
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-slate-800">Carteira de Clientes</h1>
                     <div className="flex gap-2">
-                        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden"
-                            onChange={e => { if (e.target.files?.[0]) importExcel.mutate(e.target.files[0]); }} />
+                        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                            onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
                         <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importExcel.isPending}>
                             {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
                             Importar Excel
@@ -85,12 +107,25 @@ export default function EmpresaClientes() {
                     </div>
                 </div>
 
+                <p className="text-xs text-slate-400">
+                    Colunas esperadas na planilha: <strong>Nome</strong>, RUC, Telefone, Email, Cidade, Departamento, Endereço, Límite de Crédito
+                </p>
+
                 <div className="relative max-w-xs">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input placeholder="Buscar por nome, RUC ou telefone..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
 
-                <div className="text-sm text-slate-500">{filtered.length} cliente{filtered.length !== 1 ? "s" : ""}</div>
+                <div className="flex items-center gap-3">
+                    <div className="text-sm text-slate-500">{filtered.length} cliente{filtered.length !== 1 ? "s" : ""}</div>
+                    <button
+                        onClick={() => setShowInactive(v => !v)}
+                        className={`text-xs flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${showInactive ? "bg-slate-200 border-slate-400 text-slate-700" : "border-slate-300 text-slate-400 hover:text-slate-600"}`}
+                    >
+                        {showInactive ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                        {showInactive ? "Mostrando inativos" : "Ver inativos"}
+                    </button>
+                </div>
 
                 {isLoading ? (
                     <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
@@ -99,17 +134,18 @@ export default function EmpresaClientes() {
                 ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {filtered.map((c: any) => (
-                            <Card key={c.id} className="hover:shadow-md transition-shadow">
+                            <Card key={c.id} className={`hover:shadow-md transition-shadow ${c.isActive === false ? "opacity-50" : ""}`}>
                                 <CardContent className="p-4">
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <Building2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
                                                 <p className="font-semibold text-sm truncate">{c.name}</p>
+                                                {c.isActive === false && <span className="text-xs bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded shrink-0">Inativo</span>}
                                             </div>
                                             {c.ruc && <p className="text-slate-500 text-xs mt-0.5">RUC: {c.ruc}</p>}
                                             {c.city && <p className="text-slate-500 text-xs">{c.city}{c.department ? `, ${c.department}` : ""}</p>}
-                                            <div className="flex gap-3 mt-2">
+                                            <div className="flex gap-3 mt-2 flex-wrap">
                                                 {c.phone && (
                                                     <span className="flex items-center gap-1 text-xs text-slate-500">
                                                         <Phone className="h-3 w-3" />{c.phone}
@@ -131,9 +167,29 @@ export default function EmpresaClientes() {
                                                 </div>
                                             )}
                                         </div>
-                                        <Button size="sm" variant="ghost" onClick={() => openEdit(c)}>
-                                            <Pencil className="h-3.5 w-3.5" />
-                                        </Button>
+                                        <div className="flex gap-0.5 shrink-0">
+                                            <Button size="sm" variant="ghost" title="Editar" onClick={() => openEdit(c)}>
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                                size="sm" variant="ghost"
+                                                title={c.isActive !== false ? "Inativar cliente" : "Reativar cliente"}
+                                                className={c.isActive !== false ? "text-slate-400 hover:text-amber-600" : "text-amber-500 hover:text-green-600"}
+                                                disabled={toggleActive.isPending}
+                                                onClick={() => toggleActive.mutate(c)}
+                                            >
+                                                {c.isActive !== false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                            </Button>
+                                            <Button
+                                                size="sm" variant="ghost"
+                                                title="Excluir cliente"
+                                                className="text-slate-400 hover:text-red-600"
+                                                disabled={remove.isPending}
+                                                onClick={() => { if (confirm(`Excluir "${c.name}"?`)) remove.mutate(c.id); }}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>
