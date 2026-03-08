@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Package, FolderTree, Percent, Settings as SettingsIcon, Menu, Bell, Plus, Upload, Edit, Save, X, Trash2, Repeat, ChevronDown, ChevronRight, RefreshCw, Calendar, Sprout, Target, TrendingUp, Loader2 } from "lucide-react";
+import { Users, Package, FolderTree, Percent, Settings as SettingsIcon, Menu, Bell, Plus, Upload, Edit, Save, X, Trash2, Repeat, ChevronDown, ChevronRight, RefreshCw, Calendar, Sprout, Target, TrendingUp, Loader2, Building2, UserPlus, ShieldCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import AdminNavbar from "@/components/layout/admin-navbar";
 import Header from "@/components/layout/header";
@@ -28,7 +28,7 @@ export default function AdminPage() {
   // Read hash from URL to determine active tab
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (hash && ['dashboard', 'users', 'master-clients', 'seasons', 'categories', 'subcategories', 'products', 'price-table', 'commissions', 'parameters', 'barter', 'timac', 'planning-import', 'global-silos', 'system'].includes(hash)) {
+    if (hash && ['dashboard', 'users', 'master-clients', 'seasons', 'categories', 'subcategories', 'products', 'price-table', 'commissions', 'parameters', 'barter', 'timac', 'planning-import', 'global-silos', 'farmers-panel', 'companies', 'system'].includes(hash)) {
       setActiveTab(hash);
     } else {
       setActiveTab('dashboard');
@@ -36,7 +36,7 @@ export default function AdminPage() {
 
     const handleHashChange = () => {
       const newHash = window.location.hash.replace('#', '');
-      if (newHash && ['dashboard', 'users', 'master-clients', 'seasons', 'categories', 'subcategories', 'products', 'price-table', 'commissions', 'parameters', 'barter', 'timac', 'planning-import', 'global-silos', 'system'].includes(newHash)) {
+      if (newHash && ['dashboard', 'users', 'master-clients', 'seasons', 'categories', 'subcategories', 'products', 'price-table', 'commissions', 'parameters', 'barter', 'timac', 'planning-import', 'global-silos', 'farmers-panel', 'companies', 'system'].includes(newHash)) {
         setActiveTab(newHash);
       } else {
         setActiveTab('dashboard');
@@ -80,6 +80,8 @@ export default function AdminPage() {
         {activeTab === 'timac' && <TimacManagement />}
         {activeTab === 'planning-import' && <PlanningImportManagement />}
         {activeTab === 'global-silos' && <GlobalSilosManagement />}
+        {activeTab === 'farmers-panel' && <FarmersPanelLink />}
+        {activeTab === 'companies' && <CompaniesManagement />}
         {activeTab === 'system' && <SystemManagement />}
       </main>
     </div>
@@ -5303,6 +5305,393 @@ function SystemManagement() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ─── Farmers Panel Link ───────────────────────────────────────────────────────
+
+function FarmersPanelLink() {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Painel de Agricultores</h2>
+        <p className="text-muted-foreground">Gerencie agricultores, propriedades, cadastros e módulos.</p>
+      </div>
+      <Card className="max-w-lg">
+        <CardContent className="p-8 flex flex-col items-center gap-4 text-center">
+          <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
+            <Sprout className="h-8 w-8 text-green-700" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold">Painel Agricultores</h3>
+            <p className="text-muted-foreground text-sm mt-1">
+              Acesse o painel dedicado para gerenciar agricultores, suas propriedades, culturas, módulos e dados agronômicos.
+            </p>
+          </div>
+          <Button className="bg-green-700 hover:bg-green-800" onClick={() => window.location.href = "/admin-farmers"}>
+            Acessar Painel de Agricultores
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Companies Management ────────────────────────────────────────────────────
+
+const COMPANY_ROLES = ["consultor", "director", "faturista", "financeiro", "admin_empresa"] as const;
+const ROLE_LABELS: Record<string, string> = {
+  consultor: "Consultor",
+  director: "Diretor",
+  faturista: "Faturista",
+  financeiro: "Financeiro",
+  admin_empresa: "Admin Empresa",
+};
+
+const emptyNewUser = { username: "", name: "", email: "", password: "", role: "consultor" };
+
+function CompaniesManagement() {
+  const { toast } = useToast();
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [showNewCompany, setShowNewCompany] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [addMode, setAddMode] = useState<"existing" | "new">("existing");
+  const [companyForm, setCompanyForm] = useState({ name: "", ruc: "", city: "", phone: "", email: "" });
+  const [existingUserId, setExistingUserId] = useState("");
+  const [existingUserRole, setExistingUserRole] = useState("consultor");
+  const [newUserForm, setNewUserForm] = useState({ ...emptyNewUser });
+
+  const adminApi = (method: string, path: string, body?: any) =>
+    fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+
+  const { data: companiesList = [], isLoading: loadingCompanies } = useQuery<any[]>({
+    queryKey: ["/api/admin/companies"],
+    queryFn: () => adminApi("GET", "/api/admin/companies"),
+  });
+
+  const { data: companyUsersList = [], isLoading: loadingUsers } = useQuery<any[]>({
+    queryKey: ["/api/admin/companies", selectedCompany?.id, "users"],
+    queryFn: () => adminApi("GET", `/api/admin/companies/${selectedCompany.id}/users`),
+    enabled: !!selectedCompany,
+  });
+
+  const { data: allUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/users"],
+    queryFn: () => adminApi("GET", "/api/admin/users"),
+  });
+
+  const createCompany = useMutation({
+    mutationFn: (data: any) => adminApi("POST", "/api/admin/companies", data),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/companies"] });
+      setShowNewCompany(false);
+      setCompanyForm({ name: "", ruc: "", city: "", phone: "", email: "" });
+      setSelectedCompany(res);
+      toast({ title: "Empresa criada com sucesso" });
+    },
+    onError: () => toast({ title: "Erro ao criar empresa", variant: "destructive" }),
+  });
+
+  const linkUser = useMutation({
+    mutationFn: (data: any) => adminApi("POST", `/api/admin/companies/${selectedCompany.id}/users`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/companies", selectedCompany.id, "users"] });
+      closeAddUser();
+      toast({ title: "Usuário vinculado à empresa" });
+    },
+    onError: () => toast({ title: "Erro ao vincular usuário", variant: "destructive" }),
+  });
+
+  const createAndLink = useMutation({
+    mutationFn: (data: any) => adminApi("POST", `/api/admin/companies/${selectedCompany.id}/users/create-and-link`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/companies", selectedCompany.id, "users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      closeAddUser();
+      toast({ title: "Usuário criado e vinculado à empresa" });
+    },
+    onError: (e: any) => toast({ title: "Erro ao criar usuário", variant: "destructive" }),
+  });
+
+  const changeRole = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      adminApi("PUT", `/api/admin/companies/${selectedCompany.id}/users/${userId}`, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/companies", selectedCompany.id, "users"] });
+      toast({ title: "Cargo atualizado" });
+    },
+  });
+
+  const removeUser = useMutation({
+    mutationFn: (userId: string) =>
+      adminApi("DELETE", `/api/admin/companies/${selectedCompany.id}/users/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/companies", selectedCompany.id, "users"] });
+      toast({ title: "Usuário removido da empresa" });
+    },
+  });
+
+  const closeAddUser = () => {
+    setShowAddUser(false);
+    setAddMode("existing");
+    setExistingUserId("");
+    setExistingUserRole("consultor");
+    setNewUserForm({ ...emptyNewUser });
+  };
+
+  const availableUsers = (allUsers as any[]).filter((u: any) => !(companyUsersList as any[]).some((cu: any) => cu.userId === u.id));
+
+  const handleAddUser = () => {
+    if (addMode === "existing") {
+      linkUser.mutate({ userId: existingUserId, role: existingUserRole });
+    } else {
+      createAndLink.mutate(newUserForm);
+    }
+  };
+
+  const isPending = linkUser.isPending || createAndLink.isPending;
+  const canSubmit = addMode === "existing"
+    ? !!existingUserId
+    : !!(newUserForm.username && newUserForm.name && newUserForm.password);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Gestão de Empresas</h2>
+          <p className="text-muted-foreground">Cadastre empresas e gerencie seus usuários e cargos.</p>
+        </div>
+        <Button onClick={() => setShowNewCompany(true)}>
+          <Plus className="h-4 w-4 mr-2" /> Nova Empresa
+        </Button>
+      </div>
+
+      <div className="flex gap-4">
+        {/* Company list */}
+        <div className="w-72 flex-shrink-0 space-y-2">
+          {loadingCompanies ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : (companiesList as any[]).length === 0 ? (
+            <p className="text-center text-muted-foreground text-sm py-8">Nenhuma empresa cadastrada</p>
+          ) : (companiesList as any[]).map((c: any) => (
+            <Card
+              key={c.id}
+              className={`cursor-pointer transition-all ${selectedCompany?.id === c.id ? "border-primary shadow-md" : "hover:shadow-sm"}`}
+              onClick={() => setSelectedCompany(c)}
+            >
+              <CardContent className="p-3 flex items-center gap-3">
+                <Building2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{c.name}</p>
+                  {c.ruc && <p className="text-muted-foreground text-xs">RUC: {c.ruc}</p>}
+                  {c.city && <p className="text-muted-foreground text-xs">{c.city}</p>}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Company detail */}
+        {selectedCompany ? (
+          <Card className="flex-1">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    {selectedCompany.name}
+                  </CardTitle>
+                  {selectedCompany.ruc && <CardDescription>RUC: {selectedCompany.ruc}</CardDescription>}
+                </div>
+                <Button size="sm" onClick={() => setShowAddUser(true)}>
+                  <UserPlus className="h-4 w-4 mr-1" /> Adicionar Usuário
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingUsers ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+              ) : (companyUsersList as any[]).length === 0 ? (
+                <p className="text-center text-muted-foreground text-sm py-8">Nenhum usuário vinculado. Clique em "Adicionar Usuário" para começar.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Usuário</TableHead>
+                      <TableHead>E-mail</TableHead>
+                      <TableHead>Cargo na empresa</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(companyUsersList as any[]).map((cu: any) => (
+                      <TableRow key={cu.userId}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                            {cu.userName ?? cu.userId}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{cu.userEmail ?? "—"}</TableCell>
+                        <TableCell>
+                          <Select value={cu.role} onValueChange={(role) => changeRole.mutate({ userId: cu.userId, role })}>
+                            <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {COMPANY_ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive h-7 w-7 p-0">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remover usuário?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  {cu.userName ?? cu.userId} perderá acesso a {selectedCompany.name}. O usuário continuará existindo na plataforma.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => removeUser.mutate(cu.userId)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                  Remover
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
+            <p>Selecione uma empresa para gerenciar usuários</p>
+          </div>
+        )}
+      </div>
+
+      {/* New company dialog */}
+      <Dialog open={showNewCompany} onOpenChange={setShowNewCompany}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Nova Empresa</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nome *</Label>
+              <Input value={companyForm.name} onChange={e => setCompanyForm(p => ({ ...p, name: e.target.value }))} placeholder="Agroinsumos S.A." />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>RUC</Label><Input value={companyForm.ruc} onChange={e => setCompanyForm(p => ({ ...p, ruc: e.target.value }))} placeholder="80012345-6" /></div>
+              <div><Label>Cidade</Label><Input value={companyForm.city} onChange={e => setCompanyForm(p => ({ ...p, city: e.target.value }))} placeholder="Ciudad del Este" /></div>
+              <div><Label>Telefone</Label><Input value={companyForm.phone} onChange={e => setCompanyForm(p => ({ ...p, phone: e.target.value }))} /></div>
+              <div><Label>E-mail</Label><Input type="email" value={companyForm.email} onChange={e => setCompanyForm(p => ({ ...p, email: e.target.value }))} /></div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowNewCompany(false)}>Cancelar</Button>
+              <Button disabled={!companyForm.name || createCompany.isPending} onClick={() => createCompany.mutate(companyForm)}>
+                {createCompany.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Criar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add user dialog */}
+      <Dialog open={showAddUser} onOpenChange={(open) => { if (!open) closeAddUser(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adicionar Usuário — {selectedCompany?.name}</DialogTitle>
+            <DialogDescription>Vincule um usuário existente ou crie um novo diretamente.</DialogDescription>
+          </DialogHeader>
+
+          {/* Toggle */}
+          <div className="flex border rounded-lg overflow-hidden">
+            <button
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${addMode === "existing" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+              onClick={() => setAddMode("existing")}
+            >
+              Usuário Existente
+            </button>
+            <button
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${addMode === "new" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+              onClick={() => setAddMode("new")}
+            >
+              Criar Novo Usuário
+            </button>
+          </div>
+
+          {addMode === "existing" ? (
+            <div className="space-y-3">
+              <div>
+                <Label>Usuário *</Label>
+                <Select value={existingUserId} onValueChange={setExistingUserId}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar usuário da plataforma..." /></SelectTrigger>
+                  <SelectContent>
+                    {availableUsers.length === 0
+                      ? <SelectItem value="_none" disabled>Todos os usuários já estão na empresa</SelectItem>
+                      : availableUsers.map((u: any) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name || u.username}{u.email ? ` — ${u.email}` : ""}
+                          </SelectItem>
+                        ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Cargo na empresa *</Label>
+                <Select value={existingUserRole} onValueChange={setExistingUserRole}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{COMPANY_ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label>Nome completo *</Label>
+                  <Input value={newUserForm.name} onChange={e => setNewUserForm(p => ({ ...p, name: e.target.value }))} placeholder="João Silva" />
+                </div>
+                <div>
+                  <Label>Login (usuário) *</Label>
+                  <Input value={newUserForm.username} onChange={e => setNewUserForm(p => ({ ...p, username: e.target.value }))} placeholder="joao.silva" />
+                </div>
+                <div>
+                  <Label>Senha *</Label>
+                  <Input type="password" value={newUserForm.password} onChange={e => setNewUserForm(p => ({ ...p, password: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <Label>E-mail</Label>
+                  <Input type="email" value={newUserForm.email} onChange={e => setNewUserForm(p => ({ ...p, email: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <Label>Cargo na empresa *</Label>
+                  <Select value={newUserForm.role} onValueChange={v => setNewUserForm(p => ({ ...p, role: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{COMPANY_ROLES.map(r => <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" onClick={closeAddUser}>Cancelar</Button>
+            <Button disabled={!canSubmit || isPending} onClick={handleAddUser}>
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {addMode === "new" ? "Criar e Adicionar" : "Adicionar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

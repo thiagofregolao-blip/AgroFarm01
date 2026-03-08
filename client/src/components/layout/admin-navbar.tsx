@@ -11,7 +11,8 @@ import {
   DollarSign,
   Shield,
   Upload,
-  MapPin
+  MapPin,
+  Building2
 } from "lucide-react";
 
 interface AdminNavbarProps {
@@ -21,7 +22,7 @@ interface AdminNavbarProps {
 
 const menuItems = [
   { id: "dashboard", icon: BarChart3, label: "Dashboard" },
-  { id: "users", icon: Users, label: "Usuários" },
+  { id: "users", icon: Users, label: "Equipe Interna" },
   { id: "master-clients", icon: Users, label: "Clientes" },
   { id: "seasons", icon: Calendar, label: "Safras" },
   { id: "categories", icon: Package, label: "Categorias" },
@@ -34,6 +35,8 @@ const menuItems = [
   { id: "timac", icon: Target, label: "Timac" },
   { id: "planning-import", icon: Upload, label: "Importar Planejamento" },
   { id: "global-silos", icon: MapPin, label: "Silos Globais" },
+  { id: "farmers-panel", icon: Users, label: "Agricultores" },
+  { id: "companies", icon: Building2, label: "Empresas" },
   { id: "system", icon: Shield, label: "Sistema" },
 ];
 

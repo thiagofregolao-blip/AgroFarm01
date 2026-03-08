@@ -11,6 +11,7 @@
 import type { Express, Request, Response } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
+import { hashPassword } from "./auth";
 import { db } from "./db";
 import {
     companies,
@@ -30,6 +31,7 @@ import {
     companyRemissions,
     companyRemissionItems,
     companyPagares,
+    users,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 
@@ -1474,6 +1476,42 @@ export function registerCommercialRoutes(app: Express) {
         }
     });
 
+    /** Create a new platform user AND link to company in one step */
+    app.post("/api/admin/companies/:companyId/users/create-and-link", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const admin = req.user as any;
+            if (admin.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
+
+            const { username, name, email, password, role } = req.body;
+            if (!username || !name || !password) return res.status(400).json({ error: "username, nome e senha são obrigatórios" });
+
+            // Check username conflict
+            const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
+            if (existing) return res.status(400).json({ error: "Nome de usuário já existe" });
+
+            const hashedPwd = await hashPassword(password);
+            const [newUser] = await db.insert(users).values({
+                username,
+                name,
+                email: email || null,
+                password: hashedPwd,
+                role: "consultor", // role padrão na plataforma; cargo na empresa é separado
+            }).returning();
+
+            const [cu] = await db.insert(companyUsers).values({
+                companyId: req.params.companyId,
+                userId: newUser.id,
+                role: role || "consultor",
+            }).returning();
+
+            res.json({ user: newUser, companyUser: cu });
+        } catch (e) {
+            console.error(e);
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
     /** Link user to company */
     app.post("/api/admin/companies/:companyId/users", async (req: Request, res: Response) => {
         try {
@@ -1501,9 +1539,72 @@ export function registerCommercialRoutes(app: Express) {
             const user = req.user as any;
             if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
-            const users = await db.select().from(companyUsers)
+            const rows = await db
+                .select({
+                    userId: companyUsers.userId,
+                    role: companyUsers.role,
+                    createdAt: companyUsers.createdAt,
+                    userName: users.username,
+                    userEmail: users.email,
+                })
+                .from(companyUsers)
+                .leftJoin(users, eq(companyUsers.userId, users.id))
                 .where(eq(companyUsers.companyId, req.params.companyId));
-            res.json(users);
+            res.json(rows);
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    app.put("/api/admin/companies/:companyId/users/:userId", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
+
+            const { role } = req.body;
+            if (!role) return res.status(400).json({ error: "role é obrigatório" });
+
+            await db.update(companyUsers)
+                .set({ role })
+                .where(and(
+                    eq(companyUsers.companyId, req.params.companyId),
+                    eq(companyUsers.userId, req.params.userId)
+                ));
+            res.json({ ok: true });
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    app.delete("/api/admin/companies/:companyId/users/:userId", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
+
+            await db.delete(companyUsers).where(and(
+                eq(companyUsers.companyId, req.params.companyId),
+                eq(companyUsers.userId, req.params.userId)
+            ));
+            res.json({ ok: true });
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    app.put("/api/admin/companies/:companyId", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
+
+            const { name, ruc, address, city, phone, email, isActive } = req.body;
+            const [updated] = await db.update(companies)
+                .set({ name, ruc, address, city, phone, email, isActive })
+                .where(eq(companies.id, req.params.companyId))
+                .returning();
+            res.json(updated);
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
         }
