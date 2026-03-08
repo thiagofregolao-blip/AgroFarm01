@@ -1494,11 +1494,11 @@ export function registerCommercialRoutes(app: Express) {
 
             const hashedPwd = await hashPassword(password);
             const [newUser] = await db.insert(users).values({
-                username,
+                username: username.trim(),
                 name,
                 email: email || null,
                 password: hashedPwd,
-                role: "consultor", // role padrão na plataforma; cargo na empresa é separado
+                role: role || "rtv",
             }).returning();
 
             const [cu] = await db.insert(companyUsers).values({
