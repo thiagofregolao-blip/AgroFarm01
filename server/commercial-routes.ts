@@ -206,6 +206,29 @@ export function registerCommercialRoutes(app: Express) {
     // COMPANY INFO
     // ──────────────────────────────────────────────────────────────────────────
 
+    /** Update own profile (name, email, password) */
+    app.put("/api/company/profile", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const currentUser = req.user as any;
+            const { name, email, password } = req.body;
+
+            const updates: any = {};
+            if (name) updates.name = name;
+            if (email !== undefined) updates.email = email;
+            if (password) updates.password = await hashPassword(password);
+
+            const [updated] = await db.update(users)
+                .set(updates)
+                .where(eq(users.id, currentUser.id))
+                .returning({ id: users.id, name: users.name, email: users.email, username: users.username });
+
+            res.json(updated);
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
     /** Get current user's company + role */
     app.get("/api/company/me", async (req: Request, res: Response) => {
         try {
@@ -1474,7 +1497,7 @@ export function registerCommercialRoutes(app: Express) {
 
             // Busca todos os userIds vinculados a alguma empresa
             const allCompanyUsers = await db.select({ userId: companyUsers.userId }).from(companyUsers);
-            const userIds = Array.from(new Set(allCompanyUsers.map((cu: any) => cu.userId)));
+            const userIds = Array.from(new Set(allCompanyUsers.map((cu: any) => cu.userId))) as string[];
 
             if (userIds.length === 0) return res.json({ updated: 0 });
 

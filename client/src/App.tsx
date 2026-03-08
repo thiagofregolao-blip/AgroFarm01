@@ -91,6 +91,7 @@ import EmpresaRemissoes from "@/pages/empresa/remissoes";
 import EmpresaProdutos from "@/pages/empresa/produtos";
 import EmpresaTabelas from "@/pages/empresa/tabelas";
 import EmpresaDepositos from "@/pages/empresa/depositos";
+import EmpresaPerfil from "@/pages/empresa/perfil";
 
 function Router() {
   return (
@@ -184,6 +185,7 @@ function Router() {
       <EmpresaRoute path="/empresa/produtos" component={EmpresaProdutos} />
       <EmpresaRoute path="/empresa/tabelas" component={EmpresaTabelas} />
       <EmpresaRoute path="/empresa/depositos" component={EmpresaDepositos} />
+      <EmpresaRoute path="/empresa/perfil" component={EmpresaPerfil} />
 
       <ConsultorRoute path="/dashboard" component={Dashboard} />
       <ConsultorRoute path="/vendas" component={Vendas} />

@@ -38,7 +38,11 @@ const api = (method: string, path: string, body?: any) =>
         headers: body ? { "Content-Type": "application/json" } : {},
         credentials: "include",
         body: body ? JSON.stringify(body) : undefined,
-    }).then(r => r.json());
+    }).then(async r => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Erro ao processar requisição");
+        return data;
+    });
 
 export default function EmpresaPedidos() {
     const { user } = useAuth();
@@ -104,7 +108,7 @@ export default function EmpresaPedidos() {
             setForm({ clientId: "", priceListId: "", paymentType: "credito", freightPayer: "cliente", deliveryLocation: "", paymentLocation: "", dueDate: "", agriculturalYear: "", zafra: "", culture: "", observations: "", currency: "USD" });
             toast({ title: "Pedido criado com sucesso" });
         },
-        onError: () => toast({ title: "Erro ao criar pedido", variant: "destructive" }),
+        onError: (e: any) => toast({ title: "Erro ao criar pedido", description: e.message, variant: "destructive" }),
     });
 
     const submitOrder = useMutation({
