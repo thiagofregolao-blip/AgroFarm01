@@ -59,6 +59,7 @@ export default function EmpresaPedidos() {
     const [search, setSearch] = useState("");
     const [activeTab, setActiveTab] = useState("all");
     const [showForm, setShowForm] = useState(false);
+    const [formTab, setFormTab] = useState("dados");
     const [detailOrder, setDetailOrder] = useState<any>(null);
 
     // Form state
@@ -118,6 +119,7 @@ export default function EmpresaPedidos() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] });
             setShowForm(false);
+            setFormTab("dados");
             setOrderItems([]);
             setForm({ clientId: "", priceListId: "", paymentType: "credito", freightPayer: "cliente", deliveryLocation: "", paymentLocation: "", dueDate: "", agriculturalYear: "", zafra: "", culture: "", observations: "", currency: "USD" });
             toast({ title: "Pedido criado com sucesso" });
@@ -211,7 +213,7 @@ export default function EmpresaPedidos() {
             <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-slate-800">Pedidos de Venda</h1>
-                    <Button onClick={() => setShowForm(true)} className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={() => { setShowForm(true); setFormTab("dados"); }} className="bg-blue-600 hover:bg-blue-700">
                         <Plus className="h-4 w-4 mr-2" /> Novo Pedido
                     </Button>
                 </div>
