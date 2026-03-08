@@ -916,7 +916,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
         }
     });
 
-    /** Import stock from Excel: columns Deposito, Produto/Codigo, Quantidade */
+    /** Import stock from Excel. If warehouseId is sent via FormData, uses it for all rows. */
     app.post("/api/company/stock/import-excel", upload.single("file"), async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -924,6 +924,9 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
             if (!req.file) return res.status(400).json({ error: "Envie um arquivo Excel (.xlsx)" });
+
+            // warehouseId sent from frontend modal (optional — falls back to Deposito column)
+            const fixedWhId: string | null = (req.body?.warehouseId as string) || null;
 
             const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -936,20 +939,41 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
             const products = await db.select().from(companyProducts)
                 .where(and(eq(companyProducts.companyId, companyId), eq(companyProducts.isActive, true)));
 
+            // Validate fixedWhId if provided
+            if (fixedWhId && !warehouses.find((w: any) => w.id === fixedWhId)) {
+                return res.status(400).json({ error: "Barracão selecionado não encontrado" });
+            }
+
             let imported = 0;
             let skipped = 0;
             const errors: string[] = [];
 
             for (const row of rows) {
-                const whName = String(row["Deposito"] || row["Depósito"] || row["deposito"] || row["Deposito"] || "").trim();
-                const prodName = String(row["Produto"] || row["produto"] || row["Product"] || "").trim();
+                const prodName = String(
+                    row["Produto"] || row["produto"] || row["Product"] || row["PRODUTO"] || ""
+                ).trim();
                 const prodCode = String(row["Codigo"] || row["Código"] || row["codigo"] || "").trim();
-                const qty = parseFloat(String(row["Quantidade"] || row["quantidade"] || row["Qty"] || "0").replace(",", "."));
+                // Support multiple quantity column names (new format: "Qtd. Estoque", classic: "Quantidade")
+                const qtyRaw = String(
+                    row["Qtd. Estoque"] || row["Quantidade"] || row["quantidade"] || row["QTD"] || row["Qty"] || "0"
+                ).replace(",", ".");
+                const qty = parseFloat(qtyRaw);
 
-                if (!whName || (!prodName && !prodCode) || isNaN(qty)) { skipped++; continue; }
+                // Skip category separator rows and empty rows
+                if (!prodName && !prodCode) { skipped++; continue; }
+                if (isNaN(qty) || qty === 0) { skipped++; continue; }
 
-                const wh = warehouses.find(w => w.name.toLowerCase() === whName.toLowerCase());
-                if (!wh) { errors.push(`Depósito "${whName}" não encontrado`); skipped++; continue; }
+                // Determine warehouse
+                let whId: string;
+                if (fixedWhId) {
+                    whId = fixedWhId;
+                } else {
+                    const whName = String(row["Deposito"] || row["Depósito"] || row["deposito"] || "").trim();
+                    if (!whName) { skipped++; continue; }
+                    const wh = warehouses.find((w: any) => w.name.toLowerCase() === whName.toLowerCase());
+                    if (!wh) { errors.push(`Depósito "${whName}" não encontrado`); skipped++; continue; }
+                    whId = wh.id;
+                }
 
                 const prod = products.find(p =>
                     (prodCode && (p.code ?? "").toLowerCase() === prodCode.toLowerCase()) ||
@@ -959,12 +983,12 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
 
                 await db.execute(sql`
                     INSERT INTO company_stock (warehouse_id, product_id, quantity, updated_at)
-                    VALUES (${wh.id}, ${prod.id}, ${qty}, now())
+                    VALUES (${whId}, ${prod.id}, ${qty}, now())
                     ON CONFLICT (warehouse_id, product_id)
                     DO UPDATE SET quantity = ${qty}, updated_at = now()
                 `);
                 await db.insert(companyStockMovements).values({
-                    companyId, warehouseId: wh.id, productId: prod.id,
+                    companyId, warehouseId: whId, productId: prod.id,
                     type: "import", quantity: String(qty), notes: "Importação via planilha", createdBy: user.id,
                 });
                 imported++;

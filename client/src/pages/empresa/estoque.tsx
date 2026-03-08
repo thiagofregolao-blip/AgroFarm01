@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Search, PackagePlus, Upload } from "lucide-react";
+import { Loader2, Search, PackagePlus, Upload, Warehouse } from "lucide-react";
 
 const api = (method: string, path: string, body?: any) =>
     fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
@@ -23,6 +23,8 @@ export default function EmpresaEstoque() {
     const [filterWh, setFilterWh] = useState("all");
     const [showAdjust, setShowAdjust] = useState(false);
     const [adjForm, setAdjForm] = useState({ warehouseId: "", productId: "", quantity: "", notes: "" });
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importWhId, setImportWhId] = useState("");
 
     const { data: stock = [], isLoading } = useQuery<any[]>({
         queryKey: ["/api/company/stock"],
@@ -57,6 +59,7 @@ export default function EmpresaEstoque() {
         mutationFn: async (file: File) => {
             const fd = new FormData();
             fd.append("file", file);
+            if (importWhId) fd.append("warehouseId", importWhId);
             const r = await fetch("/api/company/stock/import-excel", { method: "POST", credentials: "include", body: fd });
             const data = await r.json();
             if (!r.ok) throw new Error(data.error || "Erro ao importar");
@@ -64,6 +67,7 @@ export default function EmpresaEstoque() {
         },
         onSuccess: (data) => {
             qc.invalidateQueries({ queryKey: ["/api/company/stock"] });
+            setShowImportModal(false);
             const desc = data.errors?.length > 0 ? data.errors.join("; ") : undefined;
             toast({
                 title: `${data.imported} item(ns) importado(s)${data.skipped > 0 ? `, ${data.skipped} ignorado(s)` : ""}`,
@@ -71,7 +75,10 @@ export default function EmpresaEstoque() {
                 variant: data.errors?.length > 0 ? "destructive" : "default",
             });
         },
-        onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
+        onError: (e: any) => {
+            setShowImportModal(false);
+            toast({ title: "Erro na importação", description: e.message, variant: "destructive" });
+        },
     });
 
     const filtered = stock.filter((s: any) => {
@@ -94,7 +101,7 @@ export default function EmpresaEstoque() {
                     <div className="flex gap-2">
                         <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden"
                             onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
-                        <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importExcel.isPending}>
+                        <Button variant="outline" onClick={() => { setImportWhId(""); setShowImportModal(true); }} disabled={importExcel.isPending}>
                             {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
                             Importar Planilha
                         </Button>
@@ -105,7 +112,7 @@ export default function EmpresaEstoque() {
                 </div>
 
                 <p className="text-xs text-slate-400">
-                    Colunas esperadas na planilha de estoque: <strong>Deposito</strong>, <strong>Produto</strong> (ou <strong>Codigo</strong>), <strong>Quantidade</strong>
+                    Colunas reconhecidas: <strong>Produto</strong>, <strong>Qtd. Estoque</strong> (ou <strong>Quantidade</strong>), <strong>Unid.</strong>
                 </p>
 
                 <div className="flex gap-3 items-center">
@@ -169,6 +176,51 @@ export default function EmpresaEstoque() {
                     </div>
                 )}
             </div>
+
+            {/* Modal seleção de barracão para importação */}
+            <Dialog open={showImportModal} onOpenChange={open => { if (!open && !importExcel.isPending) setShowImportModal(false); }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Warehouse className="h-5 w-5 text-blue-600" /> Importar Planilha de Estoque
+                        </DialogTitle>
+                    </DialogHeader>
+                    {importExcel.isPending ? (
+                        <div className="flex flex-col items-center gap-3 py-6">
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                            <p className="text-sm text-slate-600 font-medium">Importando estoque...</p>
+                            <p className="text-xs text-slate-400 text-center">Processando a planilha. Aguarde um momento.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div>
+                                <Label>Barracão (Depósito) *</Label>
+                                <p className="text-xs text-slate-400 mb-2">Selecione o barracão ao qual pertencem os produtos desta planilha.</p>
+                                <Select value={importWhId} onValueChange={setImportWhId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecionar barracão..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {warehouses.map((w: any) => (
+                                            <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                                <Button variant="outline" onClick={() => setShowImportModal(false)}>Cancelar</Button>
+                                <Button
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                    disabled={!importWhId}
+                                    onClick={() => fileRef.current?.click()}
+                                >
+                                    <Upload className="h-4 w-4 mr-2" /> Escolher Arquivo
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={showAdjust} onOpenChange={setShowAdjust}>
                 <DialogContent className="max-w-md">
