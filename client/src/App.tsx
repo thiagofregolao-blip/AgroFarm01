@@ -10,6 +10,7 @@ import { AdminRoute } from "@/lib/admin-route";
 import { ManagerRoute } from "@/lib/manager-route";
 import { FaturistaRoute } from "@/lib/faturista-route";
 import { AdminFarmerRoute } from "@/lib/admin-farmer-route";
+import { EmpresaRoute } from "@/lib/empresa-route";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
@@ -173,16 +174,16 @@ function Router() {
       <Route path="/pdv" component={PdvTerminal} />
 
       {/* Commercial Module Routes */}
-      <Route path="/empresa" component={EmpresaDashboard} />
-      <Route path="/empresa/pedidos" component={EmpresaPedidos} />
-      <Route path="/empresa/clientes" component={EmpresaClientes} />
-      <Route path="/empresa/estoque" component={EmpresaEstoque} />
-      <Route path="/empresa/faturas" component={EmpresaFaturas} />
-      <Route path="/empresa/pagares" component={EmpresaPagares} />
-      <Route path="/empresa/remissoes" component={EmpresaRemissoes} />
-      <Route path="/empresa/produtos" component={EmpresaProdutos} />
-      <Route path="/empresa/tabelas" component={EmpresaTabelas} />
-      <Route path="/empresa/depositos" component={EmpresaDepositos} />
+      <EmpresaRoute path="/empresa" component={EmpresaDashboard} />
+      <EmpresaRoute path="/empresa/pedidos" component={EmpresaPedidos} />
+      <EmpresaRoute path="/empresa/clientes" component={EmpresaClientes} />
+      <EmpresaRoute path="/empresa/estoque" component={EmpresaEstoque} />
+      <EmpresaRoute path="/empresa/faturas" component={EmpresaFaturas} />
+      <EmpresaRoute path="/empresa/pagares" component={EmpresaPagares} />
+      <EmpresaRoute path="/empresa/remissoes" component={EmpresaRemissoes} />
+      <EmpresaRoute path="/empresa/produtos" component={EmpresaProdutos} />
+      <EmpresaRoute path="/empresa/tabelas" component={EmpresaTabelas} />
+      <EmpresaRoute path="/empresa/depositos" component={EmpresaDepositos} />
 
       <ConsultorRoute path="/dashboard" component={Dashboard} />
       <ConsultorRoute path="/vendas" component={Vendas} />

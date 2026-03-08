@@ -40,6 +40,8 @@ export default function AuthPage() {
         setLocation("/faturista");
       } else if (user.role === 'agricultor') {
         setLocation("/fazenda");
+      } else if (user.role === 'rtv') {
+        setLocation("/empresa");
       } else {
         setLocation("/dashboard");
       }

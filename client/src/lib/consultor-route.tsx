@@ -53,5 +53,13 @@ export function ConsultorRoute({
     );
   }
 
+  if (user.role === 'rtv') {
+    return (
+      <Route path={path}>
+        <Redirect to="/empresa" />
+      </Route>
+    );
+  }
+
   return <Route path={path} component={Component} />;
 }
