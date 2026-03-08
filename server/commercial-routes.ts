@@ -916,7 +916,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
         }
     });
 
-    /** Import stock from Excel. If warehouseId is sent via FormData, uses it for all rows. */
+    /** Import stock from Excel using Gemini AI — handles any layout/column names */
     app.post("/api/company/stock/import-excel", upload.single("file"), async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -925,73 +925,136 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
             if (!req.file) return res.status(400).json({ error: "Envie um arquivo Excel (.xlsx)" });
 
-            // warehouseId sent from frontend modal (optional — falls back to Deposito column)
             const fixedWhId: string | null = (req.body?.warehouseId as string) || null;
 
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY não configurada" });
+
+            // Convert Excel to CSV text for Gemini
             const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+            const csvText = XLSX.utils.sheet_to_csv(sheet);
 
-            if (rows.length === 0) return res.status(400).json({ error: "Planilha vazia ou sem dados" });
+            const prompt = `Você é um assistente especializado em importação de estoque agrícola. Analise a planilha abaixo e extraia TODOS os produtos de estoque.
 
+Para cada produto extraia:
+- nome: nome do produto (campo obrigatório)
+- quantidade: quantidade numérica em estoque (campo obrigatório, apenas número)
+- unidade: unidade de medida (ex: Litro, Kg, Saco, Un)
+- principioAtivo: princípio ativo ou ingrediente ativo se houver
+- categoria: categoria do produto se houver (ex: FUNGICIDAS, HERBICIDAS, INSECTICIDAS)
+
+Ignore linhas de título, subtítulo, totais, separadores de categoria (linhas que só têm o nome da categoria), linhas vazias e linhas sem quantidade.
+
+Retorne APENAS JSON válido, sem texto extra:
+{
+  "produtos": [
+    {
+      "nome": "PICONAZOL 375 SC",
+      "quantidade": 65,
+      "unidade": "Litro",
+      "principioAtivo": "Picoxystrobin 20% + Prothiconazole 17,5%",
+      "categoria": "FUNGICIDAS"
+    }
+  ]
+}
+
+Dados da planilha:
+${csvText}`;
+
+            const geminiRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+                    }),
+                }
+            );
+
+            if (!geminiRes.ok) return res.status(500).json({ error: "Erro ao chamar Gemini AI" });
+
+            const geminiData = await geminiRes.json() as any;
+            const text: string = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) return res.status(422).json({ error: "IA não retornou JSON válido", raw: text.slice(0, 200) });
+
+            const parsed = JSON.parse(jsonMatch[0]);
+            const produtos: any[] = parsed.produtos ?? [];
+
+            if (produtos.length === 0) {
+                return res.json({ success: true, imported: 0, skipped: 0, errors: [] });
+            }
+
+            // Load warehouses and existing products
             const warehouses = await db.select().from(companyWarehouses)
                 .where(eq(companyWarehouses.companyId, companyId));
-            const products = await db.select().from(companyProducts)
-                .where(and(eq(companyProducts.companyId, companyId), eq(companyProducts.isActive, true)));
 
-            // Validate fixedWhId if provided
             if (fixedWhId && !warehouses.find((w: any) => w.id === fixedWhId)) {
                 return res.status(400).json({ error: "Barracão selecionado não encontrado" });
             }
+
+            const existingProducts = await db.select().from(companyProducts)
+                .where(eq(companyProducts.companyId, companyId));
 
             let imported = 0;
             let skipped = 0;
             const errors: string[] = [];
 
-            for (const row of rows) {
-                const prodName = String(
-                    row["Produto"] || row["produto"] || row["Product"] || row["PRODUTO"] || ""
-                ).trim();
-                const prodCode = String(row["Codigo"] || row["Código"] || row["codigo"] || "").trim();
-                // Support multiple quantity column names (new format: "Qtd. Estoque", classic: "Quantidade")
-                const qtyRaw = String(
-                    row["Qtd. Estoque"] || row["Quantidade"] || row["quantidade"] || row["QTD"] || row["Qty"] || "0"
-                ).replace(",", ".");
-                const qty = parseFloat(qtyRaw);
+            for (const p of produtos) {
+                const prodName: string = String(p.nome || "").trim();
+                const qty = parseFloat(String(p.quantidade ?? "0"));
+                const unit: string = String(p.unidade || "Un").trim();
 
-                // Skip category separator rows and empty rows
-                if (!prodName && !prodCode) { skipped++; continue; }
-                if (isNaN(qty) || qty === 0) { skipped++; continue; }
+                if (!prodName || isNaN(qty)) { skipped++; continue; }
 
                 // Determine warehouse
-                let whId: string;
-                if (fixedWhId) {
-                    whId = fixedWhId;
-                } else {
-                    const whName = String(row["Deposito"] || row["Depósito"] || row["deposito"] || "").trim();
-                    if (!whName) { skipped++; continue; }
-                    const wh = warehouses.find((w: any) => w.name.toLowerCase() === whName.toLowerCase());
-                    if (!wh) { errors.push(`Depósito "${whName}" não encontrado`); skipped++; continue; }
-                    whId = wh.id;
+                let whId: string | null = fixedWhId;
+                if (!whId) { skipped++; continue; } // no warehouse specified and no Deposito column
+
+                // Find or create product
+                let prod = existingProducts.find((ep: any) =>
+                    ep.name.toLowerCase() === prodName.toLowerCase()
+                );
+
+                if (!prod) {
+                    // Auto-create the product
+                    try {
+                        const [newProd] = await db.insert(companyProducts).values({
+                            companyId,
+                            name: prodName,
+                            unit,
+                            activeIngredient: p.principioAtivo || null,
+                            category: p.categoria ? p.categoria.toLowerCase().replace(/[^a-z]/g, "_") : null,
+                            isActive: true,
+                        } as any).returning();
+                        prod = newProd;
+                        existingProducts.push(newProd); // avoid re-creating in same import
+                    } catch {
+                        errors.push(`Erro ao criar produto "${prodName}"`);
+                        skipped++;
+                        continue;
+                    }
                 }
 
-                const prod = products.find(p =>
-                    (prodCode && (p.code ?? "").toLowerCase() === prodCode.toLowerCase()) ||
-                    p.name.toLowerCase() === prodName.toLowerCase()
-                );
-                if (!prod) { errors.push(`Produto "${prodName || prodCode}" não encontrado`); skipped++; continue; }
-
-                await db.execute(sql`
-                    INSERT INTO company_stock (warehouse_id, product_id, quantity, updated_at)
-                    VALUES (${whId}, ${prod.id}, ${qty}, now())
-                    ON CONFLICT (warehouse_id, product_id)
-                    DO UPDATE SET quantity = ${qty}, updated_at = now()
-                `);
-                await db.insert(companyStockMovements).values({
-                    companyId, warehouseId: whId, productId: prod.id,
-                    type: "import", quantity: String(qty), notes: "Importação via planilha", createdBy: user.id,
-                });
-                imported++;
+                try {
+                    await db.execute(sql`
+                        INSERT INTO company_stock (warehouse_id, product_id, quantity, updated_at)
+                        VALUES (${whId}, ${prod.id}, ${qty}, now())
+                        ON CONFLICT (warehouse_id, product_id)
+                        DO UPDATE SET quantity = ${qty}, updated_at = now()
+                    `);
+                    await db.insert(companyStockMovements).values({
+                        companyId, warehouseId: whId, productId: prod.id,
+                        type: "import", quantity: String(qty), notes: "Importação via planilha", createdBy: user.id,
+                    });
+                    imported++;
+                } catch {
+                    errors.push(`Erro ao importar estoque de "${prodName}"`);
+                    skipped++;
+                }
             }
 
             res.json({ success: true, imported, skipped, errors: errors.slice(0, 10) });
