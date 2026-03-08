@@ -1,35 +1,35 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import EmpresaLayout from "@/components/empresa/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, Search, Eye, CheckCircle, XCircle, Send, Loader2, Trash2 } from "lucide-react";
+import { Plus, Search, Eye, CheckCircle, XCircle, Send, Loader2, Trash2, AlertTriangle, FileCheck } from "lucide-react";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-    draft: { label: "Rascunho", color: "bg-slate-100 text-slate-700" },
-    pending_director: { label: "Aguard. Diretor", color: "bg-yellow-100 text-yellow-800" },
-    approved: { label: "Aprovado", color: "bg-blue-100 text-blue-800" },
-    pending_billing: { label: "Aguard. Faturamento", color: "bg-purple-100 text-purple-800" },
-    pending_finance: { label: "Aguard. Financeiro", color: "bg-orange-100 text-orange-800" },
-    invoiced: { label: "Faturado", color: "bg-green-100 text-green-800" },
-    partially_invoiced: { label: "Fat. Parcial", color: "bg-teal-100 text-teal-800" },
-    cancelled: { label: "Cancelado", color: "bg-red-100 text-red-800" },
+    draft:            { label: "Rascunho",         color: "bg-slate-100 text-slate-700" },
+    pending_director: { label: "Aguard. Diretor",   color: "bg-yellow-100 text-yellow-800" },
+    pending_finance:  { label: "Aguard. Financeiro",color: "bg-orange-100 text-orange-800" },
+    pending_billing:  { label: "Para Faturar",      color: "bg-purple-100 text-purple-800" },
+    invoiced:         { label: "Faturado",           color: "bg-green-100 text-green-800" },
+    partially_invoiced:{ label: "Fat. Parcial",     color: "bg-teal-100 text-teal-800" },
+    cancelled:        { label: "Cancelado",          color: "bg-red-100 text-red-800" },
 };
 
 const STATUS_TABS = [
-    { key: "all", label: "Todos" },
-    { key: "draft", label: "Rascunho" },
+    { key: "all",              label: "Todos" },
+    { key: "draft",            label: "Rascunho" },
     { key: "pending_director", label: "Aguard. Diretor" },
-    { key: "approved", label: "Aprovado" },
-    { key: "pending_billing", label: "Para Faturar" },
-    { key: "invoiced", label: "Faturado" },
+    { key: "pending_finance",  label: "Aguard. Financeiro" },
+    { key: "pending_billing",  label: "Para Faturar" },
+    { key: "invoiced",         label: "Faturado" },
+    { key: "cancelled",        label: "Cancelado" },
 ];
 
 const api = (method: string, path: string, body?: any) =>
@@ -48,6 +48,14 @@ export default function EmpresaPedidos() {
     const { user } = useAuth();
     const { toast } = useToast();
     const queryClient = useQueryClient();
+
+    // Cargo do usuário dentro da empresa
+    const { data: company } = useQuery<any>({
+        queryKey: ["/api/company/me"],
+        queryFn: () => api("GET", "/api/company/me"),
+        enabled: !!user,
+    });
+    const companyRole: string = company?.role ?? "";
     const [search, setSearch] = useState("");
     const [activeTab, setActiveTab] = useState("all");
     const [showForm, setShowForm] = useState(false);
@@ -111,30 +119,49 @@ export default function EmpresaPedidos() {
         onError: (e: any) => toast({ title: "Erro ao criar pedido", description: e.message, variant: "destructive" }),
     });
 
+    const invalidateOrders = () => queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] });
+    const onErr = (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" });
+
     const submitOrder = useMutation({
         mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/submit`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] }); toast({ title: "Pedido enviado para aprovação" }); },
+        onSuccess: () => { invalidateOrders(); toast({ title: "Pedido enviado para o diretor" }); },
+        onError: onErr,
     });
 
     const approveOrder = useMutation({
         mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/approve`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] }); toast({ title: "Pedido aprovado" }); },
-        onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+        onSuccess: () => { invalidateOrders(); toast({ title: "Pedido aprovado — enviado para faturamento" }); },
+        onError: onErr,
     });
 
     const rejectOrder = useMutation({
         mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/reject`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] }); toast({ title: "Pedido cancelado" }); },
+        onSuccess: () => { invalidateOrders(); toast({ title: "Pedido rejeitado" }); },
+        onError: onErr,
     });
 
     const toFinance = useMutation({
         mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/to-finance`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] }); toast({ title: "Enviado para financeiro" }); },
+        onSuccess: () => { invalidateOrders(); toast({ title: "Enviado para análise de crédito" }); },
+        onError: onErr,
     });
 
     const financeApprove = useMutation({
         mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/finance-approve`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] }); toast({ title: "Crédito aprovado" }); },
+        onSuccess: () => { invalidateOrders(); toast({ title: "Crédito liberado — pedido para faturamento" }); },
+        onError: onErr,
+    });
+
+    const financeReject = useMutation({
+        mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/finance-reject`),
+        onSuccess: () => { invalidateOrders(); toast({ title: "Crédito bloqueado — pedido cancelado" }); },
+        onError: onErr,
+    });
+
+    const markBilled = useMutation({
+        mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/mark-billed`),
+        onSuccess: () => { invalidateOrders(); toast({ title: "Pedido marcado como faturado" }); },
+        onError: onErr,
     });
 
     const handleAddItem = () => {
@@ -166,6 +193,8 @@ export default function EmpresaPedidos() {
     const totalUsd = orderItems.reduce((acc, i) => acc + (i.totalPriceUsd ?? 0), 0);
 
     const filtered = orders.filter((o: any) => {
+        // RTV só vê os próprios pedidos
+        if (companyRole === "rtv" && o.consultantId !== user?.id) return false;
         const matchSearch = !search || o.orderNumber.toLowerCase().includes(search.toLowerCase()) || (o.clientName ?? "").toLowerCase().includes(search.toLowerCase());
         const matchTab = activeTab === "all" || o.status === activeTab;
         return matchSearch && matchTab;
@@ -227,33 +256,45 @@ export default function EmpresaPedidos() {
                                                         </p>
                                                         <p className="text-slate-400 text-xs">{new Date(order.createdAt).toLocaleDateString("es-PY")}</p>
                                                     </div>
-                                                    <div className="flex gap-1">
+                                                    <div className="flex gap-1 flex-wrap justify-end">
                                                         <Button size="sm" variant="ghost" onClick={() => setDetailOrder(order)}>
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
-                                                        {order.status === "draft" && (
-                                                            <Button size="sm" variant="ghost" className="text-blue-600" onClick={() => submitOrder.mutate(order.id)}>
+                                                        {/* RTV: envia rascunho para diretor */}
+                                                        {order.status === "draft" && companyRole === "rtv" && (
+                                                            <Button size="sm" variant="ghost" className="text-blue-600" title="Enviar para diretor" onClick={() => submitOrder.mutate(order.id)}>
                                                                 <Send className="h-4 w-4" />
                                                             </Button>
                                                         )}
-                                                        {order.status === "pending_director" && (
+                                                        {/* DIRETOR: aprovar → faturamento | enviar financeiro | rejeitar */}
+                                                        {order.status === "pending_director" && ["director", "admin_empresa"].includes(companyRole) && (
                                                             <>
-                                                                <Button size="sm" variant="ghost" className="text-green-600" onClick={() => approveOrder.mutate(order.id)}>
+                                                                <Button size="sm" variant="ghost" className="text-green-600" title="Aprovar" onClick={() => approveOrder.mutate(order.id)}>
                                                                     <CheckCircle className="h-4 w-4" />
                                                                 </Button>
-                                                                <Button size="sm" variant="ghost" className="text-red-500" onClick={() => rejectOrder.mutate(order.id)}>
+                                                                <Button size="sm" variant="ghost" className="text-orange-500" title="Verificar crédito" onClick={() => toFinance.mutate(order.id)}>
+                                                                    <AlertTriangle className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button size="sm" variant="ghost" className="text-red-500" title="Rejeitar" onClick={() => rejectOrder.mutate(order.id)}>
                                                                     <XCircle className="h-4 w-4" />
                                                                 </Button>
                                                             </>
                                                         )}
-                                                        {order.status === "approved" && (
-                                                            <Button size="sm" variant="ghost" className="text-orange-600" onClick={() => toFinance.mutate(order.id)}>
-                                                                Financeiro
-                                                            </Button>
+                                                        {/* FINANCEIRO: liberar ou bloquear crédito */}
+                                                        {order.status === "pending_finance" && ["financeiro", "admin_empresa"].includes(companyRole) && (
+                                                            <>
+                                                                <Button size="sm" variant="ghost" className="text-green-600" title="Liberar crédito" onClick={() => financeApprove.mutate(order.id)}>
+                                                                    <CheckCircle className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button size="sm" variant="ghost" className="text-red-500" title="Bloquear crédito" onClick={() => financeReject.mutate(order.id)}>
+                                                                    <XCircle className="h-4 w-4" />
+                                                                </Button>
+                                                            </>
                                                         )}
-                                                        {order.status === "pending_finance" && (
-                                                            <Button size="sm" variant="ghost" className="text-green-600" onClick={() => financeApprove.mutate(order.id)}>
-                                                                Liberar
+                                                        {/* FATURISTA: marcar como faturado manualmente */}
+                                                        {order.status === "pending_billing" && ["faturista", "admin_empresa"].includes(companyRole) && (
+                                                            <Button size="sm" variant="ghost" className="text-purple-600" title="Marcar como faturado" onClick={() => markBilled.mutate(order.id)}>
+                                                                <FileCheck className="h-4 w-4" />
                                                             </Button>
                                                         )}
                                                     </div>

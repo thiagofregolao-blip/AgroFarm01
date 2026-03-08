@@ -921,7 +921,7 @@ export function registerCommercialRoutes(app: Express) {
         }
     });
 
-    /** Director approves order */
+    /** Director approves order → goes directly to pending_billing */
     app.post("/api/company/orders/:id/approve", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -931,7 +931,7 @@ export function registerCommercialRoutes(app: Express) {
 
             const [cu] = await db.select().from(companyUsers)
                 .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.companyId, companyId)));
-            if (!["director", "admin"].includes(cu?.role ?? "")) {
+            if (!["director", "admin_empresa"].includes(cu?.role ?? "")) {
                 return res.status(403).json({ error: "Apenas o diretor pode aprovar pedidos" });
             }
 
@@ -941,15 +941,15 @@ export function registerCommercialRoutes(app: Express) {
             if (order.status !== "pending_director") return res.status(400).json({ error: "Pedido não está aguardando aprovação" });
 
             await db.update(salesOrders)
-                .set({ status: "approved", approvedById: user.id, approvedAt: new Date(), updatedAt: new Date() } as any)
+                .set({ status: "pending_billing", approvedById: user.id, approvedAt: new Date(), updatedAt: new Date() } as any)
                 .where(eq(salesOrders.id, order.id));
-            res.json({ success: true, status: "approved" });
+            res.json({ success: true, status: "pending_billing" });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
         }
     });
 
-    /** Director/faturista rejects order */
+    /** Director rejects order → cancelled */
     app.post("/api/company/orders/:id/reject", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -966,7 +966,7 @@ export function registerCommercialRoutes(app: Express) {
         }
     });
 
-    /** Faturista sends to finance (no credit) */
+    /** Director sends to finance (special case: client has no credit) */
     app.post("/api/company/orders/:id/to-finance", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -974,16 +974,21 @@ export function registerCommercialRoutes(app: Express) {
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
+            const [order] = await db.select().from(salesOrders)
+                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)));
+            if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+            if (order.status !== "pending_director") return res.status(400).json({ error: "Pedido precisa estar aguardando diretor" });
+
             await db.update(salesOrders)
                 .set({ status: "pending_finance", updatedAt: new Date() } as any)
-                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)));
+                .where(eq(salesOrders.id, order.id));
             res.json({ success: true, status: "pending_finance" });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
         }
     });
 
-    /** Finance approves (credit granted) → back to billing */
+    /** Finance approves credit → goes to pending_billing */
     app.post("/api/company/orders/:id/finance-approve", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -992,9 +997,48 @@ export function registerCommercialRoutes(app: Express) {
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
             await db.update(salesOrders)
-                .set({ status: "approved", updatedAt: new Date() } as any)
+                .set({ status: "pending_billing", updatedAt: new Date() } as any)
                 .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)));
-            res.json({ success: true, status: "approved" });
+            res.json({ success: true, status: "pending_billing" });
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    /** Finance blocks credit → cancelled */
+    app.post("/api/company/orders/:id/finance-reject", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            await db.update(salesOrders)
+                .set({ status: "cancelled", updatedAt: new Date() } as any)
+                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)));
+            res.json({ success: true, status: "cancelled" });
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    /** Faturista marks order as manually billed */
+    app.post("/api/company/orders/:id/mark-billed", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            const [order] = await db.select().from(salesOrders)
+                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)));
+            if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+            if (order.status !== "pending_billing") return res.status(400).json({ error: "Pedido precisa estar em Para Faturar" });
+
+            await db.update(salesOrders)
+                .set({ status: "invoiced", updatedAt: new Date() } as any)
+                .where(eq(salesOrders.id, order.id));
+            res.json({ success: true, status: "invoiced" });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
         }
