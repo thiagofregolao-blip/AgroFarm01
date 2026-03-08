@@ -864,6 +864,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
                 productId: companyStock.productId,
                 productName: companyProducts.name,
                 productCode: companyProducts.code,
+                productCategory: companyProducts.category,
                 unit: companyProducts.unit,
                 quantity: companyStock.quantity,
                 updatedAt: companyStock.updatedAt,
@@ -872,7 +873,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
                 .innerJoin(companyWarehouses, eq(companyStock.warehouseId, companyWarehouses.id))
                 .innerJoin(companyProducts, eq(companyStock.productId, companyProducts.id))
                 .where(inArray(companyStock.warehouseId, warehouseIds))
-                .orderBy(asc(companyProducts.name), asc(companyWarehouses.name));
+                .orderBy(asc(companyProducts.category), asc(companyProducts.name), asc(companyWarehouses.name));
 
             res.json(stockRows);
         } catch (e) {

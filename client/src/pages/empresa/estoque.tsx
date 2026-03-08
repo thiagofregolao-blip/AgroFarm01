@@ -87,11 +87,21 @@ export default function EmpresaEstoque() {
         return matchSearch && matchWh;
     });
 
-    const byWarehouse: Record<string, any[]> = {};
+    // Group by warehouse, then by category within each warehouse
+    const byWarehouse: Record<string, Record<string, any[]>> = {};
     for (const s of filtered) {
-        if (!byWarehouse[s.warehouseId]) byWarehouse[s.warehouseId] = [];
-        byWarehouse[s.warehouseId].push(s);
+        if (!byWarehouse[s.warehouseId]) byWarehouse[s.warehouseId] = {};
+        const cat = s.productCategory ?? "__sem_categoria__";
+        if (!byWarehouse[s.warehouseId][cat]) byWarehouse[s.warehouseId][cat] = [];
+        byWarehouse[s.warehouseId][cat].push(s);
     }
+
+    const CATEGORY_LABELS: Record<string, string> = {
+        fungicidas: "Fungicidas", herbicidas: "Herbicidas", insecticidas: "Inseticidas",
+        insekticidas: "Inseticidas", inseticidas: "Inseticidas",
+        coadyuvantes: "Coadjuvantes", fertilizantes: "Fertilizantes",
+        sementes: "Sementes", outros: "Outros", __sem_categoria__: "Sem Categoria",
+    };
 
     return (
         <EmpresaLayout>
@@ -135,40 +145,52 @@ export default function EmpresaEstoque() {
                     <div className="text-center py-12 text-slate-400">Nenhum produto em estoque</div>
                 ) : (
                     <div className="space-y-4">
-                        {Object.entries(byWarehouse).map(([whId, items]) => {
+                        {Object.entries(byWarehouse).map(([whId, byCategory]) => {
                             const wh = warehouses.find((w: any) => w.id === whId);
+                            const totalItems = Object.values(byCategory).reduce((acc, arr) => acc + arr.length, 0);
                             return (
                                 <Card key={whId}>
                                     <CardHeader className="pb-2">
-                                        <CardTitle className="text-base">{wh?.name ?? "Depósito"}</CardTitle>
+                                        <CardTitle className="text-base flex items-center gap-2">
+                                            {wh?.name ?? "Depósito"}
+                                            <span className="text-xs font-normal bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{totalItems} produto(s)</span>
+                                        </CardTitle>
                                     </CardHeader>
                                     <CardContent className="p-0">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="text-slate-500 text-xs border-b bg-slate-50">
-                                                    <th className="text-left px-4 py-2">Produto</th>
-                                                    <th className="text-left px-4 py-2">Código</th>
-                                                    <th className="text-right px-4 py-2">Quantidade</th>
-                                                    <th className="text-right px-4 py-2">Unidade</th>
-                                                    <th className="text-right px-4 py-2">Atualizado</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y">
-                                                {items.map((s: any) => (
-                                                    <tr key={s.stockId} className={parseFloat(s.quantity) < 0 ? "bg-red-50" : ""}>
-                                                        <td className="px-4 py-2 font-medium">{s.productName}</td>
-                                                        <td className="px-4 py-2 text-slate-500">{s.productCode ?? "—"}</td>
-                                                        <td className={`px-4 py-2 text-right font-semibold ${parseFloat(s.quantity) < 0 ? "text-red-600" : ""}`}>
-                                                            {parseFloat(s.quantity).toLocaleString("es-PY", { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                        <td className="px-4 py-2 text-right text-slate-500">{s.unit}</td>
-                                                        <td className="px-4 py-2 text-right text-slate-400 text-xs">
-                                                            {new Date(s.updatedAt).toLocaleDateString("es-PY")}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                        {Object.entries(byCategory).map(([cat, items]) => (
+                                            <div key={cat}>
+                                                <div className="px-4 py-1.5 bg-slate-100 border-y text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                                                    {CATEGORY_LABELS[cat] ?? cat.replace(/_/g, " ")}
+                                                    <span className="ml-2 font-normal normal-case text-slate-400">({items.length})</span>
+                                                </div>
+                                                <table className="w-full text-sm">
+                                                    <thead>
+                                                        <tr className="text-slate-500 text-xs border-b bg-slate-50">
+                                                            <th className="text-left px-4 py-2">Produto</th>
+                                                            <th className="text-left px-4 py-2">Código</th>
+                                                            <th className="text-right px-4 py-2">Quantidade</th>
+                                                            <th className="text-right px-4 py-2">Unidade</th>
+                                                            <th className="text-right px-4 py-2">Atualizado</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y">
+                                                        {items.map((s: any) => (
+                                                            <tr key={s.stockId} className={parseFloat(s.quantity) < 0 ? "bg-red-50" : ""}>
+                                                                <td className="px-4 py-2 font-medium">{s.productName}</td>
+                                                                <td className="px-4 py-2 text-slate-500">{s.productCode ?? "—"}</td>
+                                                                <td className={`px-4 py-2 text-right font-semibold ${parseFloat(s.quantity) < 0 ? "text-red-600" : ""}`}>
+                                                                    {parseFloat(s.quantity).toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                                                </td>
+                                                                <td className="px-4 py-2 text-right text-slate-500">{s.unit}</td>
+                                                                <td className="px-4 py-2 text-right text-slate-400 text-xs">
+                                                                    {new Date(s.updatedAt).toLocaleDateString("es-PY")}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ))}
                                     </CardContent>
                                 </Card>
                             );
