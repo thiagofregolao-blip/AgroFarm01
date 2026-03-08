@@ -1465,6 +1465,35 @@ export function registerCommercialRoutes(app: Express) {
         }
     });
 
+    /** Corrige platform role de todos os usuários vinculados a empresas para 'rtv' */
+    app.post("/api/admin/companies/fix-platform-roles", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const admin = req.user as any;
+            if (admin.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
+
+            // Busca todos os userIds vinculados a alguma empresa
+            const allCompanyUsers = await db.select({ userId: companyUsers.userId }).from(companyUsers);
+            const userIds = Array.from(new Set(allCompanyUsers.map((cu: any) => cu.userId)));
+
+            if (userIds.length === 0) return res.json({ updated: 0 });
+
+            // Atualiza platform role para 'rtv' de todos que NÃO são administrador
+            const result = await db.update(users)
+                .set({ role: "rtv" })
+                .where(and(
+                    inArray(users.id, userIds),
+                    sql`role NOT IN ('administrador', 'rtv')`
+                ))
+                .returning({ id: users.id, username: users.username, role: users.role });
+
+            res.json({ updated: result.length, users: result });
+        } catch (e) {
+            console.error(e);
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
     app.get("/api/admin/companies", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -1498,13 +1527,13 @@ export function registerCommercialRoutes(app: Express) {
                 name,
                 email: email || null,
                 password: hashedPwd,
-                role: role || "rtv",
+                role: "rtv", // sempre rtv na plataforma; cargo real fica em company_users
             }).returning();
 
             const [cu] = await db.insert(companyUsers).values({
                 companyId: req.params.companyId,
                 userId: newUser.id,
-                role: role || "rtv",
+                role: role || "rtv", // cargo dentro da empresa (director, faturista, etc.)
             }).returning();
 
             res.json({ user: newUser, companyUser: cu });
