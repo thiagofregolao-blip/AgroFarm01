@@ -79,6 +79,18 @@ import BankReconciliation from "@/pages/fazenda/reconciliation";
 import PdvLogin from "@/pages/pdv/login";
 import PdvTerminal from "@/pages/pdv/terminal";
 
+// Commercial Module
+import EmpresaDashboard from "@/pages/empresa/dashboard";
+import EmpresaPedidos from "@/pages/empresa/pedidos";
+import EmpresaClientes from "@/pages/empresa/clientes";
+import EmpresaEstoque from "@/pages/empresa/estoque";
+import EmpresaFaturas from "@/pages/empresa/faturas";
+import EmpresaPagares from "@/pages/empresa/pagares";
+import EmpresaRemissoes from "@/pages/empresa/remissoes";
+import EmpresaProdutos from "@/pages/empresa/produtos";
+import EmpresaTabelas from "@/pages/empresa/tabelas";
+import EmpresaDepositos from "@/pages/empresa/depositos";
+
 function Router() {
   return (
     <Switch>
@@ -159,6 +171,18 @@ function Router() {
       {/* PDV Routes (Tablet) */}
       <Route path="/pdv/login" component={PdvLogin} />
       <Route path="/pdv" component={PdvTerminal} />
+
+      {/* Commercial Module Routes */}
+      <Route path="/empresa" component={EmpresaDashboard} />
+      <Route path="/empresa/pedidos" component={EmpresaPedidos} />
+      <Route path="/empresa/clientes" component={EmpresaClientes} />
+      <Route path="/empresa/estoque" component={EmpresaEstoque} />
+      <Route path="/empresa/faturas" component={EmpresaFaturas} />
+      <Route path="/empresa/pagares" component={EmpresaPagares} />
+      <Route path="/empresa/remissoes" component={EmpresaRemissoes} />
+      <Route path="/empresa/produtos" component={EmpresaProdutos} />
+      <Route path="/empresa/tabelas" component={EmpresaTabelas} />
+      <Route path="/empresa/depositos" component={EmpresaDepositos} />
 
       <ConsultorRoute path="/dashboard" component={Dashboard} />
       <ConsultorRoute path="/vendas" component={Vendas} />
