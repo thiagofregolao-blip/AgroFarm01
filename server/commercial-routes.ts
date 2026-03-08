@@ -410,8 +410,11 @@ export function registerCommercialRoutes(app: Express) {
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
+            const includeAll = req.query.all === "true";
             const products = await db.select().from(companyProducts)
-                .where(and(eq(companyProducts.companyId, companyId), eq(companyProducts.isActive, true)))
+                .where(includeAll
+                    ? eq(companyProducts.companyId, companyId)
+                    : and(eq(companyProducts.companyId, companyId), eq(companyProducts.isActive, true)))
                 .orderBy(asc(companyProducts.name));
             res.json(products);
         } catch (e) {
@@ -453,6 +456,23 @@ export function registerCommercialRoutes(app: Express) {
                 .returning();
             if (!product) return res.status(404).json({ error: "Produto não encontrado" });
             res.json(product);
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    app.delete("/api/company/products/:id", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            const deleted = await db.delete(companyProducts)
+                .where(and(eq(companyProducts.id, req.params.id), eq(companyProducts.companyId, companyId)))
+                .returning();
+            if (!deleted.length) return res.status(404).json({ error: "Produto não encontrado" });
+            res.json({ ok: true });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
         }

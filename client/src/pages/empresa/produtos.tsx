@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, Search, Pencil, Loader2, Package, Sparkles, Upload, Check, X } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Package, Sparkles, Upload, Check, X, Trash2, EyeOff, Eye } from "lucide-react";
 
 const api = (method: string, path: string, body?: any) =>
     fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined })
@@ -49,6 +49,7 @@ export default function EmpresaProdutos() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [search, setSearch] = useState("");
+    const [showInactive, setShowInactive] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState<any>(null);
     const [form, setForm] = useState({ ...emptyForm });
@@ -60,8 +61,8 @@ export default function EmpresaProdutos() {
     const [savingAi, setSavingAi] = useState(false);
 
     const { data: products = [], isLoading } = useQuery<any[]>({
-        queryKey: ["/api/company/products"],
-        queryFn: () => api("GET", "/api/company/products"),
+        queryKey: ["/api/company/products", showInactive],
+        queryFn: () => api("GET", `/api/company/products${showInactive ? "?all=true" : ""}`),
         enabled: !!user,
     });
 
@@ -75,6 +76,21 @@ export default function EmpresaProdutos() {
             toast({ title: editing ? "Produto atualizado" : "Produto criado" });
         },
         onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
+    });
+
+    const toggleActive = useMutation({
+        mutationFn: (p: any) => api("PUT", `/api/company/products/${p.id}`, { ...p, isActive: !p.isActive }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/company/products"] }),
+        onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+    });
+
+    const remove = useMutation({
+        mutationFn: (id: string) => api("DELETE", `/api/company/products/${id}`),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["/api/company/products"] });
+            toast({ title: "Produto excluído" });
+        },
+        onError: (e: any) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
     });
 
     const openEdit = (p: any) => {
@@ -178,7 +194,16 @@ export default function EmpresaProdutos() {
                     <Input placeholder="Buscar produto ou código..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
 
-                <p className="text-sm text-slate-500">{filtered.length} produto{filtered.length !== 1 ? "s" : ""}</p>
+                <div className="flex items-center gap-3">
+                    <p className="text-sm text-slate-500">{filtered.length} produto{filtered.length !== 1 ? "s" : ""}</p>
+                    <button
+                        onClick={() => setShowInactive(v => !v)}
+                        className={`text-xs flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${showInactive ? "bg-slate-200 border-slate-400 text-slate-700" : "border-slate-300 text-slate-400 hover:text-slate-600"}`}
+                    >
+                        {showInactive ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                        {showInactive ? "Mostrando inativos" : "Ver inativos"}
+                    </button>
+                </div>
 
                 {isLoading ? (
                     <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
@@ -187,13 +212,16 @@ export default function EmpresaProdutos() {
                 ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {filtered.map((p: any) => (
-                            <Card key={p.id} className="hover:shadow-md transition-shadow">
+                            <Card key={p.id} className={`hover:shadow-md transition-shadow ${!p.isActive ? "opacity-50" : ""}`}>
                                 <CardContent className="p-4">
                                     <div className="flex items-start justify-between">
                                         <div className="flex gap-2 items-start flex-1 min-w-0">
                                             <Package className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
                                             <div className="min-w-0 flex-1">
-                                                <p className="font-semibold text-sm">{p.name}</p>
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="font-semibold text-sm">{p.name}</p>
+                                                    {!p.isActive && <span className="text-xs bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">Inativo</span>}
+                                                </div>
                                                 {p.code && <p className="text-slate-500 text-xs">Cód: {p.code}</p>}
                                                 {p.activeIngredient && (
                                                     <p className="text-slate-500 text-xs mt-0.5">P.A.: {p.activeIngredient}</p>
@@ -211,9 +239,29 @@ export default function EmpresaProdutos() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <Button size="sm" variant="ghost" onClick={() => openEdit(p)}>
-                                            <Pencil className="h-3.5 w-3.5" />
-                                        </Button>
+                                        <div className="flex gap-0.5 shrink-0">
+                                            <Button size="sm" variant="ghost" title="Editar" onClick={() => openEdit(p)}>
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                                size="sm" variant="ghost"
+                                                title={p.isActive ? "Inativar produto" : "Reativar produto"}
+                                                className={p.isActive ? "text-slate-400 hover:text-amber-600" : "text-amber-500 hover:text-green-600"}
+                                                disabled={toggleActive.isPending}
+                                                onClick={() => toggleActive.mutate(p)}
+                                            >
+                                                {p.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                            </Button>
+                                            <Button
+                                                size="sm" variant="ghost"
+                                                title="Excluir produto"
+                                                className="text-slate-400 hover:text-red-600"
+                                                disabled={remove.isPending}
+                                                onClick={() => { if (confirm(`Excluir "${p.name}"?`)) remove.mutate(p.id); }}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>
