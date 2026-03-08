@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -109,7 +108,8 @@ export default function EmpresaProdutos() {
                 credentials: "include",
                 body: fd,
             });
-            const data = await r.json();
+            let data: any;
+            try { data = await r.json(); } catch { throw new Error("Erro ao processar arquivo (resposta inválida)"); }
             if (!r.ok) throw new Error(data.error || "Erro ao processar arquivo");
             if (!data.produtos || data.produtos.length === 0) {
                 toast({ title: "Nenhum produto encontrado na imagem/PDF", variant: "destructive" });

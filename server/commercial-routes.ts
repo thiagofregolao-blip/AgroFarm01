@@ -35,7 +35,7 @@ import {
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: get the companyId for the authenticated user
@@ -459,7 +459,17 @@ export function registerCommercialRoutes(app: Express) {
     });
 
     // AI import from image/PDF
-    app.post("/api/company/products/import-from-file", upload.single("file"), async (req: Request, res: Response) => {
+    app.post("/api/company/products/import-from-file", (req: Request, res: Response, next: any) => {
+        upload.single("file")(req, res, (err: any) => {
+            if (err) {
+                if (err.code === "LIMIT_FILE_SIZE") {
+                    return res.status(413).json({ error: "Arquivo muito grande. Máximo 50MB." });
+                }
+                return res.status(400).json({ error: err.message || "Erro ao processar arquivo" });
+            }
+            next();
+        });
+    }, async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
             if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
