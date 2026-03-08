@@ -138,7 +138,14 @@ export default function EmpresaPedidos() {
     });
 
     const handleAddItem = () => {
-        if (!newItem.productName || !newItem.quantity) return;
+        if (!newItem.productName) {
+            toast({ title: "Informe o nome do produto", variant: "destructive" });
+            return;
+        }
+        if (!newItem.quantity || parseFloat(newItem.quantity) <= 0) {
+            toast({ title: "Informe a quantidade", variant: "destructive" });
+            return;
+        }
         const qty = parseFloat(newItem.quantity);
         const price = parseFloat(newItem.unitPriceUsd || "0");
         setOrderItems(prev => [...prev, { ...newItem, quantity: qty, unitPriceUsd: price, totalPriceUsd: qty * price }]);
@@ -390,12 +397,24 @@ export default function EmpresaPedidos() {
                             {/* Add item row */}
                             <div className="grid grid-cols-12 gap-2 items-end">
                                 <div className="col-span-4">
-                                    <Select value={newItem.productId} onValueChange={handleProductSelect}>
-                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Produto..." /></SelectTrigger>
-                                        <SelectContent>
-                                            {products.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
+                                    <datalist id="products-list">
+                                        {(products as any[]).map((p: any) => <option key={p.id} value={p.name} data-id={p.id} />)}
+                                    </datalist>
+                                    <Input
+                                        className="h-8 text-xs"
+                                        placeholder="Nome do produto..."
+                                        list="products-list"
+                                        value={newItem.productName}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const match = (products as any[]).find((p: any) => p.name === val);
+                                            if (match) {
+                                                handleProductSelect(match.id);
+                                            } else {
+                                                setNewItem(prev => ({ ...prev, productName: val, productId: "", productCode: "" }));
+                                            }
+                                        }}
+                                    />
                                 </div>
                                 <div className="col-span-2">
                                     <Input className="h-8 text-xs" placeholder="Qtd" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))} />
@@ -404,7 +423,7 @@ export default function EmpresaPedidos() {
                                     <Input className="h-8 text-xs" placeholder="Un" value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))} />
                                 </div>
                                 <div className="col-span-2">
-                                    <Input className="h-8 text-xs" placeholder="Preço" value={newItem.unitPriceUsd} onChange={e => setNewItem(p => ({ ...p, unitPriceUsd: e.target.value }))} />
+                                    <Input className="h-8 text-xs" placeholder="Preço U$" value={newItem.unitPriceUsd} onChange={e => setNewItem(p => ({ ...p, unitPriceUsd: e.target.value }))} />
                                 </div>
                                 <div className="col-span-2 text-xs text-slate-500 text-right">
                                     {newItem.quantity && newItem.unitPriceUsd ? (parseFloat(newItem.quantity) * parseFloat(newItem.unitPriceUsd)).toLocaleString("es-PY", { minimumFractionDigits: 2 }) : "—"}
@@ -415,6 +434,9 @@ export default function EmpresaPedidos() {
                                     </Button>
                                 </div>
                             </div>
+                            {orderItems.length === 0 && (
+                                <p className="text-xs text-slate-400 text-center pt-1">Digite o produto, quantidade e clique em <strong>+</strong> para adicionar</p>
+                            )}
                             {orderItems.length > 0 && (
                                 <div className="text-right text-sm font-semibold border-t pt-2">
                                     Total: $ {totalUsd.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
