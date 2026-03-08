@@ -1701,6 +1701,7 @@ export const companyStock = pgTable("company_stock", {
   warehouseId: varchar("warehouse_id").notNull().references(() => companyWarehouses.id, { onDelete: "cascade" }),
   productId: varchar("product_id").notNull().references(() => companyProducts.id, { onDelete: "cascade" }),
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull().default("0"),
+  reservedQuantity: decimal("reserved_quantity", { precision: 15, scale: 4 }).notNull().default("0"),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 }, (table) => ({
   uniqueWarehouseProduct: unique().on(table.warehouseId, table.productId),

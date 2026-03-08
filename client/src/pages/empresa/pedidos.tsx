@@ -107,6 +107,12 @@ export default function EmpresaPedidos() {
         enabled: !!form.priceListId,
     });
 
+    const { data: availableByProduct = [] } = useQuery<any[]>({
+        queryKey: ["/api/company/stock/available-by-product"],
+        queryFn: () => api("GET", "/api/company/stock/available-by-product"),
+        enabled: showForm,
+    });
+
     const createOrder = useMutation({
         mutationFn: (data: any) => api("POST", "/api/company/orders", data),
         onSuccess: () => {
@@ -456,9 +462,25 @@ export default function EmpresaPedidos() {
                                             }
                                         }}
                                     />
+                                    {newItem.productId && (() => {
+                                        const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
+                                        if (!avail) return null;
+                                        const qty = parseFloat(avail.available);
+                                        return (
+                                            <span className={`text-xs mt-0.5 block ${qty < 0 ? "text-red-500" : qty === 0 ? "text-slate-400" : "text-green-600"}`}>
+                                                Disp: {qty.toLocaleString("es-PY", { minimumFractionDigits: 2 })} {avail.unit}
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                                 <div className="col-span-2">
                                     <Input className="h-8 text-xs" placeholder="Qtd" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))} />
+                                    {newItem.productId && newItem.quantity && (() => {
+                                        const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
+                                        if (!avail) return null;
+                                        const excede = parseFloat(newItem.quantity) > parseFloat(avail.available);
+                                        return excede ? <span className="text-xs text-orange-500 block mt-0.5">Acima do disp.</span> : null;
+                                    })()}
                                 </div>
                                 <div className="col-span-1">
                                     <Input className="h-8 text-xs" placeholder="Un" value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))} />

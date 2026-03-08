@@ -197,6 +197,63 @@ async function deductStockFromInvoice(invoiceId: string, companyId: string, user
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: reserve stock when an order is submitted
+// ─────────────────────────────────────────────────────────────────────────────
+async function reserveStockForOrder(orderId: string, companyId: string, userId: string) {
+    const items = await db.select().from(salesOrderItems).where(eq(salesOrderItems.orderId, orderId));
+    for (const item of items) {
+        if (!item.warehouseId || !item.productId) continue;
+        const qty = parseFloat(item.quantity as string);
+
+        await db.execute(sql`
+            INSERT INTO company_stock (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
+            VALUES (${item.warehouseId}, ${item.productId}, 0, ${qty}, now())
+            ON CONFLICT (warehouse_id, product_id)
+            DO UPDATE SET reserved_quantity = company_stock.reserved_quantity + ${qty}, updated_at = now()
+        `);
+
+        await db.insert(companyStockMovements).values({
+            companyId,
+            warehouseId: item.warehouseId,
+            productId: item.productId,
+            type: "reserve",
+            quantity: String(qty),
+            referenceType: "order",
+            referenceId: orderId,
+            createdBy: userId,
+        });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: release stock reservation when order is rejected/cancelled
+// ─────────────────────────────────────────────────────────────────────────────
+async function releaseStockReservation(orderId: string, companyId: string, userId: string) {
+    const items = await db.select().from(salesOrderItems).where(eq(salesOrderItems.orderId, orderId));
+    for (const item of items) {
+        if (!item.warehouseId || !item.productId) continue;
+        const qty = parseFloat(item.quantity as string);
+
+        await db.execute(sql`
+            UPDATE company_stock
+            SET reserved_quantity = GREATEST(0, reserved_quantity - ${qty}), updated_at = now()
+            WHERE warehouse_id = ${item.warehouseId} AND product_id = ${item.productId}
+        `);
+
+        await db.insert(companyStockMovements).values({
+            companyId,
+            warehouseId: item.warehouseId,
+            productId: item.productId,
+            type: "reserve_release",
+            quantity: String(qty),
+            referenceType: "order",
+            referenceId: orderId,
+            createdBy: userId,
+        });
+    }
+}
+
 // =============================================================================
 // REGISTER ROUTES
 // =============================================================================
@@ -867,6 +924,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
                 productCategory: companyProducts.category,
                 unit: companyProducts.unit,
                 quantity: companyStock.quantity,
+                reservedQuantity: companyStock.reservedQuantity,
                 updatedAt: companyStock.updatedAt,
             })
                 .from(companyStock)
@@ -876,6 +934,39 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
                 .orderBy(asc(companyProducts.category), asc(companyProducts.name), asc(companyWarehouses.name));
 
             res.json(stockRows);
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    /** Available stock aggregated by product (sum across all warehouses) */
+    app.get("/api/company/stock/available-by-product", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            const warehouses = await db.select().from(companyWarehouses)
+                .where(eq(companyWarehouses.companyId, companyId));
+            const warehouseIds = warehouses.map((w: any) => w.id);
+            if (warehouseIds.length === 0) return res.json([]);
+
+            const rows = await db.execute(sql`
+                SELECT
+                    cs.product_id AS "productId",
+                    cp.name AS "productName",
+                    cp.unit AS unit,
+                    SUM(cs.quantity::numeric) AS "totalQty",
+                    SUM(cs.reserved_quantity::numeric) AS "totalReserved",
+                    SUM(cs.quantity::numeric - cs.reserved_quantity::numeric) AS available
+                FROM company_stock cs
+                JOIN company_products cp ON cp.id = cs.product_id
+                WHERE cs.warehouse_id = ANY(${warehouseIds})
+                GROUP BY cs.product_id, cp.name, cp.unit
+                ORDER BY cp.name
+            `);
+            res.json(rows.rows);
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
         }
@@ -1263,6 +1354,7 @@ ${csvText}`;
 
             await db.update(salesOrders).set({ status: "pending_director", updatedAt: new Date() } as any)
                 .where(eq(salesOrders.id, order.id));
+            await reserveStockForOrder(order.id, companyId, user.id);
             res.json({ success: true, status: "pending_director" });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
@@ -1305,9 +1397,11 @@ ${csvText}`;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            await db.update(salesOrders)
+            const [rejectedOrder] = await db.update(salesOrders)
                 .set({ status: "cancelled", updatedAt: new Date() } as any)
-                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)));
+                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)))
+                .returning();
+            if (rejectedOrder) await releaseStockReservation(rejectedOrder.id, companyId, user.id);
             res.json({ success: true, status: "cancelled" });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
@@ -1361,9 +1455,11 @@ ${csvText}`;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            await db.update(salesOrders)
+            const [finRejectedOrder] = await db.update(salesOrders)
                 .set({ status: "cancelled", updatedAt: new Date() } as any)
-                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)));
+                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)))
+                .returning();
+            if (finRejectedOrder) await releaseStockReservation(finRejectedOrder.id, companyId, user.id);
             res.json({ success: true, status: "cancelled" });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
@@ -1386,6 +1482,31 @@ ${csvText}`;
             await db.update(salesOrders)
                 .set({ status: "invoiced", updatedAt: new Date() } as any)
                 .where(eq(salesOrders.id, order.id));
+
+            // Deduct real stock and release reservation
+            const orderItems = await db.select().from(salesOrderItems).where(eq(salesOrderItems.orderId, order.id));
+            for (const item of orderItems) {
+                if (!item.warehouseId || !item.productId) continue;
+                const qty = parseFloat(item.quantity as string);
+                await db.execute(sql`
+                    UPDATE company_stock
+                    SET quantity = quantity - ${qty},
+                        reserved_quantity = GREATEST(0, reserved_quantity - ${qty}),
+                        updated_at = now()
+                    WHERE warehouse_id = ${item.warehouseId} AND product_id = ${item.productId}
+                `);
+                await db.insert(companyStockMovements).values({
+                    companyId,
+                    warehouseId: item.warehouseId,
+                    productId: item.productId,
+                    type: "out",
+                    quantity: String(qty),
+                    referenceType: "order",
+                    referenceId: order.id,
+                    createdBy: user.id,
+                });
+            }
+
             res.json({ success: true, status: "invoiced" });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });

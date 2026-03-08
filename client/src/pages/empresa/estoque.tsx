@@ -183,6 +183,8 @@ export default function EmpresaEstoque() {
                                                                 <th className="text-left px-4 py-2">Produto</th>
                                                                 <th className="text-left px-4 py-2">Código</th>
                                                                 <th className="text-right px-4 py-2">Quantidade</th>
+                                                                <th className="text-right px-4 py-2">Reservado</th>
+                                                                <th className="text-right px-4 py-2">Disponível</th>
                                                                 <th className="text-right px-4 py-2">Unidade</th>
                                                                 <th className="text-right px-4 py-2">Atualizado</th>
                                                             </tr>
@@ -194,6 +196,12 @@ export default function EmpresaEstoque() {
                                                                     <td className="px-4 py-2 text-slate-500">{s.productCode ?? "—"}</td>
                                                                     <td className={`px-4 py-2 text-right font-semibold ${parseFloat(s.quantity) < 0 ? "text-red-600" : ""}`}>
                                                                         {parseFloat(s.quantity).toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                                                    </td>
+                                                                    <td className={`px-4 py-2 text-right text-sm ${parseFloat(s.reservedQuantity ?? "0") > 0 ? "text-amber-600 font-medium" : "text-slate-400"}`}>
+                                                                        {parseFloat(s.reservedQuantity ?? "0").toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                                                    </td>
+                                                                    <td className={`px-4 py-2 text-right font-semibold ${(parseFloat(s.quantity) - parseFloat(s.reservedQuantity ?? "0")) < 0 ? "text-red-600" : "text-green-700"}`}>
+                                                                        {(parseFloat(s.quantity) - parseFloat(s.reservedQuantity ?? "0")).toLocaleString("es-PY", { minimumFractionDigits: 2 })}
                                                                     </td>
                                                                     <td className="px-4 py-2 text-right text-slate-500">{s.unit}</td>
                                                                     <td className="px-4 py-2 text-right text-slate-400 text-xs">

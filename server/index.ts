@@ -156,6 +156,17 @@ app.use((req, res, next) => {
     log(`⚠️  Migration check for company_products: ${migErr.message}`);
   }
 
+  // Inline migration: add reserved_quantity to company_stock
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+    await db.execute(sql`ALTER TABLE company_stock ADD COLUMN IF NOT EXISTS reserved_quantity decimal(15,4) NOT NULL DEFAULT 0`);
+    log("✅ Migration: company_stock.reserved_quantity column ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration check for company_products: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes
