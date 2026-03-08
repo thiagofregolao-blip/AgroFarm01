@@ -17,6 +17,11 @@ const api = (method: string, path: string, body?: any) =>
 
 const emptyForm = { name: "", ruc: "", cedula: "", clientType: "person", address: "", city: "", department: "", phone: "", email: "", creditLimit: "", notes: "" };
 
+const ROLE_LABELS: Record<string, string> = {
+    rtv: "RTV", director: "Diretor", faturista: "Faturista",
+    financeiro: "Financeiro", admin_empresa: "Admin",
+};
+
 export default function EmpresaClientes() {
     const { user } = useAuth();
     const { toast } = useToast();
@@ -28,9 +33,19 @@ export default function EmpresaClientes() {
     const [form, setForm] = useState({ ...emptyForm });
     const fileRef = useRef<HTMLInputElement>(null);
 
+    // Import RTV selection modal
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [selectedRtvId, setSelectedRtvId] = useState<string>("none");
+
     const { data: allClients = [], isLoading } = useQuery<any[]>({
         queryKey: ["/api/company/clients"],
         queryFn: () => api("GET", "/api/company/clients"),
+        enabled: !!user,
+    });
+
+    const { data: team = [] } = useQuery<any[]>({
+        queryKey: ["/api/company/team"],
+        queryFn: () => api("GET", "/api/company/team"),
         enabled: !!user,
     });
 
@@ -67,6 +82,7 @@ export default function EmpresaClientes() {
         mutationFn: async (file: File) => {
             const fd = new FormData();
             fd.append("file", file);
+            if (selectedRtvId && selectedRtvId !== "none") fd.append("assignedConsultantId", selectedRtvId);
             const r = await fetch("/api/company/clients/import-excel", { method: "POST", credentials: "include", body: fd });
             const data = await r.json();
             if (!r.ok) throw new Error(data.error || "Erro ao importar");
@@ -74,6 +90,7 @@ export default function EmpresaClientes() {
         },
         onSuccess: (data) => {
             qc.invalidateQueries({ queryKey: ["/api/company/clients"] });
+            setShowImportModal(false);
             toast({ title: `${data.created} cliente(s) importado(s)`, description: data.skipped > 0 ? `${data.skipped} linha(s) ignorada(s)` : undefined });
         },
         onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
@@ -97,7 +114,7 @@ export default function EmpresaClientes() {
                     <div className="flex gap-2">
                         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
                             onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
-                        <Button variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => fileRef.current?.click()} disabled={importExcel.isPending}>
+                        <Button variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => { setSelectedRtvId("none"); setShowImportModal(true); }} disabled={importExcel.isPending}>
                             {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
                             {importExcel.isPending ? "Analisando com IA..." : "Importar com IA"}
                         </Button>
@@ -257,6 +274,48 @@ export default function EmpresaClientes() {
                             <Button className="bg-blue-600 hover:bg-blue-700" disabled={!form.name || save.isPending} onClick={() => save.mutate(form)}>
                                 {save.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                                 Salvar
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Import RTV selection modal */}
+            <Dialog open={showImportModal} onOpenChange={open => { if (!open) setShowImportModal(false); }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-blue-600" /> Importar Clientes com IA
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <Label>Vincular ao RTV *</Label>
+                            <p className="text-xs text-slate-400 mb-2">Todos os clientes importados serão atribuídos ao RTV selecionado.</p>
+                            <Select value={selectedRtvId} onValueChange={setSelectedRtvId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecionar RTV..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Sem RTV (importar sem vínculo)</SelectItem>
+                                    {team
+                                        .filter((m: any) => ["rtv", "director", "admin_empresa"].includes(m.role))
+                                        .map((m: any) => (
+                                            <SelectItem key={m.userId} value={m.userId}>
+                                                {m.name || m.username} — {ROLE_LABELS[m.role] ?? m.role}
+                                            </SelectItem>
+                                        ))
+                                    }
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <Button variant="outline" onClick={() => setShowImportModal(false)}>Cancelar</Button>
+                            <Button
+                                className="bg-blue-600 hover:bg-blue-700"
+                                onClick={() => fileRef.current?.click()}
+                            >
+                                <Sparkles className="h-4 w-4 mr-2" /> Escolher Arquivo
                             </Button>
                         </div>
                     </div>

@@ -251,6 +251,32 @@ export function registerCommercialRoutes(app: Express) {
         }
     });
 
+    // Team members (RTVs) for this company
+    app.get("/api/company/team", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            const members = await db
+                .select({
+                    userId: companyUsers.userId,
+                    role: companyUsers.role,
+                    name: users.name,
+                    username: users.username,
+                })
+                .from(companyUsers)
+                .innerJoin(users, eq(companyUsers.userId, users.id))
+                .where(and(eq(companyUsers.companyId, companyId), eq(companyUsers.isActive, true)))
+                .orderBy(asc(users.name));
+
+            res.json(members);
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
     // ──────────────────────────────────────────────────────────────────────────
     // CLIENTS
     // ──────────────────────────────────────────────────────────────────────────
@@ -429,6 +455,7 @@ ${csvText}`;
                 return res.json({ success: true, created: 0, skipped: 0, total: 0 });
             }
 
+            const assignedConsultantId = req.body.assignedConsultantId || null;
             const importBatch = `import-${Date.now()}`;
             let created = 0;
             let skipped = 0;
@@ -449,6 +476,7 @@ ${csvText}`;
                         address: c.endereco ? String(c.endereco).trim() : null,
                         creditLimit: c.limiteCredito ? String(parseFloat(String(c.limiteCredito).replace(/[^0-9.]/g, "")) || 0) : "0",
                         notes: c.observacoes ? String(c.observacoes).trim() : null,
+                        assignedConsultantId,
                         importBatch,
                     } as any);
                     created++;
