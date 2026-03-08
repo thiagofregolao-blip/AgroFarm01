@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, Search, Pencil, Upload, Loader2, Phone, Mail, Building2, Trash2, EyeOff, Eye } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Phone, Mail, Building2, Trash2, EyeOff, Eye, Sparkles } from "lucide-react";
 
 const api = (method: string, path: string, body?: any) =>
     fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined })
@@ -97,9 +97,9 @@ export default function EmpresaClientes() {
                     <div className="flex gap-2">
                         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
                             onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
-                        <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importExcel.isPending}>
-                            {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                            Importar Excel
+                        <Button variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => fileRef.current?.click()} disabled={importExcel.isPending}>
+                            {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                            {importExcel.isPending ? "Analisando com IA..." : "Importar com IA"}
                         </Button>
                         <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => { setEditing(null); setForm({ ...emptyForm }); setShowForm(true); }}>
                             <Plus className="h-4 w-4 mr-2" /> Novo Cliente

@@ -347,7 +347,7 @@ export function registerCommercialRoutes(app: Express) {
         }
     });
 
-    /** Import clients from Excel */
+    /** Import clients from Excel using Gemini AI — handles any column names/format */
     app.post("/api/company/clients/import-excel", upload.single("file"), async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -356,44 +356,109 @@ export function registerCommercialRoutes(app: Express) {
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
             if (!req.file) return res.status(400).json({ error: "Envie um arquivo Excel (.xlsx)" });
 
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY não configurada" });
+
+            // Convert Excel to CSV text for Gemini
             const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+            const csvText = XLSX.utils.sheet_to_csv(sheet);
+
+            const prompt = `Você é um assistente especializado em importação de dados de clientes. Analise a planilha abaixo e extraia TODOS os clientes.
+
+Para cada cliente extraia:
+- nome: nome completo ou razão social (campo obrigatório)
+- ruc: número do RUC ou documento fiscal (apenas números e hifens)
+- cedula: número de cédula/CI se houver
+- clientType: "company" se pessoa jurídica/empresa/S.A./Ltda/S.R.L./Cooperativa, senão "person"
+- telefone: número de telefone
+- email: endereço de email
+- cidade: cidade
+- departamento: departamento ou estado
+- endereco: endereço completo
+- limiteCredito: valor numérico do limite de crédito (apenas número, sem símbolo de moeda)
+- observacoes: observações ou notas
+
+Ignore linhas de título, subtítulo, totais, cabeçalhos repetidos e linhas vazias.
+
+Retorne APENAS JSON válido, sem texto extra:
+{
+  "clientes": [
+    {
+      "nome": "Nome do Cliente",
+      "ruc": "12345678-9",
+      "cedula": null,
+      "clientType": "company",
+      "telefone": "+595 61 123456",
+      "email": "email@exemplo.com",
+      "cidade": "Ciudad del Este",
+      "departamento": "Alto Paraná",
+      "endereco": "Av. Principal 123",
+      "limiteCredito": 15000,
+      "observacoes": "Cliente VIP"
+    }
+  ]
+}
+
+Dados da planilha:
+${csvText}`;
+
+            const geminiRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+                    }),
+                }
+            );
+
+            if (!geminiRes.ok) return res.status(500).json({ error: "Erro ao chamar Gemini AI" });
+
+            const geminiData = await geminiRes.json() as any;
+            const text: string = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) return res.status(422).json({ error: "IA não retornou JSON válido", raw: text.slice(0, 200) });
+
+            const parsed = JSON.parse(jsonMatch[0]);
+            const clientes: any[] = parsed.clientes ?? [];
+
+            if (clientes.length === 0) {
+                return res.json({ success: true, created: 0, skipped: 0, total: 0 });
+            }
 
             const importBatch = `import-${Date.now()}`;
             let created = 0;
             let skipped = 0;
 
-            for (const row of rows) {
-                const name = row["Nome"] || row["Name"] || row["Nombre"] || row["NOME"] || "";
-                if (!name) { skipped++; continue; }
-
-                const ruc = String(row["RUC"] || row["ruc"] || "").trim() || null;
-                const cedula = String(row["Cédula"] || row["Cedula"] || row["CI"] || "").trim() || null;
-                const address = String(row["Endereço"] || row["Dirección"] || row["Address"] || "").trim() || null;
-                const city = String(row["Cidade"] || row["Ciudad"] || row["City"] || "").trim() || null;
-                const phone = String(row["Telefone"] || row["Teléfono"] || row["Phone"] || "").trim() || null;
-                const email = String(row["Email"] || row["email"] || "").trim() || null;
-                const creditLimitRaw = row["Límite de Crédito"] || row["Limite de Crédito"] || row["Credito"] || 0;
-                const creditLimit = parseFloat(String(creditLimitRaw).replace(/[^0-9.]/g, "")) || 0;
-
-                await db.insert(companyClients).values({
-                    companyId,
-                    name: String(name).trim(),
-                    ruc,
-                    cedula,
-                    address,
-                    city,
-                    phone,
-                    email: email || null,
-                    creditLimit: String(creditLimit),
-                    importBatch,
-                } as any).onConflictDoNothing();
-                created++;
+            for (const c of clientes) {
+                if (!c.nome) { skipped++; continue; }
+                try {
+                    await db.insert(companyClients).values({
+                        companyId,
+                        name: String(c.nome).trim(),
+                        ruc: c.ruc ? String(c.ruc).trim() : null,
+                        cedula: c.cedula ? String(c.cedula).trim() : null,
+                        clientType: c.clientType === "company" ? "company" : "person",
+                        phone: c.telefone ? String(c.telefone).trim() : null,
+                        email: c.email ? String(c.email).trim() : null,
+                        city: c.cidade ? String(c.cidade).trim() : null,
+                        department: c.departamento ? String(c.departamento).trim() : null,
+                        address: c.endereco ? String(c.endereco).trim() : null,
+                        creditLimit: c.limiteCredito ? String(parseFloat(String(c.limiteCredito).replace(/[^0-9.]/g, "")) || 0) : "0",
+                        notes: c.observacoes ? String(c.observacoes).trim() : null,
+                        importBatch,
+                    } as any);
+                    created++;
+                } catch {
+                    skipped++;
+                }
             }
 
-            res.json({ success: true, created, skipped, total: rows.length });
-        } catch (e) {
+            res.json({ success: true, created, skipped, total: clientes.length });
+        } catch (e: any) {
             console.error("[Clients Import]", e);
             res.status(500).json({ error: "Erro ao importar planilha" });
         }
