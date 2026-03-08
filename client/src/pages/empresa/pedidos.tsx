@@ -13,23 +13,23 @@ import { useAuth } from "@/hooks/use-auth";
 import { Plus, Search, Eye, CheckCircle, XCircle, Send, Loader2, Trash2, AlertTriangle, FileCheck } from "lucide-react";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-    draft:            { label: "Rascunho",         color: "bg-slate-100 text-slate-700" },
-    pending_director: { label: "Aguard. Diretor",   color: "bg-yellow-100 text-yellow-800" },
-    pending_finance:  { label: "Aguard. Financeiro",color: "bg-orange-100 text-orange-800" },
-    pending_billing:  { label: "Para Faturar",      color: "bg-purple-100 text-purple-800" },
-    invoiced:         { label: "Faturado",           color: "bg-green-100 text-green-800" },
-    partially_invoiced:{ label: "Fat. Parcial",     color: "bg-teal-100 text-teal-800" },
-    cancelled:        { label: "Cancelado",          color: "bg-red-100 text-red-800" },
+    draft: { label: "Rascunho", color: "bg-slate-100 text-slate-700" },
+    pending_director: { label: "Aguard. Diretor", color: "bg-yellow-100 text-yellow-800" },
+    pending_finance: { label: "Aguard. Financeiro", color: "bg-orange-100 text-orange-800" },
+    pending_billing: { label: "Para Faturar", color: "bg-purple-100 text-purple-800" },
+    invoiced: { label: "Faturado", color: "bg-green-100 text-green-800" },
+    partially_invoiced: { label: "Fat. Parcial", color: "bg-teal-100 text-teal-800" },
+    cancelled: { label: "Cancelado", color: "bg-red-100 text-red-800" },
 };
 
 const STATUS_TABS = [
-    { key: "all",              label: "Todos" },
-    { key: "draft",            label: "Rascunho" },
+    { key: "all", label: "Todos" },
+    { key: "draft", label: "Rascunho" },
     { key: "pending_director", label: "Aguard. Diretor" },
-    { key: "pending_finance",  label: "Aguard. Financeiro" },
-    { key: "pending_billing",  label: "Para Faturar" },
-    { key: "invoiced",         label: "Faturado" },
-    { key: "cancelled",        label: "Cancelado" },
+    { key: "pending_finance", label: "Aguard. Financeiro" },
+    { key: "pending_billing", label: "Para Faturar" },
+    { key: "invoiced", label: "Faturado" },
+    { key: "cancelled", label: "Cancelado" },
 ];
 
 const api = (method: string, path: string, body?: any) =>
@@ -345,182 +345,223 @@ export default function EmpresaPedidos() {
 
             {/* New Order Dialog */}
             <Dialog open={showForm} onOpenChange={setShowForm}>
-                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] p-4 md:p-6">
                     <DialogHeader>
                         <DialogTitle>Novo Pedido de Venda</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="col-span-2">
-                                <Label>Cliente *</Label>
-                                <Select value={form.clientId} onValueChange={v => setForm(p => ({ ...p, clientId: v }))}>
-                                    <SelectTrigger><SelectValue placeholder="Selecionar cliente..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name} {c.ruc ? `— ${c.ruc}` : ""}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>Tabela de Preços</Label>
-                                <Select value={form.priceListId} onValueChange={v => setForm(p => ({ ...p, priceListId: v }))}>
-                                    <SelectTrigger><SelectValue placeholder="Selecionar tabela..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {priceLists.filter((pl: any) => pl.isActive).map((pl: any) => <SelectItem key={pl.id} value={pl.id}>{pl.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>Tipo de Pagamento</Label>
-                                <Select value={form.paymentType} onValueChange={v => setForm(p => ({ ...p, paymentType: v }))}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="contado">Contado</SelectItem>
-                                        <SelectItem value="credito">Crédito</SelectItem>
-                                        <SelectItem value="anticipado">Anticipado</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>Frete</Label>
-                                <Select value={form.freightPayer} onValueChange={v => setForm(p => ({ ...p, freightPayer: v }))}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="cliente">Cliente</SelectItem>
-                                        <SelectItem value="company">Empresa</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>Año Agrícola</Label>
-                                <Input value={form.agriculturalYear} onChange={e => setForm(p => ({ ...p, agriculturalYear: e.target.value }))} placeholder="2025/26" />
-                            </div>
-                            <div>
-                                <Label>Cultura</Label>
-                                <Input value={form.culture} onChange={e => setForm(p => ({ ...p, culture: e.target.value }))} placeholder="Soja, Milho..." />
-                            </div>
-                            <div>
-                                <Label>Zafra</Label>
-                                <Input value={form.zafra} onChange={e => setForm(p => ({ ...p, zafra: e.target.value }))} />
-                            </div>
-                            <div>
-                                <Label>Vencimento</Label>
-                                <Input type="date" value={form.dueDate} onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))} />
-                            </div>
-                            <div>
-                                <Label>Local de Entrega</Label>
-                                <Input value={form.deliveryLocation} onChange={e => setForm(p => ({ ...p, deliveryLocation: e.target.value }))} />
-                            </div>
-                            <div>
-                                <Label>Local de Pagamento</Label>
-                                <Input value={form.paymentLocation} onChange={e => setForm(p => ({ ...p, paymentLocation: e.target.value }))} />
-                            </div>
-                            <div className="col-span-2">
-                                <Label>Observações</Label>
-                                <Input value={form.observations} onChange={e => setForm(p => ({ ...p, observations: e.target.value }))} />
-                            </div>
-                        </div>
 
-                        {/* Items */}
-                        <div className="border rounded-lg p-3 space-y-3">
-                            <p className="font-medium text-sm">Itens do Pedido</p>
-                            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 px-1">
-                                <span className="col-span-4">Produto</span>
-                                <span className="col-span-2">Qtd</span>
-                                <span className="col-span-1">Un.</span>
-                                <span className="col-span-2">Preço U$</span>
-                                <span className="col-span-2">Total U$</span>
-                                <span className="col-span-1">Dep.</span>
-                            </div>
-                            {orderItems.map((item, idx) => (
-                                <div key={idx} className="grid grid-cols-12 gap-2 text-sm items-center bg-slate-50 rounded px-1 py-1">
-                                    <span className="col-span-4 truncate">{item.productName}</span>
-                                    <span className="col-span-2">{item.quantity}</span>
-                                    <span className="col-span-1">{item.unit}</span>
-                                    <span className="col-span-2">{parseFloat(item.unitPriceUsd).toLocaleString("es-PY")}</span>
-                                    <span className="col-span-2">{parseFloat(item.totalPriceUsd).toLocaleString("es-PY")}</span>
-                                    <button className="col-span-1 text-red-400 hover:text-red-600" onClick={() => setOrderItems(prev => prev.filter((_, i) => i !== idx))}>
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                            ))}
-                            {/* Add item row */}
-                            <div className="grid grid-cols-12 gap-2 items-end">
-                                <div className="col-span-4">
-                                    <datalist id="products-list">
-                                        {(products as any[]).map((p: any) => <option key={p.id} value={p.name} data-id={p.id} />)}
-                                    </datalist>
-                                    <Input
-                                        className="h-8 text-xs"
-                                        placeholder="Nome do produto..."
-                                        list="products-list"
-                                        value={newItem.productName}
-                                        onChange={e => {
-                                            const val = e.target.value;
-                                            const match = (products as any[]).find((p: any) => p.name === val);
-                                            if (match) {
-                                                handleProductSelect(match.id);
-                                            } else {
-                                                setNewItem(prev => ({ ...prev, productName: val, productId: "", productCode: "" }));
-                                            }
-                                        }}
-                                    />
-                                    {newItem.productId && (() => {
-                                        const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
-                                        if (!avail) return null;
-                                        const qty = parseFloat(avail.available);
-                                        return (
-                                            <span className={`text-xs mt-0.5 block ${qty < 0 ? "text-red-500" : qty === 0 ? "text-slate-400" : "text-green-600"}`}>
-                                                Disp: {qty.toLocaleString("es-PY", { minimumFractionDigits: 2 })} {avail.unit}
-                                            </span>
-                                        );
-                                    })()}
-                                </div>
-                                <div className="col-span-2">
-                                    <Input className="h-8 text-xs" placeholder="Qtd" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))} />
-                                    {newItem.productId && newItem.quantity && (() => {
-                                        const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
-                                        if (!avail) return null;
-                                        const excede = parseFloat(newItem.quantity) > parseFloat(avail.available);
-                                        return excede ? <span className="text-xs text-orange-500 block mt-0.5">Acima do disp.</span> : null;
-                                    })()}
-                                </div>
-                                <div className="col-span-1">
-                                    <Input className="h-8 text-xs" placeholder="Un" value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))} />
-                                </div>
-                                <div className="col-span-2">
-                                    <Input className="h-8 text-xs" placeholder="Preço U$" value={newItem.unitPriceUsd} onChange={e => setNewItem(p => ({ ...p, unitPriceUsd: e.target.value }))} />
-                                </div>
-                                <div className="col-span-2 text-xs text-slate-500 text-right">
-                                    {newItem.quantity && newItem.unitPriceUsd ? (parseFloat(newItem.quantity) * parseFloat(newItem.unitPriceUsd)).toLocaleString("es-PY", { minimumFractionDigits: 2 }) : "—"}
-                                </div>
-                                <div className="col-span-1">
-                                    <Button size="sm" variant="outline" className="h-8 w-full" onClick={handleAddItem}>
-                                        <Plus className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                            </div>
-                            {orderItems.length === 0 && (
-                                <p className="text-xs text-slate-400 text-center pt-1">Digite o produto, quantidade e clique em <strong>+</strong> para adicionar</p>
-                            )}
-                            {orderItems.length > 0 && (
-                                <div className="text-right text-sm font-semibold border-t pt-2">
-                                    Total: $ {totalUsd.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
-                                </div>
-                            )}
-                        </div>
+                    <Tabs value={formTab} onValueChange={setFormTab} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="dados" className="text-xs md:text-sm">1. Dados do Pedido</TabsTrigger>
+                            <TabsTrigger value="itens" disabled={!form.clientId} className="text-xs md:text-sm">2. Itens do Pedido</TabsTrigger>
+                        </TabsList>
 
-                        <div className="flex gap-2 justify-end">
-                            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-                            <Button
-                                className="bg-blue-600 hover:bg-blue-700"
-                                disabled={!form.clientId || orderItems.length === 0 || createOrder.isPending}
-                                onClick={() => createOrder.mutate({ ...form, items: orderItems.map(i => ({ ...i, totalPriceUsd: i.totalPriceUsd })) })}
-                            >
-                                {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                Salvar Pedido
-                            </Button>
-                        </div>
-                    </div>
+                        <TabsContent value="dados" className="space-y-4 mt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="col-span-1 md:col-span-2">
+                                    <Label>Cliente *</Label>
+                                    <Select value={form.clientId} onValueChange={v => setForm(p => ({ ...p, clientId: v }))}>
+                                        <SelectTrigger><SelectValue placeholder="Selecionar cliente..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name} {c.ruc ? `— ${c.ruc}` : ""}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label>Tabela de Preços</Label>
+                                    <Select value={form.priceListId} onValueChange={v => setForm(p => ({ ...p, priceListId: v }))}>
+                                        <SelectTrigger><SelectValue placeholder="Selecionar tabela..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {priceLists.filter((pl: any) => pl.isActive).map((pl: any) => <SelectItem key={pl.id} value={pl.id}>{pl.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label>Tipo de Pagamento</Label>
+                                    <Select value={form.paymentType} onValueChange={v => setForm(p => ({ ...p, paymentType: v }))}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="contado">Contado</SelectItem>
+                                            <SelectItem value="credito">Crédito</SelectItem>
+                                            <SelectItem value="anticipado">Anticipado</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label>Frete</Label>
+                                    <Select value={form.freightPayer} onValueChange={v => setForm(p => ({ ...p, freightPayer: v }))}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="cliente">Cliente</SelectItem>
+                                            <SelectItem value="company">Empresa</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label>Año Agrícola</Label>
+                                    <Input value={form.agriculturalYear} onChange={e => setForm(p => ({ ...p, agriculturalYear: e.target.value }))} placeholder="2025/26" />
+                                </div>
+                                <div>
+                                    <Label>Cultura</Label>
+                                    <Input value={form.culture} onChange={e => setForm(p => ({ ...p, culture: e.target.value }))} placeholder="Soja, Milho..." />
+                                </div>
+                                <div>
+                                    <Label>Zafra</Label>
+                                    <Input value={form.zafra} onChange={e => setForm(p => ({ ...p, zafra: e.target.value }))} />
+                                </div>
+                                <div>
+                                    <Label>Vencimento</Label>
+                                    <Input type="date" value={form.dueDate} onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))} />
+                                </div>
+                                <div>
+                                    <Label>Local de Entrega</Label>
+                                    <Input value={form.deliveryLocation} onChange={e => setForm(p => ({ ...p, deliveryLocation: e.target.value }))} />
+                                </div>
+                                <div>
+                                    <Label>Local de Pagamento</Label>
+                                    <Input value={form.paymentLocation} onChange={e => setForm(p => ({ ...p, paymentLocation: e.target.value }))} />
+                                </div>
+                                <div className="col-span-1 md:col-span-2">
+                                    <Label>Observações</Label>
+                                    <Input value={form.observations} onChange={e => setForm(p => ({ ...p, observations: e.target.value }))} />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-4 border-t">
+                                <Button
+                                    className="bg-slate-800 hover:bg-slate-900 w-full md:w-auto"
+                                    onClick={() => setFormTab("itens")}
+                                    disabled={!form.clientId}
+                                >
+                                    Avançar para Itens <Search className="ml-2 h-4 w-4 hidden md:block" />
+                                </Button>
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="itens" className="space-y-4 mt-4">
+                            {/* Items Grid */}
+                            <div className="border rounded-lg p-2 md:p-3 space-y-3">
+                                <p className="font-medium text-sm hidden md:block">Itens do Pedido</p>
+                                <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 px-1">
+                                    <span className="col-span-4">Produto</span>
+                                    <span className="col-span-2">Qtd</span>
+                                    <span className="col-span-1">Un.</span>
+                                    <span className="col-span-2">Preço U$</span>
+                                    <span className="col-span-2">Total U$</span>
+                                    <span className="col-span-1 border"></span>
+                                </div>
+                                {orderItems.map((item, idx) => (
+                                    <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 text-sm items-center bg-slate-50 border md:border-none rounded p-2 md:px-1 md:py-1 mb-2 md:mb-0 relative">
+                                        <div className="col-span-1 md:col-span-4 pr-6 md:pr-0">
+                                            <span className="font-medium md:font-normal block truncate">{item.productName}</span>
+                                        </div>
+                                        <div className="grid grid-cols-3 md:contents gap-2 mt-1 md:mt-0">
+                                            <div className="col-span-1 md:col-span-2">
+                                                <span className="text-xs text-slate-400 block md:hidden">Qtd</span>
+                                                {item.quantity}
+                                            </div>
+                                            <div className="col-span-1">
+                                                <span className="text-xs text-slate-400 block md:hidden">Un</span>
+                                                {item.unit}
+                                            </div>
+                                            <div className="col-span-1 md:col-span-2">
+                                                <span className="text-xs text-slate-400 block md:hidden">Preço</span>
+                                                ${parseFloat(item.unitPriceUsd).toLocaleString("es-PY")}
+                                            </div>
+                                        </div>
+                                        <div className="col-span-1 md:col-span-2 mt-1 md:mt-0 font-medium md:font-normal">
+                                            <span className="text-xs text-slate-400 mr-2 md:hidden">Total:</span>
+                                            ${parseFloat(item.totalPriceUsd).toLocaleString("es-PY")}
+                                        </div>
+                                        <button className="absolute top-2 right-2 md:static col-span-1 text-red-400 hover:text-red-600 md:text-right" onClick={() => setOrderItems(prev => prev.filter((_, i) => i !== idx))}>
+                                            <Trash2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                                        </button>
+                                    </div>
+                                ))}
+
+                                {/* Add item row */}
+                                <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end mt-4 pt-4 border-t border-dashed">
+                                    <div className="col-span-2 md:col-span-4">
+                                        <Label className="md:hidden text-xs">Produto</Label>
+                                        <datalist id="products-list">
+                                            {(products as any[]).map((p: any) => <option key={p.id} value={p.name} data-id={p.id} />)}
+                                        </datalist>
+                                        <Input
+                                            className="h-10 md:h-8 text-sm md:text-xs"
+                                            placeholder="Nome do produto..."
+                                            list="products-list"
+                                            value={newItem.productName}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                const match = (products as any[]).find((p: any) => p.name === val);
+                                                if (match) {
+                                                    handleProductSelect(match.id);
+                                                } else {
+                                                    setNewItem(prev => ({ ...prev, productName: val, productId: "", productCode: "" }));
+                                                }
+                                            }}
+                                        />
+                                        {newItem.productId && (() => {
+                                            const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
+                                            if (!avail) return null;
+                                            const qty = parseFloat(avail.available);
+                                            return (
+                                                <span className={`text-xs mt-0.5 block ${qty < 0 ? "text-red-500" : qty === 0 ? "text-slate-400" : "text-green-600"}`}>
+                                                    Disp: {qty.toLocaleString("es-PY", { minimumFractionDigits: 2 })} {avail.unit}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
+                                    <div className="col-span-1 md:col-span-2">
+                                        <Label className="md:hidden text-xs">Qtd</Label>
+                                        <Input className="h-10 md:h-8 text-sm md:text-xs" type="number" step="0.01" placeholder="Qtd" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))} />
+                                        {newItem.productId && newItem.quantity && (() => {
+                                            const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
+                                            if (!avail) return null;
+                                            const excede = parseFloat(newItem.quantity) > parseFloat(avail.available);
+                                            return excede ? <span className="text-xs text-orange-500 block mt-0.5">Acima</span> : null;
+                                        })()}
+                                    </div>
+                                    <div className="col-span-1 md:col-span-1">
+                                        <Label className="md:hidden text-xs">Un</Label>
+                                        <Input className="h-10 md:h-8 text-sm md:text-xs" placeholder="Un" value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))} />
+                                    </div>
+                                    <div className="col-span-1 md:col-span-2">
+                                        <Label className="md:hidden text-xs">Preço U$</Label>
+                                        <Input className="h-10 md:h-8 text-sm md:text-xs" type="number" step="0.01" placeholder="Preço" value={newItem.unitPriceUsd} onChange={e => setNewItem(p => ({ ...p, unitPriceUsd: e.target.value }))} />
+                                    </div>
+                                    <div className="hidden md:block col-span-2 text-xs text-slate-500 text-right">
+                                        {newItem.quantity && newItem.unitPriceUsd ? (parseFloat(newItem.quantity) * parseFloat(newItem.unitPriceUsd)).toLocaleString("es-PY", { minimumFractionDigits: 2 }) : "—"}
+                                    </div>
+                                    <div className="col-span-1 md:col-span-1">
+                                        <Button size="sm" variant="outline" className="h-10 md:h-8 w-full border-blue-200 text-blue-600" onClick={handleAddItem}>
+                                            <Plus className="h-4 w-4 md:h-3 md:w-3" />
+                                        </Button>
+                                    </div>
+                                </div>
+                                {orderItems.length === 0 && (
+                                    <p className="text-xs text-slate-400 text-center pt-2">Selecione o produto, preencha os dados e clique no +</p>
+                                )}
+                                {orderItems.length > 0 && (
+                                    <div className="text-right text-base text-blue-600 font-semibold border-t pt-3 pb-1 mt-3">
+                                        Total do Pedido: $ {totalUsd.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-2 justify-between md:justify-end pt-4 border-t mt-4">
+                                <Button variant="outline" onClick={() => setFormTab("dados")}>Voltar</Button>
+                                <Button
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                    disabled={!form.clientId || orderItems.length === 0 || createOrder.isPending}
+                                    onClick={() => createOrder.mutate({ ...form, items: orderItems.map(i => ({ ...i, totalPriceUsd: i.totalPriceUsd })) })}
+                                >
+                                    {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                    Salvar Pedido
+                                </Button>
+                            </div>
+                        </TabsContent>
+                    </Tabs>
                 </DialogContent>
             </Dialog>
         </EmpresaLayout>
