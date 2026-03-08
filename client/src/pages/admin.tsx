@@ -5340,16 +5340,16 @@ function FarmersPanelLink() {
 
 // ─── Companies Management ────────────────────────────────────────────────────
 
-const COMPANY_ROLES = ["consultor", "director", "faturista", "financeiro", "admin_empresa"] as const;
+const COMPANY_ROLES = ["rtv", "director", "faturista", "financeiro", "admin_empresa"] as const;
 const ROLE_LABELS: Record<string, string> = {
-  consultor: "Consultor",
+  rtv: "RTV",
   director: "Diretor",
   faturista: "Faturista",
   financeiro: "Financeiro",
   admin_empresa: "Admin Empresa",
 };
 
-const emptyNewUser = { username: "", name: "", email: "", password: "", role: "consultor" };
+const emptyNewUser = { username: "", name: "", email: "", password: "", role: "rtv" };
 
 function CompaniesManagement() {
   const { toast } = useToast();
@@ -5638,10 +5638,10 @@ function CompaniesManagement() {
                     {availableUsers.length === 0
                       ? <SelectItem value="_none" disabled>Todos os usuários já estão na empresa</SelectItem>
                       : availableUsers.map((u: any) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.name || u.username}{u.email ? ` — ${u.email}` : ""}
-                          </SelectItem>
-                        ))}
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name || u.username}{u.email ? ` — ${u.email}` : ""}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

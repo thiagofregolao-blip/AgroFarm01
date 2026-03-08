@@ -556,9 +556,11 @@ export function registerCommercialRoutes(app: Express) {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
             const { priceUsd, pricePyg, productName, unit, productCode } = req.body;
             const [item] = await db.update(companyPriceListItems)
-                .set({ priceUsd: priceUsd !== undefined ? String(priceUsd) : undefined,
+                .set({
+                    priceUsd: priceUsd !== undefined ? String(priceUsd) : undefined,
                     pricePyg: pricePyg !== undefined ? String(pricePyg) : undefined,
-                    productName, unit, productCode, updatedAt: new Date() } as any)
+                    productName, unit, productCode, updatedAt: new Date()
+                } as any)
                 .where(eq(companyPriceListItems.id, req.params.itemId))
                 .returning();
             res.json(item);
@@ -1502,7 +1504,7 @@ export function registerCommercialRoutes(app: Express) {
             const [cu] = await db.insert(companyUsers).values({
                 companyId: req.params.companyId,
                 userId: newUser.id,
-                role: role || "consultor",
+                role: role || "rtv",
             }).returning();
 
             res.json({ user: newUser, companyUser: cu });
@@ -1525,7 +1527,7 @@ export function registerCommercialRoutes(app: Express) {
             const [cu] = await db.insert(companyUsers).values({
                 companyId: req.params.companyId,
                 userId,
-                role: role || "consultor",
+                role: role || "rtv",
             }).onConflictDoNothing().returning();
             res.json(cu);
         } catch (e) {
