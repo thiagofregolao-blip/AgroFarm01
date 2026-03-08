@@ -170,6 +170,11 @@ app.use((req, res, next) => {
   registerInvoiceEmailRoutes(app);
   log("✅ Invoice Email Import routes registered (/api/webhooks/mailgun/*)");
 
+  // Register Commercial Module routes
+  const { registerCommercialRoutes } = await import("./commercial-routes");
+  registerCommercialRoutes(app);
+  log("✅ Commercial Module routes registered (/api/company/* /api/admin/companies/*)");
+
   // Register WhatsApp routes (if configured)
   if (process.env.ZAPI_INSTANCE_ID && process.env.ZAPI_TOKEN && process.env.GEMINI_API_KEY) {
     const { WhatsAppService } = await import("./whatsapp/whatsapp-service");

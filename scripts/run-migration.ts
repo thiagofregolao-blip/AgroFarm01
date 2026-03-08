@@ -373,6 +373,17 @@ const runMigration = async () => {
             console.log('✅ Migração seasons_crop concluída!');
         }
 
+        // Migration 33: Commercial Module (companies, clients, products, price lists,
+        //               warehouses, stock, sales orders, sales invoices, remissions, pagarés)
+        const commercialPath = path.join(process.cwd(), 'migration_commercial_module.sql');
+        if (fs.existsSync(commercialPath)) {
+            const commercialSql = fs.readFileSync(commercialPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', commercialPath);
+            console.log('🚀 Executando SQL (commercial_module)...');
+            await sql.unsafe(commercialSql);
+            console.log('✅ Migração commercial_module concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

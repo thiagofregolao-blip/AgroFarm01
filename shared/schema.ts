@@ -1597,3 +1597,289 @@ export const insertFarmGrainDeliverySchema = createInsertSchema(farmGrainDeliver
 export type InsertFarmGrainDelivery = z.infer<typeof insertFarmGrainDeliverySchema>;
 export type FarmGrainDelivery = typeof farmGrainDeliveries.$inferSelect;
 
+// ============================================================================
+// COMMERCIAL MODULE
+// ============================================================================
+
+export const companies = pgTable("companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  ruc: text("ruc"),
+  address: text("address"),
+  city: text("city"),
+  phone: text("phone"),
+  email: text("email"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const companyUsers = pgTable("company_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default("consultor"), // consultor | director | faturista | financeiro | admin
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+}, (table) => ({
+  uniqueCompanyUser: unique().on(table.companyId, table.userId),
+}));
+
+export const companyClients = pgTable("company_clients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  ruc: text("ruc"),
+  cedula: text("cedula"),
+  clientType: text("client_type").notNull().default("person"), // person | company
+  address: text("address"),
+  city: text("city"),
+  department: text("department"),
+  phone: text("phone"),
+  email: text("email"),
+  creditLimit: decimal("credit_limit", { precision: 15, scale: 2 }).default("0"),
+  creditUsed: decimal("credit_used", { precision: 15, scale: 2 }).default("0"),
+  isActive: boolean("is_active").notNull().default(true),
+  assignedConsultantId: varchar("assigned_consultant_id").references(() => users.id),
+  notes: text("notes"),
+  importBatch: text("import_batch"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const companyProducts = pgTable("company_products", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  code: text("code"),
+  name: text("name").notNull(),
+  unit: text("unit").notNull().default("UNI"),
+  category: text("category"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const companyPriceLists = pgTable("company_price_lists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  validFrom: timestamp("valid_from"),
+  validUntil: timestamp("valid_until"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const companyPriceListItems = pgTable("company_price_list_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  priceListId: varchar("price_list_id").notNull().references(() => companyPriceLists.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").references(() => companyProducts.id),
+  productCode: text("product_code"),
+  productName: text("product_name").notNull(),
+  unit: text("unit").notNull().default("UNI"),
+  priceUsd: decimal("price_usd", { precision: 15, scale: 4 }),
+  pricePyg: decimal("price_pyg", { precision: 15, scale: 0 }),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const companyWarehouses = pgTable("company_warehouses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  address: text("address"),
+  city: text("city"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const companyStock = pgTable("company_stock", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  warehouseId: varchar("warehouse_id").notNull().references(() => companyWarehouses.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").notNull().references(() => companyProducts.id, { onDelete: "cascade" }),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull().default("0"),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  uniqueWarehouseProduct: unique().on(table.warehouseId, table.productId),
+}));
+
+export const companyStockMovements = pgTable("company_stock_movements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  warehouseId: varchar("warehouse_id").notNull().references(() => companyWarehouses.id),
+  productId: varchar("product_id").notNull().references(() => companyProducts.id),
+  type: text("type").notNull(), // in | out | transfer_out | transfer_in | manual_adjust
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  referenceType: text("reference_type"),
+  referenceId: varchar("reference_id"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const salesOrders = pgTable("sales_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  orderNumber: text("order_number").notNull(),
+  clientId: varchar("client_id").notNull().references(() => companyClients.id),
+  consultantId: varchar("consultant_id").notNull().references(() => users.id),
+  priceListId: varchar("price_list_id").references(() => companyPriceLists.id),
+  paymentType: text("payment_type").notNull().default("credito"), // contado | credito | anticipado
+  freightPayer: text("freight_payer").default("cliente"), // company | cliente
+  deliveryLocation: text("delivery_location"),
+  paymentLocation: text("payment_location"),
+  dueDate: timestamp("due_date"),
+  agriculturalYear: text("agricultural_year"),
+  zafra: text("zafra"),
+  culture: text("culture"),
+  status: text("status").notNull().default("draft"),
+  // draft | pending_director | approved | pending_billing | pending_finance | invoiced | partially_invoiced | cancelled
+  observations: text("observations"),
+  totalAmountUsd: decimal("total_amount_usd", { precision: 15, scale: 2 }),
+  totalAmountPyg: decimal("total_amount_pyg", { precision: 15, scale: 0 }),
+  currency: text("currency").notNull().default("USD"),
+  approvedById: varchar("approved_by_id").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  invoicedById: varchar("invoiced_by_id").references(() => users.id),
+  invoicedAt: timestamp("invoiced_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => ({
+  uniqueOrderNumber: unique().on(table.companyId, table.orderNumber),
+}));
+
+export const salesOrderItems = pgTable("sales_order_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => salesOrders.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").references(() => companyProducts.id),
+  productCode: text("product_code"),
+  productName: text("product_name").notNull(),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  unit: text("unit").notNull().default("UNI"),
+  unitPriceUsd: decimal("unit_price_usd", { precision: 15, scale: 4 }),
+  totalPriceUsd: decimal("total_price_usd", { precision: 15, scale: 2 }),
+  warehouseId: varchar("warehouse_id").references(() => companyWarehouses.id),
+  invoicedQuantity: decimal("invoiced_quantity", { precision: 15, scale: 4 }).default("0"),
+  status: text("status").notNull().default("open"), // open | partially_invoiced | invoiced
+  notes: text("notes"),
+});
+
+export const salesInvoices = pgTable("sales_invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => companyClients.id),
+  invoiceNumber: text("invoice_number"),
+  issueDate: timestamp("issue_date"),
+  dueDate: timestamp("due_date"),
+  totalAmountUsd: decimal("total_amount_usd", { precision: 15, scale: 2 }),
+  totalAmountPyg: decimal("total_amount_pyg", { precision: 15, scale: 0 }),
+  currency: text("currency").notNull().default("USD"),
+  status: text("status").notNull().default("pending"), // pending | reconciled | partial | cancelled
+  reconciliationStatus: text("reconciliation_status").notNull().default("unmatched"), // unmatched | partial | matched
+  source: text("source").notNull().default("manual"), // manual | email_import
+  sourceEmailId: text("source_email_id"),
+  sourceEmailFrom: text("source_email_from"),
+  pdfBase64: text("pdf_base64"),
+  rawData: text("raw_data"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const salesInvoiceItems = pgTable("sales_invoice_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull().references(() => salesInvoices.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").references(() => companyProducts.id),
+  productCode: text("product_code"),
+  productName: text("product_name").notNull(),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  unit: text("unit").notNull().default("UNI"),
+  unitPriceUsd: decimal("unit_price_usd", { precision: 15, scale: 4 }),
+  totalPriceUsd: decimal("total_price_usd", { precision: 15, scale: 2 }),
+  warehouseId: varchar("warehouse_id").references(() => companyWarehouses.id),
+  orderItemId: varchar("order_item_id").references(() => salesOrderItems.id),
+  isReconciled: boolean("is_reconciled").notNull().default(false),
+});
+
+export const salesOrderInvoiceLinks = pgTable("sales_order_invoice_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => salesOrders.id, { onDelete: "cascade" }),
+  invoiceId: varchar("invoice_id").notNull().references(() => salesInvoices.id, { onDelete: "cascade" }),
+  orderItemId: varchar("order_item_id").references(() => salesOrderItems.id),
+  invoiceItemId: varchar("invoice_item_id").references(() => salesInvoiceItems.id),
+  quantityLinked: decimal("quantity_linked", { precision: 15, scale: 4 }).notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const companyRemissions = pgTable("company_remissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  remissionNumber: text("remission_number").notNull(),
+  fromWarehouseId: varchar("from_warehouse_id").notNull().references(() => companyWarehouses.id),
+  toWarehouseId: varchar("to_warehouse_id").notNull().references(() => companyWarehouses.id),
+  status: text("status").notNull().default("draft"), // draft | in_transit | completed | cancelled
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export const companyRemissionItems = pgTable("company_remission_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  remissionId: varchar("remission_id").notNull().references(() => companyRemissions.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").notNull().references(() => companyProducts.id),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  notes: text("notes"),
+});
+
+export const companyPagares = pgTable("company_pagares", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").notNull().references(() => companyClients.id),
+  invoiceId: varchar("invoice_id").references(() => salesInvoices.id),
+  orderId: varchar("order_id").references(() => salesOrders.id),
+  pagareNumber: text("pagare_number"),
+  amountUsd: decimal("amount_usd", { precision: 15, scale: 2 }),
+  amountPyg: decimal("amount_pyg", { precision: 15, scale: 0 }),
+  currency: text("currency").notNull().default("USD"),
+  issueDate: timestamp("issue_date"),
+  dueDate: timestamp("due_date").notNull(),
+  status: text("status").notNull().default("pendente"), // pendente | pago | protestado | cancelado
+  notes: text("notes"),
+  registeredBy: varchar("registered_by").references(() => users.id),
+  paidDate: timestamp("paid_date"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// ---- Types ----
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = typeof companies.$inferInsert;
+
+export type CompanyUser = typeof companyUsers.$inferSelect;
+export type CompanyClient = typeof companyClients.$inferSelect;
+export type InsertCompanyClient = typeof companyClients.$inferInsert;
+
+export type CompanyProduct = typeof companyProducts.$inferSelect;
+export type InsertCompanyProduct = typeof companyProducts.$inferInsert;
+
+export type CompanyPriceList = typeof companyPriceLists.$inferSelect;
+export type CompanyPriceListItem = typeof companyPriceListItems.$inferSelect;
+
+export type CompanyWarehouse = typeof companyWarehouses.$inferSelect;
+export type CompanyStock = typeof companyStock.$inferSelect;
+export type CompanyStockMovement = typeof companyStockMovements.$inferSelect;
+
+export type SalesOrder = typeof salesOrders.$inferSelect;
+export type InsertSalesOrder = typeof salesOrders.$inferInsert;
+export type SalesOrderItem = typeof salesOrderItems.$inferSelect;
+
+export type SalesInvoice = typeof salesInvoices.$inferSelect;
+export type SalesInvoiceItem = typeof salesInvoiceItems.$inferSelect;
+
+export type CompanyRemission = typeof companyRemissions.$inferSelect;
+export type CompanyRemissionItem = typeof companyRemissionItems.$inferSelect;
+
+export type CompanyPagare = typeof companyPagares.$inferSelect;
+export type InsertCompanyPagare = typeof companyPagares.$inferInsert;
+
