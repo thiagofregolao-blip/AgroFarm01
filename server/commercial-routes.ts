@@ -202,58 +202,80 @@ async function deductStockFromInvoice(invoiceId: string, companyId: string, user
 // ─────────────────────────────────────────────────────────────────────────────
 async function reserveStockForOrder(orderId: string, companyId: string, userId: string) {
     const items = await db.select().from(salesOrderItems).where(eq(salesOrderItems.orderId, orderId));
+
     for (const item of items) {
         if (!item.productId) continue;
-        const qty = parseFloat(item.quantity as string);
+        let remaining = parseFloat(item.quantity as string);
+        if (remaining <= 0) continue;
 
-        // If no warehouse specified, auto-pick the one with most available stock for this product
-        let warehouseId = item.warehouseId;
-        if (!warehouseId) {
-            // First try: warehouse with existing stock record for this product
-            const best = await db.execute(sql`
-                SELECT cs.warehouse_id
-                FROM company_stock cs
-                JOIN company_warehouses cw ON cw.id = cs.warehouse_id
-                WHERE cs.product_id = ${item.productId}
-                  AND cw.company_id = ${companyId}
-                ORDER BY (cs.quantity - cs.reserved_quantity) DESC
-                LIMIT 1
-            `);
-            warehouseId = (best.rows[0] as any)?.warehouse_id ?? null;
-
-            // Fallback: if product has no stock record, use first active warehouse of the company
-            if (!warehouseId) {
-                const fallback = await db.execute(sql`
-                    SELECT id FROM company_warehouses
-                    WHERE company_id = ${companyId}
-                    ORDER BY created_at ASC
-                    LIMIT 1
-                `);
-                warehouseId = (fallback.rows[0] as any)?.id ?? null;
-            }
-        }
-        if (!warehouseId) {
-            console.warn(`[reserveStock] No warehouse found for product ${item.productId} in company ${companyId}, skipping`);
-            continue;
-        }
-
-        await db.execute(sql`
-            INSERT INTO company_stock (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
-            VALUES (${warehouseId}, ${item.productId}, 0, ${qty}, now())
-            ON CONFLICT (warehouse_id, product_id)
-            DO UPDATE SET reserved_quantity = company_stock.reserved_quantity + ${qty}, updated_at = now()
+        // Get all warehouses that have stock for this product, ordered by available (most first)
+        const stockRows = await db.execute(sql`
+            SELECT cs.warehouse_id,
+                   GREATEST(0, cs.quantity - cs.reserved_quantity) AS available
+            FROM company_stock cs
+            JOIN company_warehouses cw ON cw.id = cs.warehouse_id
+            WHERE cs.product_id = ${item.productId}
+              AND cw.company_id = ${companyId}
+            ORDER BY available DESC
         `);
 
-        await db.insert(companyStockMovements).values({
-            companyId,
-            warehouseId,
-            productId: item.productId,
-            type: "reserve",
-            quantity: String(qty),
-            referenceType: "order",
-            referenceId: orderId,
-            createdBy: userId,
-        });
+        const warehouses: { warehouse_id: string; available: number }[] = (stockRows.rows as any[]).map(r => ({
+            warehouse_id: r.warehouse_id,
+            available: parseFloat(r.available ?? "0"),
+        }));
+
+        // If product has no stock record at all, fall back to first warehouse of the company
+        if (warehouses.length === 0) {
+            const fallback = await db.execute(sql`
+                SELECT id FROM company_warehouses WHERE company_id = ${companyId} ORDER BY created_at ASC LIMIT 1
+            `);
+            const whId = (fallback.rows[0] as any)?.id ?? null;
+            if (!whId) {
+                console.warn(`[reserveStock] No warehouse in company ${companyId} for product ${item.productId}`);
+                continue;
+            }
+            warehouses.push({ warehouse_id: whId, available: 0 });
+        }
+
+        // Greedy reservation: fill from warehouse with most stock, then next, until order is covered
+        for (const wh of warehouses) {
+            if (remaining <= 0) break;
+
+            // Reserve as much as available in this warehouse (at minimum 0, maximum remaining)
+            // If available is 0 and this is the last warehouse, still reserve remaining (soft limit)
+            const isLast = wh === warehouses[warehouses.length - 1];
+            const toReserve = wh.available >= remaining
+                ? remaining
+                : wh.available > 0
+                    ? wh.available
+                    : isLast ? remaining : 0; // last warehouse absorbs any leftover
+
+            if (toReserve <= 0) continue;
+
+            await db.execute(sql`
+                INSERT INTO company_stock (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
+                VALUES (${wh.warehouse_id}, ${item.productId}, 0, ${toReserve}, now())
+                ON CONFLICT (warehouse_id, product_id)
+                DO UPDATE SET reserved_quantity = company_stock.reserved_quantity + ${toReserve}, updated_at = now()
+            `);
+
+            await db.insert(companyStockMovements).values({
+                companyId,
+                warehouseId: wh.warehouse_id,
+                productId: item.productId,
+                type: "reserve",
+                quantity: String(toReserve),
+                referenceType: "order",
+                referenceId: orderId,
+                createdBy: userId,
+            });
+
+            remaining -= toReserve;
+        }
+
+        if (remaining > 0) {
+            console.warn(`[reserveStock] Order ${orderId}: product ${item.productId} still needs ${remaining} units but stock exhausted`);
+        }
     }
 }
 
