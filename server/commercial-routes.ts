@@ -1332,9 +1332,41 @@ ${csvText}`;
                 }))
             );
 
+            // Reserve stock immediately on order creation (non-blocking)
+            try { await reserveStockForOrder(order.id, companyId, user.id); } catch (e) {
+                console.error("[Orders] reserveStock on create failed (non-blocking):", e);
+            }
+
             res.json({ ...order, items });
         } catch (e) {
             console.error("[Orders] create:", e);
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    app.delete("/api/company/orders/:id", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            const [order] = await db.select().from(salesOrders)
+                .where(and(eq(salesOrders.id, req.params.id), eq(salesOrders.companyId, companyId)));
+            if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+            if (order.status !== "draft") return res.status(400).json({ error: "Apenas rascunhos podem ser excluídos" });
+
+            // Release any stock reservations before deleting
+            try { await releaseStockReservation(order.id, companyId, user.id); } catch (e) {
+                console.error("[Orders] releaseStock on delete failed (non-blocking):", e);
+            }
+
+            await db.delete(salesOrderItems).where(eq(salesOrderItems.orderId, order.id));
+            await db.delete(salesOrders).where(eq(salesOrders.id, order.id));
+
+            res.json({ success: true });
+        } catch (e) {
+            console.error("[Orders] delete:", e);
             res.status(500).json({ error: "Erro interno" });
         }
     });
@@ -1413,7 +1445,6 @@ ${csvText}`;
 
             await db.update(salesOrders).set({ status: "pending_director", updatedAt: new Date() } as any)
                 .where(eq(salesOrders.id, order.id));
-            await reserveStockForOrder(order.id, companyId, user.id);
             res.json({ success: true, status: "pending_director" });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });

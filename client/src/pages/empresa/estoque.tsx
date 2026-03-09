@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import EmpresaLayout from "@/components/empresa/layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,9 +13,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Search, PackagePlus, Upload, Warehouse, ChevronDown, ChevronRight } from "lucide-react";
 
 const api = (method: string, path: string, body?: any) =>
-    fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
-
-const apiJson = (path: string) => fetch(path, { credentials: "include" }).then(r => r.json());
+    fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined })
+        .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || "Erro"); return d; });
 
 export default function EmpresaEstoque() {
     const { user } = useAuth();
@@ -37,7 +37,7 @@ export default function EmpresaEstoque() {
 
     const { data: company } = useQuery<any>({
         queryKey: ["/api/company/me"],
-        queryFn: () => apiJson("/api/company/me"),
+        queryFn: () => api("GET", "/api/company/me"),
         enabled: !!user,
     });
     const isRtv = (company?.role ?? "") === "rtv";
@@ -119,8 +119,17 @@ export default function EmpresaEstoque() {
         sementes: "Sementes", outros: "Outros", __sem_categoria__: "Sem Categoria",
     };
 
+    const { refreshing } = usePullToRefresh(() => qc.invalidateQueries({ queryKey: ["/api/company/stock"] }));
+
     return (
         <EmpresaLayout>
+            {refreshing && (
+                <div className="fixed top-0 inset-x-0 z-50 flex justify-center pt-2 pointer-events-none">
+                    <div className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Atualizando...
+                    </div>
+                </div>
+            )}
             <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-slate-800">Estoque por Depósito</h1>

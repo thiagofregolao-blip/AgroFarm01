@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import EmpresaLayout from "@/components/empresa/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ export default function EmpresaClientes() {
     const [editing, setEditing] = useState<any>(null);
     const [form, setForm] = useState({ ...emptyForm });
     const fileRef = useRef<HTMLInputElement>(null);
-    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
     // Import RTV selection modal
     const [showImportModal, setShowImportModal] = useState(false);
@@ -115,8 +116,17 @@ export default function EmpresaClientes() {
         !search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.ruc ?? "").includes(search) || (c.phone ?? "").includes(search)
     );
 
+    const { refreshing } = usePullToRefresh(() => qc.invalidateQueries({ queryKey: ["/api/company/clients"] }));
+
     return (
         <EmpresaLayout>
+            {refreshing && (
+                <div className="fixed top-0 inset-x-0 z-50 flex justify-center pt-2 pointer-events-none">
+                    <div className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Atualizando...
+                    </div>
+                </div>
+            )}
             <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-slate-800">Carteira de Clientes</h1>
@@ -174,7 +184,7 @@ export default function EmpresaClientes() {
                         groups[groupMap[rtvId]].items.push(c);
                     }
 
-                    const toggleGroup = (id: string) => setExpandedGroups(prev => {
+                    const toggleGroup = (id: string) => setCollapsedGroups(prev => {
                         const next = new Set(prev);
                         next.has(id) ? next.delete(id) : next.add(id);
                         return next;
@@ -183,7 +193,7 @@ export default function EmpresaClientes() {
                     return (
                         <div className="space-y-3">
                             {groups.map(group => {
-                                const isOpen = expandedGroups.has(group.id);
+                                const isOpen = !collapsedGroups.has(group.id);
                                 return (
                                     <Card key={group.id}>
                                         <button

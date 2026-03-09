@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import EmpresaLayout from "@/components/empresa/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -130,6 +131,8 @@ export default function EmpresaPedidos() {
     const invalidateOrders = () => queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] });
     const onErr = (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" });
 
+    const { refreshing } = usePullToRefresh(() => queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] }));
+
     const submitOrder = useMutation({
         mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/submit`),
         onSuccess: () => { invalidateOrders(); toast({ title: "Pedido enviado para o diretor" }); },
@@ -172,6 +175,12 @@ export default function EmpresaPedidos() {
         onError: onErr,
     });
 
+    const deleteDraft = useMutation({
+        mutationFn: (id: string) => api("DELETE", `/api/company/orders/${id}`),
+        onSuccess: () => { invalidateOrders(); queryClient.invalidateQueries({ queryKey: ["/api/company/stock"] }); toast({ title: "Rascunho excluído" }); },
+        onError: onErr,
+    });
+
     const handleAddItem = () => {
         if (!newItem.productName) {
             toast({ title: "Informe o nome do produto", variant: "destructive" });
@@ -210,6 +219,13 @@ export default function EmpresaPedidos() {
 
     return (
         <EmpresaLayout>
+            {refreshing && (
+                <div className="fixed top-0 inset-x-0 z-50 flex justify-center pt-2 pointer-events-none">
+                    <div className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Atualizando...
+                    </div>
+                </div>
+            )}
             <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-slate-800">Pedidos de Venda</h1>
@@ -270,9 +286,16 @@ export default function EmpresaPedidos() {
                                                         </Button>
                                                         {/* RTV: envia rascunho para diretor */}
                                                         {order.status === "draft" && companyRole === "rtv" && (
-                                                            <Button size="sm" variant="ghost" className="text-blue-600" title="Enviar para diretor" onClick={() => submitOrder.mutate(order.id)}>
-                                                                <Send className="h-4 w-4" />
-                                                            </Button>
+                                                            <>
+                                                                <Button size="sm" variant="ghost" className="text-blue-600" title="Enviar para diretor" onClick={() => submitOrder.mutate(order.id)}>
+                                                                    <Send className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button size="sm" variant="ghost" className="text-red-500" title="Excluir rascunho"
+                                                                    disabled={deleteDraft.isPending}
+                                                                    onClick={() => { if (confirm("Excluir este rascunho?")) deleteDraft.mutate(order.id); }}>
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </>
                                                         )}
                                                         {/* DIRETOR: aprovar → faturamento | enviar financeiro | rejeitar */}
                                                         {order.status === "pending_director" && ["director", "admin_empresa"].includes(companyRole) && (
