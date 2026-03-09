@@ -101,7 +101,14 @@ export default function EmpresaClientes() {
         onSuccess: (data) => {
             qc.invalidateQueries({ queryKey: ["/api/company/clients"] });
             setShowImportModal(false);
-            toast({ title: `${data.created} cliente(s) importado(s)`, description: data.skipped > 0 ? `${data.skipped} linha(s) ignorada(s)` : undefined });
+            const desc = data.created === 0 && data.skipped > 0
+                ? `${data.skipped} cliente(s) já existem no sistema e foram ignorados`
+                : data.skipped > 0 ? `${data.skipped} linha(s) ignorada(s) (já existem)` : undefined;
+            toast({
+                title: data.created > 0 ? `${data.created} cliente(s) importado(s)` : "Nenhum cliente novo importado",
+                description: desc,
+                variant: data.created === 0 ? "destructive" : "default",
+            });
         },
         onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
     });
