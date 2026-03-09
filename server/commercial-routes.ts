@@ -209,6 +209,7 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
         // If no warehouse specified, auto-pick the one with most available stock for this product
         let warehouseId = item.warehouseId;
         if (!warehouseId) {
+            // First try: warehouse with existing stock record for this product
             const best = await db.execute(sql`
                 SELECT cs.warehouse_id
                 FROM company_stock cs
@@ -219,8 +220,22 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
                 LIMIT 1
             `);
             warehouseId = (best.rows[0] as any)?.warehouse_id ?? null;
+
+            // Fallback: if product has no stock record, use first active warehouse of the company
+            if (!warehouseId) {
+                const fallback = await db.execute(sql`
+                    SELECT id FROM company_warehouses
+                    WHERE company_id = ${companyId}
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                `);
+                warehouseId = (fallback.rows[0] as any)?.id ?? null;
+            }
         }
-        if (!warehouseId) continue;
+        if (!warehouseId) {
+            console.warn(`[reserveStock] No warehouse found for product ${item.productId} in company ${companyId}, skipping`);
+            continue;
+        }
 
         await db.execute(sql`
             INSERT INTO company_stock (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
@@ -388,13 +403,18 @@ export function registerCommercialRoutes(app: Express) {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
             const user = req.user as any;
             const companyId = await getCompanyId(user.id);
-            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+            if (!companyId) {
+                console.warn(`[Clients GET] userId=${user.id} has no companyId — returning 403`);
+                return res.status(403).json({ error: "Sem empresa vinculada" });
+            }
 
             const clients = await db.select().from(companyClients)
                 .where(eq(companyClients.companyId, companyId))
                 .orderBy(asc(companyClients.name));
+            console.log(`[Clients GET] userId=${user.id} companyId=${companyId} → ${clients.length} clientes`);
             res.json(clients);
         } catch (e) {
+            console.error("[Clients GET] error:", e);
             res.status(500).json({ error: "Erro interno" });
         }
     });
@@ -595,11 +615,13 @@ ${csvText}`;
                     } as any);
                     existingNames.add(normalizedName);
                     created++;
-                } catch {
+                } catch (insertErr: any) {
+                    console.error(`[Clients Import] insert failed for "${c.nome}":`, insertErr?.message);
                     skipped++;
                 }
             }
 
+            console.log(`[Clients Import] companyId=${companyId} created=${created} skipped=${skipped} total=${clientes.length}`);
             res.json({ success: true, created, skipped, total: clientes.length });
         } catch (e: any) {
             console.error("[Clients Import]", e);
