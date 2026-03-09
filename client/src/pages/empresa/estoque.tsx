@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import EmpresaLayout from "@/components/empresa/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -177,40 +177,40 @@ export default function EmpresaEstoque() {
                                                         {CATEGORY_LABELS[cat] ?? cat.replace(/_/g, " ")}
                                                         <span className="ml-2 font-normal normal-case text-slate-400">({items.length})</span>
                                                     </div>
-                                                    <table className="w-full text-sm">
+                                                    <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm min-w-[500px]">
                                                         <thead>
                                                             <tr className="text-slate-500 text-xs border-b bg-slate-50">
-                                                                <th className="text-left px-4 py-2">Produto</th>
-                                                                <th className="text-left px-4 py-2">Código</th>
-                                                                <th className="text-right px-4 py-2">Quantidade</th>
-                                                                <th className="text-right px-4 py-2">Reservado</th>
-                                                                <th className="text-right px-4 py-2">Disponível</th>
-                                                                <th className="text-right px-4 py-2">Unidade</th>
-                                                                <th className="text-right px-4 py-2">Atualizado</th>
+                                                                <th className="text-left px-3 py-2">Produto</th>
+                                                                <th className="text-right px-3 py-2">Qtd</th>
+                                                                <th className="text-right px-3 py-2">Reservado</th>
+                                                                <th className="text-right px-3 py-2">Disponível</th>
+                                                                <th className="text-right px-3 py-2">Un.</th>
+                                                                <th className="text-right px-3 py-2 hidden md:table-cell">Atualizado</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y">
                                                             {items.map((s: any) => (
                                                                 <tr key={s.stockId} className={parseFloat(s.quantity) < 0 ? "bg-red-50" : ""}>
-                                                                    <td className="px-4 py-2 font-medium">{s.productName}</td>
-                                                                    <td className="px-4 py-2 text-slate-500">{s.productCode ?? "—"}</td>
-                                                                    <td className={`px-4 py-2 text-right font-semibold ${parseFloat(s.quantity) < 0 ? "text-red-600" : ""}`}>
+                                                                    <td className="px-3 py-2 font-medium">{s.productName}</td>
+                                                                    <td className={`px-3 py-2 text-right font-semibold ${parseFloat(s.quantity) < 0 ? "text-red-600" : ""}`}>
                                                                         {parseFloat(s.quantity).toLocaleString("es-PY", { minimumFractionDigits: 2 })}
                                                                     </td>
-                                                                    <td className={`px-4 py-2 text-right text-sm ${parseFloat(s.reservedQuantity ?? "0") > 0 ? "text-amber-600 font-medium" : "text-slate-400"}`}>
+                                                                    <td className={`px-3 py-2 text-right text-sm ${parseFloat(s.reservedQuantity ?? "0") > 0 ? "text-amber-600 font-medium" : "text-slate-400"}`}>
                                                                         {parseFloat(s.reservedQuantity ?? "0").toLocaleString("es-PY", { minimumFractionDigits: 2 })}
                                                                     </td>
-                                                                    <td className={`px-4 py-2 text-right font-semibold ${(parseFloat(s.quantity) - parseFloat(s.reservedQuantity ?? "0")) < 0 ? "text-red-600" : "text-green-700"}`}>
+                                                                    <td className={`px-3 py-2 text-right font-semibold ${(parseFloat(s.quantity) - parseFloat(s.reservedQuantity ?? "0")) < 0 ? "text-red-600" : "text-green-700"}`}>
                                                                         {(parseFloat(s.quantity) - parseFloat(s.reservedQuantity ?? "0")).toLocaleString("es-PY", { minimumFractionDigits: 2 })}
                                                                     </td>
-                                                                    <td className="px-4 py-2 text-right text-slate-500">{s.unit}</td>
-                                                                    <td className="px-4 py-2 text-right text-slate-400 text-xs">
+                                                                    <td className="px-3 py-2 text-right text-slate-500">{s.unit}</td>
+                                                                    <td className="px-3 py-2 text-right text-slate-400 text-xs hidden md:table-cell">
                                                                         {new Date(s.updatedAt).toLocaleDateString("es-PY")}
                                                                     </td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
                                                     </table>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>

@@ -483,24 +483,16 @@ export default function EmpresaPedidos() {
                                 <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end mt-4 pt-4 border-t border-dashed">
                                     <div className="col-span-2 md:col-span-4">
                                         <Label className="md:hidden text-xs">Produto</Label>
-                                        <datalist id="products-list">
-                                            {(products as any[]).map((p: any) => <option key={p.id} value={p.name} data-id={p.id} />)}
-                                        </datalist>
-                                        <Input
-                                            className="h-10 md:h-8 text-sm md:text-xs"
-                                            placeholder="Nome do produto..."
-                                            list="products-list"
-                                            value={newItem.productName}
-                                            onChange={e => {
-                                                const val = e.target.value;
-                                                const match = (products as any[]).find((p: any) => p.name === val);
-                                                if (match) {
-                                                    handleProductSelect(match.id);
-                                                } else {
-                                                    setNewItem(prev => ({ ...prev, productName: val, productId: "", productCode: "" }));
-                                                }
-                                            }}
-                                        />
+                                        <Select value={newItem.productId} onValueChange={handleProductSelect}>
+                                            <SelectTrigger className="h-10 md:h-8 text-sm md:text-xs">
+                                                <SelectValue placeholder="Selecionar produto..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(products as any[]).map((p: any) => (
+                                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                         {newItem.productId && (() => {
                                             const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
                                             if (!avail) return null;
