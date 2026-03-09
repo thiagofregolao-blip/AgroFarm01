@@ -550,6 +550,29 @@ export function registerCommercialRoutes(app: Express) {
         }
     });
 
+    /** Purge ALL clients for this company (hard delete) */
+    app.delete("/api/company/clients/purge-all", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            // Count before delete
+            const before = await db.select({ id: companyClients.id }).from(companyClients)
+                .where(eq(companyClients.companyId, companyId));
+
+            // Hard delete all clients for this company
+            await db.delete(companyClients).where(eq(companyClients.companyId, companyId));
+
+            console.log(`[Clients PURGE] userId=${user.id} companyId=${companyId} deleted=${before.length} clients`);
+            res.json({ success: true, deleted: before.length });
+        } catch (e: any) {
+            console.error("[Clients PURGE] error:", e);
+            res.status(500).json({ error: e.message || "Erro interno" });
+        }
+    });
+
     app.delete("/api/company/clients/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
