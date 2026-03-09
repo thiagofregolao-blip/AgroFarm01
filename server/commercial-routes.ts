@@ -1065,6 +1065,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
+            console.log(`[available-by-product] companyId=${companyId}`);
             const rows = await db.execute(sql`
                 SELECT
                     cs.product_id AS "productId",
@@ -1080,6 +1081,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
                 GROUP BY cs.product_id, cp.name, cp.unit
                 ORDER BY cp.name
             `);
+            console.log(`[available-by-product] returning ${rows.rows.length} products`, JSON.stringify(rows.rows).slice(0, 500));
             res.json(rows.rows);
         } catch (e) {
             console.error("[available-by-product] error:", e);
@@ -1389,9 +1391,13 @@ ${csvText}`;
                 }))
             );
 
-            // Reserve stock immediately on order creation (non-blocking)
-            try { await reserveStockForOrder(order.id, companyId, user.id); } catch (e) {
-                console.error("[Orders] reserveStock on create failed (non-blocking):", e);
+            // Reserve stock immediately on order creation
+            console.log(`[Orders] About to reserveStock for order ${order.id} company ${companyId}`);
+            try {
+                await reserveStockForOrder(order.id, companyId, user.id);
+                console.log(`[Orders] reserveStock DONE for order ${order.id}`);
+            } catch (e) {
+                console.error("[Orders] reserveStock FAILED:", e);
             }
 
             res.json({ ...order, items });
