@@ -1097,6 +1097,69 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
         }
     });
 
+    /** Demand vs Stock — aggregated view for directors */
+    app.get("/api/company/demand-vs-stock", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            // Active order statuses (not yet billed/cancelled)
+            const activeStatuses = ["draft", "pending_director", "pending_finance", "pending_billing"];
+
+            const data = await db.execute(sql`
+                WITH demand AS (
+                    SELECT
+                        soi.product_id,
+                        SUM(soi.quantity::numeric) AS total_demand,
+                        COUNT(DISTINCT so.id) AS order_count,
+                        MIN(so.created_at) AS oldest_order_date
+                    FROM sales_order_items soi
+                    JOIN sales_orders so ON so.id = soi.order_id
+                    WHERE so.company_id = ${companyId}
+                      AND so.status IN ('draft', 'pending_director', 'pending_finance', 'pending_billing')
+                      AND soi.product_id IS NOT NULL
+                    GROUP BY soi.product_id
+                ),
+                stock AS (
+                    SELECT
+                        cs.product_id,
+                        SUM(cs.quantity::numeric) AS total_stock,
+                        SUM(COALESCE(cs.reserved_quantity, 0)::numeric) AS total_reserved
+                    FROM company_stock cs
+                    JOIN company_warehouses cw ON cw.id = cs.warehouse_id
+                    WHERE cw.company_id = ${companyId}
+                    GROUP BY cs.product_id
+                )
+                SELECT
+                    COALESCE(d.product_id, s.product_id) AS "productId",
+                    cp.name AS "productName",
+                    cp.unit AS unit,
+                    cp.category AS category,
+                    COALESCE(s.total_stock, 0) AS "totalStock",
+                    COALESCE(d.total_demand, 0) AS "totalDemand",
+                    COALESCE(s.total_reserved, 0) AS "totalReserved",
+                    GREATEST(0, COALESCE(s.total_stock, 0) - COALESCE(d.total_demand, 0)) AS available,
+                    GREATEST(0, COALESCE(d.total_demand, 0) - COALESCE(s.total_stock, 0)) AS "needToBuy",
+                    CASE WHEN COALESCE(d.total_demand, 0) > 0
+                        THEN LEAST(100, ROUND(COALESCE(s.total_stock, 0) / d.total_demand * 100, 1))
+                        ELSE 100
+                    END AS "coveragePct",
+                    COALESCE(d.order_count, 0) AS "orderCount",
+                    d.oldest_order_date AS "oldestOrderDate"
+                FROM demand d
+                FULL OUTER JOIN stock s ON s.product_id = d.product_id
+                JOIN company_products cp ON cp.id = COALESCE(d.product_id, s.product_id)
+                ORDER BY "coveragePct" ASC, cp.name ASC
+            `);
+            res.json(getRows(data));
+        } catch (e) {
+            console.error("[demand-vs-stock] error:", e);
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
     /** Manual stock adjustment */
     app.post("/api/company/stock/adjust", async (req: Request, res: Response) => {
         try {

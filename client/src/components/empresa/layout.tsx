@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
     Home, Package, Users, Warehouse, FileText, CreditCard,
-    ArrowLeftRight, Tag, LogOut, Menu, X, Building2, ShoppingCart, UserCircle
+    ArrowLeftRight, Tag, LogOut, Menu, X, Building2, ShoppingCart, UserCircle, BarChart3
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -34,6 +34,7 @@ const navGroups = [
     {
         label: "GESTÃO",
         items: [
+            { label: "Demanda vs Estoque", href: "/empresa/demanda-estoque", icon: BarChart3, roles: ["director", "admin_empresa"] },
             { label: "Produtos", href: "/empresa/produtos", icon: Package, roles: ["director", "admin_empresa"] },
             { label: "Tabelas de Preço", href: "/empresa/tabelas", icon: Tag, roles: ["director", "admin_empresa"] },
             { label: "Depósitos", href: "/empresa/depositos", icon: Building2, roles: ["director", "admin_empresa"] },

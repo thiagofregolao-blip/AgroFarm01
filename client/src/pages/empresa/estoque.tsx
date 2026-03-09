@@ -205,29 +205,39 @@ export default function EmpresaEstoque() {
                                                                 <th className="text-right px-3 py-2">Qtd</th>
                                                                 <th className="text-right px-3 py-2">Reservado</th>
                                                                 <th className="text-right px-3 py-2">Disponível</th>
+                                                                <th className="text-right px-3 py-2">Nec. Compra</th>
                                                                 <th className="text-right px-3 py-2">Un.</th>
                                                                 <th className="text-right px-3 py-2 hidden md:table-cell">Atualizado</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y">
-                                                            {items.map((s: any) => (
-                                                                <tr key={s.stockId} className={parseFloat(s.quantity) < 0 ? "bg-red-50" : ""}>
+                                                            {items.map((s: any) => {
+                                                                const qty = parseFloat(s.quantity);
+                                                                const reserved = parseFloat(s.reservedQuantity ?? "0");
+                                                                const available = Math.max(0, qty - reserved);
+                                                                const needToBuy = Math.max(0, reserved - qty);
+                                                                return (
+                                                                <tr key={s.stockId} className={needToBuy > 0 ? "bg-red-50" : ""}>
                                                                     <td className="px-3 py-2 font-medium">{s.productName}</td>
-                                                                    <td className={`px-3 py-2 text-right font-semibold ${parseFloat(s.quantity) < 0 ? "text-red-600" : ""}`}>
-                                                                        {parseFloat(s.quantity).toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                                                    <td className={`px-3 py-2 text-right font-semibold ${qty < 0 ? "text-red-600" : ""}`}>
+                                                                        {qty.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
                                                                     </td>
-                                                                    <td className={`px-3 py-2 text-right text-sm ${parseFloat(s.reservedQuantity ?? "0") > 0 ? "text-amber-600 font-medium" : "text-slate-400"}`}>
-                                                                        {parseFloat(s.reservedQuantity ?? "0").toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                                                    <td className={`px-3 py-2 text-right text-sm ${reserved > 0 ? "text-amber-600 font-medium" : "text-slate-400"}`}>
+                                                                        {reserved.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
                                                                     </td>
-                                                                    <td className={`px-3 py-2 text-right font-semibold ${(parseFloat(s.quantity) - parseFloat(s.reservedQuantity ?? "0")) < 0 ? "text-red-600" : "text-green-700"}`}>
-                                                                        {(parseFloat(s.quantity) - parseFloat(s.reservedQuantity ?? "0")).toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                                                    <td className={`px-3 py-2 text-right font-semibold ${available === 0 ? "text-red-600" : "text-green-700"}`}>
+                                                                        {available.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                                                    </td>
+                                                                    <td className={`px-3 py-2 text-right font-semibold ${needToBuy > 0 ? "text-red-600" : "text-slate-300"}`}>
+                                                                        {needToBuy > 0 ? needToBuy.toLocaleString("es-PY", { minimumFractionDigits: 2 }) : "—"}
                                                                     </td>
                                                                     <td className="px-3 py-2 text-right text-slate-500">{s.unit}</td>
                                                                     <td className="px-3 py-2 text-right text-slate-400 text-xs hidden md:table-cell">
                                                                         {new Date(s.updatedAt).toLocaleDateString("es-PY")}
                                                                     </td>
                                                                 </tr>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </tbody>
                                                     </table>
                                                     </div>
