@@ -529,7 +529,7 @@ export function registerCommercialRoutes(app: Express) {
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
             const { id } = req.params;
-            const { name, ruc, cedula, clientType, address, city, department, phone, email, creditLimit, notes, isActive } = req.body;
+            const { name, ruc, cedula, clientType, address, city, department, phone, email, creditLimit, notes, isActive, assignedConsultantId } = req.body;
 
             const [client] = await db.update(companyClients)
                 .set({
@@ -538,6 +538,7 @@ export function registerCommercialRoutes(app: Express) {
                     creditLimit: creditLimit !== undefined ? String(creditLimit) : undefined,
                     notes,
                     isActive: isActive !== undefined ? Boolean(isActive) : undefined,
+                    assignedConsultantId: assignedConsultantId !== undefined ? (assignedConsultantId || null) : undefined,
                     updatedAt: new Date(),
                 } as any)
                 .where(and(eq(companyClients.id, id), eq(companyClients.companyId, companyId)))
@@ -588,9 +589,17 @@ export function registerCommercialRoutes(app: Express) {
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            await db.update(companyClients)
-                .set({ isActive: false })
-                .where(and(eq(companyClients.id, req.params.id), eq(companyClients.companyId, companyId)));
+            const clientId = req.params.id;
+            // Try hard delete first; if FK violation (has orders), fall back to soft delete
+            try {
+                await db.delete(companyClients)
+                    .where(and(eq(companyClients.id, clientId), eq(companyClients.companyId, companyId)));
+            } catch {
+                // Has orders — soft delete
+                await db.update(companyClients)
+                    .set({ isActive: false })
+                    .where(and(eq(companyClients.id, clientId), eq(companyClients.companyId, companyId)));
+            }
             res.json({ success: true });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
@@ -684,36 +693,51 @@ ${csvText}`;
             let created = 0;
             let skipped = 0;
 
-            // Load existing client names (lowercased) for this company to prevent duplicates
-            const existingClients = await db.select({ name: companyClients.name })
+            // Load ALL existing clients (active and inactive) indexed by lowercased name
+            const existingClients = await db.select({ id: companyClients.id, name: companyClients.name, isActive: companyClients.isActive })
                 .from(companyClients).where(eq(companyClients.companyId, companyId));
-            const existingNames = new Set(existingClients.map((c: any) => c.name.toLowerCase()));
+            const existingByName = new Map(existingClients.map((c: any) => [c.name.toLowerCase(), c]));
 
             for (const c of clientes) {
                 if (!c.nome) { skipped++; continue; }
                 const normalizedName = String(c.nome).trim().toLowerCase();
-                if (existingNames.has(normalizedName)) { skipped++; continue; }
+                const existing = existingByName.get(normalizedName);
+
+                const values = {
+                    name: String(c.nome).trim(),
+                    ruc: c.ruc ? String(c.ruc).trim() : null,
+                    cedula: c.cedula ? String(c.cedula).trim() : null,
+                    clientType: c.clientType === "company" ? "company" : "person",
+                    phone: c.telefone ? String(c.telefone).trim() : null,
+                    email: c.email ? String(c.email).trim() : null,
+                    city: c.cidade ? String(c.cidade).trim() : null,
+                    department: c.departamento ? String(c.departamento).trim() : null,
+                    address: c.endereco ? String(c.endereco).trim() : null,
+                    creditLimit: c.limiteCredito ? String(parseFloat(String(c.limiteCredito).replace(/[^0-9.]/g, "")) || 0) : "0",
+                    notes: c.observacoes ? String(c.observacoes).trim() : null,
+                    assignedConsultantId,
+                    importBatch,
+                };
+
                 try {
-                    await db.insert(companyClients).values({
-                        companyId,
-                        name: String(c.nome).trim(),
-                        ruc: c.ruc ? String(c.ruc).trim() : null,
-                        cedula: c.cedula ? String(c.cedula).trim() : null,
-                        clientType: c.clientType === "company" ? "company" : "person",
-                        phone: c.telefone ? String(c.telefone).trim() : null,
-                        email: c.email ? String(c.email).trim() : null,
-                        city: c.cidade ? String(c.cidade).trim() : null,
-                        department: c.departamento ? String(c.departamento).trim() : null,
-                        address: c.endereco ? String(c.endereco).trim() : null,
-                        creditLimit: c.limiteCredito ? String(parseFloat(String(c.limiteCredito).replace(/[^0-9.]/g, "")) || 0) : "0",
-                        notes: c.observacoes ? String(c.observacoes).trim() : null,
-                        assignedConsultantId,
-                        importBatch,
-                    } as any);
-                    existingNames.add(normalizedName);
-                    created++;
+                    if (existing) {
+                        if (existing.isActive) {
+                            // Active client with same name — skip
+                            skipped++;
+                        } else {
+                            // Inactive client — reactivate and update
+                            await db.update(companyClients)
+                                .set({ ...values, isActive: true, updatedAt: new Date() } as any)
+                                .where(eq(companyClients.id, existing.id));
+                            created++;
+                        }
+                    } else {
+                        await db.insert(companyClients).values({ companyId, ...values } as any);
+                        existingByName.set(normalizedName, { id: "", name: values.name, isActive: true });
+                        created++;
+                    }
                 } catch (insertErr: any) {
-                    console.error(`[Clients Import] insert failed for "${c.nome}":`, insertErr?.message);
+                    console.error(`[Clients Import] failed for "${c.nome}":`, insertErr?.message);
                     skipped++;
                 }
             }
