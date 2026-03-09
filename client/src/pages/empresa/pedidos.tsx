@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -97,7 +97,7 @@ export default function EmpresaPedidos() {
         enabled: !!user,
     });
 
-    const { data: warehouses = [] } = useQuery<any[]>({
+    useQuery<any[]>({
         queryKey: ["/api/company/warehouses"],
         queryFn: () => api("GET", "/api/company/warehouses"),
         enabled: !!user,
@@ -368,18 +368,18 @@ export default function EmpresaPedidos() {
 
             {/* New Order Dialog */}
             <Dialog open={showForm} onOpenChange={setShowForm}>
-                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] p-4 md:p-6">
-                    <DialogHeader>
+                <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col w-[95vw] p-4 md:p-6">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle>Novo Pedido de Venda</DialogTitle>
                     </DialogHeader>
 
-                    <Tabs value={formTab} onValueChange={setFormTab} className="w-full">
+                    <Tabs value={formTab} onValueChange={setFormTab} className="w-full flex flex-col flex-1 min-h-0">
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="dados" className="text-xs md:text-sm">1. Dados do Pedido</TabsTrigger>
                             <TabsTrigger value="itens" disabled={!form.clientId} className="text-xs md:text-sm">2. Itens do Pedido</TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="dados" className="space-y-4 mt-4">
+                        <TabsContent value="dados" className="space-y-4 mt-4 overflow-y-auto flex-1">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="col-span-1 md:col-span-2">
                                     <Label>Cliente *</Label>
@@ -461,88 +461,51 @@ export default function EmpresaPedidos() {
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="itens" className="space-y-4 mt-4">
-                            {/* Items Grid */}
-                            <div className="border rounded-lg p-2 md:p-3 space-y-3">
-                                <p className="font-medium text-sm hidden md:block">Itens do Pedido</p>
-                                <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 px-1">
-                                    <span className="col-span-4">Produto</span>
-                                    <span className="col-span-2">Qtd</span>
-                                    <span className="col-span-1">Un.</span>
-                                    <span className="col-span-2">Preço U$</span>
-                                    <span className="col-span-2">Total U$</span>
-                                    <span className="col-span-1 border"></span>
-                                </div>
-                                {orderItems.map((item, idx) => (
-                                    <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 text-sm items-center bg-slate-50 border md:border-none rounded p-2 md:px-1 md:py-1 mb-2 md:mb-0 relative">
-                                        <div className="col-span-1 md:col-span-4 pr-6 md:pr-0">
-                                            <span className="font-medium md:font-normal block truncate">{item.productName}</span>
-                                        </div>
-                                        <div className="grid grid-cols-3 md:contents gap-2 mt-1 md:mt-0">
-                                            <div className="col-span-1 md:col-span-2">
-                                                <span className="text-xs text-slate-400 block md:hidden">Qtd</span>
-                                                {item.quantity}
-                                            </div>
-                                            <div className="col-span-1">
-                                                <span className="text-xs text-slate-400 block md:hidden">Un</span>
-                                                {item.unit}
-                                            </div>
-                                            <div className="col-span-1 md:col-span-2">
-                                                <span className="text-xs text-slate-400 block md:hidden">Preço</span>
-                                                ${parseFloat(item.unitPriceUsd).toLocaleString("es-PY")}
-                                            </div>
-                                        </div>
-                                        <div className="col-span-1 md:col-span-2 mt-1 md:mt-0 font-medium md:font-normal">
-                                            <span className="text-xs text-slate-400 mr-2 md:hidden">Total:</span>
-                                            ${parseFloat(item.totalPriceUsd).toLocaleString("es-PY")}
-                                        </div>
-                                        <button className="absolute top-2 right-2 md:static col-span-1 text-red-400 hover:text-red-600 md:text-right" onClick={() => setOrderItems(prev => prev.filter((_, i) => i !== idx))}>
-                                            <Trash2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
-                                        </button>
-                                    </div>
-                                ))}
-
-                                {/* Add item row */}
-                                <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end mt-4 pt-4 border-t border-dashed">
+                        <TabsContent value="itens" className="flex flex-col flex-1 min-h-0 mt-4 gap-3">
+                            {/* ── Add item form (fixo no topo) ── */}
+                            <div className="border rounded-lg p-2 md:p-3 shrink-0">
+                                <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end">
                                     <div className="col-span-2 md:col-span-4">
-                                        <Label className="md:hidden text-xs">Produto</Label>
+                                        <Label className="text-xs">Produto</Label>
                                         <Select value={newItem.productId} onValueChange={handleProductSelect}>
                                             <SelectTrigger className="h-10 md:h-8 text-sm md:text-xs">
                                                 <SelectValue placeholder="Selecionar produto..." />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {(products as any[]).map((p: any) => (
-                                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                                                ))}
+                                                {(products as any[]).map((p: any) => {
+                                                    const avail = (availableByProduct as any[]).find((a: any) => a.productId === p.id);
+                                                    const qty = avail ? parseFloat(avail.available) : null;
+                                                    return (
+                                                        <SelectItem key={p.id} value={p.id}>
+                                                            <span>{p.name}</span>
+                                                            {qty !== null && (
+                                                                <span className={`ml-2 text-xs font-medium ${qty < 0 ? "text-red-500" : qty === 0 ? "text-slate-400" : "text-green-600"}`}>
+                                                                    {qty.toLocaleString("es-PY", { maximumFractionDigits: 1 })} {avail.unit}
+                                                                </span>
+                                                            )}
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
-                                        {newItem.productId && (() => {
-                                            const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
-                                            if (!avail) return null;
-                                            const qty = parseFloat(avail.available);
-                                            return (
-                                                <span className={`text-xs mt-0.5 block ${qty < 0 ? "text-red-500" : qty === 0 ? "text-slate-400" : "text-green-600"}`}>
-                                                    Disp: {qty.toLocaleString("es-PY", { minimumFractionDigits: 2 })} {avail.unit}
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
-                                    <div className="col-span-1 md:col-span-2">
-                                        <Label className="md:hidden text-xs">Qtd</Label>
-                                        <Input className="h-10 md:h-8 text-sm md:text-xs" type="number" step="0.01" placeholder="Qtd" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))} />
                                         {newItem.productId && newItem.quantity && (() => {
                                             const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
                                             if (!avail) return null;
-                                            const excede = parseFloat(newItem.quantity) > parseFloat(avail.available);
-                                            return excede ? <span className="text-xs text-orange-500 block mt-0.5">Acima</span> : null;
+                                            return parseFloat(newItem.quantity) > parseFloat(avail.available)
+                                                ? <span className="text-xs text-orange-500 block mt-0.5">⚠ Acima do disponível</span>
+                                                : null;
                                         })()}
                                     </div>
+                                    <div className="col-span-1 md:col-span-2">
+                                        <Label className="text-xs">Qtd</Label>
+                                        <Input className="h-10 md:h-8 text-sm md:text-xs" type="number" step="0.01" placeholder="Qtd" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))} />
+                                    </div>
                                     <div className="col-span-1 md:col-span-1">
-                                        <Label className="md:hidden text-xs">Un</Label>
+                                        <Label className="text-xs">Un</Label>
                                         <Input className="h-10 md:h-8 text-sm md:text-xs" placeholder="Un" value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))} />
                                     </div>
                                     <div className="col-span-1 md:col-span-2">
-                                        <Label className="md:hidden text-xs">Preço U$</Label>
+                                        <Label className="text-xs">Preço U$</Label>
                                         <Input className="h-10 md:h-8 text-sm md:text-xs" type="number" step="0.01" placeholder="Preço" value={newItem.unitPriceUsd} onChange={e => setNewItem(p => ({ ...p, unitPriceUsd: e.target.value }))} />
                                     </div>
                                     <div className="hidden md:block col-span-2 text-xs text-slate-500 text-right">
@@ -554,26 +517,72 @@ export default function EmpresaPedidos() {
                                         </Button>
                                     </div>
                                 </div>
-                                {orderItems.length === 0 && (
-                                    <p className="text-xs text-slate-400 text-center pt-2">Selecione o produto, preencha os dados e clique no +</p>
-                                )}
-                                {orderItems.length > 0 && (
-                                    <div className="text-right text-base text-blue-600 font-semibold border-t pt-3 pb-1 mt-3">
-                                        Total do Pedido: $ {totalUsd.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
-                                    </div>
+                            </div>
+
+                            {/* ── Lista de itens adicionados (scrollável) ── */}
+                            <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+                                {orderItems.length === 0 ? (
+                                    <p className="text-xs text-slate-400 text-center pt-4">Selecione o produto, preencha os dados e clique no +</p>
+                                ) : (
+                                    <>
+                                        <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 px-1">
+                                            <span className="col-span-4">Produto</span>
+                                            <span className="col-span-2">Qtd</span>
+                                            <span className="col-span-1">Un.</span>
+                                            <span className="col-span-2">Preço U$</span>
+                                            <span className="col-span-2">Total U$</span>
+                                            <span className="col-span-1"></span>
+                                        </div>
+                                        {orderItems.map((item, idx) => (
+                                            <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 text-sm items-center bg-slate-50 border md:border-none rounded p-2 md:px-1 md:py-1 relative">
+                                                <div className="col-span-1 md:col-span-4 pr-6 md:pr-0">
+                                                    <span className="font-medium md:font-normal block truncate">{item.productName}</span>
+                                                </div>
+                                                <div className="grid grid-cols-3 md:contents gap-2 mt-1 md:mt-0">
+                                                    <div className="col-span-1 md:col-span-2">
+                                                        <span className="text-xs text-slate-400 block md:hidden">Qtd</span>
+                                                        {item.quantity}
+                                                    </div>
+                                                    <div className="col-span-1">
+                                                        <span className="text-xs text-slate-400 block md:hidden">Un</span>
+                                                        {item.unit}
+                                                    </div>
+                                                    <div className="col-span-1 md:col-span-2">
+                                                        <span className="text-xs text-slate-400 block md:hidden">Preço</span>
+                                                        ${parseFloat(item.unitPriceUsd).toLocaleString("es-PY")}
+                                                    </div>
+                                                </div>
+                                                <div className="col-span-1 md:col-span-2 mt-1 md:mt-0 font-medium md:font-normal">
+                                                    <span className="text-xs text-slate-400 mr-2 md:hidden">Total:</span>
+                                                    ${parseFloat(item.totalPriceUsd).toLocaleString("es-PY")}
+                                                </div>
+                                                <button className="absolute top-2 right-2 md:static col-span-1 text-red-400 hover:text-red-600 md:text-right" onClick={() => setOrderItems(prev => prev.filter((_, i) => i !== idx))}>
+                                                    <Trash2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </>
                                 )}
                             </div>
 
-                            <div className="flex gap-2 justify-between md:justify-end pt-4 border-t mt-4">
-                                <Button variant="outline" onClick={() => setFormTab("dados")}>Voltar</Button>
-                                <Button
-                                    className="bg-blue-600 hover:bg-blue-700"
-                                    disabled={!form.clientId || orderItems.length === 0 || createOrder.isPending}
-                                    onClick={() => createOrder.mutate({ ...form, items: orderItems.map(i => ({ ...i, totalPriceUsd: i.totalPriceUsd })) })}
-                                >
-                                    {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                    Salvar Pedido
-                                </Button>
+                            {/* ── Rodapé fixo: total + botões ── */}
+                            <div className="shrink-0 border-t pt-3 space-y-2">
+                                {orderItems.length > 0 && (
+                                    <div className="text-right text-base text-blue-600 font-semibold">
+                                        Total do Pedido: $ {totalUsd.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                    </div>
+                                )}
+                                <div className="flex gap-2 justify-between md:justify-end">
+                                    <Button variant="outline" onClick={() => setFormTab("dados")}>Voltar</Button>
+                                    <Button
+                                        className="bg-blue-600 hover:bg-blue-700"
+                                        disabled={!form.clientId || orderItems.length === 0 || createOrder.isPending}
+                                        onClick={() => createOrder.mutate({ ...form, items: orderItems.map(i => ({ ...i, totalPriceUsd: i.totalPriceUsd })) })}
+                                    >
+                                        {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                        Salvar Pedido
+                                    </Button>
+                                </div>
                             </div>
                         </TabsContent>
                     </Tabs>
