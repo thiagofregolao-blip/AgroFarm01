@@ -386,7 +386,7 @@ export default function EmpresaPedidos() {
                                     <Select value={form.clientId} onValueChange={v => setForm(p => ({ ...p, clientId: v }))}>
                                         <SelectTrigger><SelectValue placeholder="Selecionar cliente..." /></SelectTrigger>
                                         <SelectContent>
-                                            {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name} {c.ruc ? `— ${c.ruc}` : ""}</SelectItem>)}
+                                            {clients.filter((c: any) => c.isActive !== false).map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name} {c.ruc ? `— ${c.ruc}` : ""}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>

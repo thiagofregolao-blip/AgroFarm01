@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Redirect, Route } from "wouter";
 
@@ -11,7 +12,16 @@ export function EmpresaRoute({
 }) {
     const { user, isLoading } = useAuth();
 
-    if (isLoading) {
+    // Check if user is linked to a company (covers rtv, director, faturista, etc.)
+    const { data: company, isLoading: companyLoading } = useQuery<any>({
+        queryKey: ["/api/company/me"],
+        queryFn: () => fetch("/api/company/me", { credentials: "include" })
+            .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; }),
+        enabled: !!user,
+        retry: false,
+    });
+
+    if (isLoading || companyLoading) {
         return (
             <Route path={path}>
                 <div className="flex items-center justify-center min-h-screen">
@@ -29,8 +39,8 @@ export function EmpresaRoute({
         );
     }
 
-    // Admins are allowed to see everything, and RTV users are the ones meant for this module
-    if (user.role !== 'rtv' && user.role !== 'administrador') {
+    // Allow access if user is admin or has an active company link
+    if (user.role !== 'administrador' && !company) {
         return (
             <Route path={path}>
                 <Redirect to="/dashboard" />

@@ -171,17 +171,38 @@ async function autoReconcileInvoice(invoiceId: string, companyId: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function deductStockFromInvoice(invoiceId: string, companyId: string, userId: string) {
     const items = await db.select().from(salesInvoiceItems).where(eq(salesInvoiceItems.invoiceId, invoiceId));
+
+    // Find linked orders to release their reservations
+    const links = await db.select().from(salesOrderInvoiceLinks)
+        .where(eq(salesOrderInvoiceLinks.invoiceId, invoiceId));
+
     for (const item of items) {
         if (!item.warehouseId || !item.productId) continue;
         const qty = parseFloat(item.quantity as string);
 
-        // Upsert stock (decrement)
-        await db.execute(sql`
-            INSERT INTO company_stock (warehouse_id, product_id, quantity, updated_at)
-            VALUES (${item.warehouseId}, ${item.productId}, ${-qty}, now())
-            ON CONFLICT (warehouse_id, product_id)
-            DO UPDATE SET quantity = company_stock.quantity - ${qty}, updated_at = now()
-        `);
+        // Find how much of this item was linked to orders (to release reservation)
+        const linkedQty = links
+            .filter((l: any) => l.invoiceItemId === item.id)
+            .reduce((sum: number, l: any) => sum + parseFloat(l.quantityLinked as string), 0);
+
+        // Upsert stock (decrement quantity + release reservation for linked portion)
+        if (linkedQty > 0) {
+            await db.execute(sql`
+                INSERT INTO company_stock (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
+                VALUES (${item.warehouseId}, ${item.productId}, ${-qty}, 0, now())
+                ON CONFLICT (warehouse_id, product_id)
+                DO UPDATE SET quantity = company_stock.quantity - ${qty},
+                    reserved_quantity = GREATEST(0, company_stock.reserved_quantity - ${linkedQty}),
+                    updated_at = now()
+            `);
+        } else {
+            await db.execute(sql`
+                INSERT INTO company_stock (warehouse_id, product_id, quantity, updated_at)
+                VALUES (${item.warehouseId}, ${item.productId}, ${-qty}, now())
+                ON CONFLICT (warehouse_id, product_id)
+                DO UPDATE SET quantity = company_stock.quantity - ${qty}, updated_at = now()
+            `);
+        }
 
         // Movement record
         await db.insert(companyStockMovements).values({
@@ -1371,7 +1392,7 @@ ${csvText}`;
                 consultantId: salesOrders.consultantId,
             })
                 .from(salesOrders)
-                .innerJoin(companyClients, eq(salesOrders.clientId, companyClients.id))
+                .leftJoin(companyClients, eq(salesOrders.clientId, companyClients.id))
                 .where(eq(salesOrders.companyId, companyId))
                 .orderBy(desc(salesOrders.createdAt));
 
@@ -1989,7 +2010,7 @@ ${csvText}`;
                 clientId: companyPagares.clientId,
             })
                 .from(companyPagares)
-                .innerJoin(companyClients, eq(companyPagares.clientId, companyClients.id))
+                .leftJoin(companyClients, eq(companyPagares.clientId, companyClients.id))
                 .where(eq(companyPagares.companyId, companyId))
                 .orderBy(asc(companyPagares.dueDate));
 
@@ -2333,6 +2354,14 @@ ${csvText}`;
                 userId,
                 role: role || "rtv",
             }).onConflictDoNothing().returning();
+
+            // Ensure platform role is set to 'rtv' so user can access empresa module
+            if (cu) {
+                await db.update(users)
+                    .set({ role: "rtv" })
+                    .where(and(eq(users.id, userId), sql`role NOT IN ('administrador', 'rtv')`));
+            }
+
             res.json(cu);
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
