@@ -1065,27 +1065,24 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            const warehouses = await db.select().from(companyWarehouses)
-                .where(eq(companyWarehouses.companyId, companyId));
-            const warehouseIds = warehouses.map((w: any) => w.id);
-            if (warehouseIds.length === 0) return res.json([]);
-
             const rows = await db.execute(sql`
                 SELECT
                     cs.product_id AS "productId",
                     cp.name AS "productName",
                     cp.unit AS unit,
                     SUM(cs.quantity::numeric) AS "totalQty",
-                    SUM(cs.reserved_quantity::numeric) AS "totalReserved",
-                    SUM(cs.quantity::numeric - cs.reserved_quantity::numeric) AS available
+                    SUM(COALESCE(cs.reserved_quantity, 0)::numeric) AS "totalReserved",
+                    SUM(cs.quantity::numeric - COALESCE(cs.reserved_quantity, 0)::numeric) AS available
                 FROM company_stock cs
                 JOIN company_products cp ON cp.id = cs.product_id
-                WHERE cs.warehouse_id = ANY(${warehouseIds})
+                JOIN company_warehouses cw ON cw.id = cs.warehouse_id
+                WHERE cw.company_id = ${companyId}
                 GROUP BY cs.product_id, cp.name, cp.unit
                 ORDER BY cp.name
             `);
             res.json(rows.rows);
         } catch (e) {
+            console.error("[available-by-product] error:", e);
             res.status(500).json({ error: "Erro interno" });
         }
     });
