@@ -201,12 +201,15 @@ async function deductStockFromInvoice(invoiceId: string, companyId: string, user
 // Helper: reserve stock when an order is submitted
 // ─────────────────────────────────────────────────────────────────────────────
 async function reserveStockForOrder(orderId: string, companyId: string, userId: string) {
+    console.log(`[reserveStock] START orderId=${orderId} companyId=${companyId}`);
     const items = await db.select().from(salesOrderItems).where(eq(salesOrderItems.orderId, orderId));
+    console.log(`[reserveStock] Found ${items.length} items`);
 
     for (const item of items) {
-        if (!item.productId) continue;
+        if (!item.productId) { console.log(`[reserveStock] Skipping item without productId`); continue; }
         let remaining = parseFloat(item.quantity as string);
         if (remaining <= 0) continue;
+        console.log(`[reserveStock] Processing product ${item.productId} qty=${remaining}`);
 
         // Get all warehouses that have stock for this product, ordered by available (most first)
         const stockRows = await db.execute(sql`
@@ -223,6 +226,7 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
             warehouse_id: r.warehouse_id,
             available: parseFloat(r.available ?? "0"),
         }));
+        console.log(`[reserveStock] Found ${warehouses.length} warehouses with stock`);
 
         // If product has no stock record at all, fall back to first warehouse of the company
         if (warehouses.length === 0) {
@@ -231,9 +235,10 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
             `);
             const whId = (fallback.rows[0] as any)?.id ?? null;
             if (!whId) {
-                console.warn(`[reserveStock] No warehouse in company ${companyId} for product ${item.productId}`);
+                console.warn(`[reserveStock] NO WAREHOUSE AT ALL in company ${companyId}`);
                 continue;
             }
+            console.log(`[reserveStock] Fallback to warehouse ${whId}`);
             warehouses.push({ warehouse_id: whId, available: 0 });
         }
 
@@ -241,23 +246,32 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
         for (const wh of warehouses) {
             if (remaining <= 0) break;
 
-            // Reserve as much as available in this warehouse (at minimum 0, maximum remaining)
-            // If available is 0 and this is the last warehouse, still reserve remaining (soft limit)
             const isLast = wh === warehouses[warehouses.length - 1];
             const toReserve = wh.available >= remaining
                 ? remaining
                 : wh.available > 0
                     ? wh.available
-                    : isLast ? remaining : 0; // last warehouse absorbs any leftover
+                    : isLast ? remaining : 0;
 
             if (toReserve <= 0) continue;
 
-            await db.execute(sql`
-                INSERT INTO company_stock (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
-                VALUES (${wh.warehouse_id}, ${item.productId}, 0, ${toReserve}, now())
-                ON CONFLICT (warehouse_id, product_id)
-                DO UPDATE SET reserved_quantity = company_stock.reserved_quantity + ${toReserve}, updated_at = now()
-            `);
+            // Use explicit check + UPDATE/INSERT instead of ON CONFLICT
+            const [existing] = await db.execute(sql`
+                SELECT id FROM company_stock WHERE warehouse_id = ${wh.warehouse_id} AND product_id = ${item.productId} LIMIT 1
+            `).then(r => r.rows as any[]);
+
+            if (existing) {
+                await db.execute(sql`
+                    UPDATE company_stock
+                    SET reserved_quantity = reserved_quantity + ${toReserve}, updated_at = now()
+                    WHERE warehouse_id = ${wh.warehouse_id} AND product_id = ${item.productId}
+                `);
+            } else {
+                await db.execute(sql`
+                    INSERT INTO company_stock (id, warehouse_id, product_id, quantity, reserved_quantity, updated_at)
+                    VALUES (gen_random_uuid(), ${wh.warehouse_id}, ${item.productId}, 0, ${toReserve}, now())
+                `);
+            }
 
             await db.insert(companyStockMovements).values({
                 companyId,
@@ -270,13 +284,15 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
                 createdBy: userId,
             });
 
+            console.log(`[reserveStock] Reserved ${toReserve} in warehouse ${wh.warehouse_id}`);
             remaining -= toReserve;
         }
 
         if (remaining > 0) {
-            console.warn(`[reserveStock] Order ${orderId}: product ${item.productId} still needs ${remaining} units but stock exhausted`);
+            console.warn(`[reserveStock] Order ${orderId}: product ${item.productId} still needs ${remaining} but stock exhausted`);
         }
     }
+    console.log(`[reserveStock] DONE orderId=${orderId}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

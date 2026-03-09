@@ -162,7 +162,8 @@ app.use((req, res, next) => {
     const { sql } = await import("drizzle-orm");
     await dbReady;
     await db.execute(sql`ALTER TABLE company_stock ADD COLUMN IF NOT EXISTS reserved_quantity decimal(15,4) NOT NULL DEFAULT 0`);
-    log("✅ Migration: company_stock.reserved_quantity column ensured");
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_company_stock_wh_product ON company_stock (warehouse_id, product_id)`);
+    log("✅ Migration: company_stock.reserved_quantity column + unique index ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration check for company_stock.reserved_quantity: ${migErr.message}`);
   }
