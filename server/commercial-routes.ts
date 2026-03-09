@@ -1193,6 +1193,7 @@ ${csvText}`;
                 createdAt: salesOrders.createdAt,
                 clientName: companyClients.name,
                 clientId: salesOrders.clientId,
+                consultantId: salesOrders.consultantId,
             })
                 .from(salesOrders)
                 .innerJoin(companyClients, eq(salesOrders.clientId, companyClients.id))
