@@ -197,6 +197,13 @@ async function deductStockFromInvoice(invoiceId: string, companyId: string, user
     }
 }
 
+// Helper: extract rows from db.execute result (postgres-js returns array, neon returns { rows })
+function getRows(result: any): any[] {
+    if (Array.isArray(result)) return result;
+    if (result && Array.isArray(result.rows)) return result.rows;
+    return [];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: reserve stock when an order is submitted
 // ─────────────────────────────────────────────────────────────────────────────
@@ -222,7 +229,7 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
             ORDER BY available DESC
         `);
 
-        const warehouses: { warehouse_id: string; available: number }[] = (stockRows.rows as any[]).map(r => ({
+        const warehouses: { warehouse_id: string; available: number }[] = getRows(stockRows).map((r: any) => ({
             warehouse_id: r.warehouse_id,
             available: parseFloat(r.available ?? "0"),
         }));
@@ -233,7 +240,7 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
             const fallback = await db.execute(sql`
                 SELECT id FROM company_warehouses WHERE company_id = ${companyId} ORDER BY created_at ASC LIMIT 1
             `);
-            const whId = (fallback.rows[0] as any)?.id ?? null;
+            const whId = (getRows(fallback)[0] as any)?.id ?? null;
             if (!whId) {
                 console.warn(`[reserveStock] NO WAREHOUSE AT ALL in company ${companyId}`);
                 continue;
@@ -258,7 +265,7 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
             // Use explicit check + UPDATE/INSERT instead of ON CONFLICT
             const [existing] = await db.execute(sql`
                 SELECT id FROM company_stock WHERE warehouse_id = ${wh.warehouse_id} AND product_id = ${item.productId} LIMIT 1
-            `).then(r => r.rows as any[]);
+            `).then(r => getRows(r));
 
             if (existing) {
                 await db.execute(sql`
@@ -1081,8 +1088,9 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
                 GROUP BY cs.product_id, cp.name, cp.unit
                 ORDER BY cp.name
             `);
-            console.log(`[available-by-product] returning ${rows.rows.length} products`, JSON.stringify(rows.rows).slice(0, 500));
-            res.json(rows.rows);
+            const data = getRows(rows);
+            console.log(`[available-by-product] returning ${data.length} products`, JSON.stringify(data).slice(0, 500));
+            res.json(data);
         } catch (e) {
             console.error("[available-by-product] error:", e);
             res.status(500).json({ error: "Erro interno" });
