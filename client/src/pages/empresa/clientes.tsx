@@ -38,6 +38,14 @@ export default function EmpresaClientes() {
     const [showImportModal, setShowImportModal] = useState(false);
     const [selectedRtvId, setSelectedRtvId] = useState<string>("none");
 
+    const { data: company } = useQuery<any>({
+        queryKey: ["/api/company/me"],
+        queryFn: () => api("GET", "/api/company/me"),
+        enabled: !!user,
+    });
+    const companyRole: string = company?.role ?? "";
+    const isRtv = companyRole === "rtv";
+
     const { data: allClients = [], isLoading } = useQuery<any[]>({
         queryKey: ["/api/company/clients"],
         queryFn: () => api("GET", "/api/company/clients"),
@@ -112,17 +120,19 @@ export default function EmpresaClientes() {
             <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-slate-800">Carteira de Clientes</h1>
-                    <div className="flex gap-2">
-                        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
-                            onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
-                        <Button variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => { setSelectedRtvId("none"); setShowImportModal(true); }} disabled={importExcel.isPending}>
-                            {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
-                            {importExcel.isPending ? "Analisando com IA..." : "Importar com IA"}
-                        </Button>
-                        <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => { setEditing(null); setForm({ ...emptyForm }); setShowForm(true); }}>
-                            <Plus className="h-4 w-4 mr-2" /> Novo Cliente
-                        </Button>
-                    </div>
+                    {!isRtv && (
+                        <div className="flex gap-2">
+                            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                                onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
+                            <Button variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => { setSelectedRtvId("none"); setShowImportModal(true); }} disabled={importExcel.isPending}>
+                                {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                                {importExcel.isPending ? "Analisando com IA..." : "Importar com IA"}
+                            </Button>
+                            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => { setEditing(null); setForm({ ...emptyForm }); setShowForm(true); }}>
+                                <Plus className="h-4 w-4 mr-2" /> Novo Cliente
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 <p className="text-xs text-slate-400">
@@ -224,29 +234,31 @@ export default function EmpresaClientes() {
                                                                             </div>
                                                                         )}
                                                                     </div>
-                                                                    <div className="flex gap-0.5 shrink-0">
-                                                                        <Button size="sm" variant="ghost" title="Editar" onClick={() => openEdit(c)}>
-                                                                            <Pencil className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                        <Button
-                                                                            size="sm" variant="ghost"
-                                                                            title={c.isActive !== false ? "Inativar cliente" : "Reativar cliente"}
-                                                                            className={c.isActive !== false ? "text-slate-400 hover:text-amber-600" : "text-amber-500 hover:text-green-600"}
-                                                                            disabled={toggleActive.isPending}
-                                                                            onClick={() => toggleActive.mutate(c)}
-                                                                        >
-                                                                            {c.isActive !== false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                                                        </Button>
-                                                                        <Button
-                                                                            size="sm" variant="ghost"
-                                                                            title="Excluir cliente"
-                                                                            className="text-slate-400 hover:text-red-600"
-                                                                            disabled={remove.isPending}
-                                                                            onClick={() => { if (confirm(`Excluir "${c.name}"?`)) remove.mutate(c.id); }}
-                                                                        >
-                                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    </div>
+                                                                    {!isRtv && (
+                                                                        <div className="flex gap-0.5 shrink-0">
+                                                                            <Button size="sm" variant="ghost" title="Editar" onClick={() => openEdit(c)}>
+                                                                                <Pencil className="h-3.5 w-3.5" />
+                                                                            </Button>
+                                                                            <Button
+                                                                                size="sm" variant="ghost"
+                                                                                title={c.isActive !== false ? "Inativar cliente" : "Reativar cliente"}
+                                                                                className={c.isActive !== false ? "text-slate-400 hover:text-amber-600" : "text-amber-500 hover:text-green-600"}
+                                                                                disabled={toggleActive.isPending}
+                                                                                onClick={() => toggleActive.mutate(c)}
+                                                                            >
+                                                                                {c.isActive !== false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                                            </Button>
+                                                                            <Button
+                                                                                size="sm" variant="ghost"
+                                                                                title="Excluir cliente"
+                                                                                className="text-slate-400 hover:text-red-600"
+                                                                                disabled={remove.isPending}
+                                                                                onClick={() => { if (confirm(`Excluir "${c.name}"?`)) remove.mutate(c.id); }}
+                                                                            >
+                                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </CardContent>
                                                         </Card>

@@ -14,6 +14,8 @@ import { Loader2, Search, PackagePlus, Upload, Warehouse, ChevronDown, ChevronRi
 const api = (method: string, path: string, body?: any) =>
     fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, credentials: "include", body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
 
+const apiJson = (path: string) => fetch(path, { credentials: "include" }).then(r => r.json());
+
 export default function EmpresaEstoque() {
     const { user } = useAuth();
     const { toast } = useToast();
@@ -32,6 +34,13 @@ export default function EmpresaEstoque() {
         next.has(id) ? next.delete(id) : next.add(id);
         return next;
     });
+
+    const { data: company } = useQuery<any>({
+        queryKey: ["/api/company/me"],
+        queryFn: () => apiJson("/api/company/me"),
+        enabled: !!user,
+    });
+    const isRtv = (company?.role ?? "") === "rtv";
 
     const { data: stock = [], isLoading } = useQuery<any[]>({
         queryKey: ["/api/company/stock"],
@@ -115,17 +124,19 @@ export default function EmpresaEstoque() {
             <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-slate-800">Estoque por Depósito</h1>
-                    <div className="flex gap-2">
-                        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden"
-                            onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
-                        <Button variant="outline" onClick={() => { setImportWhId(""); setShowImportModal(true); }} disabled={importExcel.isPending}>
-                            {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                            Importar Planilha
-                        </Button>
-                        <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowAdjust(true)}>
-                            <PackagePlus className="h-4 w-4 mr-2" /> Ajuste Manual
-                        </Button>
-                    </div>
+                    {!isRtv && (
+                        <div className="flex gap-2">
+                            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden"
+                                onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
+                            <Button variant="outline" onClick={() => { setImportWhId(""); setShowImportModal(true); }} disabled={importExcel.isPending}>
+                                {importExcel.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                Importar Planilha
+                            </Button>
+                            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowAdjust(true)}>
+                                <PackagePlus className="h-4 w-4 mr-2" /> Ajuste Manual
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 <p className="text-xs text-slate-400">
