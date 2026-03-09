@@ -550,7 +550,7 @@ export function registerCommercialRoutes(app: Express) {
         }
     });
 
-    /** Purge ALL clients for this company (hard delete) */
+    /** Reactivate ALL clients (set isActive=true) + hard delete clients with no orders */
     app.delete("/api/company/clients/purge-all", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -558,15 +558,23 @@ export function registerCommercialRoutes(app: Express) {
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            // Count before delete
-            const before = await db.select({ id: companyClients.id }).from(companyClients)
-                .where(eq(companyClients.companyId, companyId));
+            // Hard delete clients that have NO orders (safe to remove)
+            const deleted = await db.execute(sql`
+                DELETE FROM company_clients
+                WHERE company_id = ${companyId}
+                  AND id NOT IN (SELECT DISTINCT client_id FROM sales_orders WHERE company_id = ${companyId})
+                RETURNING id
+            `);
+            const deletedCount = Array.isArray(deleted) ? deleted.length : (deleted as any)?.rows?.length ?? 0;
 
-            // Hard delete all clients for this company
-            await db.delete(companyClients).where(eq(companyClients.companyId, companyId));
+            // Reactivate clients that couldn't be deleted (have orders)
+            const reactivated = await db.update(companyClients)
+                .set({ isActive: true })
+                .where(eq(companyClients.companyId, companyId))
+                .returning({ id: companyClients.id });
 
-            console.log(`[Clients PURGE] userId=${user.id} companyId=${companyId} deleted=${before.length} clients`);
-            res.json({ success: true, deleted: before.length });
+            console.log(`[Clients PURGE] deleted=${deletedCount} reactivated=${reactivated.length}`);
+            res.json({ success: true, deleted: deletedCount, reactivated: reactivated.length });
         } catch (e: any) {
             console.error("[Clients PURGE] error:", e);
             res.status(500).json({ error: e.message || "Erro interno" });

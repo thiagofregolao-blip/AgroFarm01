@@ -92,7 +92,10 @@ export default function EmpresaClientes() {
         mutationFn: () => api("DELETE", "/api/company/clients/purge-all"),
         onSuccess: (data: any) => {
             qc.invalidateQueries({ queryKey: ["/api/company/clients"] });
-            toast({ title: `${data.deleted} cliente(s) removido(s)` });
+            const msg = data.deleted > 0 && data.reactivated > 0
+                ? `${data.deleted} removido(s), ${data.reactivated} reativado(s) (tinham pedidos)`
+                : data.deleted > 0 ? `${data.deleted} cliente(s) removido(s)` : `${data.reactivated} cliente(s) reativado(s)`;
+            toast({ title: msg });
         },
         onError: (e: any) => toast({ title: "Erro ao limpar", description: e.message, variant: "destructive" }),
     });
@@ -151,7 +154,7 @@ export default function EmpresaClientes() {
                             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
                                 onChange={e => { if (e.target.files?.[0]) { importExcel.mutate(e.target.files[0]); e.target.value = ""; } }} />
                             <Button variant="outline" className="border-red-300 text-red-600 hover:bg-red-50" disabled={purgeAll.isPending}
-                                onClick={() => { if (confirm("Tem certeza? Isso vai EXCLUIR TODOS os clientes permanentemente.")) purgeAll.mutate(); }}>
+                                onClick={() => { if (confirm("Limpar clientes sem pedidos e reativar os demais?")) purgeAll.mutate(); }}>
                                 {purgeAll.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
                                 Limpar Todos
                             </Button>
