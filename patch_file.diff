@@ -1,0 +1,204 @@
+--- client/src/pages/empresa/pedidos.tsx
++++ client/src/pages/empresa/pedidos.tsx
+@@ -58,6 +58,7 @@
+     const [search, setSearch] = useState("");
+     const [activeTab, setActiveTab] = useState("all");
+     const [showForm, setShowForm] = useState(false);
++    const [formTab, setFormTab] = useState("dados");
+     const [detailOrder, setDetailOrder] = useState<any>(null);
+ 
+     // Form state
+@@ -117,6 +118,7 @@
+         onSuccess: () => {
+             queryClient.invalidateQueries({ queryKey: ["/api/company/orders"] });
+             setShowForm(false);
++            setFormTab("dados");
+             setOrderItems([]);
+             setForm({ clientId: "", priceListId: "", paymentType: "credito", freightPayer: "cliente", deliveryLocation: "", paymentLocation: "", dueDate: "", agriculturalYear: "", zafra: "", culture: "", observations: "", currency: "USD" });
+             toast({ title: "Pedido criado com sucesso" });
+@@ -211,7 +213,7 @@
+             <div className="p-6 space-y-4">
+                 <div className="flex items-center justify-between">
+                     <h1 className="text-2xl font-bold text-slate-800">Pedidos de Venda</h1>
+-                    <Button onClick={() => setShowForm(true)} className="bg-blue-600 hover:bg-blue-700">
++                    <Button onClick={() => { setShowForm(true); setFormTab("dados"); }} className="bg-blue-600 hover:bg-blue-700">
+                         <Plus className="h-4 w-4 mr-2" /> Novo Pedido
+                     </Button>
+                 </div>
+@@ -343,9 +345,15 @@
+             {/* New Order Dialog */}
+             <Dialog open={showForm} onOpenChange={setShowForm}>
+-                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
++                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] p-4 md:p-6">
+                     <DialogHeader>
+                         <DialogTitle>Novo Pedido de Venda</DialogTitle>
+                     </DialogHeader>
+-                    <div className="space-y-4">
+-                        <div className="grid grid-cols-2 gap-3">
+-                            <div className="col-span-2">
++                    
++                    <Tabs value={formTab} onValueChange={setFormTab} className="w-full">
++                        <TabsList className="grid w-full grid-cols-2">
++                            <TabsTrigger value="dados" className="text-xs md:text-sm">1. Dados do Pedido</TabsTrigger>
++                            <TabsTrigger value="itens" disabled={!form.clientId} className="text-xs md:text-sm">2. Itens do Pedido</TabsTrigger>
++                        </TabsList>
++
++                        <TabsContent value="dados" className="space-y-4 mt-4">
++                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
++                                <div className="col-span-1 md:col-span-2">
+                                 <Label>Cliente *</Label>
+                                 <Select value={form.clientId} onValueChange={v => setForm(p => ({ ...p, clientId: v }))}>
+@@ -410,24 +418,34 @@
+                                 <Input value={form.paymentLocation} onChange={e => setForm(p => ({ ...p, paymentLocation: e.target.value }))} />
+                             </div>
+-                            <div className="col-span-2">
++                            <div className="col-span-1 md:col-span-2">
+                                 <Label>Observações</Label>
+                                 <Input value={form.observations} onChange={e => setForm(p => ({ ...p, observations: e.target.value }))} />
+                             </div>
+                         </div>
+ 
+-                        {/* Items */}
+-                        <div className="border rounded-lg p-3 space-y-3">
+-                            <p className="font-medium text-sm">Itens do Pedido</p>
+-                            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 px-1">
++                            <div className="flex justify-end pt-4 border-t">
++                                <Button 
++                                    className="bg-slate-800 hover:bg-slate-900 w-full md:w-auto" 
++                                    onClick={() => setFormTab("itens")}
++                                    disabled={!form.clientId}
++                                >
++                                    Avançar para Itens <Search className="ml-2 h-4 w-4 hidden md:block" />
++                                </Button>
++                            </div>
++                        </TabsContent>
++
++                        <TabsContent value="itens" className="space-y-4 mt-4">
++                            {/* Items Grid */}
++                            <div className="border rounded-lg p-2 md:p-3 space-y-3">
++                                <p className="font-medium text-sm hidden md:block">Itens do Pedido</p>
++                                <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 px-1">
+                                 <span className="col-span-4">Produto</span>
+                                 <span className="col-span-2">Qtd</span>
+                                 <span className="col-span-1">Un.</span>
+                                 <span className="col-span-2">Preço U$</span>
+                                 <span className="col-span-2">Total U$</span>
+-                                <span className="col-span-1">Dep.</span>
++                                <span className="col-span-1 border"></span>
+                             </div>
+                             {orderItems.map((item, idx) => (
+-                                <div key={idx} className="grid grid-cols-12 gap-2 text-sm items-center bg-slate-50 rounded px-1 py-1">
+-                                    <span className="col-span-4 truncate">{item.productName}</span>
+-                                    <span className="col-span-2">{item.quantity}</span>
+-                                    <span className="col-span-1">{item.unit}</span>
+-                                    <span className="col-span-2">{parseFloat(item.unitPriceUsd).toLocaleString("es-PY")}</span>
+-                                    <span className="col-span-2">{parseFloat(item.totalPriceUsd).toLocaleString("es-PY")}</span>
+-                                    <button className="col-span-1 text-red-400 hover:text-red-600" onClick={() => setOrderItems(prev => prev.filter((_, i) => i !== idx))}>
+-                                        <Trash2 className="h-3.5 w-3.5" />
++                                <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 text-sm items-center bg-slate-50 border md:border-none rounded p-2 md:px-1 md:py-1 mb-2 md:mb-0 relative">
++                                    <div className="col-span-1 md:col-span-4 pr-6 md:pr-0">
++                                        <span className="font-medium md:font-normal block truncate">{item.productName}</span>
++                                    </div>
++                                    <div className="grid grid-cols-3 md:contents gap-2 mt-1 md:mt-0">
++                                        <div className="col-span-1 md:col-span-2">
++                                            <span className="text-xs text-slate-400 block md:hidden">Qtd</span>
++                                            {item.quantity}
++                                        </div>
++                                        <div className="col-span-1">
++                                            <span className="text-xs text-slate-400 block md:hidden">Un</span>
++                                            {item.unit}
++                                        </div>
++                                        <div className="col-span-1 md:col-span-2">
++                                            <span className="text-xs text-slate-400 block md:hidden">Preço</span>
++                                            ${parseFloat(item.unitPriceUsd).toLocaleString("es-PY")}
++                                        </div>
++                                    </div>
++                                    <div className="col-span-1 md:col-span-2 mt-1 md:mt-0 font-medium md:font-normal">
++                                        <span className="text-xs text-slate-400 mr-2 md:hidden">Total:</span>
++                                        ${parseFloat(item.totalPriceUsd).toLocaleString("es-PY")}
++                                    </div>
++                                    <button className="absolute top-2 right-2 md:static col-span-1 text-red-400 hover:text-red-600 md:text-right" onClick={() => setOrderItems(prev => prev.filter((_, i) => i !== idx))}>
++                                        <Trash2 className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                                     </button>
+                                 </div>
+                             ))}
++                                
+                             {/* Add item row */}
+-                            <div className="grid grid-cols-12 gap-2 items-end">
+-                                <div className="col-span-4">
++                            <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end mt-4 pt-4 border-t border-dashed">
++                                <div className="col-span-2 md:col-span-4">
++                                    <Label className="md:hidden text-xs">Produto</Label>
+                                     <datalist id="products-list">
+                                         {(products as any[]).map((p: any) => <option key={p.id} value={p.name} data-id={p.id} />)}
+                                     </datalist>
+                                     <Input
+-                                        className="h-8 text-xs"
++                                        className="h-10 md:h-8 text-sm md:text-xs"
+                                         placeholder="Nome do produto..."
+                                         list="products-list"
+@@ -458,5 +476,6 @@
+                                 </div>
+-                                <div className="col-span-2">
+-                                    <Input className="h-8 text-xs" placeholder="Qtd" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))} />
++                                <div className="col-span-1 md:col-span-2">
++                                    <Label className="md:hidden text-xs">Qtd</Label>
++                                    <Input className="h-10 md:h-8 text-sm md:text-xs" type="number" step="0.01" placeholder="Qtd" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))} />
+                                     {newItem.productId && newItem.quantity && (() => {
+                                         const avail = (availableByProduct as any[]).find((a: any) => a.productId === newItem.productId);
+@@ -464,28 +483,32 @@
+                                         const excede = parseFloat(newItem.quantity) > parseFloat(avail.available);
+-                                        return excede ? <span className="text-xs text-orange-500 block mt-0.5">Acima do disp.</span> : null;
++                                        return excede ? <span className="text-xs text-orange-500 block mt-0.5">Acima</span> : null;
+                                     })()}
+                                 </div>
+-                                <div className="col-span-1">
+-                                    <Input className="h-8 text-xs" placeholder="Un" value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))} />
++                                <div className="col-span-1 md:col-span-1">
++                                    <Label className="md:hidden text-xs">Un</Label>
++                                    <Input className="h-10 md:h-8 text-sm md:text-xs" placeholder="Un" value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))} />
+                                 </div>
+-                                <div className="col-span-2">
+-                                    <Input className="h-8 text-xs" placeholder="Preço U$" value={newItem.unitPriceUsd} onChange={e => setNewItem(p => ({ ...p, unitPriceUsd: e.target.value }))} />
++                                <div className="col-span-1 md:col-span-2">
++                                    <Label className="md:hidden text-xs">Preço U$</Label>
++                                    <Input className="h-10 md:h-8 text-sm md:text-xs" type="number" step="0.01" placeholder="Preço" value={newItem.unitPriceUsd} onChange={e => setNewItem(p => ({ ...p, unitPriceUsd: e.target.value }))} />
+                                 </div>
+-                                <div className="col-span-2 text-xs text-slate-500 text-right">
++                                <div className="hidden md:block col-span-2 text-xs text-slate-500 text-right">
+                                     {newItem.quantity && newItem.unitPriceUsd ? (parseFloat(newItem.quantity) * parseFloat(newItem.unitPriceUsd)).toLocaleString("es-PY", { minimumFractionDigits: 2 }) : "—"}
+                                 </div>
+-                                <div className="col-span-1">
+-                                    <Button size="sm" variant="outline" className="h-8 w-full" onClick={handleAddItem}>
+-                                        <Plus className="h-3 w-3" />
++                                <div className="col-span-1 md:col-span-1">
++                                    <Button size="sm" variant="outline" className="h-10 md:h-8 w-full border-blue-200 text-blue-600" onClick={handleAddItem}>
++                                        <Plus className="h-4 w-4 md:h-3 md:w-3" />
+                                     </Button>
+                                 </div>
+                             </div>
+                             {orderItems.length === 0 && (
+-                                <p className="text-xs text-slate-400 text-center pt-1">Digite o produto, quantidade e clique em <strong>+</strong> para adicionar</p>
++                                <p className="text-xs text-slate-400 text-center pt-2">Selecione o produto, preencha os dados e clique no +</p>
+                             )}
+                             {orderItems.length > 0 && (
+-                                <div className="text-right text-sm font-semibold border-t pt-2">
+-                                    Total: $ {totalUsd.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
++                                <div className="text-right text-base text-blue-600 font-semibold border-t pt-3 pb-1 mt-3">
++                                    Total do Pedido: $ {totalUsd.toLocaleString("es-PY", { minimumFractionDigits: 2 })}
+                                 </div>
+                             )}
+                         </div>
+
+-                        <div className="flex gap-2 justify-end">
+-                            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
++                        <div className="flex gap-2 justify-between md:justify-end pt-4 border-t mt-4">
++                            <Button variant="outline" onClick={() => setFormTab("dados")}>Voltar</Button>
+                             <Button
+                                 className="bg-blue-600 hover:bg-blue-700"
+@@ -501,4 +524,4 @@
+-                    </div>
++                        </TabsContent>
++                    </Tabs>
+                 </DialogContent>
+             </Dialog>

@@ -1,17 +1,68 @@
 import express, { type Request, Response, NextFunction } from "express";
 // Force restart
 import cors from "cors";
+import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import cron from "node-cron";
 import { WeatherStationService } from "./services/weather_station_service";
 
 const app = express();
+app.disable("x-powered-by");
+
+// Strict CORS Configuration based on environment
+const isProduction = process.env.NODE_ENV === "production";
 
 app.use(cors({
-  origin: true,
+  origin: isProduction ? ["https://www.agrofarmdigital.com", "https://agrofarmdigital.com"] : true,
   credentials: true,
 }));
+
+// Setup Helmet with custom Content-Security-Policy
+app.use(helmet({
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: isProduction
+        ? ["'self'"]
+        : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://cdnjs.cloudflare.com",
+        "https://server.arcgisonline.com",
+        "https://mt1.google.com",
+        "https://*.tile.openstreetmap.org",
+        "https://api.dicebear.com",
+        "https://unpkg.com"
+      ],
+      connectSrc: isProduction
+        ? ["'self'", "https://wa.me"]
+        : ["'self'", "https://wa.me", "ws:", "wss:"],
+      workerSrc: ["'self'", "blob:"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    }
+  }
+}));
+
+// Strict Cache-Control for all /api routes
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
 
 declare module 'http' {
   interface IncomingMessage {

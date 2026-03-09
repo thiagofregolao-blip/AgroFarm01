@@ -1,0 +1,20 @@
+@@ -342,9 +344,15 @@
+             {/* New Order Dialog */}
+             <Dialog open={showForm} onOpenChange={setShowForm}>
+-                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
++                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] p-4 md:p-6">
+                     <DialogHeader>
+                         <DialogTitle>Novo Pedido de Venda</DialogTitle>
+                     </DialogHeader>
+-                    <div className="space-y-4">
+-                        <div className="grid grid-cols-2 gap-3">
+-                            <div className="col-span-2">
++                    
++                    <Tabs value={formTab} onValueChange={setFormTab} className="w-full">
++                        <TabsList className="grid w-full grid-cols-2">
++                            <TabsTrigger value="dados" className="text-xs md:text-sm">1. Dados do Pedido</TabsTrigger>
++                            <TabsTrigger value="itens" disabled={!form.clientId} className="text-xs md:text-sm">2. Itens do Pedido</TabsTrigger>
++                        </TabsList>
++
++                        <TabsContent value="dados" className="space-y-4 mt-4">
++                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
