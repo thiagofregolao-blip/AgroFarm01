@@ -203,19 +203,35 @@ async function deductStockFromInvoice(invoiceId: string, companyId: string, user
 async function reserveStockForOrder(orderId: string, companyId: string, userId: string) {
     const items = await db.select().from(salesOrderItems).where(eq(salesOrderItems.orderId, orderId));
     for (const item of items) {
-        if (!item.warehouseId || !item.productId) continue;
+        if (!item.productId) continue;
         const qty = parseFloat(item.quantity as string);
+
+        // If no warehouse specified, auto-pick the one with most available stock for this product
+        let warehouseId = item.warehouseId;
+        if (!warehouseId) {
+            const best = await db.execute(sql`
+                SELECT cs.warehouse_id
+                FROM company_stock cs
+                JOIN company_warehouses cw ON cw.id = cs.warehouse_id
+                WHERE cs.product_id = ${item.productId}
+                  AND cw.company_id = ${companyId}
+                ORDER BY (cs.quantity - cs.reserved_quantity) DESC
+                LIMIT 1
+            `);
+            warehouseId = (best.rows[0] as any)?.warehouse_id ?? null;
+        }
+        if (!warehouseId) continue;
 
         await db.execute(sql`
             INSERT INTO company_stock (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
-            VALUES (${item.warehouseId}, ${item.productId}, 0, ${qty}, now())
+            VALUES (${warehouseId}, ${item.productId}, 0, ${qty}, now())
             ON CONFLICT (warehouse_id, product_id)
             DO UPDATE SET reserved_quantity = company_stock.reserved_quantity + ${qty}, updated_at = now()
         `);
 
         await db.insert(companyStockMovements).values({
             companyId,
-            warehouseId: item.warehouseId,
+            warehouseId,
             productId: item.productId,
             type: "reserve",
             quantity: String(qty),
@@ -232,25 +248,54 @@ async function reserveStockForOrder(orderId: string, companyId: string, userId: 
 async function releaseStockReservation(orderId: string, companyId: string, userId: string) {
     const items = await db.select().from(salesOrderItems).where(eq(salesOrderItems.orderId, orderId));
     for (const item of items) {
-        if (!item.warehouseId || !item.productId) continue;
+        if (!item.productId) continue;
         const qty = parseFloat(item.quantity as string);
 
-        await db.execute(sql`
-            UPDATE company_stock
-            SET reserved_quantity = GREATEST(0, reserved_quantity - ${qty}), updated_at = now()
-            WHERE warehouse_id = ${item.warehouseId} AND product_id = ${item.productId}
-        `);
-
-        await db.insert(companyStockMovements).values({
-            companyId,
-            warehouseId: item.warehouseId,
-            productId: item.productId,
-            type: "reserve_release",
-            quantity: String(qty),
-            referenceType: "order",
-            referenceId: orderId,
-            createdBy: userId,
-        });
+        // Release from all warehouses that have a reservation for this product/order
+        // (handles both items with and without explicit warehouseId)
+        if (item.warehouseId) {
+            await db.execute(sql`
+                UPDATE company_stock
+                SET reserved_quantity = GREATEST(0, reserved_quantity - ${qty}), updated_at = now()
+                WHERE warehouse_id = ${item.warehouseId} AND product_id = ${item.productId}
+            `);
+            await db.insert(companyStockMovements).values({
+                companyId,
+                warehouseId: item.warehouseId,
+                productId: item.productId,
+                type: "reserve_release",
+                quantity: String(qty),
+                referenceType: "order",
+                referenceId: orderId,
+                createdBy: userId,
+            });
+        } else {
+            // Find movements of type "reserve" for this order+product to know which warehouse was used
+            const movements = await db.select().from(companyStockMovements)
+                .where(and(
+                    eq(companyStockMovements.referenceType, "order"),
+                    eq(companyStockMovements.referenceId, orderId),
+                    eq(companyStockMovements.productId, item.productId),
+                    eq(companyStockMovements.type, "reserve"),
+                ));
+            for (const mv of movements) {
+                await db.execute(sql`
+                    UPDATE company_stock
+                    SET reserved_quantity = GREATEST(0, reserved_quantity - ${parseFloat(mv.quantity as string)}), updated_at = now()
+                    WHERE warehouse_id = ${mv.warehouseId} AND product_id = ${mv.productId}
+                `);
+                await db.insert(companyStockMovements).values({
+                    companyId,
+                    warehouseId: mv.warehouseId,
+                    productId: mv.productId,
+                    type: "reserve_release",
+                    quantity: mv.quantity,
+                    referenceType: "order",
+                    referenceId: orderId,
+                    createdBy: userId,
+                });
+            }
+        }
     }
 }
 
@@ -1498,20 +1543,35 @@ ${csvText}`;
                 .where(eq(salesOrders.id, order.id));
 
             // Deduct real stock and release reservation
+            // Look up warehouse from reserve movement if item has no explicit warehouseId
             const orderItems = await db.select().from(salesOrderItems).where(eq(salesOrderItems.orderId, order.id));
             for (const item of orderItems) {
-                if (!item.warehouseId || !item.productId) continue;
+                if (!item.productId) continue;
                 const qty = parseFloat(item.quantity as string);
+
+                let warehouseId = item.warehouseId;
+                if (!warehouseId) {
+                    const [mv] = await db.select().from(companyStockMovements)
+                        .where(and(
+                            eq(companyStockMovements.referenceType, "order"),
+                            eq(companyStockMovements.referenceId, order.id),
+                            eq(companyStockMovements.productId, item.productId),
+                            eq(companyStockMovements.type, "reserve"),
+                        )).limit(1);
+                    warehouseId = mv?.warehouseId ?? null;
+                }
+                if (!warehouseId) continue;
+
                 await db.execute(sql`
                     UPDATE company_stock
                     SET quantity = quantity - ${qty},
                         reserved_quantity = GREATEST(0, reserved_quantity - ${qty}),
                         updated_at = now()
-                    WHERE warehouse_id = ${item.warehouseId} AND product_id = ${item.productId}
+                    WHERE warehouse_id = ${warehouseId} AND product_id = ${item.productId}
                 `);
                 await db.insert(companyStockMovements).values({
                     companyId,
-                    warehouseId: item.warehouseId,
+                    warehouseId,
                     productId: item.productId,
                     type: "out",
                     quantity: String(qty),
