@@ -280,11 +280,12 @@ export default function LandingPage() {
             </section>
 
             {/* ── RESOURCES GRID ──────────────────────────────────────── */}
-            <section id="resources" className="relative py-20 px-6 bg-gradient-to-br from-green-800 via-green-700 to-emerald-600 overflow-hidden">
+            <section id="resources" className="relative py-20 px-6 overflow-hidden"
+                style={{ backgroundImage: "url('/hero-soja-bg.png')", backgroundSize: "cover", backgroundPosition: "center 30%" }}>
+                {/* Dark overlay */}
+                <div className="absolute inset-0 bg-black/50" />
                 {/* Dot grid */}
-                <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={DOT_GRID} />
-                <div className="absolute -top-20 -right-20 w-80 h-80 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-green-900/40 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={DOT_GRID} />
 
                 <div className="relative z-10 max-w-6xl mx-auto">
                     <div className="text-center mb-14">
