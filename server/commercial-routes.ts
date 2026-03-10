@@ -592,11 +592,17 @@ export function registerCommercialRoutes(app: Express) {
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            const [cu] = await db.select({ faturistaEmail: companyUsers.faturistaEmail, emailBodyTemplate: companyUsers.emailBodyTemplate })
-                .from(companyUsers)
-                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.companyId, companyId)));
-
-            res.json({ faturistaEmail: cu?.faturistaEmail ?? "", emailBodyTemplate: cu?.emailBodyTemplate ?? "" });
+            const result = await db.execute(sql`
+                SELECT faturista_email, email_body_template
+                FROM company_users
+                WHERE user_id = ${user.id} AND company_id = ${companyId}
+                LIMIT 1
+            `);
+            const row = (result as any).rows?.[0] ?? (result as any)[0] ?? null;
+            res.json({
+                faturistaEmail: row?.faturista_email ?? "",
+                emailBodyTemplate: row?.email_body_template ?? "",
+            });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
         }
@@ -618,9 +624,13 @@ export function registerCommercialRoutes(app: Express) {
             }
 
             const { faturistaEmail, emailBodyTemplate } = req.body;
-            await db.update(companyUsers)
-                .set({ faturistaEmail: faturistaEmail ?? null, emailBodyTemplate: emailBodyTemplate ?? null } as any)
-                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.companyId, companyId)));
+            await db.execute(sql`
+                UPDATE company_users
+                SET faturista_email     = ${faturistaEmail ?? null},
+                    email_body_template = ${emailBodyTemplate ?? null}
+                WHERE user_id    = ${user.id}
+                  AND company_id = ${companyId}
+            `);
 
             res.json({ success: true });
         } catch (e) {
@@ -1906,14 +1916,18 @@ ${csvText}`;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            const [cu] = await db.select({ role: companyUsers.role, faturistaEmail: companyUsers.faturistaEmail, emailBodyTemplate: companyUsers.emailBodyTemplate })
-                .from(companyUsers)
-                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.companyId, companyId)));
+            const cuResult = await db.execute(sql`
+                SELECT role, faturista_email, email_body_template
+                FROM company_users
+                WHERE user_id = ${user.id} AND company_id = ${companyId}
+                LIMIT 1
+            `);
+            const cu = (cuResult as any).rows?.[0] ?? (cuResult as any)[0] ?? null;
             if (!["director", "admin_empresa"].includes(cu?.role ?? "")) {
                 return res.status(403).json({ error: "Apenas o diretor pode aprovar pedidos" });
             }
 
-            if (!cu?.faturistaEmail) {
+            if (!cu?.faturista_email) {
                 return res.status(400).json({ error: "Email do faturista não cadastrado. Configure em Meu Perfil antes de aprovar." });
             }
 
@@ -1934,8 +1948,8 @@ ${csvText}`;
             try {
                 const pdfBuffer = await generateOrderPdf(order.id, companyId);
                 await sendApprovalEmail({
-                    toEmail: cu.faturistaEmail,
-                    bodyTemplate: cu.emailBodyTemplate ?? null,
+                    toEmail: cu.faturista_email,
+                    bodyTemplate: cu.email_body_template ?? null,
                     orderNumber: order.orderNumber ?? order.id,
                     clientName: client?.name ?? "—",
                     directorName: user.name ?? user.username ?? "Diretor",
