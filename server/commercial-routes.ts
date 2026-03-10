@@ -468,16 +468,28 @@ export function registerCommercialRoutes(app: Express) {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
             const user = req.user as any;
-            const companyId = await getCompanyId(user.id);
-            if (!companyId) {
+
+            const [cu] = await db.select({ companyId: companyUsers.companyId, role: companyUsers.role })
+                .from(companyUsers)
+                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.isActive, true)))
+                .limit(1);
+
+            if (!cu) {
                 console.warn(`[Clients GET] userId=${user.id} has no companyId — returning 403`);
                 return res.status(403).json({ error: "Sem empresa vinculada" });
             }
 
+            const { companyId, role } = cu;
+
+            // RTV só vê a própria carteira; outros papéis (director, financeiro, faturista, admin) veem tudo
+            const whereClause = role === "rtv"
+                ? and(eq(companyClients.companyId, companyId), eq(companyClients.assignedConsultantId, user.id))
+                : eq(companyClients.companyId, companyId);
+
             const clients = await db.select().from(companyClients)
-                .where(eq(companyClients.companyId, companyId))
+                .where(whereClause)
                 .orderBy(asc(companyClients.name));
-            console.log(`[Clients GET] userId=${user.id} companyId=${companyId} → ${clients.length} clientes`);
+            console.log(`[Clients GET] userId=${user.id} role=${role} companyId=${companyId} → ${clients.length} clientes`);
             res.json(clients);
         } catch (e) {
             console.error("[Clients GET] error:", e);
@@ -1428,8 +1440,13 @@ ${csvText}`;
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
             const user = req.user as any;
-            const companyId = await getCompanyId(user.id);
-            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            const [cu] = await db.select({ companyId: companyUsers.companyId, role: companyUsers.role })
+                .from(companyUsers)
+                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.isActive, true)))
+                .limit(1);
+            if (!cu) return res.status(403).json({ error: "Sem empresa vinculada" });
+            const { companyId, role } = cu;
 
             const orders = await db.select({
                 id: salesOrders.id,
@@ -1450,7 +1467,9 @@ ${csvText}`;
             })
                 .from(salesOrders)
                 .leftJoin(companyClients, eq(salesOrders.clientId, companyClients.id))
-                .where(eq(salesOrders.companyId, companyId))
+                .where(role === "rtv"
+                    ? and(eq(salesOrders.companyId, companyId), eq(salesOrders.consultantId, user.id))
+                    : eq(salesOrders.companyId, companyId))
                 .orderBy(desc(salesOrders.createdAt));
 
             res.json(orders);
