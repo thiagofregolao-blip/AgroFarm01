@@ -1445,6 +1445,8 @@ ${csvText}`;
                 clientName: companyClients.name,
                 clientId: salesOrders.clientId,
                 consultantId: salesOrders.consultantId,
+                clientCreditLimit: companyClients.creditLimit,
+                clientCreditUsed: companyClients.creditUsed,
             })
                 .from(salesOrders)
                 .leftJoin(companyClients, eq(salesOrders.clientId, companyClients.id))

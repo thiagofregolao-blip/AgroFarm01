@@ -11,7 +11,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, Search, Eye, CheckCircle, XCircle, Send, Loader2, Trash2, AlertTriangle, FileCheck } from "lucide-react";
+import { Plus, Search, Eye, CheckCircle, XCircle, Send, Loader2, Trash2, AlertTriangle, FileCheck, CreditCard } from "lucide-react";
+
+const fmtUsd = (v: any) => `$ ${parseFloat(v ?? "0").toLocaleString("es-PY", { minimumFractionDigits: 2 })}`;
+
+function CreditBadge({ creditLimit, creditUsed, orderTotal }: { creditLimit: any; creditUsed: any; orderTotal: any }) {
+    const limit = parseFloat(creditLimit ?? "0");
+    const used = parseFloat(creditUsed ?? "0");
+    const total = parseFloat(orderTotal ?? "0");
+    if (limit <= 0) return null;
+    const available = limit - used;
+    const afterOrder = available - total;
+    const pct = (available / limit) * 100;
+    const isLow = pct < 30 || afterOrder < 0;
+    const isMid = pct >= 30 && pct < 60;
+    const color = afterOrder < 0 ? "bg-red-100 text-red-700 border-red-200" : isLow ? "bg-amber-100 text-amber-700 border-amber-200" : isMid ? "bg-yellow-50 text-yellow-700 border-yellow-200" : "bg-green-50 text-green-700 border-green-200";
+    return (
+        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${color}`}>
+            <CreditCard className="h-3 w-3" />
+            Dispon: {fmtUsd(available)}
+            {afterOrder < 0 && <span className="font-bold"> ⚠ Excede limite!</span>}
+        </span>
+    );
+}
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     draft: { label: "Rascunho", color: "bg-slate-100 text-slate-700" },
@@ -272,6 +294,11 @@ export default function EmpresaPedidos() {
                                                         </div>
                                                         <p className="text-slate-600 text-sm mt-0.5">{order.clientName}</p>
                                                         {order.culture && <p className="text-slate-400 text-xs">{order.agriculturalYear} — {order.culture}</p>}
+                                                        {order.status === "pending_director" && ["director", "admin_empresa"].includes(companyRole) && (
+                                                            <div className="mt-1">
+                                                                <CreditBadge creditLimit={order.clientCreditLimit} creditUsed={order.clientCreditUsed} orderTotal={order.totalAmountUsd} />
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="font-semibold text-sm">
@@ -389,6 +416,37 @@ export default function EmpresaPedidos() {
                                             {clients.filter((c: any) => c.isActive !== false).map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name} {c.ruc ? `— ${c.ruc}` : ""}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
+                                    {/* Informações de crédito do cliente selecionado */}
+                                    {form.clientId && (() => {
+                                        const cl = clients.find((c: any) => c.id === form.clientId);
+                                        if (!cl || parseFloat(cl.creditLimit ?? "0") <= 0) return null;
+                                        const limit = parseFloat(cl.creditLimit);
+                                        const used = parseFloat(cl.creditUsed ?? "0");
+                                        const available = limit - used;
+                                        const pct = Math.max(0, Math.min(100, (available / limit) * 100));
+                                        const barColor = pct < 30 ? "bg-red-500" : pct < 60 ? "bg-amber-500" : "bg-green-500";
+                                        const textColor = pct < 30 ? "text-red-600" : pct < 60 ? "text-amber-600" : "text-green-600";
+                                        return (
+                                            <div className="mt-2 p-3 rounded-lg border bg-slate-50 space-y-1.5">
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="flex items-center gap-1 text-slate-500"><CreditCard className="h-3 w-3" /> Crédito do cliente</span>
+                                                    <span className={`font-bold ${textColor}`}>{fmtUsd(available)} disponível</span>
+                                                </div>
+                                                <div className="w-full bg-slate-200 rounded-full h-1.5">
+                                                    <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                                                </div>
+                                                <div className="flex justify-between text-xs text-slate-400">
+                                                    <span>Usado: {fmtUsd(used)}</span>
+                                                    <span>Límite: {fmtUsd(limit)}</span>
+                                                </div>
+                                                {available < totalUsd && totalUsd > 0 && (
+                                                    <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+                                                        <AlertTriangle className="h-3 w-3" /> Pedido ({fmtUsd(totalUsd)}) excede crédito disponível
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                                 <div>
                                     <Label>Tabela de Preços</Label>
