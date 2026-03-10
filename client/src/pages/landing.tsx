@@ -4,268 +4,205 @@ import {
     Package, Sprout, FileBarChart, Tractor, BarChart3, TrendingUp,
     Map, FileText, DollarSign, Satellite, BookOpen, ArrowDownUp,
     ChevronDown, ChevronUp, MessageCircle, ArrowRight, Menu, X,
-    Shield, Zap, Smartphone, Globe, Bell, Users, CloudSun, Target
+    Shield, Zap, Smartphone, Globe, Bell, Users, CloudSun, Target,
+    CheckCircle,
 } from "lucide-react";
 
-// ===========================
-// COLOR PALETTE — John Deere
-// ===========================
-const colors = {
-    green: "#367C2B",
-    greenDark: "#2A5F21",
-    greenLight: "#4A9D3C",
-    yellow: "#FFDE00",
-    yellowLight: "#FFF3B0",
-    yellowDark: "#E5C800",
-    white: "#FFFFFF",
-    gray50: "#F9FAFB",
-    gray100: "#F3F4F6",
-    gray200: "#E5E7EB",
-    gray500: "#6B7280",
-    gray700: "#374151",
-    gray900: "#111827",
+const WHATSAPP_URL = "https://wa.me/595986848326?text=Olá! Gostaria de saber mais sobre o AgroFarm.";
+
+// ─── Dot grid background (same pattern as Login/PDV hero) ─────────────────
+const DOT_GRID: React.CSSProperties = {
+    backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.7) 1px, transparent 1px)",
+    backgroundSize: "28px 28px",
 };
 
-// ===========================
-// LANDING PAGE
-// ===========================
+// ─── GlassCard — same component as Login/PDV ──────────────────────────────
+function GlassCard({ icon: Icon, title, description }: {
+    icon: React.ElementType; title: string; description: string;
+}) {
+    return (
+        <div className="flex items-start gap-4 p-5 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md shadow-[0_4px_24px_rgba(0,0,0,0.08)] transition-transform duration-200 hover:-translate-y-1">
+            <div className="w-11 h-11 bg-[#F7D601] rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+                <Icon className="w-5 h-5 text-green-800" />
+            </div>
+            <div>
+                <h4 className="font-semibold text-white text-sm leading-tight mb-1">{title}</h4>
+                <p className="text-green-100/75 text-xs leading-relaxed">{description}</p>
+            </div>
+        </div>
+    );
+}
+
+// ─── Landing Page ──────────────────────────────────────────────────────────
 export default function LandingPage() {
     const [, navigate] = useLocation();
     const [mobileMenu, setMobileMenu] = useState(false);
-    const [scrolled, setScrolled] = useState(false);
     const [heroSlide, setHeroSlide] = useState(0);
 
     const heroSlides = [
-        { image: "/landing-hero.png", label: "Gestão Completa", sublabel: "Controle total da sua fazenda", icon: "🌾" },
-        { image: "/hero-drone.png", label: "Drone Multiespectral", sublabel: "DJI Mavic 3M com NDVI", icon: "🛩️" },
-        { image: "/hero-dashboard.png", label: "Dashboard Inteligente", sublabel: "Relatórios e gráficos em tempo real", icon: "📊" },
-        { image: "/hero-warehouse.png", label: "Controle de Estoque", sublabel: "Insumos sempre sob controle", icon: "📦" },
+        { image: "/landing-hero.png",    label: "Gestão Completa",       sublabel: "Controle total da sua fazenda",       icon: Sprout },
+        { image: "/hero-drone.png",      label: "Drone Multiespectral",  sublabel: "DJI Mavic 3M com NDVI",              icon: Satellite },
+        { image: "/hero-dashboard.png",  label: "Dashboard Inteligente", sublabel: "Relatórios em tempo real",           icon: BarChart3 },
+        { image: "/hero-warehouse.png",  label: "Controle de Estoque",   sublabel: "Insumos sempre sob controle",        icon: Package },
     ];
 
-    // ==========================================
-    // PWA STANDALONE DETECTION
-    // Se o app está instalado como PWA, redireciona para o login
-    // Em browser normal, continua exibindo a Landing Page
-    // ==========================================
+    // PWA standalone → redirect to login
     useEffect(() => {
         const isPWA =
             window.matchMedia("(display-mode: standalone)").matches ||
             (window.navigator as any).standalone === true;
-
-        if (isPWA) {
-            navigate("/auth");
-        }
+        if (isPWA) navigate("/auth");
     }, [navigate]);
-
-    useEffect(() => {
-        const onScroll = () => setScrolled(window.scrollY > 50);
-        window.addEventListener("scroll", onScroll);
-        return () => window.removeEventListener("scroll", onScroll);
-    }, []);
 
     // Auto-rotate hero carousel
     useEffect(() => {
-        const timer = setInterval(() => {
-            setHeroSlide(prev => (prev + 1) % heroSlides.length);
-        }, 5000);
+        const timer = setInterval(() => setHeroSlide(prev => (prev + 1) % heroSlides.length), 5000);
         return () => clearInterval(timer);
     }, [heroSlides.length]);
-
-    const WHATSAPP_URL = "https://wa.me/595986848326?text=Olá! Gostaria de saber mais sobre o AgroFarm.";
 
     const scrollTo = (id: string) => {
         setMobileMenu(false);
         document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
     };
 
-    return (
-        <div style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif", color: colors.gray900 }}>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    const NAV_LINKS = [
+        { label: "Funcionalidades", id: "features" },
+        { label: "Recursos", id: "resources" },
+        { label: "FAQ", id: "faq" },
+    ];
 
-            {/* ========== NAVBAR ========== */}
-            <nav style={{
-                position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
-                background: "rgba(255,255,255,0.97)",
-                backdropFilter: "blur(12px)",
-                boxShadow: "0 2px 20px rgba(0,0,0,0.08)",
-                transition: "all 0.3s ease",
-                padding: "0 24px",
-            }}>
-                <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 70 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <Sprout size={32} color={colors.green} />
-                        <span style={{ fontSize: 24, fontWeight: 800, color: colors.green }}>AgroFarm</span>
+    return (
+        <div className="font-sans text-slate-900 antialiased">
+
+            {/* ── NAVBAR ──────────────────────────────────────────────── */}
+            <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md shadow-[0_2px_20px_rgba(0,0,0,0.07)]">
+                <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-[70px]">
+                    {/* Logo */}
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 bg-[#F7D601] rounded-xl flex items-center justify-center">
+                            <Sprout className="w-5 h-5 text-green-700" />
+                        </div>
+                        <span className="text-xl font-extrabold text-green-700 tracking-tight">AgroFarm</span>
                     </div>
 
-                    {/* Desktop Nav */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 32 }} className="hidden-mobile">
-                        {[
-                            { label: "Funcionalidades", id: "features" },
-                            { label: "Recursos", id: "resources" },
-                            { label: "FAQ", id: "faq" },
-                        ].map(item => (
+                    {/* Desktop links */}
+                    <div className="hidden lg:flex items-center gap-8">
+                        {NAV_LINKS.map(item => (
                             <button key={item.id} onClick={() => scrollTo(item.id)}
-                                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, fontWeight: 500, color: colors.gray700 }}>
+                                className="text-sm font-medium text-slate-600 hover:text-green-700 transition-colors cursor-pointer bg-transparent border-none">
                                 {item.label}
                             </button>
                         ))}
                         <button onClick={() => navigate("/fazenda/login")}
-                            style={{
-                                background: colors.green, color: colors.white,
-                                border: "none", borderRadius: 8, padding: "10px 24px",
-                                fontSize: 15, fontWeight: 600, cursor: "pointer",
-                                display: "flex", alignItems: "center", gap: 8,
-                                transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                            }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.05)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 15px rgba(54,124,43,0.4)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
-                        >
-                            Acessar Sistema <ArrowRight size={16} />
+                            className="flex items-center gap-2 bg-green-700 hover:bg-green-800 text-white text-sm font-semibold px-5 py-2.5 rounded-2xl shadow-md shadow-green-200 transition-all duration-150 border-none cursor-pointer">
+                            Acessar Sistema <ArrowRight className="w-4 h-4" />
                         </button>
                     </div>
 
                     {/* Mobile hamburger */}
-                    <button onClick={() => setMobileMenu(!mobileMenu)} className="show-mobile"
-                        style={{ background: "none", border: "none", cursor: "pointer", display: "none" }}>
-                        {mobileMenu ? <X size={28} /> : <Menu size={28} />}
+                    <button onClick={() => setMobileMenu(!mobileMenu)}
+                        className="lg:hidden bg-transparent border-none cursor-pointer p-1 text-slate-700">
+                        {mobileMenu ? <X size={26} /> : <Menu size={26} />}
                     </button>
                 </div>
 
                 {/* Mobile menu */}
                 {mobileMenu && (
-                    <div style={{ background: colors.white, padding: 20, borderTop: `1px solid ${colors.gray200}` }}>
-                        {["features", "resources", "faq"].map(id => (
-                            <button key={id} onClick={() => scrollTo(id)} style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 0", background: "none", border: "none", fontSize: 16, cursor: "pointer", color: colors.gray700, borderBottom: `1px solid ${colors.gray100}` }}>
-                                {id === "features" ? "Funcionalidades" : id === "resources" ? "Recursos" : "FAQ"}
+                    <div className="lg:hidden bg-white border-t border-slate-100 px-6 py-4 space-y-1">
+                        {NAV_LINKS.map(item => (
+                            <button key={item.id} onClick={() => scrollTo(item.id)}
+                                className="block w-full text-left py-3 text-base font-medium text-slate-700 border-b border-slate-100 bg-transparent border-x-0 border-t-0 cursor-pointer hover:text-green-700 transition-colors">
+                                {item.label}
                             </button>
                         ))}
-                        <button onClick={() => navigate("/fazenda/login")} style={{ marginTop: 12, width: "100%", background: colors.green, color: colors.white, border: "none", borderRadius: 8, padding: "12px 20px", fontSize: 16, fontWeight: 600, cursor: "pointer" }}>
+                        <button onClick={() => navigate("/fazenda/login")}
+                            className="mt-3 w-full bg-green-700 text-white rounded-2xl py-3 font-semibold text-base border-none cursor-pointer">
                             Acessar Sistema
                         </button>
                     </div>
                 )}
             </nav>
 
-            {/* ========== HERO ========== */}
-            <section style={{
-                minHeight: "100vh", display: "flex", alignItems: "center",
-                position: "relative", overflow: "hidden", paddingTop: 70,
-            }}>
-                {/* Background image with dark overlay */}
-                <div style={{
-                    position: "absolute", inset: 0, zIndex: 0,
-                    backgroundImage: "url('/hero-soja-bg.png')",
-                    backgroundSize: "cover", backgroundPosition: "center",
-                }} />
-                <div style={{
-                    position: "absolute", inset: 0, zIndex: 1,
-                    background: "linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(10,30,10,0.55) 50%, rgba(0,0,0,0.45) 100%)",
-                }} />
-                {/* Decorative circles */}
-                <div style={{ position: "absolute", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", border: `2px solid rgba(255,222,0,0.1)`, zIndex: 2 }} />
-                <div style={{ position: "absolute", bottom: -50, left: -50, width: 300, height: 300, borderRadius: "50%", border: `2px solid rgba(255,222,0,0.07)`, zIndex: 2 }} />
+            {/* ── HERO ────────────────────────────────────────────────── */}
+            <section className="relative min-h-screen flex items-center overflow-hidden pt-[70px] bg-gradient-to-br from-green-800 via-green-700 to-emerald-600">
+                {/* Dot grid */}
+                <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={DOT_GRID} />
+                {/* Blobs */}
+                <div className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-32 -left-32 w-[400px] h-[400px] bg-green-900/40 rounded-full blur-3xl pointer-events-none" />
 
-                <div style={{ maxWidth: 1200, margin: "0 auto", padding: "60px 24px", display: "flex", alignItems: "center", gap: 60, flexWrap: "wrap", position: "relative", zIndex: 3 }}>
-                    <div style={{ flex: 1, minWidth: 320 }}>
-                        <div style={{ display: "inline-block", background: "rgba(255,222,0,0.2)", color: colors.yellow, padding: "6px 16px", borderRadius: 20, fontSize: 13, fontWeight: 600, marginBottom: 20, letterSpacing: 1 }}>
-                            🌾 GESTÃO AGRÍCOLA DIGITAL
+                <div className="relative z-10 max-w-6xl mx-auto px-6 py-16 flex items-center gap-14 flex-wrap">
+                    {/* Left — text */}
+                    <div className="flex-1 min-w-[300px]">
+                        {/* Badge */}
+                        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full mb-6">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#F7D601] animate-pulse" />
+                            <span className="text-xs font-semibold text-white/90 tracking-widest uppercase">Gestão Agrícola Digital</span>
                         </div>
-                        <h1 style={{ fontSize: "clamp(2.2rem, 5vw, 3.5rem)", fontWeight: 900, color: colors.white, lineHeight: 1.1, marginBottom: 20 }}>
-                            Domine a gestão da sua <span style={{ color: colors.yellow }}>fazenda</span>
+
+                        <h1 className="text-[clamp(2.4rem,5vw,3.8rem)] font-black text-white leading-[1.08] tracking-tight mb-5">
+                            Domine a gestão<br />
+                            da sua <span className="text-[#F7D601]">fazenda</span>
                         </h1>
-                        <p style={{ fontSize: 18, color: "rgba(255,255,255,0.8)", lineHeight: 1.7, marginBottom: 32, maxWidth: 520 }}>
+                        <p className="text-base text-green-100/80 leading-relaxed mb-8 max-w-[500px]">
                             Controle estoque, insumos, aplicações, custos e muito mais.
                             Tudo em um sistema completo, fácil e acessível de qualquer lugar.
                         </p>
-                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+
+                        {/* CTAs */}
+                        <div className="flex gap-4 flex-wrap">
                             <button onClick={() => scrollTo("features")}
-                                style={{
-                                    background: colors.yellow, color: colors.greenDark,
-                                    border: "none", borderRadius: 10, padding: "14px 32px",
-                                    fontSize: 16, fontWeight: 700, cursor: "pointer",
-                                    display: "flex", alignItems: "center", gap: 8,
-                                    transition: "transform 0.2s ease",
-                                }}
-                                onMouseEnter={e => { (e.target as HTMLElement).style.transform = "scale(1.05)"; }}
-                                onMouseLeave={e => { (e.target as HTMLElement).style.transform = "scale(1)"; }}
-                            >
-                                Conhecer Funcionalidades <ChevronDown size={18} />
+                                className="flex items-center gap-2 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 shadow-md border-none cursor-pointer">
+                                Conhecer Funcionalidades <ChevronDown className="w-4 h-4" />
                             </button>
                             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
-                                style={{
-                                    background: "transparent", color: colors.white,
-                                    border: `2px solid rgba(255,255,255,0.4)`, borderRadius: 10,
-                                    padding: "14px 32px", fontSize: 16, fontWeight: 600, cursor: "pointer",
-                                    textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8,
-                                }}
-                            >
-                                <MessageCircle size={18} /> Solicite uma Visita
+                                className="flex items-center gap-2 text-white border-2 border-white/30 hover:border-white/60 font-semibold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 no-underline">
+                                <MessageCircle className="w-4 h-4" /> Solicite uma Visita
                             </a>
                         </div>
 
-                        {/* Stats — animated count-up */}
-                        <div style={{ display: "flex", gap: 40, marginTop: 48 }}>
+                        {/* Count-up stats */}
+                        <div className="flex gap-10 mt-12">
                             {[
-                                { target: 3, prefix: "+", suffix: "", label: "Departamentos" },
-                                { target: 110, prefix: "+", suffix: "", label: "Produtores" },
-                                { target: 50, prefix: "+", suffix: "mil", label: "Hectares" },
+                                { target: 3,   prefix: "+", suffix: "",    label: "Departamentos" },
+                                { target: 110, prefix: "+", suffix: "",    label: "Produtores" },
+                                { target: 50,  prefix: "+", suffix: "mil", label: "Hectares" },
                             ].map(s => (
                                 <CountUpStat key={s.label} target={s.target} prefix={s.prefix} suffix={s.suffix} label={s.label} />
                             ))}
                         </div>
                     </div>
 
-                    {/* Hero Carousel */}
-                    <div style={{ flex: 1, minWidth: 320, display: "flex", justifyContent: "center" }}>
-                        <div style={{ position: "relative" }}>
-                            <div style={{
-                                width: "clamp(300px, 40vw, 480px)", height: "clamp(300px, 40vw, 480px)",
-                                borderRadius: 24, overflow: "hidden",
-                                boxShadow: "0 40px 80px rgba(0,0,0,0.3)",
-                                border: `3px solid rgba(255,222,0,0.3)`,
-                                position: "relative",
-                            }}>
+                    {/* Right — carousel */}
+                    <div className="flex-1 min-w-[300px] flex justify-center">
+                        <div className="relative">
+                            {/* Main image frame */}
+                            <div className="relative w-[clamp(280px,38vw,460px)] h-[clamp(280px,38vw,460px)] rounded-2xl overflow-hidden shadow-[0_40px_80px_rgba(0,0,0,0.35)] border-2 border-yellow-400/30">
                                 {heroSlides.map((slide, i) => (
                                     <img key={i} src={slide.image} alt={slide.label}
-                                        style={{
-                                            position: "absolute", top: 0, left: 0,
-                                            width: "100%", height: "100%", objectFit: "cover",
-                                            opacity: heroSlide === i ? 1 : 0,
-                                            transition: "opacity 0.8s ease-in-out",
-                                        }}
+                                        className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+                                        style={{ opacity: heroSlide === i ? 1 : 0 }}
                                     />
                                 ))}
-                                {/* Carousel dots */}
-                                <div style={{
-                                    position: "absolute", bottom: 16, left: 0, right: 0,
-                                    display: "flex", justifyContent: "center", gap: 8, zIndex: 5,
-                                }}>
+                                {/* Dots */}
+                                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
                                     {heroSlides.map((_, i) => (
                                         <button key={i} onClick={() => setHeroSlide(i)}
-                                            style={{
-                                                width: heroSlide === i ? 24 : 10, height: 10,
-                                                borderRadius: 5, border: "none", cursor: "pointer",
-                                                background: heroSlide === i ? colors.yellow : "rgba(255,255,255,0.5)",
-                                                transition: "all 0.3s ease",
-                                            }}
+                                            className="h-2.5 rounded-full border-none cursor-pointer transition-all duration-300"
+                                            style={{ width: heroSlide === i ? 24 : 10, background: heroSlide === i ? "#F7D601" : "rgba(255,255,255,0.45)" }}
                                         />
                                     ))}
                                 </div>
                             </div>
-                            {/* Floating card — changes with slide */}
-                            <div style={{
-                                position: "absolute", bottom: -20, left: -30,
-                                background: colors.white, borderRadius: 16, padding: "16px 20px",
-                                boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
-                                display: "flex", alignItems: "center", gap: 12,
-                                transition: "all 0.5s ease",
-                            }}>
-                                <div style={{ background: `${colors.green}15`, borderRadius: 12, padding: 10, fontSize: 22 }}>
-                                    {heroSlides[heroSlide].icon}
+
+                            {/* Floating info card */}
+                            <div className="absolute -bottom-5 -left-7 bg-white rounded-2xl px-5 py-4 shadow-[0_10px_40px_rgba(0,0,0,0.15)] flex items-center gap-3 transition-all duration-500">
+                                <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                                    {(() => { const Icon = heroSlides[heroSlide].icon; return <Icon className="w-5 h-5 text-green-700" />; })()}
                                 </div>
                                 <div>
-                                    <div style={{ fontSize: 12, color: colors.gray500 }}>{heroSlides[heroSlide].sublabel}</div>
-                                    <div style={{ fontSize: 16, fontWeight: 700, color: colors.green }}>{heroSlides[heroSlide].label}</div>
+                                    <p className="text-xs text-slate-400 leading-tight">{heroSlides[heroSlide].sublabel}</p>
+                                    <p className="text-sm font-bold text-green-700 leading-tight">{heroSlides[heroSlide].label}</p>
                                 </div>
                             </div>
                         </div>
@@ -273,105 +210,66 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ========== FEATURES ========== */}
-            <section id="features" style={{ padding: "100px 24px", background: colors.white }}>
-                <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-                    <div style={{ textAlign: "center", marginBottom: 64 }}>
-                        <div style={{ color: colors.green, fontWeight: 700, fontSize: 14, letterSpacing: 2, marginBottom: 12 }}>FUNCIONALIDADES</div>
-                        <h2 style={{ fontSize: "clamp(1.8rem, 4vw, 2.8rem)", fontWeight: 800, color: colors.gray900, marginBottom: 16 }}>
-                            Tudo que você precisa em <span style={{ color: colors.green }}>um só lugar</span>
+            {/* ── FEATURES ────────────────────────────────────────────── */}
+            <section id="features" className="py-24 px-6 bg-slate-50">
+                <div className="max-w-6xl mx-auto">
+                    {/* Section header */}
+                    <div className="text-center mb-16">
+                        <p className="text-green-600 font-bold text-xs tracking-[0.2em] uppercase mb-3">Funcionalidades</p>
+                        <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-extrabold text-slate-900 tracking-tight mb-4">
+                            Tudo que você precisa em <span className="text-green-700">um só lugar</span>
                         </h2>
-                        <p style={{ fontSize: 18, color: colors.gray500, maxWidth: 600, margin: "0 auto" }}>
+                        <p className="text-slate-500 text-lg max-w-xl mx-auto leading-relaxed">
                             Sistema completo para gestão da sua propriedade rural, do plantio à colheita.
                         </p>
                     </div>
 
-                    {/* Feature rows — alternating layout */}
+                    {/* Feature rows */}
                     {[
-                        {
-                            icon: Package, title: "Controle de Estoque & Insumos",
-                            desc: "Saiba exatamente o que tem, quanto custou e quando comprar mais.",
-                            items: ["Custo médio automático por produto", "Alertas de estoque baixo via WhatsApp", "Movimentações com rastreabilidade", "Integração com faturas de compra", "Histórico completo de preços"],
-                            color: colors.green, image: "/feature-estoque.png",
-                        },
-                        {
-                            icon: Satellite, title: "Monitoramento NDVI por Satélite",
-                            desc: "Imagens de satélite Sentinel-2 atualizadas a cada 5 dias, direto no mapa dos seus talhões.",
-                            items: ["Índices NDVI, EVI, Cor Real e Falsa Cor", "Resolução de 10 metros por pixel (Sentinel-2)", "Histórico de 90 dias com comparativo visual", "Paleta profissional para identificar estresse na lavoura", "Filtro automático de nuvens e dias inválidos"],
-                            color: colors.greenLight, reverse: true, image: "/feature-ndvi.png",
-                        },
-                        {
-                            icon: CloudSun, title: "Estações Meteorológicas Virtuais",
-                            desc: "Dados climáticos em tempo real para cada talhão, sem precisar instalar equipamentos.",
-                            items: ["Temperatura, umidade, vento, pressão e índice UV", "Previsão do tempo para os próximos 7 dias", "Janela de Pulverização inteligente por horário", "Graus-Dia de Desenvolvimento (GDD) da cultura", "Histórico climático completo por estação"],
-                            color: colors.green, image: "/feature-weather.png",
-                        },
-                        {
-                            icon: BookOpen, title: "Caderno de Campo Automático",
-                            desc: "Rastreabilidade total sem trabalho manual. 100% automático.",
-                            items: ["Gerado a partir das aplicações registradas", "Mapa dos talhões com áreas aplicadas", "Linha do tempo completa da safra", "Exportação em PDF profissional", "Atende exigências de exportação"],
-                            color: colors.greenLight, reverse: true, image: "/feature-caderno.png",
-                        },
-                        {
-                            icon: Bell, title: "Alertas Inteligentes via WhatsApp",
-                            desc: "Receba avisos importantes sem precisar abrir o sistema.",
-                            items: ["Estoque baixo? Avisamos no WhatsApp", "Fatura vencendo em 5 dias", "Variação de preço de insumos", "Boletim diário com clima e cotações", "Notícias do mercado agrícola"],
-                            color: colors.green, image: "/feature-alertas.png",
-                        },
-                        {
-                            icon: Target, title: "Inteligência Estratégica de Romaneios",
-                            desc: "Descubra qual silo entrega a melhor viabilidade e proteja-se contra descontos abusivos.",
-                            items: ["Ranking de Eficiência Real (Distância de Frete vs % de Desconto)", "Alerta no WhatsApp de quebras de peso fora do padrão histórico", "Comparativo inteligente de proximidade do seu talhão (Lat/Lng)", "Análise de variação de umidade e impureza por destinatário"],
-                            color: colors.greenLight, reverse: true, image: "/feature-inteligencia.png",
-                        },
-                        {
-                            icon: Users, title: "Rede de Cotação Anônima",
-                            desc: "Compare seus preços com outros agricultores. Negocie melhor.",
-                            items: ["Comparativo anônimo de preços", "Média, menor e maior preço pago", "Ranking: você está acima ou abaixo?", "Privacidade garantida", "Poder de negociação na compra"],
-                            color: colors.green, image: "/feature-cotacoes.png",
-                        },
+                        { icon: Package, title: "Controle de Estoque & Insumos", desc: "Saiba exatamente o que tem, quanto custou e quando comprar mais.", image: "/feature-estoque.png",
+                          items: ["Custo médio automático por produto", "Alertas de estoque baixo via WhatsApp", "Movimentações com rastreabilidade", "Integração com faturas de compra", "Histórico completo de preços"] },
+                        { icon: Satellite, title: "Monitoramento NDVI por Satélite", desc: "Imagens do Sentinel-2 atualizadas a cada 5 dias, direto no mapa dos seus talhões.", image: "/feature-ndvi.png", reverse: true,
+                          items: ["Índices NDVI, EVI, Cor Real e Falsa Cor", "Resolução de 10 metros por pixel", "Histórico de 90 dias com comparativo visual", "Paleta profissional para identificar estresse", "Filtro automático de nuvens"] },
+                        { icon: CloudSun, title: "Estações Meteorológicas Virtuais", desc: "Dados climáticos em tempo real para cada talhão, sem precisar instalar equipamentos.", image: "/feature-weather.png",
+                          items: ["Temperatura, umidade, vento, pressão e UV", "Previsão para os próximos 7 dias", "Janela de Pulverização inteligente", "Graus-Dia de Desenvolvimento (GDD)", "Histórico climático completo"] },
+                        { icon: BookOpen, title: "Caderno de Campo Automático", desc: "Rastreabilidade total sem trabalho manual. 100% automático.", image: "/feature-caderno.png", reverse: true,
+                          items: ["Gerado a partir das aplicações registradas", "Mapa dos talhões com áreas aplicadas", "Linha do tempo completa da safra", "Exportação em PDF profissional", "Atende exigências de exportação"] },
+                        { icon: Bell, title: "Alertas Inteligentes via WhatsApp", desc: "Receba avisos importantes sem precisar abrir o sistema.", image: "/feature-alertas.png",
+                          items: ["Estoque baixo? Avisamos no WhatsApp", "Fatura vencendo em 5 dias", "Variação de preço de insumos", "Boletim diário com clima e cotações", "Notícias do mercado agrícola"] },
+                        { icon: Target, title: "Inteligência Estratégica de Romaneios", desc: "Descubra qual silo entrega a melhor viabilidade e proteja-se contra descontos abusivos.", image: "/feature-inteligencia.png", reverse: true,
+                          items: ["Ranking de Eficiência Real por silo", "Alerta de quebras de peso fora do padrão", "Comparativo por distância do talhão", "Análise de variação de umidade e impureza"] },
+                        { icon: Users, title: "Rede de Cotação Anônima", desc: "Compare seus preços com outros agricultores. Negocie melhor.", image: "/feature-cotacoes.png",
+                          items: ["Comparativo anônimo de preços", "Média, menor e maior preço pago", "Ranking: acima ou abaixo da média?", "Privacidade garantida", "Poder de negociação na compra"] },
                     ].map((feature, idx) => {
                         const Icon = feature.icon;
-                        const isReversed = feature.reverse;
                         return (
-                            <div key={idx} style={{
-                                display: "flex", alignItems: "center", gap: 60,
-                                marginBottom: 80, flexWrap: "wrap",
-                                flexDirection: isReversed ? "row-reverse" : "row",
-                            }}>
-                                {/* Text side */}
-                                <div style={{ flex: 1, minWidth: 300 }}>
-                                    <div style={{ display: "inline-flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                                        <div style={{ background: `${feature.color}15`, borderRadius: 14, padding: 12 }}>
-                                            <Icon size={28} color={feature.color} />
+                            <div key={idx} className={`flex items-center gap-14 mb-20 flex-wrap ${feature.reverse ? "flex-row-reverse" : "flex-row"}`}>
+                                {/* Text */}
+                                <div className="flex-1 min-w-[280px]">
+                                    <div className="inline-flex items-center gap-3 mb-5">
+                                        <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                                            <Icon className="w-6 h-6 text-green-700" />
                                         </div>
-                                        <h3 style={{ fontSize: 24, fontWeight: 700, color: colors.gray900 }}>{feature.title}</h3>
+                                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">{feature.title}</h3>
                                     </div>
-                                    <p style={{ fontSize: 16, color: colors.gray500, marginBottom: 24, lineHeight: 1.6 }}>{feature.desc}</p>
-                                    <ul style={{ listStyle: "none", padding: 0 }}>
+                                    <p className="text-slate-500 text-base leading-relaxed mb-5">{feature.desc}</p>
+                                    <ul className="space-y-2.5">
                                         {feature.items.map((item, i) => (
-                                            <li key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", fontSize: 15, color: colors.gray700 }}>
-                                                <div style={{ width: 22, height: 22, borderRadius: "50%", background: `${colors.green}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                                    <span style={{ color: colors.green, fontSize: 14, fontWeight: 700 }}>✓</span>
-                                                </div>
+                                            <li key={i} className="flex items-center gap-3 text-sm text-slate-700">
+                                                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                                                 {item}
                                             </li>
                                         ))}
                                     </ul>
                                 </div>
 
-                                {/* Visual side — gradient card */}
-                                <div style={{ flex: 1, minWidth: 300, display: "flex", justifyContent: "center" }}>
-                                    <div style={{
-                                        width: "100%", maxWidth: 420, aspectRatio: "4/3", borderRadius: 20,
-                                        overflow: "hidden",
-                                        boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-                                        position: "relative",
-                                    }}>
-                                        <img src={(feature as any).image} alt={feature.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.7))", padding: "40px 20px 16px" }}>
-                                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>AgroFarm</div>
-                                            <div style={{ fontSize: 15, fontWeight: 700, color: colors.white }}>{feature.title}</div>
+                                {/* Image */}
+                                <div className="flex-1 min-w-[280px] flex justify-center">
+                                    <div className="w-full max-w-[420px] aspect-[4/3] rounded-2xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.10)] relative">
+                                        <img src={feature.image} alt={feature.title} className="w-full h-full object-cover" />
+                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-5 pb-4 pt-10">
+                                            <p className="text-[11px] text-white/60">AgroFarm</p>
+                                            <p className="text-sm font-bold text-white">{feature.title}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -381,87 +279,67 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ========== RESOURCES GRID ========== */}
-            <section id="resources" style={{ padding: "80px 24px", background: colors.gray50 }}>
-                <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-                    <div style={{ textAlign: "center", marginBottom: 56 }}>
-                        <div style={{ color: colors.green, fontWeight: 700, fontSize: 14, letterSpacing: 2, marginBottom: 12 }}>MAIS RECURSOS</div>
-                        <h2 style={{ fontSize: "clamp(1.8rem, 4vw, 2.5rem)", fontWeight: 800, color: colors.gray900 }}>
-                            Sistema completo para sua <span style={{ color: colors.green }}>fazenda crescer</span>
+            {/* ── RESOURCES GRID ──────────────────────────────────────── */}
+            <section id="resources" className="relative py-20 px-6 bg-gradient-to-br from-green-800 via-green-700 to-emerald-600 overflow-hidden">
+                {/* Dot grid */}
+                <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={DOT_GRID} />
+                <div className="absolute -top-20 -right-20 w-80 h-80 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-green-900/40 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 max-w-6xl mx-auto">
+                    <div className="text-center mb-14">
+                        <p className="text-[#F7D601] font-bold text-xs tracking-[0.2em] uppercase mb-3">Mais Recursos</p>
+                        <h2 className="text-[clamp(1.8rem,4vw,2.5rem)] font-extrabold text-white tracking-tight">
+                            Sistema completo para sua <span className="text-[#F7D601]">fazenda crescer</span>
                         </h2>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 24 }}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {[
-                            { icon: Package, title: "Estoque", desc: "Controle total de produtos e insumos com custo médio automático" },
-                            { icon: FileText, title: "Faturas", desc: "Importe faturas e vincule automaticamente ao estoque" },
-                            { icon: Sprout, title: "Aplicações", desc: "Registre aplicações por talhão com dose e operador" },
-                            { icon: Tractor, title: "Frota", desc: "Abastecimentos, horímetro e manutenção dos equipamentos" },
-                            { icon: BarChart3, title: "Custo/Hectare", desc: "Saiba quanto custa cada talhão com precisão total" },
-                            { icon: TrendingUp, title: "Cotações", desc: "Compare preços com outros agricultores anonimamente" },
-                            { icon: Map, title: "Propriedades", desc: "Cadastre fazendas e talhões com mapa e localização" },
-                            { icon: FileBarChart, title: "Relatórios", desc: "9 tipos de relatórios com filtros e exportação PDF" },
+                            { icon: Package,     title: "Estoque",       desc: "Controle total de produtos e insumos com custo médio automático" },
+                            { icon: FileText,    title: "Faturas",        desc: "Importe faturas e vincule automaticamente ao estoque" },
+                            { icon: Sprout,      title: "Aplicações",    desc: "Registre aplicações por talhão com dose e operador" },
+                            { icon: Tractor,     title: "Frota",          desc: "Abastecimentos, horímetro e manutenção dos equipamentos" },
+                            { icon: BarChart3,   title: "Custo/Hectare", desc: "Saiba quanto custa cada talhão com precisão total" },
+                            { icon: TrendingUp,  title: "Cotações",      desc: "Compare preços com outros agricultores anonimamente" },
+                            { icon: Map,         title: "Propriedades",  desc: "Cadastre fazendas e talhões com mapa e localização" },
+                            { icon: FileBarChart,title: "Relatórios",    desc: "9 tipos de relatórios com filtros e exportação PDF" },
                             { icon: ArrowDownUp, title: "Movimentações", desc: "Entradas, saídas e ajustes com rastreabilidade total" },
-                            { icon: DollarSign, title: "Despesas", desc: "Controle gastos por categoria com gráficos visuais" },
-                            { icon: MessageCircle, title: "WhatsApp Bot", desc: "Boletim diário com clima, cotação da soja e alertas" },
-                            { icon: Satellite, title: "Satélite NDVI", desc: "Monitore a saúde da lavoura via imagens de satélite" },
-                        ].map((res, i) => {
-                            const Icon = res.icon;
-                            return (
-                                <div key={i} style={{
-                                    background: colors.white, borderRadius: 16, padding: 24,
-                                    border: `1px solid ${colors.gray200}`,
-                                    transition: "all 0.3s ease",
-                                    cursor: "default",
-                                }}
-                                    onMouseEnter={e => {
-                                        (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
-                                        (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 30px rgba(0,0,0,0.08)";
-                                        (e.currentTarget as HTMLElement).style.borderColor = colors.green;
-                                    }}
-                                    onMouseLeave={e => {
-                                        (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-                                        (e.currentTarget as HTMLElement).style.boxShadow = "none";
-                                        (e.currentTarget as HTMLElement).style.borderColor = colors.gray200;
-                                    }}
-                                >
-                                    <div style={{ background: `${colors.green}10`, borderRadius: 12, width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-                                        <Icon size={24} color={colors.green} />
-                                    </div>
-                                    <h4 style={{ fontSize: 17, fontWeight: 700, color: colors.gray900, marginBottom: 8 }}>{res.title}</h4>
-                                    <p style={{ fontSize: 14, color: colors.gray500, lineHeight: 1.5 }}>{res.desc}</p>
-                                </div>
-                            );
-                        })}
+                            { icon: DollarSign,  title: "Despesas",      desc: "Controle gastos por categoria com gráficos visuais" },
+                            { icon: MessageCircle,title: "WhatsApp Bot", desc: "Boletim diário com clima, cotação da soja e alertas" },
+                            { icon: Satellite,   title: "Satélite NDVI", desc: "Monitore a saúde da lavoura via imagens de satélite" },
+                        ].map((res, i) => (
+                            <GlassCard key={i} icon={res.icon} title={res.title} description={res.desc} />
+                        ))}
                     </div>
                 </div>
             </section>
 
-            {/* ========== BENEFITS BANNER ========== */}
-            <section style={{
-                padding: "80px 24px",
-                background: `linear-gradient(135deg, ${colors.green} 0%, ${colors.greenDark} 100%)`,
-                color: colors.white,
-            }}>
-                <div style={{ maxWidth: 1200, margin: "0 auto", textAlign: "center" }}>
-                    <h2 style={{ fontSize: "clamp(1.8rem, 4vw, 2.5rem)", fontWeight: 800, marginBottom: 48, color: colors.white }}>
-                        Por que escolher o <span style={{ color: colors.yellow }}>AgroFarm</span>?
-                    </h2>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 32 }}>
+            {/* ── BENEFITS ────────────────────────────────────────────── */}
+            <section className="relative py-20 px-6 bg-slate-50">
+                <div className="max-w-6xl mx-auto">
+                    <div className="text-center mb-14">
+                        <p className="text-green-600 font-bold text-xs tracking-[0.2em] uppercase mb-3">Vantagens</p>
+                        <h2 className="text-[clamp(1.8rem,4vw,2.5rem)] font-extrabold text-slate-900 tracking-tight">
+                            Por que escolher o <span className="text-green-700">AgroFarm</span>?
+                        </h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         {[
-                            { icon: Globe, title: "100% Na Nuvem", desc: "Acesse do celular, tablet ou computador, de qualquer lugar" },
-                            { icon: Zap, title: "Fácil de Usar", desc: "Interface intuitiva, sem necessidade de treinamento" },
-                            { icon: Shield, title: "Dados Seguros", desc: "Seus dados protegidos com criptografia e backup automático" },
-                            { icon: Smartphone, title: "Mobile First", desc: "Funciona perfeitamente no celular, na lavoura" },
+                            { icon: Globe,      title: "100% Na Nuvem",  desc: "Acesse do celular, tablet ou computador, de qualquer lugar" },
+                            { icon: Zap,        title: "Fácil de Usar",  desc: "Interface intuitiva, sem necessidade de treinamento" },
+                            { icon: Shield,     title: "Dados Seguros",  desc: "Seus dados protegidos com criptografia e backup automático" },
+                            { icon: Smartphone, title: "Mobile First",   desc: "Funciona perfeitamente no celular, na lavoura" },
                         ].map((b, i) => {
                             const Icon = b.icon;
                             return (
-                                <div key={i} style={{ padding: 24 }}>
-                                    <div style={{ background: "rgba(255,222,0,0.15)", borderRadius: 16, width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                                        <Icon size={28} color={colors.yellow} />
+                                <div key={i} className="bg-white rounded-2xl p-6 shadow-[0_2px_16px_rgba(0,0,0,0.05)] border border-slate-100 hover:-translate-y-1 transition-transform duration-200">
+                                    <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center mb-4">
+                                        <Icon className="w-6 h-6 text-green-700" />
                                     </div>
-                                    <h4 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: colors.white }}>{b.title}</h4>
-                                    <p style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>{b.desc}</p>
+                                    <h4 className="text-base font-bold text-slate-900 mb-2">{b.title}</h4>
+                                    <p className="text-sm text-slate-500 leading-relaxed">{b.desc}</p>
                                 </div>
                             );
                         })}
@@ -469,13 +347,13 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ========== FAQ ========== */}
-            <section id="faq" style={{ padding: "80px 24px", background: colors.white }}>
-                <div style={{ maxWidth: 800, margin: "0 auto" }}>
-                    <div style={{ textAlign: "center", marginBottom: 48 }}>
-                        <div style={{ color: colors.green, fontWeight: 700, fontSize: 14, letterSpacing: 2, marginBottom: 12 }}>DÚVIDAS</div>
-                        <h2 style={{ fontSize: "clamp(1.8rem, 4vw, 2.5rem)", fontWeight: 800, color: colors.gray900 }}>
-                            Perguntas <span style={{ color: colors.green }}>Frequentes</span>
+            {/* ── FAQ ─────────────────────────────────────────────────── */}
+            <section id="faq" className="py-20 px-6 bg-white">
+                <div className="max-w-2xl mx-auto">
+                    <div className="text-center mb-12">
+                        <p className="text-green-600 font-bold text-xs tracking-[0.2em] uppercase mb-3">Dúvidas</p>
+                        <h2 className="text-[clamp(1.8rem,4vw,2.5rem)] font-extrabold text-slate-900 tracking-tight">
+                            Perguntas <span className="text-green-700">Frequentes</span>
                         </h2>
                     </div>
 
@@ -494,110 +372,70 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ========== CTA FINAL ========== */}
-            <section style={{
-                padding: "80px 24px",
-                background: `linear-gradient(135deg, ${colors.yellow} 0%, ${colors.yellowDark} 100%)`,
-                textAlign: "center",
-            }}>
-                <div style={{ maxWidth: 700, margin: "0 auto" }}>
-                    <h2 style={{ fontSize: "clamp(1.8rem, 4vw, 2.5rem)", fontWeight: 800, color: colors.greenDark, marginBottom: 16 }}>
-                        Domine a gestão da sua fazenda
+            {/* ── CTA FINAL ───────────────────────────────────────────── */}
+            <section className="relative py-20 px-6 bg-gradient-to-br from-green-800 via-green-700 to-emerald-600 overflow-hidden text-center">
+                <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={DOT_GRID} />
+                <div className="absolute -top-20 right-0 w-72 h-72 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="relative z-10 max-w-xl mx-auto">
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full mb-6">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#F7D601] animate-pulse" />
+                        <span className="text-xs font-semibold text-white/90">Comece hoje mesmo</span>
+                    </div>
+                    <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-black text-white tracking-tight mb-4">
+                        Domine a gestão da sua <span className="text-[#F7D601]">fazenda</span>
                     </h2>
-                    <p style={{ fontSize: 18, color: colors.greenDark, opacity: 0.8, marginBottom: 32 }}>
+                    <p className="text-green-100/75 text-base leading-relaxed mb-8">
                         Comece agora a usar o sistema mais completo de gestão agrícola.
                     </p>
                     <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
-                        style={{
-                            background: colors.green, color: colors.white,
-                            border: "none", borderRadius: 12, padding: "16px 40px",
-                            fontSize: 18, fontWeight: 700, cursor: "pointer",
-                            display: "inline-flex", alignItems: "center", gap: 10,
-                            boxShadow: "0 8px 30px rgba(54,124,43,0.3)",
-                            transition: "transform 0.2s ease",
-                            textDecoration: "none",
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.05)"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
-                    >
-                        <MessageCircle size={20} /> Solicite uma Visita
+                        className="inline-flex items-center gap-2.5 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-10 py-4 rounded-2xl text-base shadow-lg transition-all duration-150 no-underline">
+                        <MessageCircle className="w-5 h-5" /> Solicite uma Visita
                     </a>
                 </div>
             </section>
 
-            {/* ========== FOOTER ========== */}
-            <footer style={{
-                padding: "40px 24px", background: colors.gray900, color: "rgba(255,255,255,0.5)",
-                textAlign: "center", fontSize: 14,
-            }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-                    <Sprout size={20} color={colors.green} />
-                    <span style={{ fontWeight: 700, color: colors.white }}>AgroFarm</span>
+            {/* ── FOOTER ──────────────────────────────────────────────── */}
+            <footer className="py-10 px-6 bg-slate-900 text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                    <Sprout className="w-5 h-5 text-green-500" />
+                    <span className="font-bold text-white text-base">AgroFarm</span>
                 </div>
-                <p>© 2026 AgroFarm — Sistema de Gestão Agrícola Digital</p>
-                <p style={{ marginTop: 4 }}>Feito com 💚 para agricultores do Brasil e Paraguai</p>
+                <p className="text-slate-500 text-sm">© 2026 AgroFarm — Sistema de Gestão Agrícola Digital</p>
+                <p className="text-slate-600 text-xs mt-1">Para agricultores do Brasil e Paraguai</p>
             </footer>
 
-            {/* ========== STICKY FOOTER CTA ========== */}
-            <div style={{
-                position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 90,
-                background: colors.greenDark,
-                padding: "12px 24px",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 24,
-                boxShadow: "0 -4px 20px rgba(0,0,0,0.2)",
-            }}>
-                <span style={{ color: colors.yellow, fontWeight: 700, fontSize: 14, letterSpacing: 1 }}>
-                    🌾 DOMINE SUA LAVOURA
-                </span>
+            {/* ── STICKY FOOTER CTA ───────────────────────────────────── */}
+            <div className="fixed bottom-0 left-0 right-0 z-50 bg-green-900/95 backdrop-blur-sm px-6 py-3 flex items-center justify-center gap-6 shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
+                <div className="flex items-center gap-2">
+                    <Sprout className="w-4 h-4 text-[#F7D601]" />
+                    <span className="text-[#F7D601] font-bold text-xs tracking-widest uppercase hidden sm:block">Domine sua Lavoura</span>
+                </div>
                 <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
-                    style={{
-                        background: colors.yellow, color: colors.greenDark,
-                        border: "none", borderRadius: 8, padding: "10px 24px",
-                        fontSize: 14, fontWeight: 700, cursor: "pointer",
-                        animation: "pulse-btn 2s infinite",
-                        textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6,
-                    }}>
-                    <MessageCircle size={14} /> Solicite uma Visita
+                    className="flex items-center gap-1.5 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-5 py-2 rounded-xl text-sm transition-all duration-150 no-underline animate-pulse">
+                    <MessageCircle className="w-3.5 h-3.5" /> Solicite uma Visita
                 </a>
             </div>
 
-            {/* Responsive + animation styles */}
-            <style>{`
-                @keyframes pulse-btn {
-                    0%, 100% { box-shadow: 0 0 0 0 rgba(255,222,0,0.5); }
-                    50% { box-shadow: 0 0 0 8px rgba(255,222,0,0); }
-                }
-                @media (max-width: 768px) {
-                    .hidden-mobile { display: none !important; }
-                    .show-mobile { display: block !important; }
-                }
-                @media (min-width: 769px) {
-                    .show-mobile { display: none !important; }
-                }
-            `}</style>
+            {/* Bottom padding to avoid sticky footer overlap */}
+            <div className="h-14" />
         </div>
     );
 }
 
-// ===========================
-// FAQ ACCORDION ITEM
-// ===========================
+// ─── FAQ Accordion ─────────────────────────────────────────────────────────
 function FAQItem({ question, answer }: { question: string; answer: string }) {
     const [open, setOpen] = useState(false);
     return (
-        <div style={{
-            borderBottom: `1px solid #E5E7EB`, marginBottom: 0,
-        }}>
-            <button onClick={() => setOpen(!open)} style={{
-                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "20px 0", background: "none", border: "none", cursor: "pointer",
-                fontSize: 16, fontWeight: 600, color: "#111827", textAlign: "left",
-            }}>
-                <span>{question}</span>
-                {open ? <ChevronUp size={20} color="#6B7280" /> : <ChevronDown size={20} color="#6B7280" />}
+        <div className="border-b border-slate-100">
+            <button onClick={() => setOpen(!open)}
+                className="w-full flex items-center justify-between py-5 bg-transparent border-none cursor-pointer text-left">
+                <span className="text-base font-semibold text-slate-900 pr-4">{question}</span>
+                {open
+                    ? <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                    : <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0" />}
             </button>
             {open && (
-                <div style={{ padding: "0 0 20px", fontSize: 15, color: "#6B7280", lineHeight: 1.7 }}>
+                <div className="pb-5 text-sm text-slate-500 leading-relaxed">
                     {answer}
                 </div>
             )}
@@ -605,9 +443,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
     );
 }
 
-// ===========================
-// COUNT-UP STAT COMPONENT
-// ===========================
+// ─── Count-up stat (preserves IntersectionObserver logic) ──────────────────
 function CountUpStat({ target, prefix, suffix, label }: { target: number; prefix: string; suffix: string; label: string }) {
     const [count, setCount] = useState(0);
     const ref = useRef<HTMLDivElement>(null);
@@ -616,17 +452,14 @@ function CountUpStat({ target, prefix, suffix, label }: { target: number; prefix
     useEffect(() => {
         const el = ref.current;
         if (!el) return;
-
         const observer = new IntersectionObserver(([entry]) => {
             if (entry.isIntersecting && !hasAnimated.current) {
                 hasAnimated.current = true;
                 const duration = 2000;
                 const start = performance.now();
-
                 const animate = (now: number) => {
                     const elapsed = now - start;
                     const progress = Math.min(elapsed / duration, 1);
-                    // easeOutQuad
                     const eased = 1 - (1 - progress) * (1 - progress);
                     setCount(Math.round(eased * target));
                     if (progress < 1) requestAnimationFrame(animate);
@@ -634,15 +467,14 @@ function CountUpStat({ target, prefix, suffix, label }: { target: number; prefix
                 requestAnimationFrame(animate);
             }
         }, { threshold: 0.3 });
-
         observer.observe(el);
         return () => observer.disconnect();
     }, [target]);
 
     return (
         <div ref={ref}>
-            <div style={{ fontSize: 38, fontWeight: 800, color: colors.yellow }}>{prefix}{count}{suffix}</div>
-            <div style={{ fontSize: 15, color: "rgba(255,255,255,0.7)" }}>{label}</div>
+            <div className="text-[2.2rem] font-black text-[#F7D601] leading-none">{prefix}{count}{suffix}</div>
+            <div className="text-xs text-green-100/70 mt-1">{label}</div>
         </div>
     );
 }
