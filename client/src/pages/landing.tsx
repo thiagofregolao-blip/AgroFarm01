@@ -136,7 +136,7 @@ export default function LandingPage() {
                     <div className="flex-1 min-w-[300px]">
                         {/* Badge */}
                         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full mb-6">
-                            <div className="w-1.5 h-1.5 rounded-full bg-[#F7D601] animate-pulse" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#F7D601]" />
                             <span className="text-xs font-semibold text-white/90 tracking-widest uppercase">Gestão Agrícola Digital</span>
                         </div>
 
@@ -378,7 +378,7 @@ export default function LandingPage() {
                 <div className="absolute -top-20 right-0 w-72 h-72 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
                 <div className="relative z-10 max-w-xl mx-auto">
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full mb-6">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#F7D601] animate-pulse" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#F7D601]" />
                         <span className="text-xs font-semibold text-white/90">Comece hoje mesmo</span>
                     </div>
                     <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-black text-white tracking-tight mb-4">
@@ -405,15 +405,23 @@ export default function LandingPage() {
             </footer>
 
             {/* ── STICKY FOOTER CTA ───────────────────────────────────── */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 bg-green-900/95 backdrop-blur-sm px-6 py-3 flex items-center justify-center gap-6 shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
-                <div className="flex items-center gap-2">
-                    <Sprout className="w-4 h-4 text-[#F7D601]" />
-                    <span className="text-[#F7D601] font-bold text-xs tracking-widest uppercase hidden sm:block">Domine sua Lavoura</span>
+            <div
+                className="fixed bottom-0 left-0 right-0 z-50 overflow-hidden shadow-[0_-4px_20px_rgba(0,0,0,0.35)]"
+                style={{ backgroundImage: "url('/hero-warehouse.png')", backgroundSize: "cover", backgroundPosition: "center 40%" }}
+            >
+                {/* Dark overlay */}
+                <div className="absolute inset-0 bg-black/65 backdrop-blur-[2px]" />
+                {/* Content */}
+                <div className="relative z-10 px-6 py-3 flex items-center justify-center gap-6">
+                    <div className="flex items-center gap-2">
+                        <Sprout className="w-4 h-4 text-[#F7D601]" />
+                        <span className="text-[#F7D601] font-bold text-xs tracking-widest uppercase hidden sm:block">Domine sua Lavoura</span>
+                    </div>
+                    <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-5 py-2 rounded-xl text-sm transition-all duration-150 no-underline">
+                        <MessageCircle className="w-3.5 h-3.5" /> Solicite uma Visita
+                    </a>
                 </div>
-                <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-5 py-2 rounded-xl text-sm transition-all duration-150 no-underline animate-pulse">
-                    <MessageCircle className="w-3.5 h-3.5" /> Solicite uma Visita
-                </a>
             </div>
 
             {/* Bottom padding to avoid sticky footer overlap */}
