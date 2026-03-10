@@ -127,7 +127,7 @@ export default function LandingPage() {
             <section className="relative min-h-screen flex items-center overflow-hidden pt-[70px]"
                 style={{ backgroundImage: "url('/hero-soja-bg.png')", backgroundSize: "cover", backgroundPosition: "center" }}>
                 {/* Dark overlay */}
-                <div className="absolute inset-0 bg-black/60" />
+                <div className="absolute inset-0 bg-black/40" />
                 {/* Dot grid */}
                 <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={DOT_GRID} />
 
@@ -376,7 +376,7 @@ export default function LandingPage() {
             <section className="relative py-20 px-6 overflow-hidden text-center"
                 style={{ backgroundImage: "url('/hero-soja-bg.png')", backgroundSize: "cover", backgroundPosition: "center 70%" }}>
                 {/* Dark overlay */}
-                <div className="absolute inset-0 bg-black/65" />
+                <div className="absolute inset-0 bg-black/40" />
                 {/* Dot grid */}
                 <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={DOT_GRID} />
                 <div className="relative z-10 max-w-xl mx-auto">
