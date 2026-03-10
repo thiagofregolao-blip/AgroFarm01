@@ -1619,6 +1619,8 @@ export const companyUsers = pgTable("company_users", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: text("role").notNull().default("consultor"), // consultor | director | faturista | financeiro | admin
   isActive: boolean("is_active").notNull().default(true),
+  faturistaEmail: text("faturista_email"),
+  emailBodyTemplate: text("email_body_template"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 }, (table) => ({
   uniqueCompanyUser: unique().on(table.companyId, table.userId),

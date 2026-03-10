@@ -219,6 +219,18 @@ app.use((req, res, next) => {
     log(`⚠️  Migration check for company_stock.reserved_quantity: ${migErr.message}`);
   }
 
+  // Inline migration: director email settings on company_users
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+    await db.execute(sql`ALTER TABLE company_users ADD COLUMN IF NOT EXISTS faturista_email text`);
+    await db.execute(sql`ALTER TABLE company_users ADD COLUMN IF NOT EXISTS email_body_template text`);
+    log("✅ Migration: company_users director email fields ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration check for company_users director email fields: ${migErr.message}`);
+  }
+
   // Inline migration: add unique index on company_clients (company_id, lower(name))
   // NOTE: dedup DELETE was removed — it ran once and was potentially deleting valid clients on restart
   try {

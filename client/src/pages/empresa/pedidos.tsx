@@ -163,7 +163,14 @@ export default function EmpresaPedidos() {
 
     const approveOrder = useMutation({
         mutationFn: (id: string) => api("POST", `/api/company/orders/${id}/approve`),
-        onSuccess: () => { invalidateOrders(); toast({ title: "Pedido aprovado — enviado para faturamento" }); },
+        onSuccess: (data: any) => {
+            invalidateOrders();
+            if (data?.emailWarning) {
+                toast({ title: "Pedido aprovado", description: data.emailWarning, variant: "destructive" });
+            } else {
+                toast({ title: "Pedido aprovado", description: "PDF enviado ao faturista por email." });
+            }
+        },
         onError: onErr,
     });
 

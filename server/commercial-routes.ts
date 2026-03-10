@@ -34,8 +34,180 @@ import {
     users,
 } from "../shared/schema";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
+import PDFDocument from "pdfkit";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: generate PDF for a sales order
+// ─────────────────────────────────────────────────────────────────────────────
+async function generateOrderPdf(orderId: string, companyId: string): Promise<Buffer> {
+    const [order] = await db.select().from(salesOrders)
+        .where(and(eq(salesOrders.id, orderId), eq(salesOrders.companyId, companyId)));
+    if (!order) throw new Error("Pedido não encontrado");
+
+    const items = await db.select().from(salesOrderItems)
+        .where(eq(salesOrderItems.orderId, orderId))
+        .orderBy(asc(salesOrderItems.productName));
+
+    const [client] = await db.select().from(companyClients)
+        .where(eq(companyClients.id, order.clientId));
+
+    const [company] = await db.select().from(companies)
+        .where(eq(companies.id, companyId));
+
+    return new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ margin: 50, size: "A4" });
+        const chunks: Buffer[] = [];
+        doc.on("data", (c: Buffer) => chunks.push(c));
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", reject);
+
+        const CURRENCY = order.currency === "USD" ? "U$" : order.currency === "PYG" ? "Gs." : "R$";
+        const fmt = (v: any) => {
+            const n = parseFloat(v ?? "0");
+            return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        // Header
+        doc.fontSize(20).font("Helvetica-Bold").text(company?.name ?? "AgroFarm Digital", { align: "center" });
+        doc.fontSize(10).font("Helvetica").fillColor("#666").text("Pedido de Venda", { align: "center" });
+        doc.moveDown(0.5);
+
+        // Order info box
+        doc.fillColor("#1a56db").rect(50, doc.y, 495, 28).fill();
+        const boxY = doc.y - 28;
+        doc.fillColor("white").fontSize(11).font("Helvetica-Bold")
+            .text(`Pedido: ${order.orderNumber}`, 60, boxY + 8);
+        doc.text(`Status: APROVADO`, 350, boxY + 8, { width: 180, align: "right" });
+        doc.moveDown(1.2);
+
+        // Two-column info
+        const col1 = 50, col2 = 300;
+        doc.fillColor("#333").font("Helvetica-Bold").fontSize(9).text("CLIENTE", col1);
+        doc.font("Helvetica").text(client?.name ?? order.clientId, col1, doc.y);
+        doc.moveUp(2);
+        doc.font("Helvetica-Bold").text("DATA", col2);
+        doc.font("Helvetica").text(new Date(order.createdAt ?? Date.now()).toLocaleDateString("pt-BR"), col2, doc.y);
+        doc.moveDown(0.4);
+
+        if (client?.ruc || client?.cedula) {
+            doc.font("Helvetica-Bold").text("RUC / Cédula", col1);
+            doc.font("Helvetica").text(client?.ruc ?? client?.cedula ?? "-", col1, doc.y);
+            doc.moveUp(2);
+        }
+        doc.font("Helvetica-Bold").text("PAGAMENTO", col2);
+        doc.font("Helvetica").text(order.paymentType === "cash" ? "À Vista" : "A Prazo", col2, doc.y);
+        doc.moveDown(0.4);
+
+        if (order.dueDate) {
+            doc.font("Helvetica-Bold").text("VENCIMENTO", col1);
+            doc.font("Helvetica").text(new Date(order.dueDate).toLocaleDateString("pt-BR"), col1, doc.y);
+            doc.moveDown(0.4);
+        }
+        if (order.agriculturalYear) {
+            doc.font("Helvetica-Bold").text("ANO AGRÍCOLA", col2);
+            doc.font("Helvetica").text(order.agriculturalYear, col2, doc.y - (order.dueDate ? 12 : 0));
+            doc.moveDown(0.4);
+        }
+
+        doc.moveDown(0.8);
+
+        // Items table header
+        const tableTop = doc.y;
+        doc.fillColor("#1a56db").rect(50, tableTop, 495, 22).fill();
+        doc.fillColor("white").font("Helvetica-Bold").fontSize(9);
+        doc.text("Produto", 58, tableTop + 6, { width: 200 });
+        doc.text("Qtd", 265, tableTop + 6, { width: 60, align: "right" });
+        doc.text("Unid.", 330, tableTop + 6, { width: 50, align: "center" });
+        doc.text("Preço Unit.", 385, tableTop + 6, { width: 80, align: "right" });
+        doc.text("Total", 465, tableTop + 6, { width: 80, align: "right" });
+
+        let rowY = tableTop + 22;
+        let zebra = false;
+        for (const item of items) {
+            const rowH = 20;
+            if (zebra) {
+                doc.fillColor("#f0f4ff").rect(50, rowY, 495, rowH).fill();
+            }
+            zebra = !zebra;
+            doc.fillColor("#222").font("Helvetica").fontSize(9);
+            doc.text(item.productName ?? "-", 58, rowY + 5, { width: 205, ellipsis: true });
+            doc.text(fmt(item.quantity), 265, rowY + 5, { width: 60, align: "right" });
+            doc.text(item.unit ?? "-", 330, rowY + 5, { width: 50, align: "center" });
+            doc.text(`${CURRENCY} ${fmt(item.unitPriceUsd)}`, 385, rowY + 5, { width: 80, align: "right" });
+            doc.text(`${CURRENCY} ${fmt(item.totalUsd)}`, 465, rowY + 5, { width: 80, align: "right" });
+            rowY += rowH;
+        }
+
+        // Total bar
+        doc.fillColor("#1a56db").rect(50, rowY, 495, 26).fill();
+        doc.fillColor("white").font("Helvetica-Bold").fontSize(11);
+        doc.text("TOTAL", 58, rowY + 7, { width: 300 });
+        doc.text(`${CURRENCY} ${fmt(order.totalAmountUsd)}`, 350, rowY + 7, { width: 195, align: "right" });
+        rowY += 36;
+
+        // Observations
+        if (order.observations) {
+            doc.fillColor("#444").font("Helvetica-Bold").fontSize(9).text("OBSERVAÇÕES:", 50, rowY + 10);
+            doc.font("Helvetica").text(order.observations, 50, doc.y + 2, { width: 495 });
+        }
+
+        // Footer
+        doc.fillColor("#999").fontSize(8).font("Helvetica")
+            .text(`Aprovado em ${new Date().toLocaleDateString("pt-BR")} • AgroFarm Digital`, 50, 780, { align: "center", width: 495 });
+
+        doc.end();
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: send approval email with PDF via Mailgun
+// ─────────────────────────────────────────────────────────────────────────────
+async function sendApprovalEmail(opts: {
+    toEmail: string;
+    bodyTemplate: string | null;
+    orderNumber: string;
+    clientName: string;
+    directorName: string;
+    totalAmount: string;
+    currency: string;
+    pdfBuffer: Buffer;
+}): Promise<void> {
+    const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY;
+    const MAILGUN_DOMAIN = "mail.agrofarmdigital.com";
+    if (!MAILGUN_API_KEY) throw new Error("MAILGUN_API_KEY não configurado");
+
+    const CURRENCY = opts.currency === "USD" ? "U$" : opts.currency === "PYG" ? "Gs." : "R$";
+    const total = parseFloat(opts.totalAmount ?? "0").toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+
+    const defaultBody = `Olá,\n\nO pedido {{numero_pedido}} do cliente {{cliente}} foi aprovado por {{diretor}} e está pronto para faturamento.\n\nValor total: {{moeda}} {{valor_total}}\n\nSegue o PDF do pedido em anexo.\n\nAgroFarm Digital`;
+
+    const bodyText = (opts.bodyTemplate || defaultBody)
+        .replace(/\{\{numero_pedido\}\}/g, opts.orderNumber)
+        .replace(/\{\{cliente\}\}/g, opts.clientName)
+        .replace(/\{\{diretor\}\}/g, opts.directorName)
+        .replace(/\{\{valor_total\}\}/g, total)
+        .replace(/\{\{moeda\}\}/g, CURRENCY);
+
+    const formData = new FormData();
+    formData.append("from", `AgroFarm Digital <noreply@${MAILGUN_DOMAIN}>`);
+    formData.append("to", opts.toEmail);
+    formData.append("subject", `Pedido ${opts.orderNumber} aprovado — pronto para faturamento`);
+    formData.append("text", bodyText);
+    formData.append("attachment", new Blob([new Uint8Array(opts.pdfBuffer)], { type: "application/pdf" }), `Pedido-${opts.orderNumber}.pdf`);
+
+    const response = await fetch(`https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`, {
+        method: "POST",
+        headers: { "Authorization": `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64")}` },
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Mailgun error: ${response.status} ${errText}`);
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: get the companyId for the authenticated user
@@ -407,6 +579,50 @@ export function registerCommercialRoutes(app: Express) {
                 .returning({ id: users.id, name: users.name, email: users.email, username: users.username });
 
             res.json(updated);
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    /** Get director email settings */
+    app.get("/api/company/profile/director-settings", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            const [cu] = await db.select({ faturistaEmail: companyUsers.faturistaEmail, emailBodyTemplate: companyUsers.emailBodyTemplate })
+                .from(companyUsers)
+                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.companyId, companyId)));
+
+            res.json({ faturistaEmail: cu?.faturistaEmail ?? "", emailBodyTemplate: cu?.emailBodyTemplate ?? "" });
+        } catch (e) {
+            res.status(500).json({ error: "Erro interno" });
+        }
+    });
+
+    /** Save director email settings */
+    app.put("/api/company/profile/director-settings", async (req: Request, res: Response) => {
+        try {
+            if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
+            const user = req.user as any;
+            const companyId = await getCompanyId(user.id);
+            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+
+            const [cu] = await db.select({ role: companyUsers.role })
+                .from(companyUsers)
+                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.companyId, companyId)));
+            if (!["director", "admin_empresa"].includes(cu?.role ?? "")) {
+                return res.status(403).json({ error: "Apenas o diretor pode configurar estas opções" });
+            }
+
+            const { faturistaEmail, emailBodyTemplate } = req.body;
+            await db.update(companyUsers)
+                .set({ faturistaEmail: faturistaEmail ?? null, emailBodyTemplate: emailBodyTemplate ?? null } as any)
+                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.companyId, companyId)));
+
+            res.json({ success: true });
         } catch (e) {
             res.status(500).json({ error: "Erro interno" });
         }
@@ -1682,7 +1898,7 @@ ${csvText}`;
         }
     });
 
-    /** Director approves order → goes directly to pending_billing */
+    /** Director approves order → pending_billing + sends PDF email to faturista */
     app.post("/api/company/orders/:id/approve", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
@@ -1690,10 +1906,15 @@ ${csvText}`;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
-            const [cu] = await db.select().from(companyUsers)
+            const [cu] = await db.select({ role: companyUsers.role, faturistaEmail: companyUsers.faturistaEmail, emailBodyTemplate: companyUsers.emailBodyTemplate })
+                .from(companyUsers)
                 .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.companyId, companyId)));
             if (!["director", "admin_empresa"].includes(cu?.role ?? "")) {
                 return res.status(403).json({ error: "Apenas o diretor pode aprovar pedidos" });
+            }
+
+            if (!cu?.faturistaEmail) {
+                return res.status(400).json({ error: "Email do faturista não cadastrado. Configure em Meu Perfil antes de aprovar." });
             }
 
             const [order] = await db.select().from(salesOrders)
@@ -1701,11 +1922,35 @@ ${csvText}`;
             if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
             if (order.status !== "pending_director") return res.status(400).json({ error: "Pedido não está aguardando aprovação" });
 
+            const [client] = await db.select({ name: companyClients.name })
+                .from(companyClients).where(eq(companyClients.id, order.clientId));
+
+            // Change status first
             await db.update(salesOrders)
                 .set({ status: "pending_billing", approvedById: user.id, approvedAt: new Date(), updatedAt: new Date() } as any)
                 .where(eq(salesOrders.id, order.id));
+
+            // Generate PDF and send email (non-blocking if email fails — order is already approved)
+            try {
+                const pdfBuffer = await generateOrderPdf(order.id, companyId);
+                await sendApprovalEmail({
+                    toEmail: cu.faturistaEmail,
+                    bodyTemplate: cu.emailBodyTemplate ?? null,
+                    orderNumber: order.orderNumber ?? order.id,
+                    clientName: client?.name ?? "—",
+                    directorName: user.name ?? user.username ?? "Diretor",
+                    totalAmount: order.totalAmountUsd ?? "0",
+                    currency: order.currency ?? "USD",
+                    pdfBuffer,
+                });
+            } catch (emailErr: any) {
+                console.error("[Approve] Email send failed:", emailErr.message);
+                return res.json({ success: true, status: "pending_billing", emailWarning: "Pedido aprovado, mas houve erro ao enviar o email: " + emailErr.message });
+            }
+
             res.json({ success: true, status: "pending_billing" });
-        } catch (e) {
+        } catch (e: any) {
+            console.error("[Approve]", e);
             res.status(500).json({ error: "Erro interno" });
         }
     });
