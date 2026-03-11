@@ -1,43 +1,61 @@
 import { type Express, type Request, type Response } from "express";
 import { db } from "./db";
 import { eq, and, sql, desc, gte, lte, notInArray } from "drizzle-orm";
-import { 
-    salesOrders, 
-    salesOrderItems, 
+import {
+    salesOrders,
+    salesOrderItems,
     companyClients,
-    companyProducts,
+    companyUsers,
     users
 } from "../shared/schema";
-import { getCompanyId } from "./commercial-routes";
 
 export function registerAdminReportRoutes(app: Express) {
     app.get("/api/company/admin-reports/dashboard", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            
+
             const user = req.user as any;
-            
-            // Apenas diretores/admins podem acessar
-            if (!["director", "admin_empresa", "administrador"].includes(user.role)) {
+
+            // Buscar company role (não platform role)
+            const [cu] = await db
+                .select({ companyId: companyUsers.companyId, role: companyUsers.role })
+                .from(companyUsers)
+                .where(and(eq(companyUsers.userId, user.id), eq(companyUsers.isActive, true)))
+                .limit(1);
+
+            // Permite: diretor/admin da empresa OU administrador da plataforma
+            const isCompanyAdmin = cu && ["director", "admin_empresa"].includes(cu.role);
+            const isPlatformAdmin = user.role === "administrador";
+
+            if (!isCompanyAdmin && !isPlatformAdmin) {
                 return res.status(403).json({ error: "Acesso negado. Apenas diretoria." });
             }
 
-            const companyId = await getCompanyId(user.id);
-            if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
+            if (!cu) return res.status(403).json({ error: "Sem empresa vinculada" });
 
+            const companyId = cu.companyId;
             const { startDate, endDate, rtvId } = req.query;
 
-            // Filtros base para as consultas
-            const conditions = [
+            // Filtros base: apenas pedidos não-rascunho e não-cancelados desta empresa
+            const conditions: any[] = [
                 eq(salesOrders.companyId, companyId),
                 notInArray(salesOrders.status, ["draft", "cancelled"])
             ];
-            
-            if (startDate) conditions.push(gte(salesOrders.createdAt, new Date(startDate as string)));
-            if (endDate) conditions.push(lte(salesOrders.createdAt, new Date(endDate as string)));
-            if (rtvId) conditions.push(eq(salesOrders.consultantId, rtvId as string));
 
-            // 1. Dados de Vendas (Resumo e Ranking de RTVs)
+            if (startDate) {
+                conditions.push(gte(salesOrders.createdAt, new Date(startDate as string)));
+            }
+            if (endDate) {
+                // Incluir o dia inteiro da data final
+                const end = new Date(endDate as string);
+                end.setHours(23, 59, 59, 999);
+                conditions.push(lte(salesOrders.createdAt, end));
+            }
+            if (rtvId && rtvId !== "all") {
+                conditions.push(eq(salesOrders.consultantId, rtvId as string));
+            }
+
+            // 1. Ranking de vendas por RTV
             const salesData = await db.select({
                 rtvId: salesOrders.consultantId,
                 rtvName: users.name,
@@ -50,12 +68,11 @@ export function registerAdminReportRoutes(app: Express) {
             .groupBy(salesOrders.consultantId, users.name)
             .orderBy(desc(sql`SUM(${salesOrders.totalAmountUsd})`));
 
-            // Calcular os KPIs principais baseados no salesData
-            const totalRevenue = salesData.reduce((acc: number, curr: any) => acc + Number(curr.totalAmountUsd), 0);
-            const totalOrders = salesData.reduce((acc: number, curr: any) => acc + Number(curr.orderCount), 0);
+            const totalRevenue = salesData.reduce((acc, curr) => acc + Number(curr.totalAmountUsd), 0);
+            const totalOrders = salesData.reduce((acc, curr) => acc + Number(curr.orderCount), 0);
             const averageTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-            // 2. Curva ABC de Produtos (Top 10)
+            // 2. Curva ABC — Top 10 produtos
             const productData = await db.select({
                 productId: salesOrderItems.productId,
                 productName: salesOrderItems.productName,
@@ -69,7 +86,7 @@ export function registerAdminReportRoutes(app: Express) {
             .orderBy(desc(sql`SUM(${salesOrderItems.totalPriceUsd})`))
             .limit(10);
 
-            // 3. Ranking de Clientes (Top 10)
+            // 3. Top 10 clientes
             const clientData = await db.select({
                 clientId: salesOrders.clientId,
                 clientName: companyClients.name,
@@ -84,14 +101,10 @@ export function registerAdminReportRoutes(app: Express) {
             .limit(10);
 
             res.json({
-                kpis: {
-                    totalRevenue,
-                    totalOrders,
-                    averageTicket
-                },
+                kpis: { totalRevenue, totalOrders, averageTicket },
                 salesByRtv: salesData,
                 topProducts: productData,
-                topClients: clientData
+                topClients: clientData,
             });
 
         } catch (e: any) {
