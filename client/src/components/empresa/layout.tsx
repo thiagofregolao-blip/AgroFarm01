@@ -40,6 +40,12 @@ const navGroups = [
             { label: "Depósitos", href: "/empresa/depositos", icon: Building2, roles: ["director", "admin_empresa"] },
         ],
     },
+    {
+        label: "ANALÍTICO",
+        items: [
+            { label: "Relatórios Rápidos", href: "/empresa/relatorios", icon: BarChart3, roles: ["director", "admin_empresa", "administrador"] },
+        ],
+    },
 ];
 
 function canSee(roles: string[] | undefined, userRole: string): boolean {

@@ -278,6 +278,11 @@ app.use((req, res, next) => {
   registerCommercialRoutes(app);
   log("✅ Commercial Module routes registered (/api/company/* /api/admin/companies/*)");
 
+  // Register Admin Report Routes (Dashboards Diretoria)
+  const { registerAdminReportRoutes } = await import("./admin-report-routes");
+  registerAdminReportRoutes(app);
+  log("✅ Admin Report routes registered (/api/company/admin-reports/*)");
+
   // Register WhatsApp routes (if configured)
   if (process.env.ZAPI_INSTANCE_ID && process.env.ZAPI_TOKEN && process.env.GEMINI_API_KEY) {
     const { WhatsAppService } = await import("./whatsapp/whatsapp-service");

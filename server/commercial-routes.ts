@@ -212,7 +212,7 @@ async function sendApprovalEmail(opts: {
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: get the companyId for the authenticated user
 // ─────────────────────────────────────────────────────────────────────────────
-async function getCompanyId(userId: string): Promise<string | null> {
+export async function getCompanyId(userId: string): Promise<string | null> {
     const [cu] = await db
         .select({ companyId: companyUsers.companyId })
         .from(companyUsers)
