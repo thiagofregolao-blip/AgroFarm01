@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import EmpresaLayout from "@/components/empresa/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,7 @@ export default function EmpresaRelatorios() {
     const rtvs = team.filter((u: any) => u.role === "rtv");
 
     return (
+        <EmpresaLayout>
         <div className="p-6 max-w-7xl mx-auto space-y-6">
 
             {/* Header */}
@@ -306,5 +308,6 @@ export default function EmpresaRelatorios() {
 
             <style>{`@media print { .print\\:hidden { display: none !important; } }`}</style>
         </div>
+        </EmpresaLayout>
     );
 }
