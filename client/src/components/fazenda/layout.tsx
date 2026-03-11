@@ -122,17 +122,16 @@ function NavButton({ item, location, onClick }: { item: NavItem; location: strin
         <button
             onClick={onClick}
             className={`
-                w-full flex items-center gap-3 rounded-xl transition-all duration-150 px-3 py-2.5
+                w-full flex items-center gap-3 rounded-full transition-all duration-150 px-3 py-2.5
                 ${isActive
-                    ? "bg-white/20 text-white shadow-md shadow-black/10"
-                    : "text-emerald-100/70 hover:bg-white/10 hover:text-white"
+                    ? "bg-white text-[#0d2418] shadow-md font-semibold"
+                    : "text-white/90 hover:bg-white/10 hover:text-white font-medium"
                 }
             `}
             title={label}
         >
-            <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-white" : "text-emerald-200/60"}`} />
-            <span className={`text-[13px] md:text-sm font-medium truncate leading-tight ${isActive ? "text-white" : ""}`}>{label}</span>
-            {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-sm" />}
+            <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-[#0d2418]" : "text-white/80"}`} />
+            <span className="text-[13px] md:text-sm truncate leading-tight">{label}</span>
         </button>
     );
 }
@@ -187,18 +186,18 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
             )}
 
             <aside className={`
-                w-[220px] md:w-[200px] bg-gradient-to-b from-emerald-700 via-emerald-600 to-emerald-800 text-white
-                flex flex-col shrink-0 fixed top-0 bottom-0 z-50 shadow-[4px_0_24px_rgba(0,0,0,0.1)]
+                w-[220px] md:w-[200px] bg-[#0d2418] text-white
+                flex flex-col shrink-0 fixed top-0 bottom-0 z-50 shadow-[4px_0_24px_rgba(0,0,0,0.15)]
                 transition-transform duration-300 ease-in-out md:translate-x-0
                 ${isMobileMenuOpen ? "translate-x-0 left-0" : "-translate-x-full md:left-0"}
             `}>
                 {/* Logo */}
                 <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg shrink-0">🚜</div>
+                        <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-lg shrink-0">🚜</div>
                         <div className="min-w-0">
-                            <span className="font-bold text-sm leading-tight block truncate">AgroFarm</span>
-                            <span className="text-[10px] text-emerald-200 truncate block">{user.name || user.username}</span>
+                            <span className="font-bold text-sm leading-tight block text-white truncate">AgroFarm</span>
+                            <span className="text-[10px] text-emerald-400 truncate block">{user.name || user.username}</span>
                         </div>
                     </div>
                     <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition-colors">
@@ -207,15 +206,15 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                 </div>
 
                 {/* Tab switcher */}
-                <div className="flex mx-2 mt-3 bg-white/10 rounded-xl p-0.5">
+                <div className="flex mx-2 mt-3 bg-white/10 rounded-full p-0.5">
                     <button onClick={() => setActiveTab("fazenda")}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-all duration-200
-                            ${activeTab === "fazenda" ? "bg-white/20 text-white shadow-sm" : "text-emerald-200/70 hover:text-white"}`}>
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-semibold transition-all duration-200
+                            ${activeTab === "fazenda" ? "bg-white text-[#0d2418] shadow-sm" : "text-white/70 hover:text-white"}`}>
                         🌾 {t("nav_tab_farm" as any)}
                     </button>
                     <button onClick={() => setActiveTab("financeiro")}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-all duration-200
-                            ${activeTab === "financeiro" ? "bg-white/20 text-white shadow-sm" : "text-emerald-200/70 hover:text-white"}`}>
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-semibold transition-all duration-200
+                            ${activeTab === "financeiro" ? "bg-white text-[#0d2418] shadow-sm" : "text-white/70 hover:text-white"}`}>
                         💰 {t("nav_tab_finance" as any)}
                     </button>
                 </div>
@@ -232,7 +231,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                                     <div className="my-2 px-1">
                                         <div className="border-t border-white/10" />
                                         {group.label && (
-                                            <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-300/50 px-2 pt-2 pb-0.5">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 px-2 pt-2 pb-0.5">
                                                 {group.label}
                                             </p>
                                         )}
@@ -251,7 +250,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                 {/* ── Fixed footer: Relatórios + Perfil + Sair ── */}
                 <div className="shrink-0 px-2 pb-3">
                     {/* Divider */}
-                    <div className="border-t border-white/20 mb-2" />
+                    <div className="border-t border-white/20 mb-2 mx-1" />
 
                     {/* Shared items (always visible for both menus) */}
                     <div className="space-y-0.5 mb-2">
@@ -261,12 +260,12 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     </div>
 
                     {/* Divider above Sair */}
-                    <div className="border-t border-white/10 mb-2" />
+                    <div className="border-t border-white/10 mb-2 mx-1" />
 
                     {/* Logout */}
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-emerald-200/70 hover:bg-red-500/20 hover:text-red-200 transition-colors"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
                         title={t("nav_logout")}
                     >
                         <LogOut className="h-5 w-5 shrink-0" />
@@ -277,7 +276,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
             {/* ── Main content ── */}
             <main className="flex-1 flex flex-col min-h-screen max-w-full md:ml-[200px]">
-                <header className="bg-gradient-to-r from-emerald-700 to-emerald-800 text-white shadow-md sticky top-0 z-[1000] px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+                <header className="bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-[1000] px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
                     <button
                         onClick={() => setIsMobileMenuOpen(true)}
                         className="md:hidden p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors"
