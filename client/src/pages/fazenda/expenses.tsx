@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
@@ -11,22 +10,47 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, DollarSign, Loader2 } from "lucide-react";
+import { Plus, DollarSign, Loader2, Repeat, Download } from "lucide-react";
+
+// ─── CSV export utility ──────────────────────────────────────────────────────
+function exportToCSV(data: any[], filename: string) {
+    if (!data.length) return;
+    const headers = ["Data", "Categoria", "Descrição", "Fornecedor", "Propriedade", "Valor", "Tipo Pag."];
+    const rows = data.map((e: any) => [
+        new Date(e.expenseDate).toLocaleDateString("pt-BR"),
+        e.category,
+        e.description || "",
+        e.supplier || "",
+        e.propertyId || "",
+        parseFloat(e.amount).toFixed(2),
+        e.paymentType || "a_vista",
+    ]);
+    const csv = [headers, ...rows].map(r => r.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+}
 
 const EXPENSE_CATEGORIES = [
-    { value: "diesel", label: "Diesel" },
-    { value: "frete", label: "Frete" },
+    { value: "diesel", label: "Diesel / Combustível" },
+    { value: "frete", label: "Frete / Transporte" },
     { value: "mao_de_obra", label: "Mão de Obra" },
-    { value: "manutencao", label: "Manutenção" },
+    { value: "manutencao", label: "Manutenção de Equipamentos" },
+    { value: "arrendamento", label: "Arrendamento" },
+    { value: "energia", label: "Energia / Água" },
+    { value: "financiamento", label: "Parcela de Financiamento" },
+    { value: "insumos", label: "Insumos Agrícolas" },
+    { value: "impostos", label: "Impostos e Taxas" },
+    { value: "salario", label: "Salário / Pro-Labore" },
     { value: "outro", label: "Outro" },
 ];
 
 export default function FarmExpenses() {
-    const [, setLocation] = useLocation();
     const queryClient = useQueryClient();
     const { toast } = useToast();
     const [openDialog, setOpenDialog] = useState(false);
-
+    const [filterCategory, setFilterCategory] = useState("todos");
     const { user } = useAuth();
 
     const { data: expenses = [], isLoading } = useQuery({
@@ -41,17 +65,24 @@ export default function FarmExpenses() {
         enabled: !!user,
     });
 
-    const { data: plots = [] } = useQuery({
-        queryKey: ["/api/farm/plots"],
-        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/plots"); return r.json(); },
+    const { data: seasons = [] } = useQuery({
+        queryKey: ["/api/farm/seasons"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/seasons"); return r.json(); },
         enabled: !!user,
     });
 
+    const filtered = filterCategory === "todos" ? expenses : expenses.filter((e: any) => e.category === filterCategory);
     const totalExpenses = expenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0);
+    const totalFiltered = filtered.reduce((s: number, e: any) => s + parseFloat(e.amount), 0);
 
     const save = useMutation({
         mutationFn: async (data: any) => apiRequest("POST", "/api/farm/expenses", data),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] }); toast({ title: "Despesa registrada" }); setOpenDialog(false); },
+        onSuccess: (_, vars) => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            const rep = parseInt(vars.repeatTimes) || 1;
+            toast({ title: rep > 1 ? `✅ ${rep} lançamentos recorrentes criados!` : "Despesa registrada" });
+            setOpenDialog(false);
+        },
     });
 
     return (
@@ -60,22 +91,47 @@ export default function FarmExpenses() {
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-emerald-800">Despesas Extras</h1>
-                        <p className="text-emerald-600 text-sm">Total: <strong>${totalExpenses.toLocaleString("en", { minimumFractionDigits: 2 })}</strong></p>
+                        <p className="text-emerald-600 text-sm">
+                            Total geral: <strong>${totalExpenses.toLocaleString("en", { minimumFractionDigits: 2 })}</strong>
+                            {filterCategory !== "todos" && <> · Filtrado: <strong className="text-amber-600">${totalFiltered.toFixed(2)}</strong></>}
+                        </p>
                     </div>
-                    <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                        <DialogTrigger asChild>
-                            <Button className="bg-emerald-600 hover:bg-emerald-700"><Plus className="mr-2 h-4 w-4" /> Nova Despesa</Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader><DialogTitle>Nova Despesa</DialogTitle></DialogHeader>
-                            <ExpenseForm properties={properties} plots={plots} onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
-                        </DialogContent>
-                    </Dialog>
+                    <div className="flex gap-2">
+                        <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportToCSV(filtered, "despesas.csv")}>
+                            <Download className="mr-2 h-4 w-4" /> Exportar CSV
+                        </Button>
+                        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                            <DialogTrigger asChild>
+                                <Button className="bg-emerald-600 hover:bg-emerald-700"><Plus className="mr-2 h-4 w-4" /> Nova Despesa</Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-lg">
+                                <DialogHeader><DialogTitle>Nova Despesa</DialogTitle></DialogHeader>
+                                <ExpenseForm properties={properties} seasons={seasons} onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                 </div>
+
+                {/* Filter bar */}
+                <Card className="border-emerald-100"><CardContent className="p-3">
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <span className="text-xs text-gray-500 font-medium">Categoria:</span>
+                        <button onClick={() => setFilterCategory("todos")}
+                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterCategory === "todos" ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                            Todas
+                        </button>
+                        {EXPENSE_CATEGORIES.map(c => (
+                            <button key={c.value} onClick={() => setFilterCategory(c.value)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filterCategory === c.value ? "bg-amber-500 text-white border-amber-500" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                                {c.label}
+                            </button>
+                        ))}
+                    </div>
+                </CardContent></Card>
 
                 {isLoading ? (
                     <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
-                ) : expenses.length === 0 ? (
+                ) : filtered.length === 0 ? (
                     <Card className="border-emerald-100"><CardContent className="py-12 text-center">
                         <DollarSign className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500">Nenhuma despesa registrada</p>
@@ -88,20 +144,22 @@ export default function FarmExpenses() {
                                     <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Descrição</th>
+                                    <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
                                     <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {expenses.map((e: any) => (
-                                    <tr key={e.id} className="border-t border-gray-100">
+                                {filtered.map((e: any) => (
+                                    <tr key={e.id} className="border-t border-gray-100 hover:bg-gray-50">
                                         <td className="p-3">{new Date(e.expenseDate).toLocaleDateString("pt-BR")}</td>
                                         <td className="p-3">
                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
                                                 {EXPENSE_CATEGORIES.find(c => c.value === e.category)?.label || e.category}
                                             </span>
                                         </td>
-                                        <td className="p-3">{e.description || "—"}</td>
-                                        <td className="text-right p-3 font-mono font-semibold">${parseFloat(e.amount).toFixed(2)}</td>
+                                        <td className="p-3 text-gray-600 max-w-[200px] truncate">{e.description || "—"}</td>
+                                        <td className="p-3 text-gray-500">{e.supplier || "—"}</td>
+                                        <td className="text-right p-3 font-mono font-semibold">$ {parseFloat(e.amount).toFixed(2)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -113,16 +171,47 @@ export default function FarmExpenses() {
     );
 }
 
-function ExpenseForm({ properties, plots, onSave, saving }: any) {
+function ExpenseForm({ properties, seasons, onSave, saving }: any) {
     const [category, setCategory] = useState("");
     const [description, setDescription] = useState("");
     const [amount, setAmount] = useState("");
+    const [supplier, setSupplier] = useState("");
     const [propertyId, setPropertyId] = useState("");
-    const [plotId, setPlotId] = useState("");
+    const [seasonId, setSeasonId] = useState("");
     const [expenseDate, setExpenseDate] = useState(new Date().toISOString().substring(0, 10));
+    const [paymentType, setPaymentType] = useState("a_vista");
+    const [dueDate, setDueDate] = useState("");
+    const [installments, setInstallments] = useState("1");
+
+    // Recurring expense controls
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [frequency, setFrequency] = useState("mensal");
+    const [repeatTimes, setRepeatTimes] = useState("3");
+
+    const submittable = category && amount;
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (!submittable) return;
+        onSave({
+            category,
+            description,
+            amount,
+            supplier: supplier || null,
+            propertyId: propertyId || null,
+            seasonId: seasonId || null,
+            expenseDate,
+            paymentType,
+            dueDate: dueDate || null,
+            installments: paymentType === "a_prazo" ? parseInt(installments) : 1,
+            // Recurring fields — backend will interpret repeatTimes > 1
+            frequency: isRecurring ? frequency : null,
+            repeatTimes: isRecurring ? parseInt(repeatTimes) : 1,
+        });
+    }
 
     return (
-        <form onSubmit={(e) => { e.preventDefault(); onSave({ category, description, amount, propertyId: propertyId || null, plotId: plotId || null, expenseDate }); }} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
             <div>
                 <Label>Categoria *</Label>
                 <Select value={category} onValueChange={setCategory}>
@@ -130,18 +219,100 @@ function ExpenseForm({ properties, plots, onSave, saving }: any) {
                     <SelectContent>{EXPENSE_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
                 </Select>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+                <div><Label>Valor ($) *</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required /></div>
+                <div><Label>Data</Label><Input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)} /></div>
+            </div>
             <div><Label>Descrição</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
-            <div><Label>Valor ($) *</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required /></div>
-            <div><Label>Data</Label><Input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)} /></div>
+            <div><Label>Fornecedor</Label><Input value={supplier} onChange={e => setSupplier(e.target.value)} /></div>
+
             <div>
-                <Label>Propriedade (opcional)</Label>
-                <Select value={propertyId} onValueChange={setPropertyId}>
-                    <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
-                    <SelectContent>{properties.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                <Label>Pagamento</Label>
+                <Select value={paymentType} onValueChange={setPaymentType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="a_vista">À Vista</SelectItem>
+                        <SelectItem value="a_prazo">A Prazo</SelectItem>
+                    </SelectContent>
                 </Select>
             </div>
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={saving || !category || !amount}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar
+
+            {paymentType === "a_prazo" && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                    <div>
+                        <Label className="text-amber-700">Nº Parcelas</Label>
+                        <Input type="number" min="1" max="60" value={installments} onChange={e => setInstallments(e.target.value)} />
+                    </div>
+                    <div>
+                        <Label className="text-amber-700">1º Vencimento</Label>
+                        <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                    </div>
+                    <p className="col-span-2 text-xs text-amber-600">
+                        ✅ Gerará {installments} parcelas de $ {amount ? (parseFloat(amount) / parseInt(installments || "1")).toFixed(2) : "0.00"} em Contas a Pagar
+                    </p>
+                </div>
+            )}
+
+            {/* ── Recurring toggle ── */}
+            <div className="border rounded-lg p-3 space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="rounded" />
+                    <Repeat className="h-4 w-4 text-emerald-600" />
+                    <span className="text-sm font-medium">Esta despesa se repete?</span>
+                </label>
+                {isRecurring && (
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div>
+                            <Label className="text-xs text-gray-500">Frequência</Label>
+                            <Select value={frequency} onValueChange={setFrequency}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="semanal">Semanal</SelectItem>
+                                    <SelectItem value="mensal">Mensal</SelectItem>
+                                    <SelectItem value="anual">Anual</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label className="text-xs text-gray-500">Qtd. de repetições</Label>
+                            <Input type="number" min="2" max="60" value={repeatTimes} onChange={e => setRepeatTimes(e.target.value)} />
+                        </div>
+                        <p className="col-span-2 text-xs text-emerald-600">
+                            ✅ Criará {repeatTimes} lançamentos com frequência {frequency}
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Cost center */}
+            {properties.length > 0 && (
+                <div>
+                    <Label>Propriedade (Centro de Custo)</Label>
+                    <Select value={propertyId} onValueChange={setPropertyId}>
+                        <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">Todas</SelectItem>
+                            {properties.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+            {seasons.length > 0 && (
+                <div>
+                    <Label>Safra (opcional)</Label>
+                    <Select value={seasonId} onValueChange={setSeasonId}>
+                        <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">Nenhuma</SelectItem>
+                            {seasons.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+
+            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={saving || !submittable}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isRecurring ? `Criar ${repeatTimes} lançamentos` : "Salvar Despesa"}
             </Button>
         </form>
     );

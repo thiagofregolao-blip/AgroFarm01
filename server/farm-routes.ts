@@ -1339,63 +1339,88 @@ export function registerFarmRoutes(app: Express) {
 
     app.post("/api/farm/expenses", requireFarmer, async (req, res) => {
         try {
-            const { plotId, propertyId, category, description, amount, expenseDate, paymentType, dueDate, installments, supplier } = req.body;
+            const {
+                plotId, propertyId, seasonId, category, description, amount,
+                expenseDate, paymentType, dueDate, installments, supplier,
+                frequency, repeatTimes,
+            } = req.body;
             if (!category || !amount) return res.status(400).json({ error: "Category and amount required" });
 
             const farmerId = (req.user as any).id;
-            const expense = await farmStorage.createExpense({
-                farmerId,
-                plotId: plotId || null,
-                propertyId: propertyId || null,
-                category,
-                description,
-                amount: String(amount),
-                expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
-                paymentType: paymentType || "a_vista",
-                dueDate: dueDate ? new Date(dueDate) : undefined,
-                installments: installments ? parseInt(installments) : 1,
-                supplier: supplier || undefined,
-            });
+            const repeats = repeatTimes && parseInt(repeatTimes) > 1 ? parseInt(repeatTimes) : 1;
+            const freq = frequency || "mensal";
+            const baseDate = expenseDate ? new Date(expenseDate) : new Date();
 
-            // AUTO: Despesa a prazo → Conta a Pagar automática
-            if (paymentType === "a_prazo") {
-                try {
-                    const { farmAccountsPayable } = await import("../shared/schema");
-                    const { db } = await import("./db");
-                    const apDueDate = dueDate ? new Date(dueDate) : new Date();
-                    if (!dueDate) apDueDate.setDate(apDueDate.getDate() + 30);
+            // Helper: advance date by frequency
+            const advanceDate = (date: Date, n: number): Date => {
+                const d = new Date(date);
+                if (freq === "semanal") d.setDate(d.getDate() + 7 * n);
+                else if (freq === "anual") d.setFullYear(d.getFullYear() + n);
+                else d.setMonth(d.getMonth() + n); // mensal
+                return d;
+            };
 
-                    const totalInst = installments ? parseInt(installments) : 1;
-                    const instAmount = parseFloat(String(amount)) / totalInst;
+            const createdExpenses = [];
 
-                    for (let i = 0; i < totalInst; i++) {
-                        const instDue = new Date(apDueDate);
-                        instDue.setMonth(instDue.getMonth() + i);
-                        await db.insert(farmAccountsPayable).values({
-                            farmerId,
-                            expenseId: expense.id,
-                            supplier: supplier || category,
-                            description: totalInst > 1 ? `${description || category} - Parcela ${i + 1}/${totalInst}` : (description || category),
-                            totalAmount: String(instAmount.toFixed(2)),
-                            currency: "USD",
-                            installmentNumber: i + 1,
-                            totalInstallments: totalInst,
-                            dueDate: instDue,
-                            status: "aberto",
-                        });
+            for (let r = 0; r < repeats; r++) {
+                const occurrenceDate = advanceDate(baseDate, r);
+                const expense = await farmStorage.createExpense({
+                    farmerId,
+                    plotId: plotId || null,
+                    propertyId: propertyId || null,
+                    category,
+                    description: repeats > 1 ? `${description || category} (${r + 1}/${repeats})` : (description || undefined),
+                    amount: String(amount),
+                    expenseDate: occurrenceDate,
+                    paymentType: paymentType || "a_vista",
+                    dueDate: dueDate ? new Date(dueDate) : undefined,
+                    installments: installments ? parseInt(installments) : 1,
+                    supplier: supplier || undefined,
+                });
+                createdExpenses.push(expense);
+
+                // AUTO: Despesa a prazo → Conta a Pagar automática
+                if (paymentType === "a_prazo") {
+                    try {
+                        const { farmAccountsPayable } = await import("../shared/schema");
+                        const { db } = await import("./db");
+                        const apDueDate = dueDate ? new Date(dueDate) : new Date(occurrenceDate);
+                        if (!dueDate) apDueDate.setDate(apDueDate.getDate() + 30);
+
+                        const totalInst = installments ? parseInt(installments) : 1;
+                        const instAmount = parseFloat(String(amount)) / totalInst;
+
+                        for (let i = 0; i < totalInst; i++) {
+                            const instDue = new Date(apDueDate);
+                            instDue.setMonth(instDue.getMonth() + i);
+                            await db.insert(farmAccountsPayable).values({
+                                farmerId,
+                                expenseId: expense.id,
+                                supplier: supplier || category,
+                                description: totalInst > 1 ? `${description || category} - Parcela ${i + 1}/${totalInst}` : (description || category),
+                                totalAmount: String(instAmount.toFixed(2)),
+                                currency: "USD",
+                                installmentNumber: i + 1,
+                                totalInstallments: totalInst,
+                                dueDate: instDue,
+                                status: "aberto",
+                            });
+                        }
+                        console.log(`[EXPENSE→AP] Auto-created ${totalInst} AP entries for expense ${expense.id}`);
+                    } catch (apErr) {
+                        console.error("[EXPENSE→AP_ERROR]", apErr);
                     }
-                    console.log(`[EXPENSE→AP] Auto-created ${totalInst} AP entries for expense ${expense.id}`);
-                } catch (apErr) {
-                    console.error("[EXPENSE→AP_ERROR]", apErr);
                 }
             }
 
-            res.status(201).json(expense);
+            console.log(`[EXPENSE_CREATE] Farmer ${farmerId}: created ${repeats} expense(s) with freq=${freq}`);
+            res.status(201).json(repeats > 1 ? createdExpenses : createdExpenses[0]);
         } catch (error) {
             console.error("[FARM_EXPENSE_CREATE]", error);
             res.status(500).json({ error: "Failed to create expense" });
         }
     });
+
 
     app.post("/api/farm/expenses/:id/confirm", requireFarmer, async (req, res) => {
         try {
@@ -4273,12 +4298,41 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
 
-            const [ap] = await db.insert(farmAccountsPayable).values({
-                ...req.body,
-                farmerId,
-                dueDate: req.body.dueDate ? new Date(req.body.dueDate) : new Date(),
-            }).returning();
-            res.json(ap);
+            const totalInstallments = parseInt(req.body.totalInstallments) || 1;
+            const firstDueDate = req.body.dueDate ? new Date(req.body.dueDate) : new Date();
+            const perInstallmentAmount = (parseFloat(req.body.totalAmount) / totalInstallments).toFixed(2);
+
+            if (totalInstallments <= 1) {
+                // Single entry — original behavior
+                const [ap] = await db.insert(farmAccountsPayable).values({
+                    ...req.body,
+                    farmerId,
+                    installmentNumber: 1,
+                    totalInstallments: 1,
+                    dueDate: firstDueDate,
+                }).returning();
+                return res.json(ap);
+            }
+
+            // Generate N installments automatically
+            const created = [];
+            for (let i = 0; i < totalInstallments; i++) {
+                const instDue = new Date(firstDueDate);
+                instDue.setMonth(instDue.getMonth() + i);
+                const [ap] = await db.insert(farmAccountsPayable).values({
+                    supplier: req.body.supplier,
+                    description: `${req.body.description || req.body.supplier} — Parcela ${i + 1}/${totalInstallments}`,
+                    totalAmount: perInstallmentAmount,
+                    currency: req.body.currency || "USD",
+                    farmerId,
+                    installmentNumber: i + 1,
+                    totalInstallments,
+                    dueDate: instDue,
+                    status: "aberto",
+                }).returning();
+                created.push(ap);
+            }
+            res.json(created);
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_CREATE]", error);
             res.status(500).json({ error: "Failed to create account payable" });

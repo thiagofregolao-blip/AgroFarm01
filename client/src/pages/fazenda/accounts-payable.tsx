@@ -10,7 +10,28 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Receipt, Loader2, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { Plus, Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare } from "lucide-react";
+
+// ─── CSV export utility ──────────────────────────────────────────────────────
+function exportToCSV(data: any[], filename: string) {
+    if (!data.length) return;
+    const headers = ["Fornecedor", "Descrição", "Parcela", "Vencimento", "Status", "Valor Total", "Pago"];
+    const rows = data.map((i: any) => [
+        i.supplier,
+        i.description || "",
+        `${i.installmentNumber}/${i.totalInstallments}`,
+        new Date(i.dueDate).toLocaleDateString("pt-BR"),
+        i.status,
+        parseFloat(i.totalAmount).toFixed(2),
+        parseFloat(i.paidAmount || 0).toFixed(2),
+    ]);
+    const csv = [headers, ...rows].map(r => r.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+}
 
 export default function AccountsPayable() {
     const queryClient = useQueryClient();
@@ -20,24 +41,30 @@ export default function AccountsPayable() {
     const { user } = useAuth();
     const backfillDone = useRef(false);
 
+    // ─── Filters ───────────────────────────────────────────────────────────
+    const [filterStatus, setFilterStatus] = useState("todos");
+    const [filterFrom, setFilterFrom] = useState("");
+    const [filterTo, setFilterTo] = useState("");
+
+    // ─── Bulk selection ────────────────────────────────────────────────────
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkPaying, setBulkPaying] = useState(false);
+    const [bulkAccountId, setBulkAccountId] = useState("");
+
     const { data: items = [], isLoading } = useQuery({
         queryKey: ["/api/farm/accounts-payable"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/accounts-payable"); return r.json(); },
         enabled: !!user,
     });
 
-    // Auto-backfill: sync confirmed invoices into accounts payable on first load
+    // Auto-backfill
     useEffect(() => {
         if (!user || backfillDone.current) return;
         backfillDone.current = true;
         apiRequest("POST", "/api/farm/accounts-payable/backfill-invoices")
             .then(r => r.json())
-            .then(result => {
-                if (result.created > 0) {
-                    queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
-                }
-            })
-            .catch(() => { /* silently ignore */ });
+            .then(result => { if (result.created > 0) queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] }); })
+            .catch(() => { });
     }, [user]);
 
     const { data: accounts = [] } = useQuery({
@@ -46,14 +73,34 @@ export default function AccountsPayable() {
         enabled: !!user,
     });
 
-    const totalAberto = items.filter((i: any) => i.status === "aberto" || i.status === "parcial")
+    const { data: seasons = [] } = useQuery({
+        queryKey: ["/api/farm/seasons"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/seasons"); return r.json(); },
+        enabled: !!user,
+    });
+
+    // ─── Filtered list ─────────────────────────────────────────────────────
+    const filtered = (items as any[]).filter((i: any) => {
+        const today = new Date();
+        const isOverdue = (i.status === "aberto" || i.status === "parcial") && new Date(i.dueDate) < today;
+        const statusCheck =
+            filterStatus === "todos" ? true :
+            filterStatus === "vencido" ? isOverdue :
+            i.status === filterStatus;
+        const dateCheck =
+            (!filterFrom || new Date(i.dueDate) >= new Date(filterFrom)) &&
+            (!filterTo || new Date(i.dueDate) <= new Date(filterTo));
+        return statusCheck && dateCheck;
+    });
+
+    const totalAberto = (items as any[]).filter((i: any) => i.status === "aberto" || i.status === "parcial")
         .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0);
-    const totalVencido = items.filter((i: any) => (i.status === "aberto" || i.status === "parcial") && new Date(i.dueDate) < new Date())
+    const totalVencido = (items as any[]).filter((i: any) => (i.status === "aberto" || i.status === "parcial") && new Date(i.dueDate) < new Date())
         .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0);
 
     const save = useMutation({
         mutationFn: async (data: any) => apiRequest("POST", "/api/farm/accounts-payable", data),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] }); toast({ title: "Conta registrada" }); setOpenCreate(false); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] }); toast({ title: "Conta(s) registrada(s)" }); setOpenCreate(false); },
     });
 
     const pay = useMutation({
@@ -71,6 +118,48 @@ export default function AccountsPayable() {
         mutationFn: async (id: string) => apiRequest("DELETE", `/api/farm/accounts-payable/${id}`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] }); toast({ title: "Removido" }); },
     });
+
+    // ─── Bulk pay ──────────────────────────────────────────────────────────
+    async function handleBulkPay() {
+        if (!bulkAccountId || selectedIds.size === 0) return;
+        setBulkPaying(true);
+        const toastId = toast({ title: `Pagando ${selectedIds.size} contas...` });
+        try {
+            for (const id of Array.from(selectedIds)) {
+                const item = (items as any[]).find((i: any) => i.id === id);
+                if (!item || item.status === "pago") continue;
+                const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
+                await apiRequest("POST", `/api/farm/accounts-payable/${id}/pay`, {
+                    accountId: bulkAccountId,
+                    amount: remaining.toFixed(2),
+                    paymentMethod: "transferencia",
+                });
+            }
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+            toast({ title: `✅ ${selectedIds.size} contas pagas com sucesso!` });
+            setSelectedIds(new Set());
+            setBulkAccountId("");
+        } catch {
+            toast({ title: "Erro ao pagar contas em lote", variant: "destructive" });
+        } finally {
+            setBulkPaying(false);
+        }
+    }
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const selectAll = () => {
+        const eligible = filtered.filter((i: any) => i.status !== "pago").map((i: any) => i.id);
+        setSelectedIds(new Set(eligible));
+    };
 
     const statusBadge = (s: string) => {
         const map: any = {
@@ -94,15 +183,20 @@ export default function AccountsPayable() {
                             {totalVencido > 0 && <span className="ml-2 text-red-600">⚠️ Vencido: $ {totalVencido.toFixed(2)}</span>}
                         </p>
                     </div>
-                    <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-                        <DialogTrigger asChild>
-                            <Button className="bg-emerald-600 hover:bg-emerald-700"><Plus className="mr-2 h-4 w-4" /> Nova Conta</Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader><DialogTitle>Nova Conta a Pagar</DialogTitle></DialogHeader>
-                            <APForm onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
-                        </DialogContent>
-                    </Dialog>
+                    <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportToCSV(filtered, "contas-a-pagar.csv")}>
+                            <Download className="mr-2 h-4 w-4" /> Exportar CSV
+                        </Button>
+                        <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+                            <DialogTrigger asChild>
+                                <Button className="bg-emerald-600 hover:bg-emerald-700"><Plus className="mr-2 h-4 w-4" /> Nova Conta</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Nova Conta a Pagar</DialogTitle></DialogHeader>
+                                <APForm seasons={seasons} onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                 </div>
 
                 {/* Summary Cards */}
@@ -110,8 +204,8 @@ export default function AccountsPayable() {
                     {[
                         { label: "Total em Aberto", value: totalAberto, color: "text-blue-700" },
                         { label: "Vencidos", value: totalVencido, color: "text-red-600" },
-                        { label: "Total de Títulos", value: items.length, color: "text-gray-700", isCurrency: false },
-                        { label: "Pagos", value: items.filter((i: any) => i.status === "pago").length, color: "text-green-700", isCurrency: false },
+                        { label: "Total de Títulos", value: (items as any[]).length, color: "text-gray-700", isCurrency: false },
+                        { label: "Pagos", value: (items as any[]).filter((i: any) => i.status === "pago").length, color: "text-green-700", isCurrency: false },
                     ].map((c, idx) => (
                         <Card key={idx} className="border-emerald-100"><CardContent className="p-4">
                             <p className="text-xs text-gray-500">{c.label}</p>
@@ -122,9 +216,60 @@ export default function AccountsPayable() {
                     ))}
                 </div>
 
+                {/* ── Filters ─────────────────────────────────────────────── */}
+                <Card className="border-emerald-100">
+                    <CardContent className="p-4">
+                        <div className="flex flex-wrap gap-3 items-end">
+                            <div>
+                                <Label className="text-xs text-gray-500">Status</Label>
+                                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                    <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="todos">Todos</SelectItem>
+                                        <SelectItem value="aberto">Aberto</SelectItem>
+                                        <SelectItem value="parcial">Parcial</SelectItem>
+                                        <SelectItem value="pago">Pago</SelectItem>
+                                        <SelectItem value="vencido">Vencido</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Vencimento de</Label>
+                                <Input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="w-36" />
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">até</Label>
+                                <Input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="w-36" />
+                            </div>
+                            <Button variant="ghost" size="sm" className="text-gray-500" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); }}>
+                                Limpar
+                            </Button>
+                            <span className="text-xs text-gray-400 ml-auto self-center">{filtered.length} de {(items as any[]).length} registros</span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* ── Bulk pay bar ─────────────────────────────────────────── */}
+                {selectedIds.size > 0 && (
+                    <Card className="border-amber-200 bg-amber-50">
+                        <CardContent className="p-3 flex flex-wrap gap-3 items-center">
+                            <span className="text-sm font-medium text-amber-800">{selectedIds.size} conta(s) selecionada(s)</span>
+                            <Select value={bulkAccountId} onValueChange={setBulkAccountId}>
+                                <SelectTrigger className="w-48 bg-white"><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                                <SelectContent>{(accounts as any[]).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
+                            </Select>
+                            <Button className="bg-green-600 hover:bg-green-700" disabled={!bulkAccountId || bulkPaying} onClick={handleBulkPay}>
+                                {bulkPaying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+                                Marcar como Pagos
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-gray-500" onClick={() => setSelectedIds(new Set())}>Cancelar</Button>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {isLoading ? (
                     <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
-                ) : items.length === 0 ? (
+                ) : filtered.length === 0 ? (
                     <Card className="border-emerald-100"><CardContent className="py-12 text-center">
                         <Receipt className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                         <p className="text-gray-500">Nenhuma conta a pagar</p>
@@ -134,6 +279,9 @@ export default function AccountsPayable() {
                         <table className="w-full text-sm">
                             <thead className="bg-emerald-50">
                                 <tr>
+                                    <th className="p-3 w-8">
+                                        <input type="checkbox" className="rounded" onChange={e => e.target.checked ? selectAll() : setSelectedIds(new Set())} checked={selectedIds.size > 0 && selectedIds.size === filtered.filter((i: any) => i.status !== "pago").length} />
+                                    </th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Descrição</th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
@@ -145,10 +293,16 @@ export default function AccountsPayable() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {items.map((item: any) => {
+                                {filtered.map((item: any) => {
                                     const isOverdue = (item.status === "aberto" || item.status === "parcial") && new Date(item.dueDate) < new Date();
+                                    const isSelected = selectedIds.has(item.id);
                                     return (
-                                        <tr key={item.id} className={`border-t border-gray-100 ${isOverdue ? "bg-red-50" : ""}`}>
+                                        <tr key={item.id} className={`border-t border-gray-100 ${isOverdue ? "bg-red-50" : ""} ${isSelected ? "bg-amber-50" : ""}`}>
+                                            <td className="p-3">
+                                                {item.status !== "pago" && (
+                                                    <input type="checkbox" className="rounded" checked={isSelected} onChange={() => toggleSelect(item.id)} />
+                                                )}
+                                            </td>
                                             <td className="p-3 font-medium">{item.supplier}</td>
                                             <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "—"}</td>
                                             <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
@@ -186,26 +340,50 @@ export default function AccountsPayable() {
     );
 }
 
-function APForm({ onSave, saving }: any) {
+function APForm({ onSave, saving, seasons }: any) {
     const [supplier, setSupplier] = useState("");
     const [description, setDescription] = useState("");
     const [totalAmount, setTotalAmount] = useState("");
     const [dueDate, setDueDate] = useState("");
-    const [installmentNumber, setInstallmentNumber] = useState("1");
     const [totalInstallments, setTotalInstallments] = useState("1");
+    const [seasonId, setSeasonId] = useState("");
+
+    const installments = parseInt(totalInstallments) || 1;
+    const perInstallment = totalAmount ? (parseFloat(totalAmount) / installments).toFixed(2) : "0.00";
 
     return (
-        <form onSubmit={(e) => { e.preventDefault(); onSave({ supplier, description, totalAmount, dueDate, installmentNumber: parseInt(installmentNumber), totalInstallments: parseInt(totalInstallments) }); }} className="space-y-4">
+        <form onSubmit={(e) => {
+            e.preventDefault();
+            onSave({ supplier, description, totalAmount, dueDate, installmentNumber: 1, totalInstallments: installments, seasonId: seasonId || null });
+        }} className="space-y-4">
             <div><Label>Fornecedor *</Label><Input value={supplier} onChange={e => setSupplier(e.target.value)} required /></div>
             <div><Label>Descrição</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
-            <div><Label>Valor ($) *</Label><Input type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} required /></div>
-            <div><Label>Vencimento *</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} required /></div>
-            <div className="grid grid-cols-2 gap-4">
-                <div><Label>Parcela Nº</Label><Input type="number" value={installmentNumber} onChange={e => setInstallmentNumber(e.target.value)} /></div>
-                <div><Label>de</Label><Input type="number" value={totalInstallments} onChange={e => setTotalInstallments(e.target.value)} /></div>
+            <div><Label>Valor Total ($) *</Label><Input type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} required /></div>
+            <div><Label>Primeiro Vencimento *</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} required /></div>
+            <div>
+                <Label>Nº de Parcelas</Label>
+                <Input type="number" min="1" max="60" value={totalInstallments} onChange={e => setTotalInstallments(e.target.value)} />
+                {installments > 1 && (
+                    <p className="text-xs text-emerald-600 mt-1">
+                        ✅ {installments}x de $ {perInstallment} — vencimentos mensais gerados automaticamente
+                    </p>
+                )}
             </div>
+            {seasons.length > 0 && (
+                <div>
+                    <Label>Vincular à Safra (opcional)</Label>
+                    <Select value={seasonId} onValueChange={setSeasonId}>
+                        <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">Nenhuma</SelectItem>
+                            {seasons.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
             <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={saving || !supplier || !totalAmount || !dueDate}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Registrar
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {installments > 1 ? `Gerar ${installments} Parcelas` : "Registrar"}
             </Button>
         </form>
     );
@@ -228,7 +406,7 @@ function PayForm({ item, accounts, onPay, saving }: any) {
             <div><Label>Conta Bancária *</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
                     <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
-                    <SelectContent>{accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent>
+                    <SelectContent>{(accounts as any[]).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent>
                 </Select>
             </div>
             <div><Label>Valor a Pagar ($)</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} /></div>
