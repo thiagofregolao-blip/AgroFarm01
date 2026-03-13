@@ -401,13 +401,13 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     >
                         <Menu className="w-6 h-6" />
                     </button>
-                    <img src="/logo.png" alt="AgroFarm" className="h-8 w-auto object-contain md:hidden" />
                     <div className="flex-1 flex items-center justify-between min-w-0">
                         <h1 className="text-lg font-bold text-white truncate">
                             {t((allNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.labelKey || "nav_home") as any) || "AgroFarm"}
                         </h1>
                         <span className="text-xs font-medium text-emerald-100 hidden sm:block truncate ml-4 max-w-[200px]">{user.name || user.username}</span>
                     </div>
+                    <img src="/logo.png" alt="AgroFarm" className="h-8 w-auto object-contain md:hidden" />
                 </header>
                 <div className={`flex-1 flex flex-col w-full overflow-x-hidden ${location === "/fazenda/clima" ? "p-0" : "px-2 sm:px-6 lg:px-8 py-4 sm:py-6"}`}>
                     {children}
