@@ -153,7 +153,7 @@ export default function AuthPage() {
             {/* Name (register only) */}
             {!isLogin && (
               <div className="relative">
-                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-200/60" />
+                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/70 z-10" />
                 <input
                   type="text"
                   value={name}
@@ -168,7 +168,7 @@ export default function AuthPage() {
 
             {/* Email / Username */}
             <div className="relative">
-              <AtSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-200/60" />
+              <AtSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/70 z-10" />
               <input
                 type="text"
                 value={username}
@@ -183,7 +183,7 @@ export default function AuthPage() {
 
             {/* Password */}
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-200/60" />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/70 z-10" />
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
@@ -197,7 +197,7 @@ export default function AuthPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-emerald-200/60 hover:text-white transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-white/70 hover:text-white transition-colors z-10"
                 aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
