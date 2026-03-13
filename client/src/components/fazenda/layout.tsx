@@ -393,7 +393,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
             {/* ── Main content ── */}
             <main className="flex-1 flex flex-col min-h-screen max-w-full md:ml-[200px]">
-                <header className="bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+                <header className="bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-2 flex items-center gap-3">
                     <button
                         onClick={() => setIsMobileMenuOpen(true)}
                         className="md:hidden p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors"
@@ -401,6 +401,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     >
                         <Menu className="w-6 h-6" />
                     </button>
+                    <img src="/logo.png" alt="AgroFarm" className="h-8 w-auto object-contain md:hidden" />
                     <div className="flex-1 flex items-center justify-between min-w-0">
                         <h1 className="text-lg font-bold text-white truncate">
                             {t((allNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.labelKey || "nav_home") as any) || "AgroFarm"}

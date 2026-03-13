@@ -120,14 +120,10 @@ export default function AuthPage() {
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 py-12">
 
           {/* Logo */}
-          <div className="mb-2">
-            <div className="w-44 mx-auto mb-4">
+          <div className="mb-6">
+            <div className="w-64 mx-auto">
               <img src="/logo.png" alt="AgroFarm" className="w-full h-auto object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)]" />
             </div>
-            <h2 className="text-center">
-              <span className="text-3xl font-extrabold text-white tracking-tight">AgroFarm</span>
-              <span className="block text-sm font-semibold text-emerald-200 tracking-[0.2em] uppercase mt-0.5">Gestor Rural Digital</span>
-            </h2>
           </div>
 
           {/* Welcome text */}
