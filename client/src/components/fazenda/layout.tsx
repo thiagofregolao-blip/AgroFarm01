@@ -1,11 +1,11 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, FileText, BarChart3,
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
     Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2,
-    Settings, HelpCircle, Download
+    Settings, HelpCircle, Download, ChevronDown
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -99,7 +99,7 @@ const financeNavGroups: NavGroup[] = [
     },
 ];
 
-// ─── SHARED (always visible in footer of BOTH menus) ─────────────────────────
+// ─── SHARED (always visible in footer of mobile menu + header right on desktop)
 const sharedFooterItems: NavItem[] = [
     { labelKey: "nav_reports", href: "/fazenda/relatorios", icon: FileBarChart, moduleKey: "reports",  alwaysOn: true },
     { labelKey: "nav_profile", href: "/fazenda/perfil",     icon: User,         moduleKey: "profile",  alwaysOn: true },
@@ -113,27 +113,141 @@ const allNavItems    = [...allFarmItems, ...allFinanceItems, ...sharedFooterItem
 
 type SidebarTab = "fazenda" | "financeiro";
 
-// ─── Desktop NavButton (dark sidebar) ────────────────────────────────────────
-function NavButton({ item, location, onClick }: { item: NavItem; location: string; onClick: () => void }) {
+// ─── Desktop Horizontal Menu Item with Dropdown ─────────────────────────────
+function DesktopMenuDropdown({
+    label, icon: Icon, items, location, onNavigate, isEnabled,
+}: {
+    label: string;
+    icon?: any;
+    items: NavItem[];
+    location: string;
+    onNavigate: (href: string) => void;
+    isEnabled: (item: NavItem) => boolean;
+}) {
     const { t } = useLanguage();
-    const isActive = location === item.href || (item.href !== "/fazenda" && location.startsWith(item.href));
-    const Icon = item.icon;
-    const label = t(item.labelKey as any);
+    const [open, setOpen] = useState(false);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+    const ref = useRef<HTMLDivElement>(null);
+
+    const visibleItems = items.filter(isEnabled);
+    if (!visibleItems.length) return null;
+
+    const hasActive = visibleItems.some(i => location === i.href || (i.href !== "/fazenda" && location.startsWith(i.href)));
+
+    function handleEnter() {
+        clearTimeout(timeoutRef.current);
+        setOpen(true);
+    }
+    function handleLeave() {
+        timeoutRef.current = setTimeout(() => setOpen(false), 150);
+    }
+
     return (
-        <button
-            onClick={onClick}
-            className={`
-                w-full flex items-center gap-3 rounded-full transition-all duration-150 px-3 py-2.5
-                ${isActive
-                    ? "bg-white text-[#0d2418] shadow-md font-semibold"
-                    : "text-white/90 hover:bg-white/10 hover:text-white font-medium"
-                }
-            `}
-            title={label}
-        >
-            <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-[#0d2418]" : "text-white/80"}`} />
-            <span className="text-[13px] md:text-sm truncate leading-tight">{label}</span>
-        </button>
+        <div ref={ref} className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+            <button
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                    ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
+                `}
+                onClick={() => setOpen(!open)}
+            >
+                {Icon && <Icon className="w-4 h-4" />}
+                <span>{label}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+            </button>
+
+            {open && (
+                <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 py-2 min-w-[220px] z-50">
+                    {visibleItems.map(item => {
+                        const ItemIcon = item.icon;
+                        const isActive = location === item.href || (item.href !== "/fazenda" && location.startsWith(item.href));
+                        return (
+                            <button
+                                key={item.href}
+                                onClick={() => { onNavigate(item.href); setOpen(false); }}
+                                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-100 cursor-pointer
+                                    ${isActive ? "text-emerald-700 bg-emerald-50 font-semibold" : "text-gray-700 hover:bg-gray-50 hover:text-emerald-700"}
+                                `}
+                            >
+                                <ItemIcon className={`w-4 h-4 shrink-0 ${isActive ? "text-emerald-600" : "text-gray-400"}`} />
+                                <span>{t(item.labelKey as any)}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Desktop Financeiro Mega Dropdown (grouped) ─────────────────────────────
+function FinanceiroMegaDropdown({
+    location, onNavigate, isEnabled,
+}: {
+    location: string;
+    onNavigate: (href: string) => void;
+    isEnabled: (item: NavItem) => boolean;
+}) {
+    const { t } = useLanguage();
+    const [open, setOpen] = useState(false);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+    const hasActive = financeNavGroups.some(g => g.items.some(i => isEnabled(i) && (location === i.href || location.startsWith(i.href))));
+
+    function handleEnter() {
+        clearTimeout(timeoutRef.current);
+        setOpen(true);
+    }
+    function handleLeave() {
+        timeoutRef.current = setTimeout(() => setOpen(false), 150);
+    }
+
+    return (
+        <div className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+            <button
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                    ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
+                `}
+                onClick={() => setOpen(!open)}
+            >
+                <Wallet className="w-4 h-4" />
+                <span>Financeiro</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+            </button>
+
+            {open && (
+                <div className="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 py-2 min-w-[240px] z-50">
+                    {financeNavGroups.map((group, gi) => {
+                        const visibleItems = group.items.filter(isEnabled);
+                        if (!visibleItems.length) return null;
+                        return (
+                            <div key={gi}>
+                                {group.label && (
+                                    <p className={`px-4 text-[11px] font-bold uppercase tracking-widest text-gray-400 ${gi > 0 ? "mt-2 pt-2 border-t border-gray-100" : ""} mb-1`}>
+                                        {group.label}
+                                    </p>
+                                )}
+                                {visibleItems.map(item => {
+                                    const ItemIcon = item.icon;
+                                    const isActive = location === item.href || location.startsWith(item.href);
+                                    return (
+                                        <button
+                                            key={item.href}
+                                            onClick={() => { onNavigate(item.href); setOpen(false); }}
+                                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-100 cursor-pointer
+                                                ${isActive ? "text-emerald-700 bg-emerald-50 font-semibold" : "text-gray-700 hover:bg-gray-50 hover:text-emerald-700"}
+                                            `}
+                                        >
+                                            <ItemIcon className={`w-4 h-4 shrink-0 ${isActive ? "text-emerald-600" : "text-gray-400"}`} />
+                                            <span>{t(item.labelKey as any)}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -192,12 +306,6 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
     const activeGroups = activeTab === "fazenda" ? farmNavGroups : financeNavGroups;
 
-    // All groups combined for mobile (show everything, no tab switching)
-    const allGroupsForMobile = [
-        { label: "Fazenda", items: farmNavGroups.flatMap(g => g.items) },
-        { label: "Financeiro", items: financeNavGroups.flatMap(g => g.items) },
-    ];
-
     const handleLogout = () => {
         logoutMutation.mutate(undefined, {
             onSuccess: () => { window.location.href = "https://www.agrofarmdigital.com/auth"; },
@@ -210,7 +318,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 flex relative">
+        <div className="min-h-screen bg-gray-100 flex flex-col relative">
 
             {/* ══════════════════════════════════════════════════════════════════
                 MOBILE DRAWER — White, wide, app-native style (< md)
@@ -227,7 +335,6 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
             `}>
                 {/* Header: Logo + User info */}
                 <div className="px-6 pt-10 pb-6">
-                    {/* Logo */}
                     <div className="flex items-center gap-3 mb-6">
                         <img src="/icon-512x512.png" alt="AgroFarm" className="w-16 h-16 object-contain" />
                         <div>
@@ -235,26 +342,17 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                             <p className="text-[11px] font-semibold text-[#0a6e3a]/70 uppercase tracking-wider">Gestor Rural Digital</p>
                         </div>
                     </div>
-
-                    {/* User greeting */}
                     <div>
                         <p className="text-lg font-bold text-gray-800">
                             Ola, {(user.name || user.username || "").split(" ")[0]}
                         </p>
                         <p className="text-sm text-gray-500 truncate">{user.username}</p>
-                        <button
-                            onClick={handleLogout}
-                            className="mt-1 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors"
-                        >
+                        <button onClick={handleLogout} className="mt-1 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors">
                             Sair
                         </button>
                     </div>
                 </div>
-
-                {/* Divider */}
                 <div className="mx-6 border-t border-gray-200" />
-
-                {/* Tab switcher */}
                 <div className="flex mx-6 mt-4 bg-gray-100 rounded-xl p-1">
                     <button onClick={() => setActiveTab("fazenda")}
                         className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200
@@ -267,8 +365,6 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                         Financeiro
                     </button>
                 </div>
-
-                {/* Nav items */}
                 <nav className="flex-1 overflow-y-auto px-6 py-4">
                     {activeGroups.map((group, gi) => {
                         const visibleItems = group.items.filter(isEnabled);
@@ -295,8 +391,6 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                             </div>
                         );
                     })}
-
-                    {/* Shared items */}
                     <div className="mt-4 pt-4 border-t border-gray-100">
                         {sharedFooterItems.map(item => (
                             <MobileNavButton
@@ -308,108 +402,139 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                         ))}
                     </div>
                 </nav>
-
-                {/* Footer */}
                 <div className="shrink-0 px-6 py-4 border-t border-gray-100">
                     <p className="text-center text-xs text-gray-400">Termos de Uso</p>
                 </div>
             </div>
 
             {/* ══════════════════════════════════════════════════════════════════
-                DESKTOP SIDEBAR — Dark green, narrow (>= md)
+                HEADER — Green bar (both mobile & desktop)
                 ══════════════════════════════════════════════════════════════════ */}
-            <aside className="hidden md:flex w-[200px] bg-[#0d2418] text-white flex-col shrink-0 fixed top-0 bottom-0 z-50 shadow-[4px_0_24px_rgba(0,0,0,0.15)]">
-                {/* Logo */}
-                <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
-                    <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0">
-                        <img src="/icon-512x512.png" alt="AgroFarm" className="w-full h-full object-contain" />
-                    </div>
+            <header className="bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-2 flex items-center gap-3">
+                {/* Mobile: hamburger */}
+                <button
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="md:hidden p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors"
+                    aria-label="Abrir menu"
+                >
+                    <Menu className="w-6 h-6" />
+                </button>
+
+                {/* Desktop: Logo */}
+                <div className="hidden md:flex items-center gap-3 mr-4">
+                    <img src="/icon-512x512.png" alt="AgroFarm" className="w-9 h-9 rounded-xl object-contain" />
                     <div className="min-w-0">
-                        <span className="font-bold text-sm leading-tight block text-white truncate">AgroFarm</span>
-                        <span className="text-[10px] text-emerald-400 truncate block">{user.name || user.username}</span>
+                        <span className="font-bold text-sm leading-tight block text-white">AgroFarm</span>
+                        <span className="text-[10px] text-emerald-300 block">Gestor Rural Digital</span>
                     </div>
                 </div>
 
-                {/* Tab switcher */}
-                <div className="flex mx-2 mt-3 bg-white/10 rounded-full p-0.5">
-                    <button onClick={() => setActiveTab("fazenda")}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-semibold transition-all duration-200
-                            ${activeTab === "fazenda" ? "bg-white text-[#0d2418] shadow-sm" : "text-white/70 hover:text-white"}`}>
-                        {t("nav_tab_farm" as any)}
-                    </button>
-                    <button onClick={() => setActiveTab("financeiro")}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-semibold transition-all duration-200
-                            ${activeTab === "financeiro" ? "bg-white text-[#0d2418] shadow-sm" : "text-white/70 hover:text-white"}`}>
-                        {t("nav_tab_finance" as any)}
-                    </button>
+                {/* Page title */}
+                <div className="flex-1 flex items-center min-w-0">
+                    <h1 className="text-lg font-bold text-white truncate">
+                        {t((allNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.labelKey || "nav_home") as any) || "AgroFarm"}
+                    </h1>
                 </div>
 
-                {/* Scrollable nav groups */}
-                <nav className="flex-1 overflow-y-auto py-3 px-2">
-                    {activeGroups.map((group, gi) => {
-                        const visibleItems = group.items.filter(isEnabled);
-                        if (!visibleItems.length) return null;
-                        return (
-                            <div key={gi}>
-                                {gi > 0 && (
-                                    <div className="my-2 px-1">
-                                        <div className="border-t border-white/10" />
-                                        {group.label && (
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 px-2 pt-2 pb-0.5">
-                                                {group.label}
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
-                                <div className="space-y-0.5">
-                                    {visibleItems.map(item => (
-                                        <NavButton key={item.href} item={item} location={location} onClick={() => setLocation(item.href)} />
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </nav>
-
-                {/* Fixed footer */}
-                <div className="shrink-0 px-2 pb-3">
-                    <div className="border-t border-white/20 mb-2 mx-1" />
-                    <div className="space-y-0.5 mb-2">
-                        {sharedFooterItems.map(item => (
-                            <NavButton key={item.href} item={item} location={location} onClick={() => setLocation(item.href)} />
-                        ))}
-                    </div>
-                    <div className="border-t border-white/10 mb-2 mx-1" />
+                {/* Desktop: right side actions */}
+                <div className="hidden md:flex items-center gap-1">
+                    <button
+                        onClick={() => setLocation("/fazenda/relatorios")}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                            ${location.startsWith("/fazenda/relatorios") ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
+                    >
+                        <FileBarChart className="w-4 h-4" />
+                        <span>Relatorios</span>
+                    </button>
+                    <button
+                        onClick={() => setLocation("/fazenda/perfil")}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                            ${location.startsWith("/fazenda/perfil") ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
+                    >
+                        <User className="w-4 h-4" />
+                        <span>Perfil</span>
+                    </button>
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
-                        title={t("nav_logout")}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors"
                     >
-                        <LogOut className="h-5 w-5 shrink-0" />
-                        <span className="text-sm font-medium">{t("nav_logout")}</span>
+                        <LogOut className="w-4 h-4" />
+                        <span>Sair</span>
                     </button>
                 </div>
-            </aside>
+
+                {/* Mobile: logo right */}
+                <img src="/logo.png" alt="AgroFarm" className="h-8 w-auto object-contain md:hidden" />
+            </header>
+
+            {/* ══════════════════════════════════════════════════════════════════
+                DESKTOP HORIZONTAL MENU BAR — White, sticky below header (>= md)
+                ══════════════════════════════════════════════════════════════════ */}
+            <nav className="hidden md:block bg-white border-b border-gray-200 sticky top-[52px] z-20 shadow-sm">
+                <div className="px-4 lg:px-8 flex items-center gap-1">
+                    {/* Inicio — direct link, no dropdown */}
+                    <button
+                        onClick={() => setLocation("/fazenda")}
+                        className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                            ${location === "/fazenda" ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
+                        `}
+                    >
+                        <Home className="w-4 h-4" />
+                        <span>Inicio</span>
+                    </button>
+
+                    {/* Producao dropdown */}
+                    <DesktopMenuDropdown
+                        label="Producao"
+                        icon={Sprout}
+                        items={farmNavGroups[1].items}
+                        location={location}
+                        onNavigate={setLocation}
+                        isEnabled={isEnabled}
+                    />
+
+                    {/* Campo dropdown */}
+                    <DesktopMenuDropdown
+                        label="Campo"
+                        icon={BookOpen}
+                        items={farmNavGroups[2].items}
+                        location={location}
+                        onNavigate={setLocation}
+                        isEnabled={isEnabled}
+                    />
+
+                    {/* Estoque dropdown */}
+                    <DesktopMenuDropdown
+                        label="Estoque"
+                        icon={Warehouse}
+                        items={farmNavGroups[3].items}
+                        location={location}
+                        onNavigate={setLocation}
+                        isEnabled={isEnabled}
+                    />
+
+                    {/* Inteligencia dropdown */}
+                    <DesktopMenuDropdown
+                        label="Inteligencia"
+                        icon={Satellite}
+                        items={farmNavGroups[4].items}
+                        location={location}
+                        onNavigate={setLocation}
+                        isEnabled={isEnabled}
+                    />
+
+                    {/* Financeiro mega dropdown */}
+                    <FinanceiroMegaDropdown
+                        location={location}
+                        onNavigate={setLocation}
+                        isEnabled={isEnabled}
+                    />
+                </div>
+            </nav>
 
             {/* ── Main content ── */}
-            <main className="flex-1 flex flex-col min-h-screen max-w-full md:ml-[200px]">
-                <header className="bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-2 flex items-center gap-3">
-                    <button
-                        onClick={() => setIsMobileMenuOpen(true)}
-                        className="md:hidden p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors"
-                        aria-label="Abrir menu"
-                    >
-                        <Menu className="w-6 h-6" />
-                    </button>
-                    <div className="flex-1 flex items-center justify-between min-w-0">
-                        <h1 className="text-lg font-bold text-white truncate">
-                            {t((allNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.labelKey || "nav_home") as any) || "AgroFarm"}
-                        </h1>
-                        <span className="text-xs font-medium text-emerald-100 hidden sm:block truncate ml-4 max-w-[200px]">{user.name || user.username}</span>
-                    </div>
-                    <img src="/logo.png" alt="AgroFarm" className="h-8 w-auto object-contain md:hidden" />
-                </header>
-                <div className={`flex-1 flex flex-col w-full overflow-x-hidden ${location === "/fazenda/clima" ? "p-0" : "px-2 sm:px-6 lg:px-8 py-4 sm:py-6"}`}>
+            <main className="flex-1 flex flex-col w-full overflow-x-hidden">
+                <div className={`flex-1 flex flex-col w-full ${location === "/fazenda/clima" ? "p-0" : "px-2 sm:px-6 lg:px-8 py-4 sm:py-6"}`}>
                     {children}
                 </div>
             </main>
