@@ -121,8 +121,8 @@ export default function AuthPage() {
 
           {/* Logo */}
           <div className="mb-2">
-            <div className="w-24 h-24 mx-auto mb-4">
-              <img src="/icon-512x512.png" alt="AgroFarm" className="w-full h-full object-contain drop-shadow-2xl" />
+            <div className="w-44 mx-auto mb-4">
+              <img src="/logo.png" alt="AgroFarm" className="w-full h-auto object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)]" />
             </div>
             <h2 className="text-center">
               <span className="text-3xl font-extrabold text-white tracking-tight">AgroFarm</span>
