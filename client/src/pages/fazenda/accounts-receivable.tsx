@@ -109,7 +109,8 @@ export default function AccountsReceivable() {
                     holder: String(ch.titular || ""),
                     amount: String(ch.valor || "0"),
                     currency: String(ch.currency || "USD"),
-                    issueDate: new Date().toISOString(),
+                    issueDate: ch.emissao ? new Date(ch.emissao).toISOString() : new Date().toISOString(),
+                    dueDate: ch.vencimento ? new Date(ch.vencimento).toISOString() : null,
                     relatedReceivableId: String(id),
                 });
                 const created = await r.json();
@@ -361,7 +362,9 @@ function ReceiveForm({ item, accounts, onReceive, saving }: any) {
     const [chequeNumero, setChequeNumero] = useState("");
     const [chequeValor, setChequeValor] = useState("");
     const [chequeCurrency, setChequeCurrency] = useState("USD");
-    const [cheques, setCheques] = useState<{ banco: string; titular: string; numero: string; valor: string; currency: string }[]>([]);
+    const [chequeEmissao, setChequeEmissao] = useState(new Date().toISOString().split("T")[0]);
+    const [chequeVencimento, setChequeVencimento] = useState("");
+    const [cheques, setCheques] = useState<{ banco: string; titular: string; numero: string; valor: string; currency: string; emissao: string; vencimento: string }[]>([]);
 
     const hasChequeMethod = paymentRows.some(r => r.paymentMethod === "cheque");
     const totalRows = paymentRows.reduce((s, r) => s + parseFloat(r.amount || "0"), 0);
@@ -381,8 +384,9 @@ function ReceiveForm({ item, accounts, onReceive, saving }: any) {
 
     function addCheque() {
         if (!chequeBanco || !chequeNumero || !chequeValor) return;
-        setCheques([...cheques, { banco: chequeBanco, titular: chequeTitular, numero: chequeNumero, valor: chequeValor, currency: chequeCurrency }]);
+        setCheques([...cheques, { banco: chequeBanco, titular: chequeTitular, numero: chequeNumero, valor: chequeValor, currency: chequeCurrency, emissao: chequeEmissao, vencimento: chequeVencimento }]);
         setChequeBanco(""); setChequeTitular(""); setChequeNumero(""); setChequeValor(""); setChequeCurrency("USD");
+        setChequeEmissao(new Date().toISOString().split("T")[0]); setChequeVencimento("");
     }
     function removeCheque(idx: number) {
         setCheques(cheques.filter((_, i) => i !== idx));
@@ -489,6 +493,16 @@ function ReceiveForm({ item, accounts, onReceive, saving }: any) {
                                     <SelectItem value="PYG">PYG</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <Label className="text-xs">Data Emissao</Label>
+                            <Input type="date" className="h-8 text-sm" value={chequeEmissao} onChange={e => setChequeEmissao(e.target.value)} />
+                        </div>
+                        <div>
+                            <Label className="text-xs">Data Vencimento</Label>
+                            <Input type="date" className="h-8 text-sm" value={chequeVencimento} onChange={e => setChequeVencimento(e.target.value)} />
                         </div>
                     </div>
                     <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addCheque}>

@@ -952,7 +952,7 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
                                         const status = CHEQUE_STATUS_COLORS[ch.status] || CHEQUE_STATUS_COLORS.emitido;
                                         return (
                                             <tr key={ch.id} className="border-t border-gray-100 hover:bg-gray-50">
-                                                <td className="p-3 font-mono">{ch.chequeNumber || "--"}</td>
+                                                <td className="p-3 font-mono">{ch.cheque_number || ch.chequeNumber || "--"}</td>
                                                 <td className="p-3">{ch.bank || "--"}</td>
                                                 <td className="p-3">{ch.holder || "--"}</td>
                                                 <td className="p-3 text-right font-mono font-semibold">{formatCurrency(parseFloat(ch.amount), ch.currency || "USD")}</td>
@@ -963,8 +963,8 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
                                                         {status.label}
                                                     </span>
                                                 </td>
-                                                <td className="p-3 text-center">{ch.issueDate ? new Date(ch.issueDate).toLocaleDateString("pt-BR") : "--"}</td>
-                                                <td className="p-3 text-center">{ch.dueDate ? new Date(ch.dueDate).toLocaleDateString("pt-BR") : "--"}</td>
+                                                <td className="p-3 text-center">{(ch.issue_date || ch.issueDate) ? new Date(ch.issue_date || ch.issueDate).toLocaleDateString("pt-BR") : "--"}</td>
+                                                <td className="p-3 text-center">{(ch.due_date || ch.dueDate) ? new Date(ch.due_date || ch.dueDate).toLocaleDateString("pt-BR") : "--"}</td>
                                                 <td className="p-3 text-center">
                                                     {ch.status === "emitido" && (
                                                         <div className="flex gap-1 justify-center">
@@ -1036,8 +1036,8 @@ function CreateChequeDialog({ accounts, onSuccess }: { accounts: any[]; onSucces
 
     const save = useMutation({
         mutationFn: () => apiRequest("POST", "/api/farm/cheques", {
-            type, chequeNumber, bank, holder, amount: parseFloat(amount), currency,
-            issueDate: new Date(issueDate), dueDate: dueDate ? new Date(dueDate) : null,
+            type, chequeNumber, bank, holder, amount: String(amount), currency,
+            issueDate: new Date(issueDate).toISOString(), dueDate: dueDate ? new Date(dueDate).toISOString() : null,
             ownerType, accountId: accountId || null, notes,
         }),
         onSuccess: () => {

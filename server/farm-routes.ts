@@ -5254,33 +5254,40 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const cheque = ((chequeRows as any).rows ?? chequeRows)[0];
             if (!cheque) return res.status(404).json({ error: "Cheque not found" });
 
-            const now = new Date();
+            const nowStr = new Date().toISOString();
+            const targetAccountId = accountId ? String(accountId) : (cheque.account_id ? String(cheque.account_id) : null);
+            if (!targetAccountId) return res.status(400).json({ error: "Conta nao informada" });
+            const chequeId = String(req.params.id);
+            const farmerId = String(req.user!.id);
             // Update cheque status
             await db.execute(sql`
-                UPDATE farm_cheques SET status = 'compensado', compensation_date = ${now}
-                WHERE id = ${req.params.id}
+                UPDATE farm_cheques SET status = 'compensado', compensation_date = ${nowStr}::timestamp
+                WHERE id = ${chequeId}
             `);
 
             // Create cash transaction
             const txType = cheque.type === 'emitido' ? 'saida' : 'entrada';
+            const chequeDesc = 'Cheque #' + String(cheque.cheque_number || '') + ' - ' + String(cheque.bank || '');
+            const chequeAmount = String(cheque.amount);
+            const chequeCurrency = String(cheque.currency || 'USD');
             const txRows = await db.execute(sql`
                 INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description,
                     payment_method, cheque_id, reference_type, transaction_date)
-                VALUES (${req.user!.id}, ${accountId ?? cheque.account_id}, ${txType}, ${cheque.amount}, ${cheque.currency},
-                    'cheque', ${'Cheque #' + cheque.cheque_number + ' - ' + cheque.bank}, 'cheque',
-                    ${cheque.id}, 'cheque', ${now})
+                VALUES (${farmerId}, ${targetAccountId}, ${txType}, ${chequeAmount}, ${chequeCurrency},
+                    'cheque', ${chequeDesc}, 'cheque',
+                    ${String(cheque.id)}, 'cheque', ${nowStr}::timestamp)
                 RETURNING id
             `);
             const txId = ((txRows as any).rows ?? txRows)[0]?.id;
 
             // Update account balance
             if (txType === 'entrada') {
-                await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${cheque.amount} WHERE id = ${accountId ?? cheque.account_id}`);
+                await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${chequeAmount}::numeric WHERE id = ${targetAccountId}`);
             } else {
-                await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${cheque.amount} WHERE id = ${accountId ?? cheque.account_id}`);
+                await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${chequeAmount}::numeric WHERE id = ${targetAccountId}`);
             }
 
-            await db.execute(sql`UPDATE farm_cheques SET cash_transaction_id = ${txId} WHERE id = ${req.params.id}`);
+            await db.execute(sql`UPDATE farm_cheques SET cash_transaction_id = ${String(txId)} WHERE id = ${chequeId}`);
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
     });
