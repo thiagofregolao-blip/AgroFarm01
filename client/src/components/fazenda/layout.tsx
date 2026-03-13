@@ -471,7 +471,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                 DESKTOP HORIZONTAL MENU BAR — White, sticky below header (>= md)
                 ══════════════════════════════════════════════════════════════════ */}
             <nav className="hidden md:block bg-white border-b border-gray-200 sticky top-[52px] z-20 shadow-sm">
-                <div className="px-4 lg:px-8 flex items-center gap-1">
+                <div className="max-w-screen-xl mx-auto px-4 lg:px-8 flex items-center justify-center gap-2 py-1">
                     {/* Inicio — direct link, no dropdown */}
                     <button
                         onClick={() => setLocation("/fazenda")}
