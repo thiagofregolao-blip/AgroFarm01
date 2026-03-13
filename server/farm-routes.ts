@@ -5223,8 +5223,8 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const rows = await db.execute(sql`
                 INSERT INTO farm_cheques (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
                     issue_date, due_date, owner_type, notes, related_payable_id, related_receivable_id)
-                VALUES (${req.user!.id}, ${accountId ?? null}, ${type}, ${chequeNumber}, ${bank}, ${holder ?? null},
-                    ${amount}, ${currency ?? 'USD'}, ${new Date(issueDate)}, ${dueDate ? new Date(dueDate) : null},
+                VALUES (${req.user!.id}, ${accountId ?? null}, ${type}, ${chequeNumber ?? ''}, ${bank ?? ''}, ${holder ?? null},
+                    ${amount}, ${currency ?? 'USD'}, ${issueDate ? new Date(issueDate) : new Date()}, ${dueDate ? new Date(dueDate) : null},
                     ${ownerType ?? null}, ${notes ?? null}, ${relatedPayableId ?? null}, ${relatedReceivableId ?? null})
                 RETURNING *
             `);
