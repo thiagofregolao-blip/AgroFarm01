@@ -4,7 +4,8 @@ import {
     Home, Warehouse, Map, FileText, BarChart3,
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
-    Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2
+    Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2,
+    Settings, HelpCircle, Download
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,20 +21,19 @@ interface NavItem {
 }
 
 interface NavGroup {
-    label?: string;   // undefined = no header / no divider above
+    label?: string;
     items: NavItem[];
 }
 
 // ─── FAZENDA nav groups ───────────────────────────────────────────────────────
 const farmNavGroups: NavGroup[] = [
     {
-        // No label = top-level, no divider above
         items: [
             { labelKey: "nav_home", href: "/fazenda", icon: Home, moduleKey: "dashboard", alwaysOn: true },
         ],
     },
     {
-        label: "Produção",
+        label: "Producao",
         items: [
             { labelKey: "nav_properties",   href: "/fazenda/propriedades",  icon: Map,       moduleKey: "properties" },
             { labelKey: "nav_seasons",       href: "/fazenda/safras",        icon: Sprout,    moduleKey: "seasons" },
@@ -42,7 +42,7 @@ const farmNavGroups: NavGroup[] = [
         ],
     },
     {
-        label: "Operação & Campo",
+        label: "Operacao & Campo",
         items: [
             { labelKey: "nav_field_notebook", href: "/fazenda/caderno-campo", icon: BookOpen, moduleKey: "field_notebook" },
             { labelKey: "nav_romaneios",       href: "/fazenda/romaneios",     icon: Scale,    moduleKey: "romaneios" },
@@ -57,7 +57,7 @@ const farmNavGroups: NavGroup[] = [
         ],
     },
     {
-        label: "Inteligência",
+        label: "Inteligencia",
         items: [
             { labelKey: "nav_quotations", href: "/fazenda/cotacoes", icon: ArrowDownUp, moduleKey: "quotations" },
             { labelKey: "nav_ndvi",       href: "/fazenda/ndvi",     icon: Satellite,   moduleKey: "ndvi" },
@@ -90,7 +90,7 @@ const financeNavGroups: NavGroup[] = [
         ],
     },
     {
-        label: "Análise",
+        label: "Analise",
         items: [
             { labelKey: "nav_dre",             href: "/fazenda/dre",         icon: PieChart, moduleKey: "dre" },
             { labelKey: "nav_budget",          href: "/fazenda/orcamento",   icon: Target,   moduleKey: "budget" },
@@ -113,7 +113,7 @@ const allNavItems    = [...allFarmItems, ...allFinanceItems, ...sharedFooterItem
 
 type SidebarTab = "fazenda" | "financeiro";
 
-// ─── NavButton ────────────────────────────────────────────────────────────────
+// ─── Desktop NavButton (dark sidebar) ────────────────────────────────────────
 function NavButton({ item, location, onClick }: { item: NavItem; location: string; onClick: () => void }) {
     const { t } = useLanguage();
     const isActive = location === item.href || (item.href !== "/fazenda" && location.startsWith(item.href));
@@ -133,6 +133,29 @@ function NavButton({ item, location, onClick }: { item: NavItem; location: strin
         >
             <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-[#0d2418]" : "text-white/80"}`} />
             <span className="text-[13px] md:text-sm truncate leading-tight">{label}</span>
+        </button>
+    );
+}
+
+// ─── Mobile NavButton (white drawer) ─────────────────────────────────────────
+function MobileNavButton({ item, location, onClick }: { item: NavItem; location: string; onClick: () => void }) {
+    const { t } = useLanguage();
+    const isActive = location === item.href || (item.href !== "/fazenda" && location.startsWith(item.href));
+    const Icon = item.icon;
+    const label = t(item.labelKey as any);
+    return (
+        <button
+            onClick={onClick}
+            className={`
+                w-full flex items-center gap-4 px-2 py-3.5 transition-colors duration-150
+                ${isActive
+                    ? "text-[#0a6e3a] font-semibold"
+                    : "text-gray-700 hover:text-[#0a6e3a] font-medium"
+                }
+            `}
+        >
+            <Icon className={`h-6 w-6 shrink-0 ${isActive ? "text-[#0a6e3a]" : "text-gray-500"}`} />
+            <span className="text-base leading-tight">{label}</span>
         </button>
     );
 }
@@ -169,6 +192,12 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
     const activeGroups = activeTab === "fazenda" ? farmNavGroups : financeNavGroups;
 
+    // All groups combined for mobile (show everything, no tab switching)
+    const allGroupsForMobile = [
+        { label: "Fazenda", items: farmNavGroups.flatMap(g => g.items) },
+        { label: "Financeiro", items: financeNavGroups.flatMap(g => g.items) },
+    ];
+
     const handleLogout = () => {
         logoutMutation.mutate(undefined, {
             onSuccess: () => { window.location.href = "https://www.agrofarmdigital.com/auth"; },
@@ -182,28 +211,123 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
     return (
         <div className="min-h-screen bg-gray-100 flex relative">
+
+            {/* ══════════════════════════════════════════════════════════════════
+                MOBILE DRAWER — White, wide, app-native style (< md)
+                ══════════════════════════════════════════════════════════════════ */}
             {isMobileMenuOpen && (
-                <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
+                <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
             )}
 
-            <aside className={`
-                w-[220px] md:w-[200px] bg-[#0d2418] text-white
-                flex flex-col shrink-0 fixed top-0 bottom-0 z-50 shadow-[4px_0_24px_rgba(0,0,0,0.15)]
-                transition-transform duration-300 ease-in-out md:translate-x-0
-                ${isMobileMenuOpen ? "translate-x-0 left-0" : "-translate-x-full md:left-0"}
+            <div className={`
+                md:hidden fixed top-0 left-0 bottom-0 z-50 w-[80%] max-w-[340px] bg-white
+                flex flex-col shadow-2xl
+                transition-transform duration-300 ease-in-out
+                ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}
             `}>
-                {/* Logo */}
-                <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-lg shrink-0">🚜</div>
-                        <div className="min-w-0">
-                            <span className="font-bold text-sm leading-tight block text-white truncate">AgroFarm</span>
-                            <span className="text-[10px] text-emerald-400 truncate block">{user.name || user.username}</span>
+                {/* Header: Logo + User info */}
+                <div className="px-6 pt-10 pb-6">
+                    {/* Logo */}
+                    <div className="flex items-center gap-3 mb-6">
+                        <img src="/icon-512x512.png" alt="AgroFarm" className="w-16 h-16 object-contain" />
+                        <div>
+                            <p className="text-xl font-extrabold text-[#0a6e3a] leading-tight tracking-tight">AgroFarm</p>
+                            <p className="text-[11px] font-semibold text-[#0a6e3a]/70 uppercase tracking-wider">Gestor Rural Digital</p>
                         </div>
                     </div>
-                    <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 transition-colors">
-                        <X className="w-5 h-5" />
+
+                    {/* User greeting */}
+                    <div>
+                        <p className="text-lg font-bold text-gray-800">
+                            Ola, {(user.name || user.username || "").split(" ")[0]}
+                        </p>
+                        <p className="text-sm text-gray-500 truncate">{user.username}</p>
+                        <button
+                            onClick={handleLogout}
+                            className="mt-1 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors"
+                        >
+                            Sair
+                        </button>
+                    </div>
+                </div>
+
+                {/* Divider */}
+                <div className="mx-6 border-t border-gray-200" />
+
+                {/* Tab switcher */}
+                <div className="flex mx-6 mt-4 bg-gray-100 rounded-xl p-1">
+                    <button onClick={() => setActiveTab("fazenda")}
+                        className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200
+                            ${activeTab === "fazenda" ? "bg-white text-[#0a6e3a] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                        Fazenda
                     </button>
+                    <button onClick={() => setActiveTab("financeiro")}
+                        className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200
+                            ${activeTab === "financeiro" ? "bg-white text-[#0a6e3a] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                        Financeiro
+                    </button>
+                </div>
+
+                {/* Nav items */}
+                <nav className="flex-1 overflow-y-auto px-6 py-4">
+                    {activeGroups.map((group, gi) => {
+                        const visibleItems = group.items.filter(isEnabled);
+                        if (!visibleItems.length) return null;
+                        return (
+                            <div key={gi}>
+                                {gi > 0 && group.label && (
+                                    <div className="mt-4 mb-1">
+                                        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 px-2">
+                                            {group.label}
+                                        </p>
+                                    </div>
+                                )}
+                                <div>
+                                    {visibleItems.map(item => (
+                                        <MobileNavButton
+                                            key={item.href}
+                                            item={item}
+                                            location={location}
+                                            onClick={() => { setLocation(item.href); setIsMobileMenuOpen(false); }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    {/* Shared items */}
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                        {sharedFooterItems.map(item => (
+                            <MobileNavButton
+                                key={item.href}
+                                item={item}
+                                location={location}
+                                onClick={() => { setLocation(item.href); setIsMobileMenuOpen(false); }}
+                            />
+                        ))}
+                    </div>
+                </nav>
+
+                {/* Footer */}
+                <div className="shrink-0 px-6 py-4 border-t border-gray-100">
+                    <p className="text-center text-xs text-gray-400">Termos de Uso</p>
+                </div>
+            </div>
+
+            {/* ══════════════════════════════════════════════════════════════════
+                DESKTOP SIDEBAR — Dark green, narrow (>= md)
+                ══════════════════════════════════════════════════════════════════ */}
+            <aside className="hidden md:flex w-[200px] bg-[#0d2418] text-white flex-col shrink-0 fixed top-0 bottom-0 z-50 shadow-[4px_0_24px_rgba(0,0,0,0.15)]">
+                {/* Logo */}
+                <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
+                    <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0">
+                        <img src="/icon-512x512.png" alt="AgroFarm" className="w-full h-full object-contain" />
+                    </div>
+                    <div className="min-w-0">
+                        <span className="font-bold text-sm leading-tight block text-white truncate">AgroFarm</span>
+                        <span className="text-[10px] text-emerald-400 truncate block">{user.name || user.username}</span>
+                    </div>
                 </div>
 
                 {/* Tab switcher */}
@@ -211,23 +335,22 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     <button onClick={() => setActiveTab("fazenda")}
                         className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-semibold transition-all duration-200
                             ${activeTab === "fazenda" ? "bg-white text-[#0d2418] shadow-sm" : "text-white/70 hover:text-white"}`}>
-                        🌾 {t("nav_tab_farm" as any)}
+                        {t("nav_tab_farm" as any)}
                     </button>
                     <button onClick={() => setActiveTab("financeiro")}
                         className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[11px] font-semibold transition-all duration-200
                             ${activeTab === "financeiro" ? "bg-white text-[#0d2418] shadow-sm" : "text-white/70 hover:text-white"}`}>
-                        💰 {t("nav_tab_finance" as any)}
+                        {t("nav_tab_finance" as any)}
                     </button>
                 </div>
 
-                {/* ── Scrollable nav groups ── */}
+                {/* Scrollable nav groups */}
                 <nav className="flex-1 overflow-y-auto py-3 px-2">
                     {activeGroups.map((group, gi) => {
                         const visibleItems = group.items.filter(isEnabled);
                         if (!visibleItems.length) return null;
                         return (
                             <div key={gi}>
-                                {/* Divider + group label (skip for first group without label) */}
                                 {gi > 0 && (
                                     <div className="my-2 px-1">
                                         <div className="border-t border-white/10" />
@@ -248,40 +371,33 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     })}
                 </nav>
 
-                {/* ── Fixed footer: Relatórios + Perfil + Sair ── */}
+                {/* Fixed footer */}
                 <div className="shrink-0 px-2 pb-3">
-                    {/* Divider */}
                     <div className="border-t border-white/20 mb-2 mx-1" />
-
-                    {/* Shared items (always visible for both menus) */}
                     <div className="space-y-0.5 mb-2">
                         {sharedFooterItems.map(item => (
                             <NavButton key={item.href} item={item} location={location} onClick={() => setLocation(item.href)} />
                         ))}
                     </div>
-
-                    {/* Divider above Sair */}
                     <div className="border-t border-white/10 mb-2 mx-1" />
-
-                    {/* Logout */}
                     <button
                         onClick={handleLogout}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-full text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
                         title={t("nav_logout")}
                     >
                         <LogOut className="h-5 w-5 shrink-0" />
-                        <span className="text-[13px] md:text-sm font-medium">{t("nav_logout")}</span>
+                        <span className="text-sm font-medium">{t("nav_logout")}</span>
                     </button>
                 </div>
             </aside>
 
             {/* ── Main content ── */}
             <main className="flex-1 flex flex-col min-h-screen max-w-full md:ml-[200px]">
-                <header className="bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-[1000] px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+                <header className="bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
                     <button
                         onClick={() => setIsMobileMenuOpen(true)}
                         className="md:hidden p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors"
-                        aria-label={t("nav_open_menu")}
+                        aria-label="Abrir menu"
                     >
                         <Menu className="w-6 h-6" />
                     </button>
