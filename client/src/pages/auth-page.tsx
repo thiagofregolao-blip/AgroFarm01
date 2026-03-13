@@ -94,27 +94,18 @@ export default function AuthPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           MOBILE — Full-screen green login (visible < lg)
           ══════════════════════════════════════════════════════════════════════ */}
-      <div className="lg:hidden min-h-screen flex flex-col relative overflow-hidden bg-gradient-to-b from-[#0a6e3a] via-[#0d8a48] to-[#0a5e32]">
+      <div className="lg:hidden min-h-screen flex flex-col relative overflow-hidden">
 
-        {/* Mesh / network pattern overlay */}
+        {/* Background image */}
         <div
-          className="absolute inset-0 opacity-[0.12] pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: `
-              radial-gradient(circle at 15% 85%, rgba(255,255,255,0.3) 1px, transparent 1px),
-              radial-gradient(circle at 85% 15%, rgba(255,255,255,0.3) 1px, transparent 1px),
-              radial-gradient(circle at 50% 50%, rgba(255,255,255,0.15) 1px, transparent 1px),
-              linear-gradient(45deg, transparent 48%, rgba(255,255,255,0.05) 49%, rgba(255,255,255,0.05) 51%, transparent 52%),
-              linear-gradient(-45deg, transparent 48%, rgba(255,255,255,0.05) 49%, rgba(255,255,255,0.05) 51%, transparent 52%)
-            `,
-            backgroundSize: "200px 200px, 200px 200px, 100px 100px, 60px 60px, 60px 60px",
+            backgroundImage: "url('/login-bg.png')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
           }}
         />
-
-        {/* Glowing orbs */}
-        <div className="absolute top-[10%] left-[15%] w-48 h-48 bg-emerald-300/10 rounded-full blur-[80px] pointer-events-none" />
-        <div className="absolute bottom-[15%] right-[10%] w-64 h-64 bg-teal-400/8 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute top-[60%] left-[50%] w-32 h-32 bg-green-200/5 rounded-full blur-[60px] pointer-events-none" />
 
         {/* Content */}
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 py-12">
