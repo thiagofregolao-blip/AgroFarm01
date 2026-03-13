@@ -5221,16 +5221,23 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const b = req.body;
             console.log("[CHEQUE_CREATE] body:", JSON.stringify(b));
             const safeAmount = String(b.amount || '0');
-            const safeIssue = b.issueDate ? new Date(String(b.issueDate)) : new Date();
-            const safeDue = b.dueDate ? new Date(String(b.dueDate)) : null;
+            const safeIssue = b.issueDate ? String(b.issueDate) : new Date().toISOString();
+            const safeDue = b.dueDate ? String(b.dueDate) : null;
+            const safeAccountId = b.accountId ? String(b.accountId) : null;
+            const safeHolder = b.holder ? String(b.holder) : null;
+            const safeOwnerType = b.ownerType ? String(b.ownerType) : null;
+            const safeNotes = b.notes ? String(b.notes) : null;
+            const safePayableId = b.relatedPayableId ? String(b.relatedPayableId) : null;
+            const safeReceivableId = b.relatedReceivableId ? String(b.relatedReceivableId) : null;
+            const farmerId = String(req.user!.id);
             const rows = await db.execute(sql`
                 INSERT INTO farm_cheques (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
                     issue_date, due_date, owner_type, notes, related_payable_id, related_receivable_id)
-                VALUES (${req.user!.id}, ${b.accountId || null}, ${String(b.type || 'recebido')}, ${String(b.chequeNumber || '')},
-                    ${String(b.bank || '')}, ${b.holder ? String(b.holder) : null},
-                    ${safeAmount}, ${String(b.currency || 'USD')}, ${safeIssue}, ${safeDue},
-                    ${b.ownerType ? String(b.ownerType) : null}, ${b.notes ? String(b.notes) : null},
-                    ${b.relatedPayableId ? String(b.relatedPayableId) : null}, ${b.relatedReceivableId ? String(b.relatedReceivableId) : null})
+                VALUES (${farmerId}, ${safeAccountId}, ${String(b.type || 'recebido')}, ${String(b.chequeNumber || '')},
+                    ${String(b.bank || '')}, ${safeHolder},
+                    ${safeAmount}, ${String(b.currency || 'USD')}, ${safeIssue}::timestamp, ${safeDue}::timestamp,
+                    ${safeOwnerType}, ${safeNotes},
+                    ${safePayableId}, ${safeReceivableId})
                 RETURNING *
             `);
             res.json(((rows as any).rows ?? rows)[0]);

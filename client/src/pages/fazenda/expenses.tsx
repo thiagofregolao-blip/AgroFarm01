@@ -264,8 +264,8 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
     const [description, setDescription] = useState(initialData?.description || "");
     const [amount, setAmount] = useState(initialData?.amount ? String(initialData.amount) : "");
     const [supplier, setSupplier] = useState(initialData?.supplier || "");
-    const [propertyId, setPropertyId] = useState(initialData?.propertyId ? String(initialData.propertyId) : "");
-    const [seasonId, setSeasonId] = useState(initialData?.seasonId ? String(initialData.seasonId) : "");
+    const [propertyId, setPropertyId] = useState(initialData?.propertyId ? String(initialData.propertyId) : "__none__");
+    const [seasonId, setSeasonId] = useState(initialData?.seasonId ? String(initialData.seasonId) : "__none__");
     const [expenseDate, setExpenseDate] = useState(initialData?.expenseDate ? new Date(initialData.expenseDate).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10));
     const [paymentType, setPaymentType] = useState(initialData?.paymentType || "a_vista");
     const [dueDate, setDueDate] = useState(initialData?.dueDate ? new Date(initialData.dueDate).toISOString().substring(0, 10) : "");
@@ -286,8 +286,8 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
             description,
             amount,
             supplier: supplier || null,
-            propertyId: propertyId || null,
-            seasonId: seasonId || null,
+            propertyId: propertyId === "__none__" ? null : propertyId || null,
+            seasonId: seasonId === "__none__" ? null : seasonId || null,
             expenseDate,
             paymentType,
             dueDate: dueDate || null,
@@ -379,7 +379,7 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
                     <Select value={propertyId} onValueChange={setPropertyId}>
                         <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Todas</SelectItem>
+                            <SelectItem value="__none__">Todas</SelectItem>
                             {properties.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
@@ -391,7 +391,7 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
                     <Select value={seasonId} onValueChange={setSeasonId}>
                         <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Nenhuma</SelectItem>
+                            <SelectItem value="__none__">Nenhuma</SelectItem>
                             {seasons.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
