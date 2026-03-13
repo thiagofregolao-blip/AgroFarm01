@@ -189,6 +189,8 @@ app.use((req, res, next) => {
       )
     `);
     await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS received_amount numeric(15, 2) DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS received_date timestamp`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS cash_transaction_id varchar`);
     log("✅ Migration: financial accounts tables ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration check for financial accounts: ${migErr.message}`);
