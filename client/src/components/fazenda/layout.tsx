@@ -4,7 +4,7 @@ import {
     Home, Warehouse, Map, FileText, BarChart3,
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
-    Receipt, HandCoins, PieChart, Target, Scale, Landmark
+    Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -76,10 +76,11 @@ const financeNavGroups: NavGroup[] = [
         ],
     },
     {
-        label: "Saídas",
+        label: "Saidas",
         items: [
-            { labelKey: "nav_expenses",          href: "/fazenda/despesas",    icon: DollarSign, moduleKey: "expenses" },
-            { labelKey: "nav_accounts_payable",  href: "/fazenda/contas-pagar",icon: Receipt,    moduleKey: "accounts_payable" },
+            { labelKey: "nav_expenses",          href: "/fazenda/despesas",       icon: DollarSign, moduleKey: "expenses" },
+            { labelKey: "nav_accounts_payable",  href: "/fazenda/contas-pagar",   icon: Receipt,    moduleKey: "accounts_payable" },
+            { labelKey: "nav_suppliers",          href: "/fazenda/fornecedores",  icon: Building2,  moduleKey: "suppliers" },
         ],
     },
     {

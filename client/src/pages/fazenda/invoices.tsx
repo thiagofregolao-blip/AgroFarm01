@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -40,6 +40,9 @@ export default function FarmInvoices() {
     const [editExpData, setEditExpData] = useState<any>({});
     const [editingExpItemId, setEditingExpItemId] = useState<string | null>(null);
     const [editExpItemData, setEditExpItemData] = useState<any>({});
+    const [isRemission, setIsRemission] = useState(false);
+    const [remissionMatch, setRemissionMatch] = useState<any>(null);
+    const [matchedRemissionId, setMatchedRemissionId] = useState<string | null>(null);
 
     const { user } = useAuth();
 
@@ -82,6 +85,24 @@ export default function FarmInvoices() {
     const { data: equipment = [] } = useQuery({
         queryKey: ["/api/farm/equipment"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/equipment"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: suppliers = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/suppliers"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/suppliers"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: expenseCategories = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/expense-categories"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/expense-categories"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: remissions = [], isLoading: isLoadingRemissions } = useQuery<any[]>({
+        queryKey: ["/api/farm/remissions"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/remissions"); return r.json(); },
         enabled: !!user,
     });
 
@@ -210,10 +231,41 @@ export default function FarmInvoices() {
         onError: () => toast({ title: "Erro ao atualizar item", variant: "destructive" }),
     });
 
+    const autoRegisterSupplier = async (supplierName: string, ruc: string) => {
+        try {
+            const existing = (suppliers as any[]).find((s: any) => s.ruc === ruc);
+            if (!existing) {
+                await apiRequest("POST", "/api/farm/suppliers", { name: supplierName, ruc });
+                queryClient.invalidateQueries({ queryKey: ["/api/farm/suppliers"] });
+                toast({ title: `Fornecedor ${supplierName} cadastrado automaticamente` });
+            }
+        } catch {
+            // Supplier auto-register is best-effort
+        }
+    };
+
+    const checkRemissionMatch = async (supplier: string, items: any[]) => {
+        try {
+            const res = await apiRequest("POST", "/api/farm/remissions/check-match", {
+                supplier,
+                items: items.map((it: any) => ({ productName: it.productName, quantity: it.quantity })),
+            });
+            const data = await res.json();
+            if (data.matched) {
+                setRemissionMatch(data);
+                setMatchedRemissionId(data.remissionId);
+            }
+        } catch {
+            // Match check is best-effort
+        }
+    };
+
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         setUploading(true);
+        setRemissionMatch(null);
+        setMatchedRemissionId(null);
 
         try {
             const formData = new FormData();
@@ -221,6 +273,29 @@ export default function FarmInvoices() {
             if (selectedSeasonId) {
                 formData.append("seasonId", selectedSeasonId);
             }
+
+            // If remission mode, post to remissions endpoint
+            if (isRemission) {
+                formData.append("isRemission", "true");
+                const res = await fetch("/api/farm/remissions/import", {
+                    method: "POST",
+                    body: formData,
+                    credentials: "include",
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error("Upload failed");
+                queryClient.invalidateQueries({ queryKey: ["/api/farm/remissions"] });
+                setImportDialogOpen(false);
+                setIsRemission(false);
+                toast({ title: `Remissao importada com sucesso` });
+
+                // Auto-register supplier from remission
+                if (data.ruc && data.supplier) {
+                    await autoRegisterSupplier(data.supplier, data.ruc);
+                }
+                return;
+            }
+
             if (skipStockEntry) {
                 formData.append("skipStockEntry", "true");
             }
@@ -242,10 +317,38 @@ export default function FarmInvoices() {
                 return;
             }
             if (!res.ok) throw new Error("Upload failed");
+
+            // #18 Auto-register supplier from RUC
+            if (data.ruc && data.supplier) {
+                await autoRegisterSupplier(data.supplier, data.ruc);
+            }
+
+            // #24 Check remission match for regular invoices
+            if (data.invoice?.items && data.invoice.supplier) {
+                await checkRemissionMatch(data.invoice.supplier, data.invoice.items);
+            }
+
+            // If a remission match was found, reconcile
+            if (matchedRemissionId && data.invoice?.id) {
+                try {
+                    const reconcileItems = (data.invoice.items || []).map((it: any) => ({
+                        productId: it.productId,
+                        unitPrice: it.unitPrice,
+                    }));
+                    await apiRequest("POST", `/api/farm/remissions/${matchedRemissionId}/reconcile`, {
+                        invoiceId: data.invoice.id,
+                        items: reconcileItems,
+                    });
+                    queryClient.invalidateQueries({ queryKey: ["/api/farm/remissions"] });
+                } catch {
+                    // Reconciliation is best-effort
+                }
+            }
+
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
             setSelectedInvoice(data.invoice.id);
             setImportDialogOpen(false);
-            toast({ title: skipStockEntry ? `📄 ${data.message} (sem entrada no estoque)` : `📄 ${data.message}` });
+            toast({ title: skipStockEntry ? `${data.message} (sem entrada no estoque)` : `${data.message}` });
         } catch (err) {
             toast({ title: "Erro ao importar fatura", variant: "destructive" });
         } finally {
@@ -324,6 +427,28 @@ export default function FarmInvoices() {
                                 </div>
                                 <Info className={`h-4 w-4 mt-0.5 flex-shrink-0 ${skipStockEntry ? 'text-amber-500' : 'text-gray-400'}`} />
                             </div>
+                            {/* Toggle: Remissao (sem valor) */}
+                            <div
+                                className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${isRemission
+                                    ? 'border-blue-400 bg-blue-50'
+                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                onClick={() => setIsRemission(!isRemission)}
+                            >
+                                <div className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors ${isRemission ? 'bg-blue-500 text-white' : 'border-2 border-gray-300'
+                                    }`}>
+                                    {isRemission && <Check className="h-3.5 w-3.5" />}
+                                </div>
+                                <div className="flex-1">
+                                    <span className={`text-sm font-medium ${isRemission ? 'text-blue-800' : 'text-gray-700'}`}>
+                                        Esta e uma Remissao (sem valor)
+                                    </span>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        Importa apenas os produtos sem precos. Usado para registrar entrada de mercadoria antes da fatura.
+                                    </p>
+                                </div>
+                                <ReceiptText className={`h-4 w-4 mt-0.5 flex-shrink-0 ${isRemission ? 'text-blue-500' : 'text-gray-400'}`} />
+                            </div>
                             <div>
                                 <label className="text-sm font-medium text-gray-700 mb-2 block">Arquivo PDF</label>
                                 <input ref={fileInputRef} type="file" accept=".pdf, .jpg, .jpeg, .png, .webp" onChange={handleUpload} className="hidden" />
@@ -354,6 +479,7 @@ export default function FarmInvoices() {
                 <Tabs defaultValue="invoices" className="space-y-4">
                     <TabsList className="bg-emerald-50 text-emerald-800">
                         <TabsTrigger value="invoices">Faturas</TabsTrigger>
+                        <TabsTrigger value="remissions">Remissoes</TabsTrigger>
                         <TabsTrigger value="receipts">Recibos de Frota</TabsTrigger>
                     </TabsList>
 
@@ -378,6 +504,8 @@ export default function FarmInvoices() {
                                                         supplier: invoiceDetail.supplier || "",
                                                         issueDate: invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toISOString().split("T")[0] : "",
                                                         totalAmount: invoiceDetail.totalAmount || "",
+                                                        currency: invoiceDetail.currency || "USD",
+                                                        expenseCategory: invoiceDetail.expenseCategory || "",
                                                     });
                                                 }}>
                                                     <Pencil className="mr-1 h-3 w-3" /> Editar
@@ -427,6 +555,27 @@ export default function FarmInvoices() {
                                                 <Label className="text-xs text-gray-500">Valor Total ($)</Label>
                                                 <Input type="number" step="0.01" className="h-8 text-sm" value={editInvData.totalAmount}
                                                     onChange={e => setEditInvData({ ...editInvData, totalAmount: e.target.value })} />
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Moeda</Label>
+                                                <Select value={editInvData.currency || "USD"} onValueChange={(v) => setEditInvData({ ...editInvData, currency: v })}>
+                                                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="USD">USD</SelectItem>
+                                                        <SelectItem value="PYG">PYG</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Categoria</Label>
+                                                <Select value={editInvData.expenseCategory || ""} onValueChange={(v) => setEditInvData({ ...editInvData, expenseCategory: v })}>
+                                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {(expenseCategories as any[]).map((cat: any) => (
+                                                            <SelectItem key={cat.id || cat.name} value={cat.name || cat.id}>{cat.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                         </div>
                                     ) : (
@@ -558,6 +707,15 @@ export default function FarmInvoices() {
                                         <p className="text-gray-500 py-4 text-center">Nenhum item extraído</p>
                                     )}
 
+                                    {remissionMatch && (
+                                        <div className="mt-4 flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                            <Info className="h-5 w-5 text-blue-600 shrink-0" />
+                                            <p className="text-sm text-blue-800 flex-1">
+                                                Produtos ja ingressados via Remissao #{remissionMatch.remissionNumber || remissionMatch.remissionId}. Os produtos nao serao duplicados no estoque.
+                                            </p>
+                                        </div>
+                                    )}
+
                                     {invoiceDetail.status === "pending" && (
                                         <div className="mt-4 flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
                                             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
@@ -639,6 +797,67 @@ export default function FarmInvoices() {
                                                 </div>
                                             </div>
                                         ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="remissions">
+                        <Card className="border-emerald-100">
+                            <CardHeader>
+                                <CardTitle className="text-emerald-800 flex items-center gap-2">
+                                    <ReceiptText className="h-5 w-5" />
+                                    Remissoes
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {isLoadingRemissions ? (
+                                    <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+                                ) : (remissions as any[]).length === 0 ? (
+                                    <div className="py-8 text-center">
+                                        <ReceiptText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                                        <p className="text-gray-500">Nenhuma remissao importada</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-emerald-50">
+                                                <tr>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Nr. Remissao</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
+                                                    <th className="text-center p-3 font-semibold text-emerald-800">Status</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Produtos</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(remissions as any[]).map((rem: any) => (
+                                                    <tr key={rem.id} className="border-t border-gray-100">
+                                                        <td className="p-3 font-medium">{rem.supplier || "--"}</td>
+                                                        <td className="p-3 font-mono text-sm">{rem.remissionNumber || rem.id}</td>
+                                                        <td className="p-3 text-gray-600">
+                                                            {rem.issueDate ? new Date(rem.issueDate).toLocaleDateString("pt-BR") : "--"}
+                                                        </td>
+                                                        <td className="text-center p-3">
+                                                            <Badge className={
+                                                                rem.status === "conciliada"
+                                                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                                                                    : "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"
+                                                            }>
+                                                                {rem.status === "conciliada" ? "Conciliada" : "Pendente"}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="p-3 text-gray-600 text-xs">
+                                                            {rem.items && rem.items.length > 0
+                                                                ? rem.items.map((it: any) => `${it.productName} (${it.quantity})`).join(", ")
+                                                                : "--"
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </CardContent>

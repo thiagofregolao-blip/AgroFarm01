@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
@@ -8,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Printer, FileBarChart, Package, ArrowDownUp, DollarSign, FileText, BarChart3, TrendingUp, Sprout, Tractor, X } from "lucide-react";
+import { Loader2, Printer, FileBarChart, Package, ArrowDownUp, DollarSign, FileText, BarChart3, TrendingUp, Sprout, Tractor, X, Receipt, ShoppingCart, Scale } from "lucide-react";
+import { formatCurrency } from "@/lib/format-currency";
 
 // ============================================================
 // HELPERS
@@ -50,6 +52,9 @@ const TABS = [
     { key: "applications", label: "Aplicações", icon: Sprout },
     { key: "fleet", label: "Frota", icon: Tractor },
     { key: "season-summary", label: "Safra", icon: FileBarChart },
+    { key: "product-purchases", label: "Extrato Produtos", icon: ShoppingCart },
+    { key: "receipts", label: "Recibos", icon: Receipt },
+    { key: "romaneios", label: "Romaneios", icon: Scale },
 ] as const;
 
 type TabKey = typeof TABS[number]["key"];
@@ -73,6 +78,8 @@ export default function FarmReports() {
     const [equipmentId, setEquipmentId] = useState("");
     const [movementType, setMovementType] = useState("");
     const [seasonId, setSeasonId] = useState("");
+    const [buyerFilter, setBuyerFilter] = useState("");
+    const [siloFilter, setSiloFilter] = useState("");
 
     // Fetch dropdown options
     const { data: filterOptions } = useQuery({
@@ -95,12 +102,14 @@ export default function FarmReports() {
         if (equipmentId) params.set("equipmentId", equipmentId);
         if (movementType) params.set("movementType", movementType);
         if (seasonId) params.set("seasonId", seasonId);
+        if (buyerFilter) params.set("buyer", buyerFilter);
+        if (siloFilter) params.set("silo", siloFilter);
         const qs = params.toString();
         return qs ? `${url}?${qs}` : url;
     })();
 
     const { data, isLoading } = useQuery({
-        queryKey: ["farm-reports", activeTab, startDate, endDate, category, supplier, statusFilter, propertyId, productName, equipmentId, movementType, seasonId],
+        queryKey: ["farm-reports", activeTab, startDate, endDate, category, supplier, statusFilter, propertyId, productName, equipmentId, movementType, seasonId, buyerFilter, siloFilter],
         queryFn: async () => { const r = await apiRequest("GET", queryUrl); return r.json(); },
         enabled: !!user,
     });
@@ -108,10 +117,10 @@ export default function FarmReports() {
     const clearFilters = () => {
         setStartDate(""); setEndDate(""); setCategory(""); setSupplier("");
         setStatusFilter(""); setPropertyId(""); setProductName(""); setEquipmentId("");
-        setMovementType(""); setSeasonId("");
+        setMovementType(""); setSeasonId(""); setBuyerFilter(""); setSiloFilter("");
     };
 
-    const hasActiveFilters = startDate || endDate || category || supplier || statusFilter || propertyId || productName || equipmentId || movementType || seasonId;
+    const hasActiveFilters = startDate || endDate || category || supplier || statusFilter || propertyId || productName || equipmentId || movementType || seasonId || buyerFilter || siloFilter;
 
     const handleTabChange = (tab: TabKey) => {
         clearFilters();
@@ -119,6 +128,7 @@ export default function FarmReports() {
     };
 
     const needsDateFilter = !["stock", "season-summary"].includes(activeTab);
+    const [receiptDetailId, setReceiptDetailId] = useState<string | null>(null);
 
     return (
         <FarmLayout>
@@ -321,6 +331,49 @@ export default function FarmReports() {
                                 </div>
                             )}
 
+                            {/* Romaneios: filter by buyer */}
+                            {activeTab === "romaneios" && filterOptions?.buyers?.length > 0 && (
+                                <div className="w-full sm:min-w-[180px] sm:w-auto">
+                                    <Label className="text-xs text-gray-500">Comprador</Label>
+                                    <Select value={buyerFilter} onValueChange={setBuyerFilter}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            {filterOptions.buyers.map((b: string) => (
+                                                <SelectItem key={b} value={b}>{b}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {activeTab === "romaneios" && filterOptions?.silos?.length > 0 && (
+                                <div className="w-full sm:min-w-[140px] sm:w-auto">
+                                    <Label className="text-xs text-gray-500">Silo</Label>
+                                    <Select value={siloFilter} onValueChange={setSiloFilter}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            {filterOptions.silos.map((s: string) => (
+                                                <SelectItem key={s} value={s}>{s}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Receipts: filter by type */}
+                            {activeTab === "receipts" && (
+                                <div className="w-full sm:min-w-[140px] sm:w-auto">
+                                    <Label className="text-xs text-gray-500">Tipo</Label>
+                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="payment">Pagamento</SelectItem>
+                                            <SelectItem value="receipt">Recebimento</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
                             {/* Clear button */}
                             {hasActiveFilters && (
                                 <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-red-500 hover:text-red-700 gap-1">
@@ -355,6 +408,14 @@ export default function FarmReports() {
                         {activeTab === "applications" && <ApplicationsReport data={data} />}
                         {activeTab === "fleet" && <FleetReport data={data} />}
                         {activeTab === "season-summary" && <SeasonSummaryReport data={data} />}
+                        {activeTab === "product-purchases" && <ProductPurchasesReport data={data} />}
+                        {activeTab === "receipts" && (
+                            <>
+                                <ReceiptsReport data={data} onViewDetail={setReceiptDetailId} />
+                                {receiptDetailId && <ReceiptDetailDialog receiptId={receiptDetailId} onClose={() => setReceiptDetailId(null)} />}
+                            </>
+                        )}
+                        {activeTab === "romaneios" && <RomaneiosReport data={data} />}
                     </div>
                 )}
             </div>
@@ -760,6 +821,216 @@ function SeasonSummaryReport({ data }: { data: any }) {
                     </CardContent>
                 </Card>
             )}
+        </>
+    );
+}
+
+// ============================================================
+// 10. PRODUCT PURCHASES REPORT (Extrato Produtos from AP)
+// ============================================================
+function ProductPurchasesReport({ data }: { data: any[] }) {
+    const items: any[] = [];
+    (data || []).forEach((inv: any) => {
+        (inv.items || []).forEach((item: any) => {
+            items.push({
+                ...item,
+                supplier: inv.supplier,
+                invoiceDate: inv.issueDate || inv.createdAt,
+                currency: inv.currency || "USD",
+            });
+        });
+    });
+    const totalValue = items.reduce((s: number, i: any) => s + parseFloat(i.totalPrice || i.quantity * i.unitPrice || 0), 0);
+
+    return (
+        <>
+            <SummaryCards items={[
+                { label: "Produtos Comprados", value: String(items.length) },
+                { label: "Faturas", value: String(data?.length || 0) },
+                { label: "Valor Total", value: formatCurrency(totalValue) },
+                { label: "Fornecedores", value: String(new Set(items.map(i => i.supplier)).size) },
+            ]} />
+            <ReportTable headers={["Produto", "Fornecedor", "Data", "Qtd", "Preco Unit.", "Total", "Moeda"]}>
+                {items.map((d: any, i: number) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 font-medium">{d.productName || d.description || "--"}</td>
+                        <td className="px-4 py-2.5">{d.supplier || "--"}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">{fmtDate(d.invoiceDate)}</td>
+                        <td className="px-4 py-2.5">{fmt(d.quantity)}</td>
+                        <td className="px-4 py-2.5">{formatCurrency(d.unitPrice, d.currency)}</td>
+                        <td className="px-4 py-2.5 font-semibold">{formatCurrency(d.totalPrice || (parseFloat(d.quantity || 0) * parseFloat(d.unitPrice || 0)), d.currency)}</td>
+                        <td className="px-4 py-2.5 text-gray-500 text-xs">{d.currency || "USD"}</td>
+                    </tr>
+                ))}
+                {items.length === 0 && <tr><td colSpan={7} className="text-center py-8 text-gray-400">Nenhum produto encontrado nas faturas</td></tr>}
+            </ReportTable>
+        </>
+    );
+}
+
+// ============================================================
+// 11. RECEIPTS REPORT (Recibos)
+// ============================================================
+function ReceiptsReport({ data, onViewDetail }: { data: any[]; onViewDetail: (id: string) => void }) {
+    const totalValue = (data || []).reduce((s: number, d: any) => s + parseFloat(d.amount || 0), 0);
+    const payments = (data || []).filter((d: any) => d.type === "payment");
+    const receipts = (data || []).filter((d: any) => d.type === "receipt");
+
+    return (
+        <>
+            <SummaryCards items={[
+                { label: "Total Recibos", value: String(data?.length || 0) },
+                { label: "Valor Total", value: formatCurrency(totalValue) },
+                { label: "Pagamentos", value: String(payments.length), color: "text-red-600" },
+                { label: "Recebimentos", value: String(receipts.length), color: "text-green-600" },
+            ]} />
+            <ReportTable headers={["Nr. Recibo", "Tipo", "Entidade", "Valor", "Data", "Tipo Pgto", ""]}>
+                {(data || []).map((d: any) => (
+                    <tr key={d.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => onViewDetail(d.id)}>
+                        <td className="px-4 py-2.5 font-medium">{d.receiptNumber || d.id?.slice(0, 8) || "--"}</td>
+                        <td className="px-4 py-2.5">
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${d.type === "payment" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+                                {d.type === "payment" ? "Pagamento" : "Recebimento"}
+                            </span>
+                        </td>
+                        <td className="px-4 py-2.5">{d.entityName || d.supplier || d.client || "--"}</td>
+                        <td className="px-4 py-2.5 font-semibold">{formatCurrency(d.amount, d.currency)}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">{fmtDate(d.receiptDate || d.createdAt)}</td>
+                        <td className="px-4 py-2.5">
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${d.paymentType === "total" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                                {d.paymentType === "total" ? "Total" : "Parcial"}
+                            </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-emerald-600 text-xs font-medium">Ver</td>
+                    </tr>
+                ))}
+                {(!data || data.length === 0) && <tr><td colSpan={7} className="text-center py-8 text-gray-400">Nenhum recibo encontrado</td></tr>}
+            </ReportTable>
+        </>
+    );
+}
+
+// ============================================================
+// RECEIPT DETAIL DIALOG
+// ============================================================
+function ReceiptDetailDialog({ receiptId, onClose }: { receiptId: string; onClose: () => void }) {
+    const { data: receipt, isLoading } = useQuery({
+        queryKey: ["farm-receipt-detail", receiptId],
+        queryFn: async () => { const r = await apiRequest("GET", `/api/farm/receipts/${receiptId}`); return r.json(); },
+        enabled: !!receiptId,
+    });
+
+    return (
+        <Dialog open={!!receiptId} onOpenChange={(o) => { if (!o) onClose(); }}>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Detalhes do Recibo</DialogTitle>
+                </DialogHeader>
+                {isLoading ? (
+                    <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+                ) : receipt ? (
+                    <div className="space-y-4 text-sm">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <p className="text-xs text-gray-500">Nr. Recibo</p>
+                                <p className="font-semibold">{receipt.receiptNumber || receipt.id?.slice(0, 8)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Tipo</p>
+                                <p className="font-semibold">{receipt.type === "payment" ? "Pagamento" : "Recebimento"}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Entidade</p>
+                                <p className="font-semibold">{receipt.entityName || receipt.supplier || receipt.client || "--"}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Data</p>
+                                <p className="font-semibold">{fmtDate(receipt.receiptDate || receipt.createdAt)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Valor</p>
+                                <p className="font-bold text-lg text-emerald-700">{formatCurrency(receipt.amount, receipt.currency)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Tipo Pagamento</p>
+                                <p className="font-semibold">{receipt.paymentType === "total" ? "Total" : "Parcial"}</p>
+                            </div>
+                        </div>
+
+                        {receipt.paymentMethods?.length > 0 && (
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500 mb-2">METODOS DE PAGAMENTO</p>
+                                <div className="space-y-1">
+                                    {receipt.paymentMethods.map((pm: any, i: number) => (
+                                        <div key={i} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg text-sm">
+                                            <span>{pm.method || pm.type || "--"}</span>
+                                            <span className="font-semibold">{formatCurrency(pm.amount, receipt.currency)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {receipt.invoices?.length > 0 && (
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500 mb-2">FATURAS VINCULADAS</p>
+                                <div className="space-y-1">
+                                    {receipt.invoices.map((inv: any, i: number) => (
+                                        <div key={i} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg text-sm">
+                                            <span>{inv.invoiceNumber || `Fatura #${i + 1}`}</span>
+                                            <span className="font-semibold">{formatCurrency(inv.totalAmount || inv.amount, receipt.currency)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {receipt.notes && (
+                            <div>
+                                <p className="text-xs font-semibold text-gray-500 mb-1">NOTAS</p>
+                                <p className="text-gray-700">{receipt.notes}</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <p className="text-center text-gray-400 py-8">Recibo nao encontrado</p>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// ============================================================
+// 12. ROMANEIOS REPORT
+// ============================================================
+function RomaneiosReport({ data }: { data: any[] }) {
+    const totalPesoFinal = (data || []).reduce((s: number, d: any) => s + parseFloat(d.finalWeight || d.netWeight || 0), 0);
+    const totalValor = (data || []).reduce((s: number, d: any) => s + parseFloat(d.totalValue || 0), 0);
+
+    return (
+        <>
+            <SummaryCards items={[
+                { label: "Romaneios", value: String(data?.length || 0) },
+                { label: "Peso Final Total", value: `${fmt(totalPesoFinal)} kg` },
+                { label: "Valor Total", value: formatCurrency(totalValor) },
+                { label: "Compradores", value: String(new Set((data || []).map((d: any) => d.buyerName)).size) },
+            ]} />
+            <ReportTable headers={["Data", "Comprador", "Cultura", "Peso Bruto", "Tara", "Peso Liquido", "Umidade", "Peso Final", "Valor"]}>
+                {(data || []).map((d: any) => (
+                    <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 whitespace-nowrap">{fmtDate(d.date || d.createdAt)}</td>
+                        <td className="px-4 py-2.5 font-medium">{d.buyerName || "--"}</td>
+                        <td className="px-4 py-2.5">{d.crop || d.culture || "--"}</td>
+                        <td className="px-4 py-2.5">{fmt(d.grossWeight)} kg</td>
+                        <td className="px-4 py-2.5">{fmt(d.tare)} kg</td>
+                        <td className="px-4 py-2.5">{fmt(d.netWeight)} kg</td>
+                        <td className="px-4 py-2.5">{d.moisture != null ? `${fmt(d.moisture)}%` : "--"}</td>
+                        <td className="px-4 py-2.5 font-semibold">{fmt(d.finalWeight || d.netWeight)} kg</td>
+                        <td className="px-4 py-2.5 font-semibold">{formatCurrency(d.totalValue, d.currency)}</td>
+                    </tr>
+                ))}
+                {(!data || data.length === 0) && <tr><td colSpan={9} className="text-center py-8 text-gray-400">Nenhum romaneio encontrado</td></tr>}
+            </ReportTable>
         </>
     );
 }

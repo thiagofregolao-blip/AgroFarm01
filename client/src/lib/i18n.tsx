@@ -32,6 +32,7 @@ const translations = {
     nav_dre: "DRE / Resultado",
     nav_budget: "Orçamento",
     nav_reconciliation: "Conciliação",
+    nav_suppliers: "Fornecedores",
 
     // Profile
     profile_title: "Meu Perfil",
@@ -166,6 +167,7 @@ const translations = {
     nav_dre: "Estado de Resultados",
     nav_budget: "Presupuesto",
     nav_reconciliation: "Conciliación",
+    nav_suppliers: "Proveedores",
 
     // Profile
     profile_title: "Mi Perfil",

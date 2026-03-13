@@ -5136,5 +5136,399 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SPRINT 24-ITEMS: NEW ROUTES
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── #6: CRUD Fornecedores (Suppliers) ────────────────────────────────────
+    app.get("/api/farm/suppliers", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const rows = await db.execute(sql`
+                SELECT * FROM farm_suppliers WHERE farmer_id = ${req.user!.id} AND is_active = true ORDER BY name
+            `);
+            res.json((rows as any).rows ?? rows);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.post("/api/farm/suppliers", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { name, ruc, phone, email, address, notes } = req.body;
+            const rows = await db.execute(sql`
+                INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, notes)
+                VALUES (${req.user!.id}, ${name}, ${ruc ?? null}, ${phone ?? null}, ${email ?? null}, ${address ?? null}, ${notes ?? null})
+                RETURNING *
+            `);
+            res.json(((rows as any).rows ?? rows)[0]);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.put("/api/farm/suppliers/:id", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { name, ruc, phone, email, address, notes } = req.body;
+            await db.execute(sql`
+                UPDATE farm_suppliers SET name=${name}, ruc=${ruc ?? null}, phone=${phone ?? null},
+                email=${email ?? null}, address=${address ?? null}, notes=${notes ?? null}
+                WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
+            `);
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.delete("/api/farm/suppliers/:id", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            await db.execute(sql`
+                UPDATE farm_suppliers SET is_active = false WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
+            `);
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── #5: DELETE + PUT Despesas (Expenses) ─────────────────────────────────
+    app.delete("/api/farm/expenses/:id", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            await db.execute(sql`DELETE FROM farm_expense_items WHERE expense_id = ${req.params.id}`);
+            await db.execute(sql`DELETE FROM farm_expenses WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}`);
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.put("/api/farm/expenses/:id", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { category, supplier, description, amount, expenseDate, paymentType, dueDate, installments } = req.body;
+            await db.execute(sql`
+                UPDATE farm_expenses SET category=${category}, supplier=${supplier ?? null},
+                description=${description ?? null}, amount=${amount}, expense_date=${expenseDate ? new Date(expenseDate) : sql`now()`},
+                payment_type=${paymentType ?? 'a_vista'}, due_date=${dueDate ? new Date(dueDate) : null},
+                installments=${installments ?? 1}
+                WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
+            `);
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── #11: CRUD Cheques ────────────────────────────────────────────────────
+    app.get("/api/farm/cheques", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const rows = await db.execute(sql`
+                SELECT * FROM farm_cheques WHERE farmer_id = ${req.user!.id} ORDER BY created_at DESC
+            `);
+            res.json((rows as any).rows ?? rows);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.post("/api/farm/cheques", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { accountId, type, chequeNumber, bank, holder, amount, currency, issueDate, dueDate, ownerType, notes,
+                    relatedPayableId, relatedReceivableId } = req.body;
+            const rows = await db.execute(sql`
+                INSERT INTO farm_cheques (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
+                    issue_date, due_date, owner_type, notes, related_payable_id, related_receivable_id)
+                VALUES (${req.user!.id}, ${accountId ?? null}, ${type}, ${chequeNumber}, ${bank}, ${holder ?? null},
+                    ${amount}, ${currency ?? 'USD'}, ${new Date(issueDate)}, ${dueDate ? new Date(dueDate) : null},
+                    ${ownerType ?? null}, ${notes ?? null}, ${relatedPayableId ?? null}, ${relatedReceivableId ?? null})
+                RETURNING *
+            `);
+            res.json(((rows as any).rows ?? rows)[0]);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // #11: Compensar cheque
+    app.post("/api/farm/cheques/:id/compensate", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { accountId } = req.body;
+            const chequeRows = await db.execute(sql`
+                SELECT * FROM farm_cheques WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}
+            `);
+            const cheque = ((chequeRows as any).rows ?? chequeRows)[0];
+            if (!cheque) return res.status(404).json({ error: "Cheque not found" });
+
+            const now = new Date();
+            // Update cheque status
+            await db.execute(sql`
+                UPDATE farm_cheques SET status = 'compensado', compensation_date = ${now}
+                WHERE id = ${req.params.id}
+            `);
+
+            // Create cash transaction
+            const txType = cheque.type === 'emitido' ? 'saida' : 'entrada';
+            const txRows = await db.execute(sql`
+                INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description,
+                    payment_method, cheque_id, reference_type, transaction_date)
+                VALUES (${req.user!.id}, ${accountId ?? cheque.account_id}, ${txType}, ${cheque.amount}, ${cheque.currency},
+                    'cheque', ${'Cheque #' + cheque.cheque_number + ' - ' + cheque.bank}, 'cheque',
+                    ${cheque.id}, 'cheque', ${now})
+                RETURNING id
+            `);
+            const txId = ((txRows as any).rows ?? txRows)[0]?.id;
+
+            // Update account balance
+            if (txType === 'entrada') {
+                await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${cheque.amount} WHERE id = ${accountId ?? cheque.account_id}`);
+            } else {
+                await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${cheque.amount} WHERE id = ${accountId ?? cheque.account_id}`);
+            }
+
+            await db.execute(sql`UPDATE farm_cheques SET cash_transaction_id = ${txId} WHERE id = ${req.params.id}`);
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.put("/api/farm/cheques/:id/cancel", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            await db.execute(sql`
+                UPDATE farm_cheques SET status = 'cancelado' WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}
+            `);
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── #15: Receipts (Recibos) ──────────────────────────────────────────────
+    app.get("/api/farm/receipts", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const rows = await db.execute(sql`
+                SELECT * FROM farm_receipts WHERE farmer_id = ${req.user!.id} ORDER BY created_at DESC
+            `);
+            res.json((rows as any).rows ?? rows);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.post("/api/farm/receipts", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { type, entity, totalAmount, currency, paymentType, paymentMethods, invoiceRefs, notes } = req.body;
+            // Generate receipt number
+            const countRows = await db.execute(sql`
+                SELECT COUNT(*)::int as cnt FROM farm_receipts WHERE farmer_id = ${req.user!.id}
+            `);
+            const count = ((countRows as any).rows ?? countRows)[0]?.cnt ?? 0;
+            const receiptNumber = String(count + 1).padStart(6, '0');
+
+            const rows = await db.execute(sql`
+                INSERT INTO farm_receipts (farmer_id, receipt_number, type, entity, total_amount, currency,
+                    payment_type, payment_methods, invoice_refs, notes)
+                VALUES (${req.user!.id}, ${receiptNumber}, ${type}, ${entity}, ${totalAmount}, ${currency ?? 'USD'},
+                    ${paymentType ?? 'total'}, ${JSON.stringify(paymentMethods ?? [])}, ${JSON.stringify(invoiceRefs ?? [])},
+                    ${notes ?? null})
+                RETURNING *
+            `);
+            res.json(((rows as any).rows ?? rows)[0]);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── #21: Transfer between accounts with exchange rate ────────────────────
+    app.post("/api/farm/cash-flow/transfer", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { fromAccountId, toAccountId, amount, exchangeRate, description } = req.body;
+            const now = new Date();
+
+            // Get source account info
+            const srcRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${fromAccountId} AND farmer_id = ${req.user!.id}`);
+            const src = ((srcRows as any).rows ?? srcRows)[0];
+            const dstRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${toAccountId} AND farmer_id = ${req.user!.id}`);
+            const dst = ((dstRows as any).rows ?? dstRows)[0];
+            if (!src || !dst) return res.status(404).json({ error: "Account not found" });
+
+            const convertedAmount = exchangeRate ? (parseFloat(amount) * parseFloat(exchangeRate)).toFixed(2) : amount;
+            const descText = description || `Transferencia ${src.currency} -> ${dst.currency} (cambio: ${exchangeRate || '1'})`;
+
+            // Debit source
+            await db.execute(sql`
+                INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description, payment_method, reference_type, transaction_date)
+                VALUES (${req.user!.id}, ${fromAccountId}, 'saida', ${amount}, ${src.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${now})
+            `);
+            await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${amount} WHERE id = ${fromAccountId}`);
+
+            // Credit destination
+            await db.execute(sql`
+                INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description, payment_method, reference_type, transaction_date)
+                VALUES (${req.user!.id}, ${toAccountId}, 'entrada', ${convertedAmount}, ${dst.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${now})
+            `);
+            await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${convertedAmount} WHERE id = ${toAccountId}`);
+
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── #24: Remissions (Remissoes) ──────────────────────────────────────────
+    app.get("/api/farm/remissions", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const rows = await db.execute(sql`
+                SELECT r.*, json_agg(json_build_object('id', ri.id, 'productName', ri.product_name, 'quantity', ri.quantity, 'unit', ri.unit))
+                    FILTER (WHERE ri.id IS NOT NULL) as items
+                FROM farm_remissions r
+                LEFT JOIN farm_remission_items ri ON ri.remission_id = r.id
+                WHERE r.farmer_id = ${req.user!.id}
+                GROUP BY r.id
+                ORDER BY r.created_at DESC
+            `);
+            res.json((rows as any).rows ?? rows);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.post("/api/farm/remissions", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { supplier, ruc, remissionNumber, issueDate, notes, items } = req.body;
+            const remRows = await db.execute(sql`
+                INSERT INTO farm_remissions (farmer_id, supplier, ruc, remission_number, issue_date, notes)
+                VALUES (${req.user!.id}, ${supplier}, ${ruc ?? null}, ${remissionNumber ?? null},
+                    ${issueDate ? new Date(issueDate) : null}, ${notes ?? null})
+                RETURNING *
+            `);
+            const rem = ((remRows as any).rows ?? remRows)[0];
+
+            // Insert items and create stock movements (entrada sem preco)
+            if (items && Array.isArray(items)) {
+                for (const item of items) {
+                    await db.execute(sql`
+                        INSERT INTO farm_remission_items (remission_id, product_id, product_name, quantity, unit)
+                        VALUES (${rem.id}, ${item.productId ?? null}, ${item.productName}, ${item.quantity}, ${item.unit ?? null})
+                    `);
+                    // Enter stock with zero cost (will be corrected when invoice arrives)
+                    if (item.productId) {
+                        await db.execute(sql`
+                            INSERT INTO farm_stock_movements (farmer_id, product_id, type, quantity, unit_cost, reference_type, reference_id, notes)
+                            VALUES (${req.user!.id}, ${item.productId}, 'entrada', ${item.quantity}, 0, 'remission', ${rem.id},
+                                ${'Remissao #' + (remissionNumber || rem.id)})
+                        `);
+                        await db.execute(sql`
+                            INSERT INTO farm_stock (farmer_id, product_id, quantity, average_cost, updated_at)
+                            VALUES (${req.user!.id}, ${item.productId}, ${item.quantity}, 0, now())
+                            ON CONFLICT (farmer_id, product_id) DO UPDATE SET
+                                quantity = farm_stock.quantity + ${item.quantity},
+                                updated_at = now()
+                        `);
+                    }
+                }
+            }
+            res.json(rem);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // #24: Check remission match before importing invoice
+    app.post("/api/farm/remissions/check-match", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { supplier, items } = req.body; // items: [{productName, quantity}]
+            const remRows = await db.execute(sql`
+                SELECT r.*, json_agg(json_build_object('productName', ri.product_name, 'quantity', ri.quantity)) as items
+                FROM farm_remissions r
+                JOIN farm_remission_items ri ON ri.remission_id = r.id
+                WHERE r.farmer_id = ${req.user!.id} AND r.status = 'pendente'
+                GROUP BY r.id
+            `);
+            const remissions = (remRows as any).rows ?? remRows;
+
+            // Try to find a matching remission by supplier name and product overlap
+            for (const rem of remissions) {
+                const supplierMatch = rem.supplier.toLowerCase().includes(supplier?.toLowerCase() || '') ||
+                    supplier?.toLowerCase().includes(rem.supplier.toLowerCase());
+                if (!supplierMatch) continue;
+
+                const remItems = Array.isArray(rem.items) ? rem.items : [];
+                let matchCount = 0;
+                for (const invoiceItem of (items || [])) {
+                    const found = remItems.find((ri: any) =>
+                        ri.productName?.toLowerCase().includes(invoiceItem.productName?.toLowerCase()) ||
+                        invoiceItem.productName?.toLowerCase().includes(ri.productName?.toLowerCase())
+                    );
+                    if (found) matchCount++;
+                }
+                if (matchCount > 0 && matchCount >= Math.min(remItems.length, (items || []).length) * 0.5) {
+                    return res.json({ match: true, remission: rem });
+                }
+            }
+            res.json({ match: false });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // #24: Reconcile remission with invoice and update prices
+    app.post("/api/farm/remissions/:id/reconcile", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { invoiceId, items } = req.body; // items: [{productId, unitPrice}]
+
+            // Mark remission as reconciled
+            await db.execute(sql`
+                UPDATE farm_remissions SET status = 'conciliada', reconciled_invoice_id = ${invoiceId}
+                WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}
+            `);
+
+            // Update prices on stock movements that were entered with zero cost from this remission
+            if (items && Array.isArray(items)) {
+                for (const item of items) {
+                    if (item.productId && item.unitPrice) {
+                        // Update the remission stock movement with the real price
+                        await db.execute(sql`
+                            UPDATE farm_stock_movements SET unit_cost = ${item.unitPrice}
+                            WHERE reference_type = 'remission' AND reference_id = ${req.params.id}
+                            AND product_id = ${item.productId}
+                        `);
+
+                        // Recalculate average cost in farm_stock
+                        const avgRows = await db.execute(sql`
+                            SELECT COALESCE(SUM(quantity * unit_cost) / NULLIF(SUM(quantity), 0), 0) as avg_cost
+                            FROM farm_stock_movements
+                            WHERE farmer_id = ${req.user!.id} AND product_id = ${item.productId} AND type = 'entrada'
+                        `);
+                        const avgCost = ((avgRows as any).rows ?? avgRows)[0]?.avg_cost ?? 0;
+                        await db.execute(sql`
+                            UPDATE farm_stock SET average_cost = ${avgCost}, updated_at = now()
+                            WHERE farmer_id = ${req.user!.id} AND product_id = ${item.productId}
+                        `);
+
+                        // Update plot costs where this product was applied with zero cost
+                        // Find applications that used this product and recalculate
+                        await db.execute(sql`
+                            UPDATE farm_stock_movements SET unit_cost = ${item.unitPrice}
+                            WHERE farmer_id = ${req.user!.id} AND product_id = ${item.productId}
+                            AND type = 'saida' AND (unit_cost IS NULL OR unit_cost = 0)
+                        `);
+                    }
+                }
+            }
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── #7: Stock Warehouses (Depositos) ─────────────────────────────────────
+    app.get("/api/farm/warehouses", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const rows = await db.execute(sql`
+                SELECT DISTINCT ON (s.id) s.*, p.name as property_name
+                FROM farm_properties s
+                WHERE s.farmer_id = ${req.user!.id}
+                ORDER BY s.id, s.name
+            `);
+            res.json((rows as any).rows ?? rows);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── #1: Backup endpoint (triggers pg_dump) ──────────────────────────────
+    app.post("/api/farm/backup", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const dbUrl = process.env.DATABASE_URL;
+            if (!dbUrl) return res.status(500).json({ error: "No DATABASE_URL configured" });
+
+            const { execSync } = await import("child_process");
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const filename = `/tmp/backup-${timestamp}.sql`;
+
+            try {
+                execSync(`pg_dump "${dbUrl}" > ${filename}`, { timeout: 60000 });
+                res.download(filename, `agrofarm-backup-${timestamp}.sql`);
+            } catch {
+                // pg_dump may not be available on Railway — fallback to JSON export
+                const tables = ['farm_suppliers', 'farm_cheques', 'farm_receipts', 'farm_remissions',
+                    'farm_cash_accounts', 'farm_cash_transactions', 'farm_expenses', 'farm_invoices',
+                    'farm_accounts_payable', 'farm_accounts_receivable', 'farm_stock', 'farm_stock_movements'];
+                const backup: any = {};
+                for (const t of tables) {
+                    try {
+                        const r = await db.execute(sql.raw(`SELECT * FROM ${t} WHERE farmer_id = '${req.user!.id}'`));
+                        backup[t] = (r as any).rows ?? r;
+                    } catch { backup[t] = []; }
+                }
+                res.json(backup);
+            }
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
     console.log("✅ Farm routes registered (/api/farm/*, /api/pdv/*)");
 }

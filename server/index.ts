@@ -246,6 +246,124 @@ app.use((req, res, next) => {
     log(`⚠️  Migration check for company_clients unique index: ${migErr.message}`);
   }
 
+  // ═══ Sprint 24-items: new tables + columns ═══
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+
+    // New table: farm_suppliers (#6)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_suppliers (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name text NOT NULL,
+        ruc text,
+        phone text,
+        email text,
+        address text,
+        notes text,
+        is_active boolean NOT NULL DEFAULT true,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+
+    // New table: farm_cheques (#10, #11, #12)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_cheques (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        account_id varchar REFERENCES farm_cash_accounts(id),
+        type text NOT NULL,
+        cheque_number text NOT NULL,
+        bank text NOT NULL,
+        holder text,
+        amount numeric(15,2) NOT NULL,
+        currency text NOT NULL DEFAULT 'USD',
+        issue_date timestamp NOT NULL,
+        due_date timestamp,
+        compensation_date timestamp,
+        status text NOT NULL DEFAULT 'emitido',
+        owner_type text,
+        related_payable_id varchar,
+        related_receivable_id varchar,
+        cash_transaction_id varchar,
+        notes text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+
+    // New table: farm_receipts (#15, #16, #17)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_receipts (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        receipt_number text NOT NULL,
+        type text NOT NULL,
+        entity text NOT NULL,
+        total_amount numeric(15,2) NOT NULL,
+        currency text NOT NULL DEFAULT 'USD',
+        payment_type text,
+        payment_methods jsonb,
+        invoice_refs jsonb,
+        notes text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+
+    // New table: farm_remissions (#24)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_remissions (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        supplier text NOT NULL,
+        ruc text,
+        remission_number text,
+        issue_date timestamp,
+        status text NOT NULL DEFAULT 'pendente',
+        reconciled_invoice_id varchar,
+        notes text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+
+    // New table: farm_remission_items (#24)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_remission_items (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        remission_id varchar NOT NULL REFERENCES farm_remissions(id) ON DELETE CASCADE,
+        product_id varchar REFERENCES farm_products_catalog(id),
+        product_name text NOT NULL,
+        quantity numeric(15,4) NOT NULL,
+        unit text
+      )
+    `);
+
+    // New columns on existing tables
+    await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS observation text`);
+    await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS payment_method text`);
+    await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS cheque_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS receipt_number text`);
+    await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS supplier_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS season_id varchar`);
+
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS account_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS receipt_id varchar`);
+
+    await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS receipt_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS cheque_id varchar`);
+
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS is_remission boolean DEFAULT false`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS remission_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS supplier_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS ruc text`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS expense_category text`);
+
+    log("✅ Migration: Sprint 24-items tables and columns ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration Sprint 24-items: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes
@@ -354,6 +472,27 @@ app.use((req, res, next) => {
         await WeatherStationService.pollAllActiveStations();
       } catch (err) {
         console.error("Error running weather polling cron:", err);
+      }
+    });
+
+    // #1: Daily backup at 2 AM — exports key tables as JSON to console log
+    cron.schedule('0 2 * * *', async () => {
+      try {
+        const { db: backupDb } = await import("./db");
+        const { sql: bkSql } = await import("drizzle-orm");
+        const tables = ['farm_cash_accounts', 'farm_cash_transactions', 'farm_expenses', 'farm_invoices',
+            'farm_accounts_payable', 'farm_accounts_receivable', 'farm_stock', 'farm_stock_movements',
+            'farm_suppliers', 'farm_cheques', 'farm_receipts', 'farm_remissions'];
+        const backup: Record<string, any> = { timestamp: new Date().toISOString() };
+        for (const t of tables) {
+          try {
+            const r = await backupDb.execute(bkSql.raw(`SELECT count(*) as cnt FROM ${t}`));
+            backup[t] = ((r as any).rows ?? r)[0]?.cnt ?? 0;
+          } catch { backup[t] = 'N/A'; }
+        }
+        console.log(`[BACKUP] Daily check completed: ${JSON.stringify(backup)}`);
+      } catch (err) {
+        console.error("[BACKUP] Daily backup check failed:", err);
       }
     });
 

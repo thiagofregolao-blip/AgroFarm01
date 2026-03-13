@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2 } from "lucide-react";
 import { useState, useRef } from "react";
+import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,6 +35,36 @@ export default function FarmStock() {
         enabled: !!user,
     });
 
+    const { data: properties = [] } = useQuery({
+        queryKey: ["/api/farm/properties"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/properties"); return r.json(); },
+        enabled: !!user,
+    });
+
+    // Extrato filters
+    const [extratoProduct, setExtratoProduct] = useState("");
+    const [extratoType, setExtratoType] = useState("");
+    const [extratoStartDate, setExtratoStartDate] = useState("");
+    const [extratoEndDate, setExtratoEndDate] = useState("");
+
+    const extratoQueryUrl = (() => {
+        const params = new URLSearchParams();
+        params.set("limit", "500");
+        if (extratoProduct) params.set("productName", extratoProduct);
+        if (extratoType) params.set("type", extratoType);
+        if (extratoStartDate) params.set("startDate", extratoStartDate);
+        if (extratoEndDate) params.set("endDate", extratoEndDate);
+        return `/api/farm/stock/movements?${params.toString()}`;
+    })();
+
+    const { data: extratoMovements = [], isLoading: extratoLoading } = useQuery({
+        queryKey: ["/api/farm/stock/movements/extrato", extratoProduct, extratoType, extratoStartDate, extratoEndDate],
+        queryFn: async () => { const r = await apiRequest("GET", extratoQueryUrl); return r.json(); },
+        enabled: !!user,
+    });
+
+    const productNames: string[] = Array.from(new Set(stock.map((s: any) => s.productName).filter(Boolean))) as string[];
+
     const deleteStock = useMutation({
         mutationFn: async (id: string) => {
             await apiRequest("DELETE", `/api/farm/stock/${id}`);
@@ -58,6 +89,14 @@ export default function FarmStock() {
         (s.productCategory || "").toLowerCase().includes(search.toLowerCase())
     );
 
+    // Group stock by property for warehouse view
+    const stockByProperty: Record<string, any[]> = {};
+    filtered.forEach((s: any) => {
+        const prop = s.propertyName || "Sem deposito";
+        if (!stockByProperty[prop]) stockByProperty[prop] = [];
+        stockByProperty[prop].push(s);
+    });
+
     const totalValue = stock.reduce((s: number, i: any) =>
         s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0
     );
@@ -69,16 +108,21 @@ export default function FarmStock() {
                     <div>
                         <h1 className="text-2xl font-bold text-emerald-800">Depósito / Estoque</h1>
                         <p className="text-emerald-600 text-sm">
-                            {stock.length} itens — Valor total: <strong>${totalValue.toLocaleString("en", { minimumFractionDigits: 2 })}</strong>
+                            {stock.length} itens — Valor total: <strong>{formatCurrency(totalValue)}</strong>
                         </p>
                     </div>
-                    <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
+                    <div className="flex gap-2 flex-wrap">
+                        <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/properties"] })} />
+                        <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
+                    </div>
                 </div>
 
                 <Tabs defaultValue="stock">
                     <TabsList>
                         <TabsTrigger value="stock">Estoque Atual</TabsTrigger>
+                        <TabsTrigger value="deposits"><Building2 className="h-4 w-4 mr-1" />Depósitos</TabsTrigger>
                         <TabsTrigger value="movements">Movimentações</TabsTrigger>
+                        <TabsTrigger value="extrato"><FileText className="h-4 w-4 mr-1" />Extrato</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="stock" className="mt-4">
@@ -124,8 +168,8 @@ export default function FarmStock() {
                                                             {qty.toFixed(2)} {s.productUnit}
                                                         </span>
                                                     </td>
-                                                    <td className="text-right p-3 font-mono">${cost.toFixed(2)}</td>
-                                                    <td className="text-right p-3 font-mono font-semibold">${(qty * cost).toFixed(2)}</td>
+                                                    <td className="text-right p-3 font-mono">{formatCurrency(cost)}</td>
+                                                    <td className="text-right p-3 font-mono font-semibold">{formatCurrency(qty * cost)}</td>
                                                     <td className="text-right p-3">
                                                         <div className="flex justify-end gap-2">
                                                             <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
@@ -139,6 +183,68 @@ export default function FarmStock() {
                                         })}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    {/* Deposits tab - stock grouped by property/warehouse */}
+                    <TabsContent value="deposits" className="mt-4">
+                        <div className="mb-4 flex items-center justify-between">
+                            <p className="text-sm text-gray-500">{properties.length} depósito(s) cadastrado(s)</p>
+                        </div>
+                        {Object.keys(stockByProperty).length === 0 ? (
+                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                                <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                                <p className="text-gray-500">Nenhum depósito com estoque</p>
+                            </CardContent></Card>
+                        ) : (
+                            <div className="space-y-4">
+                                {Object.entries(stockByProperty).map(([propName, items]) => {
+                                    const propTotal = items.reduce((s: number, i: any) => s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0);
+                                    return (
+                                        <Card key={propName} className="border-emerald-100">
+                                            <CardHeader className="pb-2">
+                                                <CardTitle className="text-lg flex items-center gap-2">
+                                                    <Building2 className="h-5 w-5 text-emerald-600" />
+                                                    {propName}
+                                                    <span className="ml-auto text-sm font-normal text-gray-500">{items.length} itens — {formatCurrency(propTotal)}</span>
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="pt-0">
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm">
+                                                        <thead className="bg-emerald-50">
+                                                            <tr>
+                                                                <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Produto</th>
+                                                                <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Categoria</th>
+                                                                <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Qtd</th>
+                                                                <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Custo Medio</th>
+                                                                <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Valor</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {items.map((s: any) => {
+                                                                const q = parseFloat(s.quantity);
+                                                                const c = parseFloat(s.averageCost);
+                                                                return (
+                                                                    <tr key={s.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
+                                                                        <td className="p-2 font-medium">{s.productName}</td>
+                                                                        <td className="p-2">
+                                                                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">{s.productCategory || "--"}</span>
+                                                                        </td>
+                                                                        <td className="text-right p-2 font-mono">{q.toFixed(2)} {s.productUnit}</td>
+                                                                        <td className="text-right p-2 font-mono">{formatCurrency(c)}</td>
+                                                                        <td className="text-right p-2 font-mono font-semibold">{formatCurrency(q * c)}</td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
                             </div>
                         )}
                     </TabsContent>
@@ -173,6 +279,100 @@ export default function FarmStock() {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    {/* Extrato de Estoque tab */}
+                    <TabsContent value="extrato" className="mt-4 space-y-4">
+                        {/* Extrato filters */}
+                        <Card className="border-emerald-100">
+                            <CardContent className="py-3 px-4">
+                                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
+                                    <div className="w-full sm:min-w-[180px] sm:w-auto">
+                                        <Label className="text-xs text-gray-500">Produto</Label>
+                                        <Select value={extratoProduct} onValueChange={setExtratoProduct}>
+                                            <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                            <SelectContent>
+                                                {productNames.map((p: string) => (
+                                                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="w-full sm:min-w-[130px] sm:w-auto">
+                                        <Label className="text-xs text-gray-500">Tipo</Label>
+                                        <Select value={extratoType} onValueChange={setExtratoType}>
+                                            <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="entry">Entrada</SelectItem>
+                                                <SelectItem value="exit">Saida</SelectItem>
+                                                <SelectItem value="adjustment">Ajuste</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="w-full sm:min-w-[130px] sm:w-auto">
+                                        <Label className="text-xs text-gray-500">Data Inicio</Label>
+                                        <Input type="date" value={extratoStartDate} onChange={e => setExtratoStartDate(e.target.value)} className="h-9" />
+                                    </div>
+                                    <div className="w-full sm:min-w-[130px] sm:w-auto">
+                                        <Label className="text-xs text-gray-500">Data Fim</Label>
+                                        <Input type="date" value={extratoEndDate} onChange={e => setExtratoEndDate(e.target.value)} className="h-9" />
+                                    </div>
+                                    {(extratoProduct || extratoType || extratoStartDate || extratoEndDate) && (
+                                        <Button variant="ghost" size="sm" className="h-9 text-red-500 hover:text-red-700" onClick={() => { setExtratoProduct(""); setExtratoType(""); setExtratoStartDate(""); setExtratoEndDate(""); }}>
+                                            Limpar
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {extratoLoading ? (
+                            <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
+                        ) : extratoMovements.length === 0 ? (
+                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                                <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                                <p className="text-gray-500">Nenhuma movimentação encontrada</p>
+                            </CardContent></Card>
+                        ) : (
+                            <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-emerald-50">
+                                            <tr>
+                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Data</th>
+                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Produto</th>
+                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Tipo</th>
+                                                <th className="text-right p-3 font-semibold text-emerald-800 text-xs">Quantidade</th>
+                                                <th className="text-right p-3 font-semibold text-emerald-800 text-xs">Custo Unit.</th>
+                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Referencia</th>
+                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Notas</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {extratoMovements.map((m: any) => (
+                                                <tr key={m.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
+                                                    <td className="p-3 whitespace-nowrap text-sm">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
+                                                    <td className="p-3 font-medium">{m.productName}</td>
+                                                    <td className="p-3">
+                                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${m.type === "entry" ? "bg-green-50 text-green-700" : m.type === "exit" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>
+                                                            {m.type === "entry" ? "Entrada" : m.type === "exit" ? "Saida" : "Ajuste"}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-right p-3 font-mono">
+                                                        <span className={m.type === "entry" ? "text-green-600" : m.type === "exit" ? "text-red-600" : "text-amber-600"}>
+                                                            {m.type === "entry" ? "+" : ""}{parseFloat(m.quantity).toFixed(2)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-right p-3 font-mono">{m.unitCost ? formatCurrency(m.unitCost) : "--"}</td>
+                                                    <td className="p-3 text-gray-500 text-xs">{m.referenceType || "--"}</td>
+                                                    <td className="p-3 text-gray-500 text-xs max-w-[200px] truncate">{m.notes || "--"}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         )}
                     </TabsContent>
@@ -377,6 +577,56 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                     >
                         {saveStock.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Package className="mr-2 h-4 w-4" />}
                         Confirmar Entrada no Estoque
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function NewDepositDialog({ onSuccess }: { onSuccess: () => void }) {
+    const [open, setOpen] = useState(false);
+    const [depositName, setDepositName] = useState("");
+    const { toast } = useToast();
+
+    const createDeposit = useMutation({
+        mutationFn: async () => {
+            return apiRequest("POST", "/api/farm/properties", { name: depositName });
+        },
+        onSuccess: () => {
+            toast({ title: "Deposito criado", description: `"${depositName}" foi adicionado.` });
+            setDepositName("");
+            setOpen(false);
+            onSuccess();
+        },
+        onError: (e: any) => {
+            toast({ title: "Erro", description: e.message, variant: "destructive" });
+        }
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setDepositName(""); }}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+                    <Building2 className="mr-2 h-4 w-4" /> Novo Deposito
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-sm">
+                <DialogHeader>
+                    <DialogTitle>Novo Deposito / Armazem</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    <div>
+                        <Label>Nome do Deposito *</Label>
+                        <Input value={depositName} onChange={e => setDepositName(e.target.value)} placeholder="Ex: Armazem Central, Silo 1..." disabled={createDeposit.isPending} />
+                    </div>
+                    <Button
+                        className="w-full bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => createDeposit.mutate()}
+                        disabled={createDeposit.isPending || !depositName.trim()}
+                    >
+                        {createDeposit.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                        Criar Deposito
                     </Button>
                 </div>
             </DialogContent>

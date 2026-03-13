@@ -2,11 +2,13 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { formatCurrency } from "@/lib/format-currency";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -14,7 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
     Wallet, Plus, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
     Loader2, Trash2, Building2, Banknote, CreditCard, Landmark, DollarSign,
-    Tag, Download, AlertTriangle, Target, Activity,
+    Tag, Download, AlertTriangle, Target, Activity, ArrowLeftRight, FileText,
+    CheckCircle, XCircle, Clock,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 
@@ -49,16 +52,11 @@ const PAYMENT_METHODS = [
 const ALL_CATEGORIES = [...SAIDA_CATEGORIES, ...ENTRADA_CATEGORIES];
 const PIE_COLORS = ["#059669", "#0891b2", "#d97706", "#dc2626", "#7c3aed", "#db2777", "#65a30d", "#ea580c", "#4f46e5", "#0d9488"];
 
-function currencySymbol(c: string) { return c === "PYG" ? "Gs." : "$"; }
-function formatMoney(amount: number, currency: string) {
-    const sym = currencySymbol(currency);
-    if (currency === "PYG") return `${sym} ${Math.round(amount).toLocaleString("es-PY")}`;
-    return `${sym} ${amount.toFixed(2)}`;
-}
+// formatCurrency imported from @/lib/format-currency
 
 // ─── CSV helper ───────────────────────────────────────────────────────────────
 function exportTransactionsCSV(transactions: any[], accounts: any[]) {
-    const headers = ["Data", "Tipo", "Categoria", "Descrição", "Conta", "Valor", "Moeda", "Origem"];
+    const headers = ["Data", "Tipo", "Categoria", "Descrição", "Conta", "Valor", "Moeda", "Recibo", "Origem"];
     const rows = transactions.map((t: any) => {
         const acc = accounts.find((a: any) => a.id === t.accountId);
         const cat = ALL_CATEGORIES.find(c => c.value === t.category);
@@ -68,8 +66,9 @@ function exportTransactionsCSV(transactions: any[], accounts: any[]) {
             cat?.label || t.category,
             t.description || "",
             acc?.name || "",
-            (t.type === "entrada" ? "+" : "-") + parseFloat(t.amount).toFixed(2),
+            (t.type === "entrada" ? "+" : "-") + formatCurrency(parseFloat(t.amount), t.currency || "USD"),
             t.currency || "USD",
+            t.receipt_id || "",
             t.referenceType === "manual" ? "Manual" : t.referenceType === "whatsapp" ? "WhatsApp" : "Auto",
         ];
     });
@@ -116,13 +115,30 @@ export default function FarmCashFlow() {
         enabled: !!user,
     });
 
-    const accounts: any[] = summary?.accounts || [];
+    const [currencyFilter, setCurrencyFilter] = useState<"todos" | "USD" | "PYG">("todos");
+
+    const allAccounts: any[] = summary?.accounts || [];
+    const accounts = currencyFilter === "todos" ? allAccounts : allAccounts.filter((a: any) => a.currency === currencyFilter);
     const month = summary?.monthSummary || { totalEntradas: 0, totalSaidas: 0, saldoLiquido: 0 };
     const chartData: any[] = summary?.chartData || [];
     const byCategory: any[] = summary?.byCategory || [];
 
+    // Filtered transactions by currency
+    const filteredTransactions = currencyFilter === "todos" ? transactions : transactions.filter((t: any) => (t.currency || "USD") === currencyFilter);
+
+    // Per-currency month totals
+    const monthTotals = useMemo(() => {
+        const currencies = currencyFilter === "todos" ? ["USD", "PYG"] : [currencyFilter];
+        return currencies.map(cur => {
+            const curTx = transactions.filter((t: any) => (t.currency || "USD") === cur);
+            const entradas = curTx.filter((t: any) => t.type === "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+            const saidas = curTx.filter((t: any) => t.type !== "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+            return { currency: cur, entradas, saidas, saldo: entradas - saidas };
+        }).filter(m => m.entradas > 0 || m.saidas > 0 || currencyFilter !== "todos");
+    }, [transactions, currencyFilter]);
+
     // ── Predictive indicators ────────────────────────────────────────
-    const totalSaldo = accounts.reduce((s, a) => s + (parseFloat(a.currentBalance) || 0), 0);
+    const totalSaldo = allAccounts.reduce((s, a) => s + (parseFloat(a.currentBalance) || 0), 0);
 
     const upcomingAP = useMemo(() => {
         const next30 = new Date(); next30.setDate(next30.getDate() + 30);
@@ -183,16 +199,32 @@ export default function FarmCashFlow() {
                         <h1 className="text-2xl font-bold text-emerald-800">Fluxo de Caixa</h1>
                         <p className="text-emerald-600 text-sm">Controle financeiro da sua fazenda</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                        <TransferDialog accounts={allAccounts} onSuccess={() => {
+                            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+                            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+                        }} />
                         <CreateAccountDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
                         <CreateTransactionDialog
-                            accounts={accounts}
+                            accounts={allAccounts}
                             onSuccess={() => {
                                 queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
                                 queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
                             }}
                         />
                     </div>
+                </div>
+
+                {/* Currency filter */}
+                <div className="flex gap-1">
+                    {(["todos", "USD", "PYG"] as const).map(cur => (
+                        <button key={cur} onClick={() => setCurrencyFilter(cur)}
+                            className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-colors ${currencyFilter === cur
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                            {cur === "todos" ? "Todas Moedas" : cur === "USD" ? "USD ($)" : "PYG (Gs.)"}
+                        </button>
+                    ))}
                 </div>
 
                 {isLoading ? (
@@ -204,6 +236,7 @@ export default function FarmCashFlow() {
                             <TabsTrigger value="previsao">📈 Previsão</TabsTrigger>
                             <TabsTrigger value="extrato">Extrato</TabsTrigger>
                             <TabsTrigger value="contas">Contas / Bancos</TabsTrigger>
+                            <TabsTrigger value="cheques">Cheques</TabsTrigger>
                             <TabsTrigger value="categorias">Categorias</TabsTrigger>
                         </TabsList>
 
@@ -214,20 +247,31 @@ export default function FarmCashFlow() {
                                 <Card className="border-emerald-200 bg-emerald-50"><CardContent className="p-5">
                                     <div className="flex items-center gap-3">
                                         <div className="h-10 w-10 rounded-full bg-emerald-200 flex items-center justify-center"><ArrowUpRight className="h-5 w-5 text-emerald-700" /></div>
-                                        <div><p className="text-xs text-emerald-600 font-medium">Entradas (Mês)</p><p className="text-xl font-bold text-emerald-800">$ {month.totalEntradas.toFixed(2)}</p></div>
+                                        <div><p className="text-xs text-emerald-600 font-medium">Entradas (Mes)</p>
+                                            {monthTotals.length > 0 ? monthTotals.map(m => (
+                                                <p key={m.currency} className="text-xl font-bold text-emerald-800">{formatCurrency(m.entradas, m.currency)}</p>
+                                            )) : <p className="text-xl font-bold text-emerald-800">{formatCurrency(month.totalEntradas, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                        </div>
                                     </div>
                                 </CardContent></Card>
                                 <Card className="border-red-200 bg-red-50"><CardContent className="p-5">
                                     <div className="flex items-center gap-3">
                                         <div className="h-10 w-10 rounded-full bg-red-200 flex items-center justify-center"><ArrowDownRight className="h-5 w-5 text-red-700" /></div>
-                                        <div><p className="text-xs text-red-600 font-medium">Saídas (Mês)</p><p className="text-xl font-bold text-red-800">$ {month.totalSaidas.toFixed(2)}</p></div>
+                                        <div><p className="text-xs text-red-600 font-medium">Saidas (Mes)</p>
+                                            {monthTotals.length > 0 ? monthTotals.map(m => (
+                                                <p key={m.currency} className="text-xl font-bold text-red-800">{formatCurrency(m.saidas, m.currency)}</p>
+                                            )) : <p className="text-xl font-bold text-red-800">{formatCurrency(month.totalSaidas, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                        </div>
                                     </div>
                                 </CardContent></Card>
                                 <Card className={`border-${month.saldoLiquido >= 0 ? "blue" : "amber"}-200 bg-${month.saldoLiquido >= 0 ? "blue" : "amber"}-50`}><CardContent className="p-5">
                                     <div className="flex items-center gap-3">
                                         <div className={`h-10 w-10 rounded-full ${month.saldoLiquido >= 0 ? "bg-blue-200" : "bg-amber-200"} flex items-center justify-center`}><DollarSign className={`h-5 w-5 ${month.saldoLiquido >= 0 ? "text-blue-700" : "text-amber-700"}`} /></div>
-                                        <div><p className={`text-xs ${month.saldoLiquido >= 0 ? "text-blue-600" : "text-amber-600"} font-medium`}>Saldo Líquido (Mês)</p>
-                                            <p className={`text-xl font-bold ${month.saldoLiquido >= 0 ? "text-blue-800" : "text-amber-800"}`}>$ {month.saldoLiquido.toFixed(2)}</p></div>
+                                        <div><p className={`text-xs ${month.saldoLiquido >= 0 ? "text-blue-600" : "text-amber-600"} font-medium`}>Saldo Liquido (Mes)</p>
+                                            {monthTotals.length > 0 ? monthTotals.map(m => (
+                                                <p key={m.currency} className={`text-xl font-bold ${m.saldo >= 0 ? "text-blue-800" : "text-amber-800"}`}>{formatCurrency(m.saldo, m.currency)}</p>
+                                            )) : <p className={`text-xl font-bold ${month.saldoLiquido >= 0 ? "text-blue-800" : "text-amber-800"}`}>{formatCurrency(month.saldoLiquido, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                        </div>
                                     </div>
                                 </CardContent></Card>
                             </div>
@@ -251,7 +295,7 @@ export default function FarmCashFlow() {
                                                             <p className="font-semibold text-gray-800 truncate">{acc.name}</p>
                                                             <p className="text-xs text-gray-500">{accType?.label} · {acc.currency}</p>
                                                         </div>
-                                                        <p className={`font-bold text-lg ${balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatMoney(balance, acc.currency)}</p>
+                                                        <p className={`font-bold text-lg ${balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(balance, acc.currency)}</p>
                                                     </div>
                                                 );
                                             })}
@@ -270,7 +314,7 @@ export default function FarmCashFlow() {
                                                 <BarChart data={chartData}>
                                                     <CartesianGrid strokeDasharray="3 3" />
                                                     <XAxis dataKey="month" /><YAxis />
-                                                    <Tooltip formatter={(v: number) => `$ ${v.toFixed(2)}`} /><Legend />
+                                                    <Tooltip formatter={(v: number) => formatCurrency(v, "USD")} /><Legend />
                                                     <Bar dataKey="entradas" name="Entradas" fill="#059669" radius={[4, 4, 0, 0]} />
                                                     <Bar dataKey="saidas" name="Saídas" fill="#dc2626" radius={[4, 4, 0, 0]} />
                                                 </BarChart>
@@ -284,10 +328,10 @@ export default function FarmCashFlow() {
                                         {byCategory.length > 0 ? (
                                             <ResponsiveContainer width="100%" height={250}>
                                                 <PieChart>
-                                                    <Pie data={byCategory} dataKey="value" nameKey="category" cx="50%" cy="50%" outerRadius={90} label={({ category, value }) => `${category}: $${value}`}>
+                                                    <Pie data={byCategory} dataKey="value" nameKey="category" cx="50%" cy="50%" outerRadius={90} label={({ category, value }) => `${category}: ${formatCurrency(value, "USD")}`}>
                                                         {byCategory.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                                                     </Pie>
-                                                    <Tooltip formatter={(v: number) => `$ ${v.toFixed(2)}`} />
+                                                    <Tooltip formatter={(v: number) => formatCurrency(v, "USD")} />
                                                 </PieChart>
                                             </ResponsiveContainer>
                                         ) : <p className="text-center text-gray-400 py-8 text-sm">Sem saídas neste mês</p>}
@@ -299,7 +343,7 @@ export default function FarmCashFlow() {
                             <Card className="border-emerald-100">
                                 <CardHeader><CardTitle className="text-emerald-800">Últimas Movimentações</CardTitle></CardHeader>
                                 <CardContent>
-                                    <TransactionTable transactions={transactions.slice(0, 10)} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
+                                    <TransactionTable transactions={filteredTransactions.slice(0, 10)} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -310,22 +354,22 @@ export default function FarmCashFlow() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <Card className="border-emerald-200 bg-emerald-50"><CardContent className="p-5">
                                     <div className="flex items-center gap-2 mb-1"><Activity className="h-4 w-4 text-emerald-600" /><p className="text-xs text-emerald-600 font-medium">Saldo Total Atual</p></div>
-                                    <p className="text-xl font-bold text-emerald-800">$ {totalSaldo.toFixed(2)}</p>
+                                    <p className="text-xl font-bold text-emerald-800">{formatCurrency(totalSaldo, "USD")}</p>
                                 </CardContent></Card>
 
                                 <Card className={`border-${upcomingAP > 0 ? "red" : "gray"}-200 bg-${upcomingAP > 0 ? "red" : "gray"}-50`}><CardContent className="p-5">
                                     <div className="flex items-center gap-2 mb-1">{upcomingAP > 0 ? <AlertTriangle className="h-4 w-4 text-red-600" /> : <DollarSign className="h-4 w-4 text-gray-400" />}<p className={`text-xs font-medium ${upcomingAP > 0 ? "text-red-600" : "text-gray-500"}`}>A Pagar (30 dias)</p></div>
-                                    <p className={`text-xl font-bold ${upcomingAP > 0 ? "text-red-700" : "text-gray-500"}`}>$ {upcomingAP.toFixed(2)}</p>
+                                    <p className={`text-xl font-bold ${upcomingAP > 0 ? "text-red-700" : "text-gray-500"}`}>{formatCurrency(upcomingAP, "USD")}</p>
                                 </CardContent></Card>
 
                                 <Card className={`border-${upcomingAR > 0 ? "blue" : "gray"}-200 bg-${upcomingAR > 0 ? "blue" : "gray"}-50`}><CardContent className="p-5">
                                     <div className="flex items-center gap-2 mb-1"><TrendingUp className={`h-4 w-4 ${upcomingAR > 0 ? "text-blue-600" : "text-gray-400"}`} /><p className={`text-xs font-medium ${upcomingAR > 0 ? "text-blue-600" : "text-gray-500"}`}>A Receber (30 dias)</p></div>
-                                    <p className={`text-xl font-bold ${upcomingAR > 0 ? "text-blue-700" : "text-gray-500"}`}>$ {upcomingAR.toFixed(2)}</p>
+                                    <p className={`text-xl font-bold ${upcomingAR > 0 ? "text-blue-700" : "text-gray-500"}`}>{formatCurrency(upcomingAR, "USD")}</p>
                                 </CardContent></Card>
 
                                 <Card className={`border-${predictedBalance >= 0 ? "emerald" : "red"}-200 bg-${predictedBalance >= 0 ? "emerald" : "red"}-50`}><CardContent className="p-5">
                                     <div className="flex items-center gap-2 mb-1"><Target className={`h-4 w-4 ${predictedBalance >= 0 ? "text-emerald-600" : "text-red-600"}`} /><p className={`text-xs font-medium ${predictedBalance >= 0 ? "text-emerald-600" : "text-red-600"}`}>Saldo Projetado (30d)</p></div>
-                                    <p className={`text-xl font-bold ${predictedBalance >= 0 ? "text-emerald-800" : "text-red-700"}`}>$ {predictedBalance.toFixed(2)}</p>
+                                    <p className={`text-xl font-bold ${predictedBalance >= 0 ? "text-emerald-800" : "text-red-700"}`}>{formatCurrency(predictedBalance, "USD")}</p>
                                     {predictedBalance < 0 && <p className="text-xs text-red-500 mt-1">⚠ Possível saldo negativo!</p>}
                                 </CardContent></Card>
                             </div>
@@ -339,7 +383,7 @@ export default function FarmCashFlow() {
                                                 ⚠ Alerta de Fluxo de Caixa
                                             </p>
                                             <p className={`text-sm ${daysUntilZero < 15 ? "text-red-600" : "text-amber-600"}`}>
-                                                Com o ritmo de gastos atual ($ {burnRate.toFixed(2)}/dia), o caixa pode zerar em aproximadamente <strong>{daysUntilZero} dias</strong>. Considere reduzir despesas ou antecipar recebimentos.
+                                                Com o ritmo de gastos atual ({formatCurrency(burnRate, "USD")}/dia), o caixa pode zerar em aproximadamente <strong>{daysUntilZero} dias</strong>. Considere reduzir despesas ou antecipar recebimentos.
                                             </p>
                                         </div>
                                     </CardContent>
@@ -362,7 +406,7 @@ export default function FarmCashFlow() {
                                                 <CartesianGrid strokeDasharray="3 3" />
                                                 <XAxis dataKey="day" tick={{ fontSize: 11 }} />
                                                 <YAxis tick={{ fontSize: 11 }} />
-                                                <Tooltip formatter={(v: number) => `$ ${v.toFixed(2)}`} />
+                                                <Tooltip formatter={(v: number) => formatCurrency(v, "USD")} />
                                                 <Legend />
                                                 <Area type="monotone" dataKey="saldo" name="Saldo" stroke="#059669" fill="url(#gradSaldo)" strokeWidth={2} />
                                                 {projectionData.some(p => p.entradas > 0) && <Bar dataKey="entradas" name="Entradas previstas" fill="#3b82f6" radius={[4, 4, 0, 0]} />}
@@ -392,7 +436,7 @@ export default function FarmCashFlow() {
                                                                 <p className="font-medium text-gray-800">{ap.supplier || ap.description}</p>
                                                                 <p className="text-xs text-gray-500">{new Date(ap.dueDate).toLocaleDateString("pt-BR")}</p>
                                                             </div>
-                                                            <span className="font-mono font-semibold text-red-600">- $ {parseFloat(ap.totalAmount || ap.amount || 0).toFixed(2)}</span>
+                                                            <span className="font-mono font-semibold text-red-600">- {formatCurrency(parseFloat(ap.totalAmount || ap.amount || 0), ap.currency || "USD")}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -410,7 +454,7 @@ export default function FarmCashFlow() {
                                                                 <p className="font-medium text-gray-800">{ar.buyer}</p>
                                                                 <p className="text-xs text-gray-500">{new Date(ar.dueDate).toLocaleDateString("pt-BR")} · {ar.description || ""}</p>
                                                             </div>
-                                                            <span className="font-mono font-semibold text-blue-600">+ $ {(parseFloat(ar.totalAmount) - parseFloat(ar.receivedAmount || 0)).toFixed(2)}</span>
+                                                            <span className="font-mono font-semibold text-blue-600">+ {formatCurrency(parseFloat(ar.totalAmount) - parseFloat(ar.receivedAmount || 0), ar.currency || "USD")}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -424,16 +468,21 @@ export default function FarmCashFlow() {
                         {/* ── EXTRATO (full) ───────────────── */}
                         <TabsContent value="extrato" className="mt-4 space-y-4">
                             <div className="flex justify-end">
-                                <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportTransactionsCSV(transactions, accounts)}>
+                                <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportTransactionsCSV(filteredTransactions, accounts)}>
                                     <Download className="mr-2 h-4 w-4" /> Exportar CSV
                                 </Button>
                             </div>
                             <Card className="border-emerald-100">
                                 <CardHeader><CardTitle className="text-emerald-800">Extrato Completo</CardTitle></CardHeader>
                                 <CardContent>
-                                    <TransactionTable transactions={transactions} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
+                                    <TransactionTable transactions={filteredTransactions} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
                                 </CardContent>
                             </Card>
+                        </TabsContent>
+
+                        {/* ── CHEQUES ───────────────── */}
+                        <TabsContent value="cheques" className="mt-4">
+                            <ChequesTab accounts={allAccounts} />
                         </TabsContent>
 
                         <TabsContent value="contas" className="mt-4">
@@ -495,6 +544,7 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                                 <th className="text-left p-3 font-semibold text-gray-600">Descrição</th>
                                 <th className="text-left p-3 font-semibold text-gray-600">Conta</th>
                                 <th className="text-right p-3 font-semibold text-gray-600">Valor</th>
+                                <th className="text-center p-3 font-semibold text-gray-600">Recibo</th>
                                 <th className="text-center p-3 font-semibold text-gray-600">Origem</th>
                                 <th className="text-center p-3 font-semibold text-gray-600">Ações</th>
                             </tr>
@@ -516,7 +566,14 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                                         <td className="p-3 max-w-[200px] truncate">{t.description || "—"}</td>
                                         <td className="p-3 text-gray-600">{acc?.name || "—"}</td>
                                         <td className={`text-right p-3 font-mono font-semibold ${isEntrada ? "text-emerald-700" : "text-red-600"}`}>
-                                            {isEntrada ? "+" : "-"}{formatMoney(parseFloat(t.amount), t.currency || "USD")}
+                                            {isEntrada ? "+" : "-"}{formatCurrency(parseFloat(t.amount), t.currency || "USD")}
+                                        </td>
+                                        <td className="text-center p-3">
+                                            {t.receipt_id ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 font-mono">
+                                                    <FileText className="h-3 w-3" />{t.receipt_id}
+                                                </span>
+                                            ) : <span className="text-gray-300">--</span>}
                                         </td>
                                         <td className="text-center p-3">
                                             <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
@@ -538,8 +595,8 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                     <div className="p-3 bg-gray-50 border-t border-gray-100 text-sm text-gray-600 flex justify-between">
                         <span>{filtered.length} movimentações</span>
                         <span>
-                            Entradas: <strong className="text-emerald-600">$ {filtered.filter(t => t.type === "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0).toFixed(2)}</strong>
-                            {" "}· Saídas: <strong className="text-red-600">$ {filtered.filter(t => t.type !== "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0).toFixed(2)}</strong>
+                            Entradas: <strong className="text-emerald-600">{formatCurrency(filtered.filter(t => t.type === "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0), "USD")}</strong>
+                            {" "}· Saidas: <strong className="text-red-600">{formatCurrency(filtered.filter(t => t.type !== "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0), "USD")}</strong>
                         </span>
                     </div>
                 </div>
@@ -575,11 +632,11 @@ function AccountsManager({ accounts, onRefresh }: { accounts: any[]; onRefresh: 
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-semibold text-gray-800">{acc.name}</h3>
                                         <p className="text-sm text-gray-500">{accType?.label} · {acc.bankName || "Sem banco"} · Moeda: {acc.currency}</p>
-                                        <p className="text-xs text-gray-400">Saldo inicial: {formatMoney(parseFloat(acc.initialBalance) || 0, acc.currency)}</p>
+                                        <p className="text-xs text-gray-400">Saldo inicial: {formatCurrency(parseFloat(acc.initialBalance) || 0, acc.currency)}</p>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-xs text-gray-500">Saldo atual</p>
-                                        <p className={`text-xl font-bold ${balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatMoney(balance, acc.currency)}</p>
+                                        <p className={`text-xl font-bold ${balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(balance, acc.currency)}</p>
                                     </div>
                                     <Button size="icon" variant="ghost" className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 h-8 w-8"
                                         onClick={() => { if (confirm(`Remover conta "${acc.name}"?`)) deleteMutation.mutate(acc.id); }}>
@@ -705,7 +762,7 @@ function CreateTransactionDialog({ accounts, onSuccess }: { accounts: any[]; onS
                         <Button variant={type === "saida" ? "default" : "outline"} className={type === "saida" ? "bg-red-600 hover:bg-red-700" : ""} onClick={() => { setType("saida"); setCategory(""); }}><TrendingDown className="mr-2 h-4 w-4" /> Saída</Button>
                         <Button variant={type === "entrada" ? "default" : "outline"} className={type === "entrada" ? "bg-emerald-600 hover:bg-emerald-700" : ""} onClick={() => { setType("entrada"); setCategory(""); }}><TrendingUp className="mr-2 h-4 w-4" /> Entrada</Button>
                     </div>
-                    <div><Label>Conta *</Label><Select value={accountId} onValueChange={setAccountId}><SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger><SelectContent>{accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} ({formatMoney(parseFloat(a.currentBalance), a.currency)})</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label>Conta *</Label><Select value={accountId} onValueChange={setAccountId}><SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger><SelectContent>{accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} ({formatCurrency(parseFloat(a.currentBalance), a.currency)})</SelectItem>)}</SelectContent></Select></div>
                     <div className="grid grid-cols-2 gap-4">
                         <div><Label>Valor *</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></div>
                         <div><Label>Data</Label><Input type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} /></div>
@@ -715,6 +772,341 @@ function CreateTransactionDialog({ accounts, onSuccess }: { accounts: any[]; onS
                     <div><Label>Descrição</Label><Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Ex: Pagamento fornecedor" /></div>
                     <Button className={`w-full ${type === "entrada" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`} onClick={() => save.mutate()} disabled={save.isPending || !accountId || !amount || !category}>
                         {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : type === "entrada" ? "Registrar Entrada" : "Registrar Saída"}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+function TransferDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: () => void }) {
+    const [open, setOpen] = useState(false);
+    const { toast } = useToast();
+    const [sourceAccountId, setSourceAccountId] = useState("");
+    const [destAccountId, setDestAccountId] = useState("");
+    const [amount, setAmount] = useState("");
+    const [exchangeRate, setExchangeRate] = useState("");
+    const [description, setDescription] = useState("");
+
+    const sourceAccount = accounts.find((a: any) => a.id === sourceAccountId);
+    const destAccount = accounts.find((a: any) => a.id === destAccountId);
+    const showExchangeRate = sourceAccount && destAccount && sourceAccount.currency !== destAccount.currency;
+
+    const transfer = useMutation({
+        mutationFn: () => apiRequest("POST", "/api/farm/cash-flow/transfer", {
+            sourceAccountId,
+            destAccountId,
+            amount: parseFloat(amount),
+            exchangeRate: showExchangeRate ? parseFloat(exchangeRate) || 1 : undefined,
+            description,
+        }),
+        onSuccess: () => {
+            toast({ title: "Transferencia realizada!" });
+            setOpen(false);
+            onSuccess();
+            setSourceAccountId(""); setDestAccountId(""); setAmount(""); setExchangeRate(""); setDescription("");
+        },
+        onError: () => toast({ title: "Erro ao transferir", variant: "destructive" }),
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="border-emerald-200 text-emerald-700">
+                    <ArrowLeftRight className="mr-2 h-4 w-4" /> Transferencia
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle>Transferencia entre Contas</DialogTitle></DialogHeader>
+                <div className="space-y-4 py-2">
+                    <div>
+                        <Label>Conta Origem *</Label>
+                        <Select value={sourceAccountId} onValueChange={setSourceAccountId}>
+                            <SelectTrigger><SelectValue placeholder="Selecione a conta de origem..." /></SelectTrigger>
+                            <SelectContent>
+                                {accounts.filter((a: any) => a.id !== destAccountId).map((a: any) => (
+                                    <SelectItem key={a.id} value={a.id}>{a.name} ({formatCurrency(parseFloat(a.currentBalance), a.currency)})</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div>
+                        <Label>Conta Destino *</Label>
+                        <Select value={destAccountId} onValueChange={setDestAccountId}>
+                            <SelectTrigger><SelectValue placeholder="Selecione a conta de destino..." /></SelectTrigger>
+                            <SelectContent>
+                                {accounts.filter((a: any) => a.id !== sourceAccountId).map((a: any) => (
+                                    <SelectItem key={a.id} value={a.id}>{a.name} ({formatCurrency(parseFloat(a.currentBalance), a.currency)})</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div>
+                        <Label>Valor *{sourceAccount ? ` (${sourceAccount.currency})` : ""}</Label>
+                        <Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" />
+                    </div>
+                    {showExchangeRate && (
+                        <div>
+                            <Label>Taxa de Cambio ({sourceAccount.currency} para {destAccount.currency}) *</Label>
+                            <Input type="number" step="0.0001" value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} placeholder="Ex: 7300 (1 USD = 7300 PYG)" />
+                            {exchangeRate && amount && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Valor no destino: {formatCurrency(parseFloat(amount) * parseFloat(exchangeRate), destAccount.currency)}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    <div>
+                        <Label>Descricao</Label>
+                        <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Ex: Troco de moeda" />
+                    </div>
+                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => transfer.mutate()}
+                        disabled={transfer.isPending || !sourceAccountId || !destAccountId || !amount || (showExchangeRate && !exchangeRate)}>
+                        {transfer.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Realizar Transferencia"}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+const CHEQUE_STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+    emitido: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Emitido" },
+    compensado: { bg: "bg-green-100", text: "text-green-700", label: "Compensado" },
+    cancelado: { bg: "bg-red-100", text: "text-red-700", label: "Cancelado" },
+};
+
+function ChequesTab({ accounts }: { accounts: any[] }) {
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+    const { user } = useAuth();
+
+    const { data: cheques = [], isLoading } = useQuery<any[]>({
+        queryKey: ["/api/farm/cheques"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/cheques"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const compensate = useMutation({
+        mutationFn: ({ id, accountId }: { id: string; accountId: string }) =>
+            apiRequest("POST", `/api/farm/cheques/${id}/compensate`, { accountId }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cheques"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+            toast({ title: "Cheque compensado!" });
+        },
+        onError: () => toast({ title: "Erro ao compensar cheque", variant: "destructive" }),
+    });
+
+    const cancel = useMutation({
+        mutationFn: (id: string) => apiRequest("PUT", `/api/farm/cheques/${id}/cancel`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cheques"] });
+            toast({ title: "Cheque cancelado" });
+        },
+        onError: () => toast({ title: "Erro ao cancelar cheque", variant: "destructive" }),
+    });
+
+    const [compensateDialogId, setCompensateDialogId] = useState<string | null>(null);
+    const [compensateAccountId, setCompensateAccountId] = useState("");
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-emerald-800">Cheques</h2>
+                <CreateChequeDialog accounts={accounts} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cheques"] })} />
+            </div>
+
+            {isLoading ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
+            ) : cheques.length === 0 ? (
+                <Card className="border-emerald-100">
+                    <CardContent className="py-8 text-center">
+                        <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500">Nenhum cheque cadastrado</p>
+                    </CardContent>
+                </Card>
+            ) : (
+                <Card className="border-emerald-100">
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="text-left p-3 font-semibold text-gray-600">Numero</th>
+                                        <th className="text-left p-3 font-semibold text-gray-600">Banco</th>
+                                        <th className="text-left p-3 font-semibold text-gray-600">Titular</th>
+                                        <th className="text-right p-3 font-semibold text-gray-600">Valor</th>
+                                        <th className="text-center p-3 font-semibold text-gray-600">Moeda</th>
+                                        <th className="text-center p-3 font-semibold text-gray-600">Status</th>
+                                        <th className="text-center p-3 font-semibold text-gray-600">Emissao</th>
+                                        <th className="text-center p-3 font-semibold text-gray-600">Vencimento</th>
+                                        <th className="text-center p-3 font-semibold text-gray-600">Acoes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {cheques.map((ch: any) => {
+                                        const status = CHEQUE_STATUS_COLORS[ch.status] || CHEQUE_STATUS_COLORS.emitido;
+                                        return (
+                                            <tr key={ch.id} className="border-t border-gray-100 hover:bg-gray-50">
+                                                <td className="p-3 font-mono">{ch.chequeNumber || "--"}</td>
+                                                <td className="p-3">{ch.bank || "--"}</td>
+                                                <td className="p-3">{ch.holder || "--"}</td>
+                                                <td className="p-3 text-right font-mono font-semibold">{formatCurrency(parseFloat(ch.amount), ch.currency || "USD")}</td>
+                                                <td className="p-3 text-center">{ch.currency || "USD"}</td>
+                                                <td className="p-3 text-center">
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.bg} ${status.text}`}>
+                                                        {ch.status === "compensado" ? <CheckCircle className="h-3 w-3" /> : ch.status === "cancelado" ? <XCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                                                        {status.label}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-center">{ch.issueDate ? new Date(ch.issueDate).toLocaleDateString("pt-BR") : "--"}</td>
+                                                <td className="p-3 text-center">{ch.dueDate ? new Date(ch.dueDate).toLocaleDateString("pt-BR") : "--"}</td>
+                                                <td className="p-3 text-center">
+                                                    {ch.status === "emitido" && (
+                                                        <div className="flex gap-1 justify-center">
+                                                            <Button size="sm" variant="outline" className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50"
+                                                                onClick={() => { setCompensateDialogId(ch.id); setCompensateAccountId(""); }}>
+                                                                Compensar
+                                                            </Button>
+                                                            <Button size="sm" variant="outline" className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50"
+                                                                onClick={() => { if (confirm("Cancelar este cheque?")) cancel.mutate(ch.id); }}
+                                                                disabled={cancel.isPending}>
+                                                                Cancelar
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Compensate dialog */}
+            <Dialog open={!!compensateDialogId} onOpenChange={(v) => { if (!v) setCompensateDialogId(null); }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader><DialogTitle>Compensar Cheque</DialogTitle></DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div>
+                            <Label>Conta para debito/credito *</Label>
+                            <Select value={compensateAccountId} onValueChange={setCompensateAccountId}>
+                                <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                                <SelectContent>
+                                    {accounts.map((a: any) => (
+                                        <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Button className="w-full bg-green-600 hover:bg-green-700"
+                            onClick={() => { if (compensateDialogId) compensate.mutate({ id: compensateDialogId, accountId: compensateAccountId }); setCompensateDialogId(null); }}
+                            disabled={!compensateAccountId || compensate.isPending}>
+                            {compensate.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Confirmar Compensacao"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+function CreateChequeDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: () => void }) {
+    const [open, setOpen] = useState(false);
+    const { toast } = useToast();
+    const [type, setType] = useState("emitido");
+    const [chequeNumber, setChequeNumber] = useState("");
+    const [bank, setBank] = useState("");
+    const [holder, setHolder] = useState("");
+    const [amount, setAmount] = useState("");
+    const [currency, setCurrency] = useState("USD");
+    const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
+    const [dueDate, setDueDate] = useState("");
+    const [ownerType, setOwnerType] = useState("proprio");
+    const [accountId, setAccountId] = useState("");
+    const [notes, setNotes] = useState("");
+
+    const save = useMutation({
+        mutationFn: () => apiRequest("POST", "/api/farm/cheques", {
+            type, chequeNumber, bank, holder, amount: parseFloat(amount), currency,
+            issueDate: new Date(issueDate), dueDate: dueDate ? new Date(dueDate) : null,
+            ownerType, accountId: accountId || null, notes,
+        }),
+        onSuccess: () => {
+            toast({ title: "Cheque cadastrado!" });
+            setOpen(false); onSuccess();
+            setChequeNumber(""); setBank(""); setHolder(""); setAmount(""); setDueDate(""); setNotes(""); setAccountId("");
+        },
+        onError: () => toast({ title: "Erro ao cadastrar cheque", variant: "destructive" }),
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button className="bg-emerald-600 hover:bg-emerald-700"><Plus className="mr-2 h-4 w-4" /> Novo Cheque</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader><DialogTitle>Cadastrar Cheque</DialogTitle></DialogHeader>
+                <div className="space-y-4 py-2">
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button variant={type === "emitido" ? "default" : "outline"} className={type === "emitido" ? "bg-emerald-600 hover:bg-emerald-700" : ""} onClick={() => setType("emitido")}>Emitido</Button>
+                        <Button variant={type === "recebido" ? "default" : "outline"} className={type === "recebido" ? "bg-blue-600 hover:bg-blue-700" : ""} onClick={() => setType("recebido")}>Recebido</Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div><Label>Numero do Cheque *</Label><Input value={chequeNumber} onChange={e => setChequeNumber(e.target.value)} placeholder="000000" /></div>
+                        <div><Label>Banco *</Label><Input value={bank} onChange={e => setBank(e.target.value)} placeholder="Ex: Itau" /></div>
+                    </div>
+                    <div><Label>Titular *</Label><Input value={holder} onChange={e => setHolder(e.target.value)} placeholder="Nome do titular" /></div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div><Label>Valor *</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></div>
+                        <div><Label>Moeda</Label>
+                            <Select value={currency} onValueChange={setCurrency}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="USD">USD ($)</SelectItem>
+                                    <SelectItem value="PYG">PYG (Gs.)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div><Label>Data Emissao</Label><Input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} /></div>
+                        <div><Label>Data Vencimento</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div><Label>Tipo de Proprietario</Label>
+                            <Select value={ownerType} onValueChange={setOwnerType}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="proprio">Proprio</SelectItem>
+                                    <SelectItem value="terceiro">Terceiro</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div><Label>Conta Vinculada</Label>
+                            <Select value={accountId} onValueChange={setAccountId}>
+                                <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+                                <SelectContent>
+                                    {accounts.map((a: any) => (
+                                        <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div><Label>Observacoes</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notas adicionais..." rows={2} /></div>
+                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => save.mutate()}
+                        disabled={save.isPending || !chequeNumber || !bank || !holder || !amount}>
+                        {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Cadastrar Cheque"}
                     </Button>
                 </div>
             </DialogContent>

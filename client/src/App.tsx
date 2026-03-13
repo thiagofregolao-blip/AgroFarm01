@@ -75,6 +75,7 @@ import AccountsReceivable from "@/pages/fazenda/accounts-receivable";
 import DrePage from "@/pages/fazenda/dre";
 import BudgetPage from "@/pages/fazenda/budget";
 import BankReconciliation from "@/pages/fazenda/reconciliation";
+import FarmFornecedores from "@/pages/fazenda/fornecedores";
 
 // PDV (Point of Sale)
 import PdvLogin from "@/pages/pdv/login";
@@ -171,6 +172,7 @@ function Router() {
       <Route path="/fazenda/dre" component={DrePage} />
       <Route path="/fazenda/orcamento" component={BudgetPage} />
       <Route path="/fazenda/conciliacao" component={BankReconciliation} />
+      <Route path="/fazenda/fornecedores" component={FarmFornecedores} />
 
       {/* PDV Routes (Tablet) */}
       <Route path="/pdv/login" component={PdvLogin} />

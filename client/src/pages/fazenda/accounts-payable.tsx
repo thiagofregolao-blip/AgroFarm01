@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency } from "@/lib/format-currency";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare } from "lucide-react";
+import { Plus, Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2 } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
 function exportToCSV(data: any[], filename: string) {
@@ -22,8 +24,8 @@ function exportToCSV(data: any[], filename: string) {
         `${i.installmentNumber}/${i.totalInstallments}`,
         new Date(i.dueDate).toLocaleDateString("pt-BR"),
         i.status,
-        parseFloat(i.totalAmount).toFixed(2),
-        parseFloat(i.paidAmount || 0).toFixed(2),
+        formatCurrency(i.totalAmount, i.currency || "USD"),
+        formatCurrency(i.paidAmount || 0, i.currency || "USD"),
     ]);
     const csv = [headers, ...rows].map(r => r.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -45,6 +47,8 @@ export default function AccountsPayable() {
     const [filterStatus, setFilterStatus] = useState("todos");
     const [filterFrom, setFilterFrom] = useState("");
     const [filterTo, setFilterTo] = useState("");
+    const [filterSupplier, setFilterSupplier] = useState("todos");
+    const [filterSeason, setFilterSeason] = useState("todos");
 
     // ─── Bulk selection ────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -79,6 +83,12 @@ export default function AccountsPayable() {
         enabled: !!user,
     });
 
+    const { data: suppliers = [] } = useQuery({
+        queryKey: ["/api/farm/suppliers"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/suppliers"); return r.json(); },
+        enabled: !!user,
+    });
+
     // ─── Filtered list ─────────────────────────────────────────────────────
     const filtered = (items as any[]).filter((i: any) => {
         const today = new Date();
@@ -90,7 +100,9 @@ export default function AccountsPayable() {
         const dateCheck =
             (!filterFrom || new Date(i.dueDate) >= new Date(filterFrom)) &&
             (!filterTo || new Date(i.dueDate) <= new Date(filterTo));
-        return statusCheck && dateCheck;
+        const supplierCheck = filterSupplier === "todos" || i.supplier === filterSupplier;
+        const seasonCheck = filterSeason === "todos" || String(i.season_id || i.seasonId || "") === filterSeason;
+        return statusCheck && dateCheck && supplierCheck && seasonCheck;
     });
 
     const totalAberto = (items as any[]).filter((i: any) => i.status === "aberto" || i.status === "parcial")
@@ -104,12 +116,27 @@ export default function AccountsPayable() {
     });
 
     const pay = useMutation({
-        mutationFn: async ({ id, data }: { id: string; data: any }) => apiRequest("POST", `/api/farm/accounts-payable/${id}/pay`, data),
+        mutationFn: async ({ id, data }: { id: string; data: any }) => {
+            const result = await apiRequest("POST", `/api/farm/accounts-payable/${id}/pay`, data);
+            // If cheque data is present, also create cheque record
+            if (data.cheque && data.paymentMethod === "cheque") {
+                await apiRequest("POST", "/api/farm/cheques", {
+                    banco: data.cheque.banco,
+                    numero: data.cheque.numero,
+                    tipo: data.cheque.tipo,
+                    valor: data.amount,
+                    fornecedor: data.supplier || "",
+                    accountPayableId: id,
+                    accountId: data.accountId || (data.accountRows?.[0]?.accountId),
+                });
+            }
+            return result;
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
-            toast({ title: "✅ Pagamento registrado no Fluxo de Caixa!" });
+            toast({ title: "Pagamento registrado no Fluxo de Caixa!" });
             setPayingItem(null);
         },
     });
@@ -179,8 +206,8 @@ export default function AccountsPayable() {
                     <div>
                         <h1 className="text-2xl font-bold text-emerald-800">📋 Contas a Pagar</h1>
                         <p className="text-sm text-emerald-600">
-                            A pagar: <strong className="text-red-600">$ {totalAberto.toFixed(2)}</strong>
-                            {totalVencido > 0 && <span className="ml-2 text-red-600">⚠️ Vencido: $ {totalVencido.toFixed(2)}</span>}
+                            A pagar: <strong className="text-red-600">{formatCurrency(totalAberto)}</strong>
+                            {totalVencido > 0 && <span className="ml-2 text-red-600">Vencido: {formatCurrency(totalVencido)}</span>}
                         </p>
                     </div>
                     <div className="flex gap-2 flex-wrap">
@@ -210,7 +237,7 @@ export default function AccountsPayable() {
                         <Card key={idx} className="border-emerald-100"><CardContent className="p-4">
                             <p className="text-xs text-gray-500">{c.label}</p>
                             <p className={`text-xl font-bold ${c.color}`}>
-                                {c.isCurrency !== false ? `$ ${(c.value as number).toFixed(2)}` : c.value}
+                                {c.isCurrency !== false ? formatCurrency(c.value as number) : c.value}
                             </p>
                         </CardContent></Card>
                     ))}
@@ -238,10 +265,34 @@ export default function AccountsPayable() {
                                 <Input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="w-36" />
                             </div>
                             <div>
-                                <Label className="text-xs text-gray-500">até</Label>
+                                <Label className="text-xs text-gray-500">ate</Label>
                                 <Input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="w-36" />
                             </div>
-                            <Button variant="ghost" size="sm" className="text-gray-500" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); }}>
+                            <div>
+                                <Label className="text-xs text-gray-500">Fornecedor</Label>
+                                <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                                    <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="todos">Todos</SelectItem>
+                                        {(suppliers as any[]).map((s: any) => (
+                                            <SelectItem key={s.id || s.name} value={s.name}>{s.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Safra</Label>
+                                <Select value={filterSeason} onValueChange={setFilterSeason}>
+                                    <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="todos">Todas</SelectItem>
+                                        {(seasons as any[]).map((s: any) => (
+                                            <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <Button variant="ghost" size="sm" className="text-gray-500" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); setFilterSupplier("todos"); setFilterSeason("todos"); }}>
                                 Limpar
                             </Button>
                             <span className="text-xs text-gray-400 ml-auto self-center">{filtered.length} de {(items as any[]).length} registros</span>
@@ -308,8 +359,8 @@ export default function AccountsPayable() {
                                             <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
                                             <td className="p-3">{new Date(item.dueDate).toLocaleDateString("pt-BR")}</td>
                                             <td className="p-3">{statusBadge(isOverdue && item.status !== "pago" ? "vencido" : item.status)}</td>
-                                            <td className="text-right p-3 font-mono font-semibold">$ {parseFloat(item.totalAmount).toFixed(2)}</td>
-                                            <td className="text-right p-3 font-mono text-green-600">$ {parseFloat(item.paidAmount || 0).toFixed(2)}</td>
+                                            <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount, item.currency || "USD")}</td>
+                                            <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.paidAmount || 0, item.currency || "USD")}</td>
                                             <td className="p-3 flex gap-1">
                                                 {item.status !== "pago" && (
                                                     <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs"
@@ -331,7 +382,7 @@ export default function AccountsPayable() {
                     <DialogContent>
                         <DialogHeader><DialogTitle>💰 Pagar Conta</DialogTitle></DialogHeader>
                         {payingItem && <PayForm item={payingItem} accounts={accounts}
-                            onPay={(data: any) => pay.mutate({ id: payingItem.id, data })}
+                            onPay={(data: any) => pay.mutate({ id: payingItem.id, data: { ...data, supplier: payingItem.supplier } })}
                             saving={pay.isPending} />}
                     </DialogContent>
                 </Dialog>
@@ -365,7 +416,7 @@ function APForm({ onSave, saving, seasons }: any) {
                 <Input type="number" min="1" max="60" value={totalInstallments} onChange={e => setTotalInstallments(e.target.value)} />
                 {installments > 1 && (
                     <p className="text-xs text-emerald-600 mt-1">
-                        ✅ {installments}x de $ {perInstallment} — vencimentos mensais gerados automaticamente
+                        {installments}x de {formatCurrency(perInstallment)} — vencimentos mensais gerados automaticamente
                     </p>
                 )}
             </div>
@@ -391,37 +442,136 @@ function APForm({ onSave, saving, seasons }: any) {
 
 function PayForm({ item, accounts, onPay, saving }: any) {
     const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
-    const [accountId, setAccountId] = useState("");
-    const [amount, setAmount] = useState(remaining.toFixed(2));
     const [paymentMethod, setPaymentMethod] = useState("transferencia");
+    const [observacao, setObservacao] = useState("");
+    const [receiptNumber, setReceiptNumber] = useState("");
+
+    // Cheque fields
+    const [chequeBanco, setChequeBanco] = useState("");
+    const [chequeNumero, setChequeNumero] = useState("");
+    const [chequeTipo, setChequeTipo] = useState("proprio");
+
+    // Multiple account rows
+    const [accountRows, setAccountRows] = useState<{ accountId: string; amount: string }[]>([
+        { accountId: "", amount: remaining.toFixed(2) },
+    ]);
+
+    const addAccountRow = () => {
+        setAccountRows(prev => [...prev, { accountId: "", amount: "" }]);
+    };
+
+    const removeAccountRow = (idx: number) => {
+        if (accountRows.length <= 1) return;
+        setAccountRows(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const updateRow = (idx: number, field: "accountId" | "amount", value: string) => {
+        setAccountRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    };
+
+    const totalAllocated = accountRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    const allRowsValid = accountRows.every(r => r.accountId && parseFloat(r.amount) > 0);
+    const totalMatch = Math.abs(totalAllocated - parseFloat(accountRows.length === 1 ? accountRows[0].amount : String(totalAllocated))) < 0.01;
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const payload: any = {
+            accountId: accountRows[0].accountId,
+            amount: totalAllocated.toFixed(2),
+            paymentMethod,
+            observacao: observacao || undefined,
+            receiptNumber: receiptNumber || undefined,
+            accountRows: accountRows.length > 1 ? accountRows.map(r => ({ accountId: r.accountId, amount: parseFloat(r.amount).toFixed(2) })) : undefined,
+        };
+
+        if (paymentMethod === "cheque") {
+            payload.cheque = {
+                banco: chequeBanco,
+                numero: chequeNumero,
+                tipo: chequeTipo,
+            };
+        }
+
+        onPay(payload);
+    };
 
     return (
-        <form onSubmit={(e) => { e.preventDefault(); onPay({ accountId, amount, paymentMethod }); }} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
             <div className="p-3 bg-gray-50 rounded-lg text-sm">
                 <p>Fornecedor: <strong>{item.supplier}</strong></p>
-                <p>Valor Total: $ {parseFloat(item.totalAmount).toFixed(2)}</p>
-                <p>Já Pago: $ {parseFloat(item.paidAmount || 0).toFixed(2)}</p>
-                <p className="text-lg font-bold text-red-600">Restante: $ {remaining.toFixed(2)}</p>
+                <p>Valor Total: {formatCurrency(item.totalAmount, item.currency || "USD")}</p>
+                <p>Ja Pago: {formatCurrency(item.paidAmount || 0, item.currency || "USD")}</p>
+                <p className="text-lg font-bold text-red-600">Restante: {formatCurrency(remaining, item.currency || "USD")}</p>
             </div>
-            <div><Label>Conta Bancária *</Label>
-                <Select value={accountId} onValueChange={setAccountId}>
-                    <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
-                    <SelectContent>{(accounts as any[]).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent>
-                </Select>
+
+            {/* Multiple account rows */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <Label className="font-semibold">Conta(s) Bancaria(s) *</Label>
+                    <Button type="button" variant="outline" size="sm" className="text-xs h-7 border-emerald-200 text-emerald-700" onClick={addAccountRow}>
+                        <PlusCircle className="mr-1 h-3 w-3" /> Adicionar conta
+                    </Button>
+                </div>
+                {accountRows.map((row, idx) => (
+                    <div key={idx} className="flex gap-2 items-end">
+                        <div className="flex-1">
+                            {idx === 0 && <Label className="text-xs text-gray-500">Conta</Label>}
+                            <Select value={row.accountId} onValueChange={v => updateRow(idx, "accountId", v)}>
+                                <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                                <SelectContent>{(accounts as any[]).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        <div className="w-32">
+                            {idx === 0 && <Label className="text-xs text-gray-500">Valor</Label>}
+                            <Input type="number" step="0.01" value={row.amount} onChange={e => updateRow(idx, "amount", e.target.value)} placeholder="0.00" />
+                        </div>
+                        {accountRows.length > 1 && (
+                            <Button type="button" variant="ghost" size="sm" className="text-red-500 h-9 px-2" onClick={() => removeAccountRow(idx)}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
+                ))}
+                {accountRows.length > 1 && (
+                    <p className={`text-xs font-medium ${Math.abs(totalAllocated - remaining) < 0.01 ? "text-green-600" : "text-red-600"}`}>
+                        Total alocado: {formatCurrency(totalAllocated, item.currency || "USD")} / Restante: {formatCurrency(remaining, item.currency || "USD")}
+                    </p>
+                )}
             </div>
-            <div><Label>Valor a Pagar ($)</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} /></div>
-            <div><Label>Método</Label>
+
+            <div><Label>Metodo de Pagamento</Label>
                 <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="transferencia">Transferência</SelectItem>
-                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="transferencia">Transferencia</SelectItem>
                         <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                        <SelectItem value="cartao">Cartão</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
-            <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={saving || !accountId}>
+
+            {paymentMethod === "cheque" && (
+                <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <p className="text-xs font-semibold text-blue-700">Dados do Cheque</p>
+                    <div><Label className="text-xs">Banco *</Label><Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} placeholder="Nome do banco" required /></div>
+                    <div><Label className="text-xs">Numero do Cheque *</Label><Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="000000" required /></div>
+                    <div><Label className="text-xs">Tipo</Label>
+                        <Select value={chequeTipo} onValueChange={setChequeTipo}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="proprio">Proprio</SelectItem>
+                                <SelectItem value="terceiro">Terceiro</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+            )}
+
+            <div><Label>Nr. Recibo/Comprovante</Label><Input value={receiptNumber} onChange={e => setReceiptNumber(e.target.value)} placeholder="Ex: REC-00123" /></div>
+
+            <div><Label>Observacao</Label><Textarea value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Observacoes sobre o pagamento..." rows={2} className="resize-none" /></div>
+
+            <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={saving || !allRowsValid || (paymentMethod === "cheque" && (!chequeBanco || !chequeNumero))}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirmar Pagamento
             </Button>
         </form>

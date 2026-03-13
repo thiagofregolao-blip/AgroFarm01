@@ -1889,3 +1889,91 @@ export type CompanyRemissionItem = typeof companyRemissionItems.$inferSelect;
 export type CompanyPagare = typeof companyPagares.$inferSelect;
 export type InsertCompanyPagare = typeof companyPagares.$inferInsert;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FARM MODULE — NEW TABLES (Sprint 24-items)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Farm Suppliers (Fornecedores) — #6
+export const farmSuppliers = pgTable("farm_suppliers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  ruc: text("ruc"),
+  phone: text("phone"),
+  email: text("email"),
+  address: text("address"),
+  notes: text("notes"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Farm Cheques — #10, #11, #12
+export const farmCheques = pgTable("farm_cheques", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  accountId: varchar("account_id").references(() => farmCashAccounts.id),
+  type: text("type").notNull(), // emitido, recebido
+  chequeNumber: text("cheque_number").notNull(),
+  bank: text("bank").notNull(),
+  holder: text("holder"),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("USD"),
+  issueDate: timestamp("issue_date").notNull(),
+  dueDate: timestamp("due_date"),
+  compensationDate: timestamp("compensation_date"),
+  status: text("status").notNull().default("emitido"), // emitido, compensado, cancelado
+  ownerType: text("owner_type"), // proprio, terceiro
+  relatedPayableId: varchar("related_payable_id"),
+  relatedReceivableId: varchar("related_receivable_id"),
+  cashTransactionId: varchar("cash_transaction_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Farm Receipts (Recibos) — #15, #16, #17
+export const farmReceipts = pgTable("farm_receipts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  receiptNumber: text("receipt_number").notNull(),
+  type: text("type").notNull(), // pagamento, recebimento
+  entity: text("entity").notNull(),
+  totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("USD"),
+  paymentType: text("payment_type"), // total, parcial
+  paymentMethods: jsonb("payment_methods"), // [{method, accountId, amount, chequeId}]
+  invoiceRefs: jsonb("invoice_refs"), // [{invoiceId, payableId, receivableId, amount, description}]
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Farm Remissions (Remissoes / Notas de Transporte) — #24
+export const farmRemissions = pgTable("farm_remissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  supplier: text("supplier").notNull(),
+  ruc: text("ruc"),
+  remissionNumber: text("remission_number"),
+  issueDate: timestamp("issue_date"),
+  status: text("status").notNull().default("pendente"), // pendente, conciliada
+  reconciledInvoiceId: varchar("reconciled_invoice_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Farm Remission Items — #24
+export const farmRemissionItems = pgTable("farm_remission_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  remissionId: varchar("remission_id").notNull().references(() => farmRemissions.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").references(() => farmProductsCatalog.id),
+  productName: text("product_name").notNull(),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  unit: text("unit"),
+});
+
+// ---- Types for new tables ----
+export type FarmSupplier = typeof farmSuppliers.$inferSelect;
+export type FarmCheque = typeof farmCheques.$inferSelect;
+export type FarmReceipt = typeof farmReceipts.$inferSelect;
+export type FarmRemission = typeof farmRemissions.$inferSelect;
+export type FarmRemissionItem = typeof farmRemissionItems.$inferSelect;
+
