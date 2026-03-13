@@ -145,14 +145,16 @@ function DesktopMenuDropdown({
     return (
         <div ref={ref} className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
             <button
-                className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                className={`flex flex-col items-center gap-1 px-4 py-2 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
                     ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
                 `}
                 onClick={() => setOpen(!open)}
             >
-                {Icon && <Icon className="w-4 h-4" />}
-                <span>{label}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+                {Icon && <Icon className="w-6 h-6" />}
+                <div className="flex items-center gap-0.5">
+                    <span>{label}</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+                </div>
             </button>
 
             {open && (
@@ -204,14 +206,16 @@ function FinanceiroMegaDropdown({
     return (
         <div className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
             <button
-                className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                className={`flex flex-col items-center gap-1 px-4 py-2 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
                     ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
                 `}
                 onClick={() => setOpen(!open)}
             >
-                <Wallet className="w-4 h-4" />
-                <span>Financeiro</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+                <Wallet className="w-6 h-6" />
+                <div className="flex items-center gap-0.5">
+                    <span>Financeiro</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+                </div>
             </button>
 
             {open && (
@@ -475,11 +479,11 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     {/* Inicio — direct link, no dropdown */}
                     <button
                         onClick={() => setLocation("/fazenda")}
-                        className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                        className={`flex flex-col items-center gap-1 px-4 py-2 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
                             ${location === "/fazenda" ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
                         `}
                     >
-                        <Home className="w-4 h-4" />
+                        <Home className="w-6 h-6" />
                         <span>Inicio</span>
                     </button>
 
