@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2 } from "lucide-react";
+import { Plus, Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
 function exportToCSV(data: any[], filename: string) {
@@ -40,6 +40,7 @@ export default function AccountsPayable() {
     const { toast } = useToast();
     const [openCreate, setOpenCreate] = useState(false);
     const [payingItem, setPayingItem] = useState<any>(null);
+    const [editingItem, setEditingItem] = useState<any>(null);
     const { user } = useAuth();
     const backfillDone = useRef(false);
 
@@ -144,6 +145,12 @@ export default function AccountsPayable() {
     const del = useMutation({
         mutationFn: async (id: string) => apiRequest("DELETE", `/api/farm/accounts-payable/${id}`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] }); toast({ title: "Removido" }); },
+    });
+
+    const editMutation = useMutation({
+        mutationFn: async ({ id, data }: { id: string; data: any }) => apiRequest("PUT", `/api/farm/accounts-payable/${id}`, data),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] }); toast({ title: "Atualizado" }); setEditingItem(null); },
+        onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
     });
 
     // ─── Bulk pay ──────────────────────────────────────────────────────────
@@ -366,8 +373,17 @@ export default function AccountsPayable() {
                                                     <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs"
                                                         onClick={() => setPayingItem(item)}>Pagar</Button>
                                                 )}
+                                                {item.status !== "pago" && (
+                                                    <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
+                                                        onClick={() => setEditingItem(item)}>
+                                                        <Pencil className="h-3 w-3 mr-1" />Editar
+                                                    </Button>
+                                                )}
                                                 <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
-                                                    onClick={() => { if (confirm("Remover?")) del.mutate(item.id); }}>×</Button>
+                                                    onClick={() => { if (confirm(`Remover conta "${item.supplier}" - ${formatCurrency(item.totalAmount, item.currency || "USD")}?`)) del.mutate(item.id); }}
+                                                    aria-label="Remover">
+                                                    <Trash2 className="h-3 w-3" />
+                                                </Button>
                                             </td>
                                         </tr>
                                     );
@@ -380,10 +396,20 @@ export default function AccountsPayable() {
                 {/* Pay Dialog */}
                 <Dialog open={!!payingItem} onOpenChange={(o) => !o && setPayingItem(null)}>
                     <DialogContent>
-                        <DialogHeader><DialogTitle>💰 Pagar Conta</DialogTitle></DialogHeader>
+                        <DialogHeader><DialogTitle>Pagar Conta</DialogTitle></DialogHeader>
                         {payingItem && <PayForm item={payingItem} accounts={accounts}
                             onPay={(data: any) => pay.mutate({ id: payingItem.id, data: { ...data, supplier: payingItem.supplier } })}
                             saving={pay.isPending} />}
+                    </DialogContent>
+                </Dialog>
+
+                {/* Edit Dialog */}
+                <Dialog open={!!editingItem} onOpenChange={(o) => !o && setEditingItem(null)}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader><DialogTitle>Editar Conta a Pagar</DialogTitle></DialogHeader>
+                        {editingItem && <EditAPForm item={editingItem} seasons={seasons}
+                            onSave={(data: any) => editMutation.mutate({ id: editingItem.id, data })}
+                            saving={editMutation.isPending} />}
                     </DialogContent>
                 </Dialog>
             </div>
@@ -435,6 +461,41 @@ function APForm({ onSave, saving, seasons }: any) {
             <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={saving || !supplier || !totalAmount || !dueDate}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {installments > 1 ? `Gerar ${installments} Parcelas` : "Registrar"}
+            </Button>
+        </form>
+    );
+}
+
+function EditAPForm({ item, seasons, onSave, saving }: any) {
+    const [supplier, setSupplier] = useState(item.supplier || "");
+    const [description, setDescription] = useState(item.description || "");
+    const [totalAmount, setTotalAmount] = useState(String(item.totalAmount || ""));
+    const [dueDate, setDueDate] = useState(item.dueDate ? new Date(item.dueDate).toISOString().split("T")[0] : "");
+    const [seasonId, setSeasonId] = useState(item.seasonId || item.season_id || "__none__");
+
+    return (
+        <form onSubmit={(e) => {
+            e.preventDefault();
+            onSave({ supplier, description, totalAmount, dueDate, seasonId: seasonId === "__none__" ? null : seasonId || null });
+        }} className="space-y-4">
+            <div><Label>Fornecedor *</Label><Input value={supplier} onChange={e => setSupplier(e.target.value)} required /></div>
+            <div><Label>Descricao</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
+            <div><Label>Valor Total ($) *</Label><Input type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} required /></div>
+            <div><Label>Vencimento *</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} required /></div>
+            {(seasons || []).length > 0 && (
+                <div>
+                    <Label>Safra (opcional)</Label>
+                    <Select value={seasonId} onValueChange={setSeasonId}>
+                        <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__none__">Nenhuma</SelectItem>
+                            {seasons.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={saving || !supplier || !totalAmount || !dueDate}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Alteracoes"}
             </Button>
         </form>
     );

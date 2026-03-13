@@ -324,7 +324,9 @@ export default function AccountsReceivable() {
                                         <td className="p-3 flex gap-1 justify-end">
                                             {item.status !== "recebido" &&
                                                 <Button size="sm" className="bg-blue-600 hover:bg-blue-700 h-7 text-xs" onClick={() => setReceivingItem(item)}>Cobrar</Button>}
-                                            <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs" onClick={() => { if (confirm("Remover?")) del.mutate(item.id); }}>×</Button>
+                                            <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
+                                                onClick={() => { if (confirm(`Remover conta a receber "${item.buyer}" - ${formatCurrency(item.totalAmount)}?`)) del.mutate(item.id); }}
+                                                aria-label="Remover"><Trash2 className="h-3 w-3" /></Button>
                                         </td>
                                     </tr>
                                 ))}

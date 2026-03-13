@@ -17,7 +17,7 @@ import {
     Wallet, Plus, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
     Loader2, Trash2, Building2, Banknote, CreditCard, Landmark, DollarSign,
     Tag, Download, AlertTriangle, Target, Activity, ArrowLeftRight, FileText,
-    CheckCircle, XCircle, Clock,
+    CheckCircle, XCircle, Clock, Pencil,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 
@@ -608,13 +608,32 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
 // ─────────────────────────────────────────────────────────────────────────────
 function AccountsManager({ accounts, onRefresh }: { accounts: any[]; onRefresh: () => void }) {
     const { toast } = useToast();
+    const [editingAccount, setEditingAccount] = useState<any>(null);
+    const [editName, setEditName] = useState("");
+    const [editBankName, setEditBankName] = useState("");
+    const [editAccountType, setEditAccountType] = useState("");
+
     const deleteMutation = useMutation({
         mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/cash-accounts/${id}`),
         onSuccess: () => { onRefresh(); toast({ title: "Conta removida" }); },
         onError: () => toast({ title: "Erro ao remover conta", variant: "destructive" }),
     });
 
+    const editMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PUT", `/api/farm/cash-accounts/${id}`, data),
+        onSuccess: () => { onRefresh(); toast({ title: "Conta atualizada" }); setEditingAccount(null); },
+        onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
+    });
+
+    function openEdit(acc: any) {
+        setEditName(acc.name);
+        setEditBankName(acc.bankName || "");
+        setEditAccountType(acc.accountType);
+        setEditingAccount(acc);
+    }
+
     return (
+        <>
         <Card className="border-emerald-100">
             <CardHeader><CardTitle className="text-emerald-800">Contas e Bancos Cadastrados</CardTitle></CardHeader>
             <CardContent>
@@ -638,10 +657,17 @@ function AccountsManager({ accounts, onRefresh }: { accounts: any[]; onRefresh: 
                                         <p className="text-xs text-gray-500">Saldo atual</p>
                                         <p className={`text-xl font-bold ${balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(balance, acc.currency)}</p>
                                     </div>
-                                    <Button size="icon" variant="ghost" className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 h-8 w-8"
-                                        onClick={() => { if (confirm(`Remover conta "${acc.name}"?`)) deleteMutation.mutate(acc.id); }}>
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                                        <Button size="icon" variant="ghost" className="text-blue-500 hover:text-blue-700 h-8 w-8"
+                                            onClick={() => openEdit(acc)} aria-label="Editar conta">
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="text-red-500 hover:text-red-700 h-8 w-8"
+                                            onClick={() => { if (confirm(`Remover conta "${acc.name}"? Todas as transacoes vinculadas serao perdidas.`)) deleteMutation.mutate(acc.id); }}
+                                            aria-label="Remover conta">
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </div>
                             );
                         })}
@@ -649,6 +675,28 @@ function AccountsManager({ accounts, onRefresh }: { accounts: any[]; onRefresh: 
                 )}
             </CardContent>
         </Card>
+
+        <Dialog open={!!editingAccount} onOpenChange={(o) => !o && setEditingAccount(null)}>
+            <DialogContent className="max-w-md">
+                <DialogHeader><DialogTitle>Editar Conta</DialogTitle></DialogHeader>
+                <div className="space-y-4 py-2">
+                    <div><Label>Nome da Conta *</Label><Input value={editName} onChange={e => setEditName(e.target.value)} /></div>
+                    <div><Label>Nome do Banco</Label><Input value={editBankName} onChange={e => setEditBankName(e.target.value)} /></div>
+                    <div><Label>Tipo *</Label>
+                        <Select value={editAccountType} onValueChange={setEditAccountType}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>{ACCOUNT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700"
+                        onClick={() => editMutation.mutate({ id: editingAccount.id, data: { name: editName, bankName: editBankName || null, accountType: editAccountType } })}
+                        disabled={editMutation.isPending || !editName || !editAccountType}>
+                        {editMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Alteracoes"}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }
 
@@ -848,11 +896,14 @@ function TransferDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: (
                     </div>
                     {showExchangeRate && (
                         <div>
-                            <Label>Taxa de Cambio ({sourceAccount.currency} para {destAccount.currency}) *</Label>
-                            <Input type="number" step="0.0001" value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} placeholder="Ex: 7300 (1 USD = 7300 PYG)" />
+                            <Label>Taxa de Cambio (1 {sourceAccount.currency} = ? {destAccount.currency}) *</Label>
+                            <Input type="number" step="0.0001" value={exchangeRate} onChange={e => setExchangeRate(e.target.value)}
+                                placeholder={sourceAccount.currency === "USD" && destAccount.currency === "PYG" ? "Ex: 7300" :
+                                    sourceAccount.currency === "PYG" && destAccount.currency === "USD" ? "Ex: 0.000137" :
+                                    "Ex: taxa de conversao"} />
                             {exchangeRate && amount && (
                                 <p className="text-xs text-gray-500 mt-1">
-                                    Valor no destino: {formatCurrency(parseFloat(amount) * parseFloat(exchangeRate), destAccount.currency)}
+                                    {formatCurrency(parseFloat(amount), sourceAccount.currency)} = {formatCurrency(parseFloat(amount) * parseFloat(exchangeRate), destAccount.currency)}
                                 </p>
                             )}
                         </div>
