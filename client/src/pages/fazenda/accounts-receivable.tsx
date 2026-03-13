@@ -104,13 +104,13 @@ export default function AccountsReceivable() {
             for (const ch of (cheques || [])) {
                 const r = await apiRequest("POST", "/api/farm/cheques", {
                     type: "recebido",
-                    chequeNumber: ch.numero,
-                    bank: ch.banco,
-                    holder: ch.titular,
-                    amount: ch.valor,
-                    currency: ch.currency || "USD",
+                    chequeNumber: String(ch.numero || ""),
+                    bank: String(ch.banco || ""),
+                    holder: String(ch.titular || ""),
+                    amount: String(ch.valor || "0"),
+                    currency: String(ch.currency || "USD"),
                     issueDate: new Date().toISOString(),
-                    relatedReceivableId: id,
+                    relatedReceivableId: String(id),
                 });
                 const created = await r.json();
                 createdCheques.push(created);
@@ -297,6 +297,7 @@ export default function AccountsReceivable() {
                                     <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
                                     <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
                                     <th className="text-right p-3 font-semibold text-emerald-800">Recebido</th>
+                                    <th className="text-right p-3 font-semibold text-emerald-800">Saldo</th>
                                     <th className="p-3" />
                                 </tr>
                             </thead>
@@ -316,6 +317,9 @@ export default function AccountsReceivable() {
                                         <td className="p-3">{badge(item.status)}</td>
                                         <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount)}</td>
                                         <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.receivedAmount || 0)}</td>
+                                        <td className={`text-right p-3 font-mono font-semibold ${(parseFloat(item.totalAmount) - parseFloat(item.receivedAmount || 0)) > 0 ? "text-red-600" : "text-green-600"}`}>
+                                            {formatCurrency(parseFloat(item.totalAmount) - parseFloat(item.receivedAmount || 0))}
+                                        </td>
                                         <td className="p-3 flex gap-1 justify-end">
                                             {item.status !== "recebido" &&
                                                 <Button size="sm" className="bg-blue-600 hover:bg-blue-700 h-7 text-xs" onClick={() => setReceivingItem(item)}>Cobrar</Button>}

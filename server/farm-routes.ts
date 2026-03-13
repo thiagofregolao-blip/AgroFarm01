@@ -5219,6 +5219,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
     app.post("/api/farm/cheques", requireFarmer, async (req: Request, res: Response) => {
         try {
             const b = req.body;
+            console.log("[CHEQUE_CREATE] body:", JSON.stringify(b));
             const safeAmount = String(b.amount || '0');
             const safeIssue = b.issueDate ? new Date(String(b.issueDate)) : new Date();
             const safeDue = b.dueDate ? new Date(String(b.dueDate)) : null;
