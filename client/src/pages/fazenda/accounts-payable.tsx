@@ -397,7 +397,7 @@ function APForm({ onSave, saving, seasons }: any) {
     const [totalAmount, setTotalAmount] = useState("");
     const [dueDate, setDueDate] = useState("");
     const [totalInstallments, setTotalInstallments] = useState("1");
-    const [seasonId, setSeasonId] = useState("");
+    const [seasonId, setSeasonId] = useState("__none__");
 
     const installments = parseInt(totalInstallments) || 1;
     const perInstallment = totalAmount ? (parseFloat(totalAmount) / installments).toFixed(2) : "0.00";
@@ -405,7 +405,7 @@ function APForm({ onSave, saving, seasons }: any) {
     return (
         <form onSubmit={(e) => {
             e.preventDefault();
-            onSave({ supplier, description, totalAmount, dueDate, installmentNumber: 1, totalInstallments: installments, seasonId: seasonId || null });
+            onSave({ supplier, description, totalAmount, dueDate, installmentNumber: 1, totalInstallments: installments, seasonId: seasonId === "__none__" ? null : seasonId || null });
         }} className="space-y-4">
             <div><Label>Fornecedor *</Label><Input value={supplier} onChange={e => setSupplier(e.target.value)} required /></div>
             <div><Label>Descrição</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
@@ -426,7 +426,7 @@ function APForm({ onSave, saving, seasons }: any) {
                     <Select value={seasonId} onValueChange={setSeasonId}>
                         <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Nenhuma</SelectItem>
+                            <SelectItem value="__none__">Nenhuma</SelectItem>
                             {seasons.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                         </SelectContent>
                     </Select>

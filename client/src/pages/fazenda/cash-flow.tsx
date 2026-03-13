@@ -747,7 +747,7 @@ function CreateTransactionDialog({ accounts, onSuccess }: { accounts: any[]; onS
     const categories = type === "entrada" ? ENTRADA_CATEGORIES : SAIDA_CATEGORIES;
 
     const save = useMutation({
-        mutationFn: () => apiRequest("POST", "/api/farm/cash-transactions", { accountId, type, amount: parseFloat(amount), category, description, paymentMethod, transactionDate: new Date(transactionDate) }),
+        mutationFn: () => apiRequest("POST", "/api/farm/cash-transactions", { accountId, type, amount: parseFloat(amount), category, description, paymentMethod, transactionDate }),
         onSuccess: () => { toast({ title: type === "entrada" ? "Entrada registrada!" : "Saída registrada!" }); setOpen(false); onSuccess(); setAmount(""); setCategory(""); setDescription(""); },
         onError: () => toast({ title: "Erro ao registrar", variant: "destructive" }),
     });

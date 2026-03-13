@@ -5336,13 +5336,15 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
     // ── #21: Transfer between accounts with exchange rate ────────────────────
     app.post("/api/farm/cash-flow/transfer", requireFarmer, async (req: Request, res: Response) => {
         try {
-            const { fromAccountId, toAccountId, amount, exchangeRate, description } = req.body;
-            const now = new Date();
+            const { sourceAccountId, destAccountId, fromAccountId, toAccountId, amount, exchangeRate, description } = req.body;
+            const srcId = sourceAccountId || fromAccountId;
+            const dstId = destAccountId || toAccountId;
+            const nowISO = new Date().toISOString();
 
             // Get source account info
-            const srcRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${fromAccountId} AND farmer_id = ${req.user!.id}`);
+            const srcRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${srcId} AND farmer_id = ${req.user!.id}`);
             const src = ((srcRows as any).rows ?? srcRows)[0];
-            const dstRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${toAccountId} AND farmer_id = ${req.user!.id}`);
+            const dstRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${dstId} AND farmer_id = ${req.user!.id}`);
             const dst = ((dstRows as any).rows ?? dstRows)[0];
             if (!src || !dst) return res.status(404).json({ error: "Account not found" });
 
@@ -5352,16 +5354,16 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             // Debit source
             await db.execute(sql`
                 INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description, payment_method, reference_type, transaction_date)
-                VALUES (${req.user!.id}, ${fromAccountId}, 'saida', ${amount}, ${src.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${now})
+                VALUES (${req.user!.id}, ${srcId}, 'saida', ${amount}, ${src.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${nowISO}::timestamp)
             `);
-            await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${amount} WHERE id = ${fromAccountId}`);
+            await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${amount} WHERE id = ${srcId}`);
 
             // Credit destination
             await db.execute(sql`
                 INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description, payment_method, reference_type, transaction_date)
-                VALUES (${req.user!.id}, ${toAccountId}, 'entrada', ${convertedAmount}, ${dst.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${now})
+                VALUES (${req.user!.id}, ${dstId}, 'entrada', ${convertedAmount}, ${dst.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${nowISO}::timestamp)
             `);
-            await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${convertedAmount} WHERE id = ${toAccountId}`);
+            await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${convertedAmount} WHERE id = ${dstId}`);
 
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
