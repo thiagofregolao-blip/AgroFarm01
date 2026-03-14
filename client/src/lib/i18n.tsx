@@ -33,6 +33,7 @@ const translations = {
     nav_budget: "Orçamento",
     nav_reconciliation: "Conciliação",
     nav_suppliers: "Fornecedores",
+    nav_productivity: "Produtividade",
 
     // Profile
     profile_title: "Meu Perfil",
@@ -168,6 +169,7 @@ const translations = {
     nav_budget: "Presupuesto",
     nav_reconciliation: "Conciliación",
     nav_suppliers: "Proveedores",
+    nav_productivity: "Productividad",
 
     // Profile
     profile_title: "Mi Perfil",

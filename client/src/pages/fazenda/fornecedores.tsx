@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Building2, Phone, Mail, MapPin } from "lucide-react";
@@ -17,6 +18,8 @@ interface Supplier {
     email: string | null;
     address: string | null;
     notes: string | null;
+    person_type: string | null;
+    entity_type: string | null;
 }
 
 export default function FornecedoresPage() {
@@ -25,7 +28,7 @@ export default function FornecedoresPage() {
     const [search, setSearch] = useState("");
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<Supplier | null>(null);
-    const [form, setForm] = useState({ name: "", ruc: "", phone: "", email: "", address: "", notes: "" });
+    const [form, setForm] = useState({ name: "", ruc: "", phone: "", email: "", address: "", notes: "", personType: "", entityType: "" });
 
     const { data: suppliers = [], isLoading } = useQuery<Supplier[]>({
         queryKey: ["/api/farm/suppliers"],
@@ -60,13 +63,13 @@ export default function FornecedoresPage() {
 
     const openNew = () => {
         setEditing(null);
-        setForm({ name: "", ruc: "", phone: "", email: "", address: "", notes: "" });
+        setForm({ name: "", ruc: "", phone: "", email: "", address: "", notes: "", personType: "", entityType: "" });
         setModalOpen(true);
     };
 
     const openEdit = (s: Supplier) => {
         setEditing(s);
-        setForm({ name: s.name, ruc: s.ruc || "", phone: s.phone || "", email: s.email || "", address: s.address || "", notes: s.notes || "" });
+        setForm({ name: s.name, ruc: s.ruc || "", phone: s.phone || "", email: s.email || "", address: s.address || "", notes: s.notes || "", personType: s.person_type || "", entityType: s.entity_type || "" });
         setModalOpen(true);
     };
 
@@ -121,6 +124,20 @@ export default function FornecedoresPage() {
                                     </div>
                                 </CardHeader>
                                 <CardContent className="pt-0 space-y-1">
+                                    {(s.person_type || s.entity_type) && (
+                                        <div className="flex gap-1.5 mb-1.5">
+                                            {s.person_type && (
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${s.person_type === "provedor" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                    {s.person_type === "provedor" ? "Provedor" : "Cliente"}
+                                                </span>
+                                            )}
+                                            {s.entity_type && (
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${s.entity_type === "fisica" ? "bg-purple-100 text-purple-700" : "bg-amber-100 text-amber-700"}`}>
+                                                    {s.entity_type === "fisica" ? "P. Fisica" : "P. Juridica"}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                     {s.phone && <p className="text-xs text-slate-600 flex items-center gap-1.5"><Phone className="w-3 h-3" /> {s.phone}</p>}
                                     {s.email && <p className="text-xs text-slate-600 flex items-center gap-1.5"><Mail className="w-3 h-3" /> {s.email}</p>}
                                     {s.address && <p className="text-xs text-slate-600 flex items-center gap-1.5"><MapPin className="w-3 h-3" /> {s.address}</p>}
@@ -140,6 +157,28 @@ export default function FornecedoresPage() {
                         <div>
                             <Label>Nome *</Label>
                             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label>Tipo</Label>
+                                <Select value={form.personType} onValueChange={(v) => setForm({ ...form, personType: v })}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="provedor">Provedor</SelectItem>
+                                        <SelectItem value="cliente">Cliente</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label>Natureza</Label>
+                                <Select value={form.entityType} onValueChange={(v) => setForm({ ...form, entityType: v })}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="fisica">Pessoa Fisica</SelectItem>
+                                        <SelectItem value="juridica">Pessoa Juridica</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>

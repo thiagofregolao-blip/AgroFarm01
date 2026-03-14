@@ -710,6 +710,36 @@ export function registerFarmRoutes(app: Express) {
         }
     });
 
+    app.post("/api/farm/stock/transfer", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { productId, fromWarehouseId, toWarehouseId, quantity, notes } = req.body;
+            const farmerId = (req.user as any).id;
+            const qty = parseFloat(quantity);
+            if (!productId || !qty || qty <= 0) {
+                return res.status(400).json({ error: "productId and positive quantity are required" });
+            }
+
+            // Create saida movement from source
+            await db.execute(sql`
+                INSERT INTO farm_stock_movements (farmer_id, product_id, type, quantity, unit_cost, reference_type, warehouse_id, notes)
+                VALUES (${farmerId}, ${productId}, 'saida', ${qty}, 0, 'transfer', ${fromWarehouseId ?? null},
+                    ${'Transferencia para deposito ' + (toWarehouseId || 'outro') + '. ' + (notes || '')})
+            `);
+
+            // Create entrada movement to destination
+            await db.execute(sql`
+                INSERT INTO farm_stock_movements (farmer_id, product_id, type, quantity, unit_cost, reference_type, warehouse_id, notes)
+                VALUES (${farmerId}, ${productId}, 'entrada', ${qty}, 0, 'transfer', ${toWarehouseId ?? null},
+                    ${'Transferencia de deposito ' + (fromWarehouseId || 'outro') + '. ' + (notes || '')})
+            `);
+
+            res.json({ ok: true, message: "Transferencia realizada com sucesso" });
+        } catch (e: any) {
+            console.error("[STOCK_TRANSFER]", e);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     // ==================== INVOICES ====================
 
     app.get("/api/farm/invoices", requireFarmer, async (req, res) => {
@@ -1116,11 +1146,13 @@ export function registerFarmRoutes(app: Express) {
     // Delete invoice
     app.delete("/api/farm/invoices/:id", requireFarmer, async (req, res) => {
         try {
-            const invoice = await farmStorage.getInvoiceById(req.params.id);
-            if (!invoice) return res.status(404).json({ error: "Invoice not found" });
-
-            await farmStorage.deleteInvoice(req.params.id);
-            res.json({ message: "Fatura excluída com sucesso." });
+            const farmerId = (req.user as any).id;
+            // Delete related records first to avoid FK constraint errors
+            await db.execute(sql`DELETE FROM farm_invoice_items WHERE invoice_id = ${req.params.id}`);
+            await db.execute(sql`UPDATE farm_accounts_payable SET invoice_id = NULL WHERE invoice_id = ${req.params.id} AND farmer_id = ${farmerId}`);
+            await db.execute(sql`UPDATE farm_remissions SET reconciled_invoice_id = NULL WHERE reconciled_invoice_id = ${req.params.id} AND farmer_id = ${farmerId}`);
+            await db.execute(sql`DELETE FROM farm_invoices WHERE id = ${req.params.id} AND farmer_id = ${farmerId}`);
+            res.json({ message: "Fatura excluida com sucesso." });
         } catch (error) {
             console.error("[FARM_INVOICE_DELETE]", error);
             res.status(500).json({ error: "Failed to delete invoice" });
@@ -3043,13 +3075,60 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     });
                 }
 
+                // Detect currency from parsed data
+                const detectedCurrency = parsed.currency || (amount > 10000 ? "PYG" : "USD");
+
+                // Auto-link to season based on payment period
+                let seasonId = null;
+                try {
+                    const seasons = await farmStorage.getSeasons(farmer.id);
+                    const now = new Date();
+                    const matchedSeason = seasons.find((s: any) => {
+                        if (!s.paymentStartDate || !s.paymentEndDate) return false;
+                        const start = new Date(s.paymentStartDate);
+                        const end = new Date(s.paymentEndDate);
+                        return now >= start && now <= end;
+                    });
+                    if (matchedSeason) seasonId = matchedSeason.id;
+                } catch (err) {
+                    console.error("[WEBHOOK_INVOICE_SEASON]", err);
+                }
+
+                // Auto-register supplier if not exists
+                let supplierId = null;
+                if (parsed.supplier) {
+                    try {
+                        const existingSup = await db.execute(sql`
+                            SELECT id FROM farm_suppliers WHERE farmer_id = ${farmer.id} AND is_active = true
+                            AND (name ILIKE ${'%' + parsed.supplier.substring(0, 15) + '%'} OR ruc = ${parsed.invoiceNumber || '__none__'})
+                            LIMIT 1
+                        `);
+                        const supRows = (existingSup as any).rows ?? existingSup;
+                        if (supRows.length > 0) {
+                            supplierId = supRows[0].id;
+                        } else {
+                            const newSup = await db.execute(sql`
+                                INSERT INTO farm_suppliers (farmer_id, name, person_type, entity_type)
+                                VALUES (${farmer.id}, ${parsed.supplier}, 'provedor', 'juridica')
+                                RETURNING id
+                            `);
+                            supplierId = ((newSup as any).rows ?? newSup)[0]?.id;
+                        }
+                    } catch (err) {
+                        console.error("[WEBHOOK_INVOICE_SUPPLIER]", err);
+                    }
+                }
+
                 const [newInvoice] = await db.insert(farmInvoices).values({
                     farmerId: farmer.id,
                     totalAmount: String(amount),
+                    currency: detectedCurrency,
                     notes: `[Via WhatsApp] ${parsed.description}`,
                     status: 'pending',
                     supplier: parsed.supplier || "Via WhatsApp",
-                    invoiceNumber: parsed.invoiceNumber || `WPP-${Date.now().toString().slice(-6)}`
+                    invoiceNumber: parsed.invoiceNumber || `WPP-${Date.now().toString().slice(-6)}`,
+                    seasonId,
+                    supplierId,
                 }).returning();
 
                 const allProducts = await farmStorage.getAllProducts();
@@ -3346,14 +3425,46 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                 .orderBy(desc(farmPriceHistory.purchaseDate))
                 .limit(50);
 
-            res.json(items.map((i: any) => ({
+            // Also search in farm_stock for manually added products
+            const stockItems = await db.execute(sql`
+                SELECT fs.updated_at as date, 'Estoque Manual' as supplier,
+                    fp.name as product_name, fs.quantity, fs.average_cost as unit_price,
+                    fp.active_ingredient
+                FROM farm_stock fs
+                JOIN farm_products fp ON fp.id = fs.product_id
+                WHERE fs.farmer_id = ${farmers[0].id}
+                ${search && String(search).trim() !== "" ? sql`AND fp.name ILIKE ${'%' + String(search).trim() + '%'}` : sql``}
+                ORDER BY fs.updated_at DESC LIMIT 20
+            `);
+            const stockRows = (stockItems as any).rows ?? stockItems;
+
+            const priceResults = items.map((i: any) => ({
                 dataCompra: i.date ? new Date(i.date).toLocaleDateString("pt-BR") : "N/A",
                 fornecedor: i.supplier,
                 produto: i.productName,
                 quantidade: parseFloat(i.quantity || "0").toFixed(2),
                 precoUnitario: parseFloat(i.unitPrice || "0").toFixed(2),
                 principioAtivo: i.activeIngredient || ""
-            })));
+            }));
+
+            // Merge stock items that are not already in price history
+            for (const s of stockRows) {
+                const alreadyExists = priceResults.some((p: any) =>
+                    p.produto?.toLowerCase() === s.product_name?.toLowerCase()
+                );
+                if (!alreadyExists && parseFloat(s.unit_price || "0") > 0) {
+                    priceResults.push({
+                        dataCompra: s.date ? new Date(s.date).toLocaleDateString("pt-BR") : "N/A",
+                        fornecedor: s.supplier || "Estoque Manual",
+                        produto: s.product_name,
+                        quantidade: parseFloat(s.quantity || "0").toFixed(2),
+                        precoUnitario: parseFloat(s.unit_price || "0").toFixed(2),
+                        principioAtivo: s.active_ingredient || ""
+                    });
+                }
+            }
+
+            res.json(priceResults);
         } catch (error) {
             console.error("[WEBHOOK_N8N_PRICES]", error);
             res.status(500).json({ error: "Internal server error" });
@@ -4592,6 +4703,23 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
         }
     });
 
+    app.put("/api/farm/accounts-receivable/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsReceivable } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [updated] = await db.update(farmAccountsReceivable).set(req.body).where(
+                and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
+            ).returning();
+            res.json(updated);
+        } catch (error) {
+            console.error("[ACCOUNTS_RECEIVABLE_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update account receivable" });
+        }
+    });
+
     // ============================================================================
     // DRE — Estado de Resultados por Safra (read-only aggregation)
     // ============================================================================
@@ -5152,10 +5280,20 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.post("/api/farm/suppliers", requireFarmer, async (req: Request, res: Response) => {
         try {
-            const { name, ruc, phone, email, address, notes } = req.body;
+            const { name, ruc, phone, email, address, notes, personType, entityType } = req.body;
+            // Validate RUC uniqueness
+            if (ruc) {
+                const existing = await db.execute(sql`
+                    SELECT id FROM farm_suppliers WHERE farmer_id = ${req.user!.id} AND ruc = ${ruc} AND is_active = true LIMIT 1
+                `);
+                const existingRows = (existing as any).rows ?? existing;
+                if (existingRows.length > 0) {
+                    return res.status(409).json({ error: `Ja existe um fornecedor cadastrado com o RUC ${ruc}` });
+                }
+            }
             const rows = await db.execute(sql`
-                INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, notes)
-                VALUES (${req.user!.id}, ${name}, ${ruc ?? null}, ${phone ?? null}, ${email ?? null}, ${address ?? null}, ${notes ?? null})
+                INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, notes, person_type, entity_type)
+                VALUES (${req.user!.id}, ${name}, ${ruc ?? null}, ${phone ?? null}, ${email ?? null}, ${address ?? null}, ${notes ?? null}, ${personType ?? null}, ${entityType ?? null})
                 RETURNING *
             `);
             res.json(((rows as any).rows ?? rows)[0]);
@@ -5164,10 +5302,11 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
 
     app.put("/api/farm/suppliers/:id", requireFarmer, async (req: Request, res: Response) => {
         try {
-            const { name, ruc, phone, email, address, notes } = req.body;
+            const { name, ruc, phone, email, address, notes, personType, entityType } = req.body;
             await db.execute(sql`
                 UPDATE farm_suppliers SET name=${name}, ruc=${ruc ?? null}, phone=${phone ?? null},
-                email=${email ?? null}, address=${address ?? null}, notes=${notes ?? null}
+                email=${email ?? null}, address=${address ?? null}, notes=${notes ?? null},
+                person_type=${personType ?? null}, entity_type=${entityType ?? null}
                 WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
             `);
             res.json({ ok: true });
@@ -5181,6 +5320,185 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             `);
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── Guarantors (Codeudor for Pagare) ─────────────────────────────────────
+    app.get("/api/farm/guarantors", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const rows = await db.execute(sql`
+                SELECT g.*, s.name as client_name FROM farm_guarantors g
+                LEFT JOIN farm_suppliers s ON s.id = g.client_id
+                WHERE g.farmer_id = ${req.user!.id} ORDER BY g.created_at DESC
+            `);
+            res.json((rows as any).rows ?? rows);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.post("/api/farm/guarantors", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { clientId, guarantorName, guarantorRuc, guarantorPhone, guarantorAddress } = req.body;
+            const rows = await db.execute(sql`
+                INSERT INTO farm_guarantors (farmer_id, client_id, guarantor_name, guarantor_ruc, guarantor_phone, guarantor_address)
+                VALUES (${req.user!.id}, ${clientId}, ${guarantorName}, ${guarantorRuc ?? null}, ${guarantorPhone ?? null}, ${guarantorAddress ?? null})
+                RETURNING *
+            `);
+            res.json(((rows as any).rows ?? rows)[0]);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.delete("/api/farm/guarantors/:id", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            await db.execute(sql`DELETE FROM farm_guarantors WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}`);
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── Issued Invoices (Faturas Emitidas -> gera Conta a Receber) ─────────
+    app.get("/api/farm/issued-invoices", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const rows = await db.execute(sql`
+                SELECT i.*, s.name as client_name FROM farm_issued_invoices i
+                LEFT JOIN farm_suppliers s ON s.id = i.client_id
+                WHERE i.farmer_id = ${req.user!.id} ORDER BY i.created_at DESC
+            `);
+            res.json((rows as any).rows ?? rows);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.post("/api/farm/issued-invoices", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const { clientId, invoiceNumber, description, totalAmount, currency, issueDate, dueDate, notes, seasonId } = req.body;
+            const farmerId = req.user!.id;
+
+            // Create issued invoice
+            const invRows = await db.execute(sql`
+                INSERT INTO farm_issued_invoices (farmer_id, client_id, invoice_number, description, total_amount, currency, issue_date, due_date, notes, season_id)
+                VALUES (${farmerId}, ${clientId ?? null}, ${invoiceNumber ?? null}, ${description ?? null}, ${totalAmount ?? '0'}, ${currency ?? 'USD'},
+                    ${issueDate ? new Date(issueDate).toISOString() : new Date().toISOString()}::timestamp,
+                    ${dueDate ? new Date(dueDate).toISOString() : null}::timestamp,
+                    ${notes ?? null}, ${seasonId ?? null})
+                RETURNING *
+            `);
+            const inv = ((invRows as any).rows ?? invRows)[0];
+
+            // Auto-create account receivable
+            const { farmAccountsReceivable } = await import("../shared/schema");
+            await db.insert(farmAccountsReceivable).values({
+                farmerId,
+                buyer: description || 'Fatura emitida',
+                description: `Fatura #${invoiceNumber || inv.id} - ${description || ''}`,
+                totalAmount: totalAmount || '0',
+                currency: currency || 'USD',
+                dueDate: dueDate ? new Date(dueDate) : new Date(),
+                status: 'pendente',
+                supplierId: clientId || null,
+            });
+
+            res.json(inv);
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.delete("/api/farm/issued-invoices/:id", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            await db.execute(sql`DELETE FROM farm_issued_invoices WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}`);
+            res.json({ ok: true });
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── #30: Produtividade por Talhao (enhanced) ──────────────────────────────
+    app.get("/api/farm/productivity", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            const farmerId = req.user!.id;
+            const { seasonId, plotId } = req.query;
+
+            let query = sql`
+                SELECT
+                    r.plot_id,
+                    p.name as plot_name,
+                    p2.name as property_name,
+                    r.season_id,
+                    s.name as season_name,
+                    r.crop,
+                    COUNT(r.id) as total_romaneios,
+                    SUM(CAST(r.final_weight AS NUMERIC)) as total_production_kg,
+                    SUM(CAST(r.final_weight AS NUMERIC)) / 1000.0 as total_production_ton
+                FROM farm_romaneios r
+                LEFT JOIN farm_plots p ON p.id = r.plot_id
+                LEFT JOIN farm_properties p2 ON p2.id = p.property_id
+                LEFT JOIN farm_seasons s ON s.id = r.season_id
+                WHERE r.farmer_id = ${farmerId} AND r.plot_id IS NOT NULL
+            `;
+
+            if (seasonId && seasonId !== 'todos') {
+                query = sql`${query} AND r.season_id = ${seasonId}`;
+            }
+            if (plotId && plotId !== 'todos') {
+                query = sql`${query} AND r.plot_id = ${plotId}`;
+            }
+
+            query = sql`${query} GROUP BY r.plot_id, p.name, p2.name, r.season_id, s.name, r.crop ORDER BY total_production_kg DESC`;
+
+            const rows = await db.execute(query);
+            const data = (rows as any).rows ?? rows;
+
+            // Also get costs per plot
+            const costQuery = sql`
+                SELECT
+                    e.plot_id,
+                    SUM(CAST(e.amount AS NUMERIC)) as total_cost
+                FROM farm_expenses e
+                WHERE e.farmer_id = ${farmerId} AND e.plot_id IS NOT NULL
+                ${seasonId && seasonId !== 'todos' ? sql`AND e.season_id = ${seasonId}` : sql``}
+                ${plotId && plotId !== 'todos' ? sql`AND e.plot_id = ${plotId}` : sql``}
+                GROUP BY e.plot_id
+            `;
+            const costRows = await db.execute(costQuery);
+            const costs = (costRows as any).rows ?? costRows;
+            const costMap: Record<string, number> = {};
+            for (const c of costs) { costMap[c.plot_id] = parseFloat(c.total_cost) || 0; }
+
+            // Get plot areas
+            const plotAreas = await db.execute(sql`
+                SELECT id, area FROM farm_plots WHERE property_id IN (SELECT id FROM farm_properties WHERE farmer_id = ${farmerId})
+            `);
+            const areaMap: Record<string, number> = {};
+            for (const pa of (plotAreas as any).rows ?? plotAreas) { areaMap[pa.id] = parseFloat(pa.area) || 1; }
+
+            // Historical average
+            const avgQuery = sql`
+                SELECT r.plot_id, AVG(CAST(r.final_weight AS NUMERIC) / 1000.0) as avg_ton_per_romaneio,
+                    COUNT(DISTINCT r.season_id) as seasons_count
+                FROM farm_romaneios r
+                WHERE r.farmer_id = ${farmerId} AND r.plot_id IS NOT NULL
+                GROUP BY r.plot_id
+            `;
+            const avgRows = await db.execute(avgQuery);
+            const avgMap: Record<string, any> = {};
+            for (const a of (avgRows as any).rows ?? avgRows) { avgMap[a.plot_id] = a; }
+
+            const result = data.map((d: any) => {
+                const area = areaMap[d.plot_id] || 1;
+                const totalTon = parseFloat(d.total_production_ton) || 0;
+                const totalCost = costMap[d.plot_id] || 0;
+                const avg = avgMap[d.plot_id];
+                return {
+                    ...d,
+                    area_ha: area,
+                    productivity_ton_ha: (totalTon / area).toFixed(2),
+                    total_cost: totalCost.toFixed(2),
+                    cost_per_ha: (totalCost / area).toFixed(2),
+                    cost_per_ton: totalTon > 0 ? (totalCost / totalTon).toFixed(2) : "0.00",
+                    margin: (totalTon * 350 - totalCost).toFixed(2),
+                    avg_production_ton: avg ? parseFloat(avg.avg_ton_per_romaneio).toFixed(2) : "0.00",
+                    seasons_count: avg?.seasons_count || 1,
+                };
+            });
+
+            res.json(result);
+        } catch (e: any) {
+            console.error("[PRODUCTIVITY]", e);
+            res.status(500).json({ error: e.message });
+        }
     });
 
     // ── #5: DELETE + PUT Despesas (Expenses) ─────────────────────────────────
@@ -5339,7 +5657,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
             const { sourceAccountId, destAccountId, fromAccountId, toAccountId, amount, exchangeRate, description } = req.body;
             const srcId = sourceAccountId || fromAccountId;
             const dstId = destAccountId || toAccountId;
-            const nowISO = new Date().toISOString();
+            const nowISO = req.body.transferDate ? new Date(req.body.transferDate).toISOString() : new Date().toISOString();
 
             // Get source account info
             const srcRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${srcId} AND farmer_id = ${req.user!.id}`);

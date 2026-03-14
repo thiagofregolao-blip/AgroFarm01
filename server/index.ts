@@ -361,9 +361,60 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS ruc text`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS expense_category text`);
 
+    await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS person_type TEXT`);
+    await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS entity_type TEXT`);
+    await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS guarantor_for TEXT`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS supplier_id TEXT`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS supplier_id TEXT`);
+    await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS transfer_date TIMESTAMP`);
+    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS warehouse_id TEXT`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS skip_stock_entry BOOLEAN DEFAULT false`);
+
     log("✅ Migration: Sprint 24-items tables and columns ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration Sprint 24-items: ${migErr.message}`);
+  }
+
+  // Inline migration: farm_guarantors (#4) and farm_issued_invoices (#29)
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_guarantors (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id VARCHAR NOT NULL,
+        client_id VARCHAR,
+        guarantor_name TEXT NOT NULL,
+        guarantor_ruc TEXT,
+        guarantor_phone TEXT,
+        guarantor_address TEXT,
+        created_at TIMESTAMP DEFAULT now()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_issued_invoices (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id VARCHAR NOT NULL,
+        client_id VARCHAR,
+        invoice_number TEXT,
+        description TEXT,
+        total_amount TEXT DEFAULT '0',
+        currency TEXT DEFAULT 'USD',
+        issue_date TIMESTAMP DEFAULT now(),
+        due_date TIMESTAMP,
+        status TEXT DEFAULT 'pendente',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT now()
+      )
+    `);
+    await db.execute(sql`ALTER TABLE farm_issued_invoices ADD COLUMN IF NOT EXISTS season_id VARCHAR`);
+
+    log("✅ Migration: farm_guarantors + farm_issued_invoices tables ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_guarantors/farm_issued_invoices: ${migErr.message}`);
   }
 
   const server = await registerRoutes(app);

@@ -85,6 +85,15 @@ export default function FarmCashFlow() {
     const { toast } = useToast();
     const { user } = useAuth();
 
+    // Expandable summary cards
+    const [expandEntradas, setExpandEntradas] = useState(false);
+    const [expandSaidas, setExpandSaidas] = useState(false);
+    const [expandSaldo, setExpandSaldo] = useState(false);
+
+    // Extrato date filter
+    const [extratoFrom, setExtratoFrom] = useState("");
+    const [extratoTo, setExtratoTo] = useState("");
+
     const { data: summary, isLoading } = useQuery<any>({
         queryKey: ["/api/farm/cash-summary"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/cash-summary"); return r.json(); },
@@ -205,13 +214,6 @@ export default function FarmCashFlow() {
                             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
                         }} />
                         <CreateAccountDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
-                        <CreateTransactionDialog
-                            accounts={allAccounts}
-                            onSuccess={() => {
-                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
-                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
-                            }}
-                        />
                     </div>
                 </div>
 
@@ -233,8 +235,9 @@ export default function FarmCashFlow() {
                     <Tabs defaultValue="dashboard">
                         <TabsList className="bg-emerald-50 text-emerald-800">
                             <TabsTrigger value="dashboard">Painel</TabsTrigger>
-                            <TabsTrigger value="previsao">📈 Previsão</TabsTrigger>
+                            <TabsTrigger value="previsao">Previsao</TabsTrigger>
                             <TabsTrigger value="extrato">Extrato</TabsTrigger>
+                            <TabsTrigger value="transferencias">Transferencias</TabsTrigger>
                             <TabsTrigger value="contas">Contas / Bancos</TabsTrigger>
                             <TabsTrigger value="cheques">Cheques</TabsTrigger>
                             <TabsTrigger value="categorias">Categorias</TabsTrigger>
@@ -242,38 +245,80 @@ export default function FarmCashFlow() {
 
                         {/* ── DASHBOARD ─────────────────── */}
                         <TabsContent value="dashboard" className="space-y-6 mt-4">
-                            {/* Month KPIs */}
+                            {/* Month KPIs - Expandable */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <Card className="border-emerald-200 bg-emerald-50"><CardContent className="p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-full bg-emerald-200 flex items-center justify-center"><ArrowUpRight className="h-5 w-5 text-emerald-700" /></div>
-                                        <div><p className="text-xs text-emerald-600 font-medium">Entradas (Mes)</p>
-                                            {monthTotals.length > 0 ? monthTotals.map(m => (
-                                                <p key={m.currency} className="text-xl font-bold text-emerald-800">{formatCurrency(m.entradas, m.currency)}</p>
-                                            )) : <p className="text-xl font-bold text-emerald-800">{formatCurrency(month.totalEntradas, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                <Card className="border-emerald-200 bg-emerald-50 cursor-pointer transition-shadow hover:shadow-md" onClick={() => setExpandEntradas(!expandEntradas)}>
+                                    <CardContent className="p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-emerald-200 flex items-center justify-center"><ArrowUpRight className="h-5 w-5 text-emerald-700" /></div>
+                                            <div><p className="text-xs text-emerald-600 font-medium">Entradas (Mes) {expandEntradas ? "[-]" : "[+]"}</p>
+                                                {monthTotals.length > 0 ? monthTotals.map(m => (
+                                                    <p key={m.currency} className="text-xl font-bold text-emerald-800">{formatCurrency(m.entradas, m.currency)}</p>
+                                                )) : <p className="text-xl font-bold text-emerald-800">{formatCurrency(month.totalEntradas, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                            </div>
                                         </div>
-                                    </div>
-                                </CardContent></Card>
-                                <Card className="border-red-200 bg-red-50"><CardContent className="p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-full bg-red-200 flex items-center justify-center"><ArrowDownRight className="h-5 w-5 text-red-700" /></div>
-                                        <div><p className="text-xs text-red-600 font-medium">Saidas (Mes)</p>
-                                            {monthTotals.length > 0 ? monthTotals.map(m => (
-                                                <p key={m.currency} className="text-xl font-bold text-red-800">{formatCurrency(m.saidas, m.currency)}</p>
-                                            )) : <p className="text-xl font-bold text-red-800">{formatCurrency(month.totalSaidas, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                        {expandEntradas && (
+                                            <div className="mt-3 pt-3 border-t border-emerald-200 space-y-1">
+                                                <p className="text-xs font-medium text-emerald-700 mb-1">Ultimas 5 entradas:</p>
+                                                {filteredTransactions.filter(t => t.type === "entrada").slice(0, 5).map((t: any) => (
+                                                    <div key={t.id} className="flex justify-between text-xs">
+                                                        <span className="text-gray-600 truncate max-w-[60%]">{t.description || t.category || "Entrada"}</span>
+                                                        <span className="font-mono text-emerald-700">+{formatCurrency(parseFloat(t.amount), t.currency || "USD")}</span>
+                                                    </div>
+                                                ))}
+                                                {filteredTransactions.filter(t => t.type === "entrada").length === 0 && <p className="text-xs text-gray-400">Nenhuma entrada</p>}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                                <Card className="border-red-200 bg-red-50 cursor-pointer transition-shadow hover:shadow-md" onClick={() => setExpandSaidas(!expandSaidas)}>
+                                    <CardContent className="p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-red-200 flex items-center justify-center"><ArrowDownRight className="h-5 w-5 text-red-700" /></div>
+                                            <div><p className="text-xs text-red-600 font-medium">Saidas (Mes) {expandSaidas ? "[-]" : "[+]"}</p>
+                                                {monthTotals.length > 0 ? monthTotals.map(m => (
+                                                    <p key={m.currency} className="text-xl font-bold text-red-800">{formatCurrency(m.saidas, m.currency)}</p>
+                                                )) : <p className="text-xl font-bold text-red-800">{formatCurrency(month.totalSaidas, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                            </div>
                                         </div>
-                                    </div>
-                                </CardContent></Card>
-                                <Card className={`border-${month.saldoLiquido >= 0 ? "blue" : "amber"}-200 bg-${month.saldoLiquido >= 0 ? "blue" : "amber"}-50`}><CardContent className="p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`h-10 w-10 rounded-full ${month.saldoLiquido >= 0 ? "bg-blue-200" : "bg-amber-200"} flex items-center justify-center`}><DollarSign className={`h-5 w-5 ${month.saldoLiquido >= 0 ? "text-blue-700" : "text-amber-700"}`} /></div>
-                                        <div><p className={`text-xs ${month.saldoLiquido >= 0 ? "text-blue-600" : "text-amber-600"} font-medium`}>Saldo Liquido (Mes)</p>
-                                            {monthTotals.length > 0 ? monthTotals.map(m => (
-                                                <p key={m.currency} className={`text-xl font-bold ${m.saldo >= 0 ? "text-blue-800" : "text-amber-800"}`}>{formatCurrency(m.saldo, m.currency)}</p>
-                                            )) : <p className={`text-xl font-bold ${month.saldoLiquido >= 0 ? "text-blue-800" : "text-amber-800"}`}>{formatCurrency(month.saldoLiquido, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                        {expandSaidas && (
+                                            <div className="mt-3 pt-3 border-t border-red-200 space-y-1">
+                                                <p className="text-xs font-medium text-red-700 mb-1">Ultimas 5 saidas:</p>
+                                                {filteredTransactions.filter(t => t.type !== "entrada").slice(0, 5).map((t: any) => (
+                                                    <div key={t.id} className="flex justify-between text-xs">
+                                                        <span className="text-gray-600 truncate max-w-[60%]">{t.description || t.category || "Saida"}</span>
+                                                        <span className="font-mono text-red-700">-{formatCurrency(parseFloat(t.amount), t.currency || "USD")}</span>
+                                                    </div>
+                                                ))}
+                                                {filteredTransactions.filter(t => t.type !== "entrada").length === 0 && <p className="text-xs text-gray-400">Nenhuma saida</p>}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                                <Card className={`border-${month.saldoLiquido >= 0 ? "blue" : "amber"}-200 bg-${month.saldoLiquido >= 0 ? "blue" : "amber"}-50 cursor-pointer transition-shadow hover:shadow-md`} onClick={() => setExpandSaldo(!expandSaldo)}>
+                                    <CardContent className="p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`h-10 w-10 rounded-full ${month.saldoLiquido >= 0 ? "bg-blue-200" : "bg-amber-200"} flex items-center justify-center`}><DollarSign className={`h-5 w-5 ${month.saldoLiquido >= 0 ? "text-blue-700" : "text-amber-700"}`} /></div>
+                                            <div><p className={`text-xs ${month.saldoLiquido >= 0 ? "text-blue-600" : "text-amber-600"} font-medium`}>Saldo Liquido (Mes) {expandSaldo ? "[-]" : "[+]"}</p>
+                                                {monthTotals.length > 0 ? monthTotals.map(m => (
+                                                    <p key={m.currency} className={`text-xl font-bold ${m.saldo >= 0 ? "text-blue-800" : "text-amber-800"}`}>{formatCurrency(m.saldo, m.currency)}</p>
+                                                )) : <p className={`text-xl font-bold ${month.saldoLiquido >= 0 ? "text-blue-800" : "text-amber-800"}`}>{formatCurrency(month.saldoLiquido, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                            </div>
                                         </div>
-                                    </div>
-                                </CardContent></Card>
+                                        {expandSaldo && (
+                                            <div className="mt-3 pt-3 border-t border-blue-200 space-y-1">
+                                                <p className="text-xs font-medium text-blue-700 mb-1">Resumo do saldo:</p>
+                                                {monthTotals.map(m => (
+                                                    <div key={m.currency} className="text-xs space-y-0.5">
+                                                        <div className="flex justify-between"><span className="text-emerald-600">Entradas ({m.currency})</span><span className="font-mono">+{formatCurrency(m.entradas, m.currency)}</span></div>
+                                                        <div className="flex justify-between"><span className="text-red-600">Saidas ({m.currency})</span><span className="font-mono">-{formatCurrency(m.saidas, m.currency)}</span></div>
+                                                        <div className="flex justify-between font-semibold"><span>Liquido</span><span className="font-mono">{formatCurrency(m.saldo, m.currency)}</span></div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
                             </div>
 
                             {/* Account balances */}
@@ -467,17 +512,49 @@ export default function FarmCashFlow() {
 
                         {/* ── EXTRATO (full) ───────────────── */}
                         <TabsContent value="extrato" className="mt-4 space-y-4">
-                            <div className="flex justify-end">
-                                <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportTransactionsCSV(filteredTransactions, accounts)}>
+                            <div className="flex flex-wrap gap-3 items-end justify-between">
+                                <div className="flex flex-wrap gap-3 items-end">
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Data de</Label>
+                                        <Input type="date" value={extratoFrom} onChange={e => setExtratoFrom(e.target.value)} className="w-40 h-8 text-sm" />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">ate</Label>
+                                        <Input type="date" value={extratoTo} onChange={e => setExtratoTo(e.target.value)} className="w-40 h-8 text-sm" />
+                                    </div>
+                                    {(extratoFrom || extratoTo) && (
+                                        <Button variant="ghost" size="sm" className="text-gray-500 h-8 text-xs" onClick={() => { setExtratoFrom(""); setExtratoTo(""); }}>
+                                            Limpar datas
+                                        </Button>
+                                    )}
+                                </div>
+                                <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportTransactionsCSV(
+                                    filteredTransactions.filter((t: any) => {
+                                        if (extratoFrom && new Date(t.transactionDate) < new Date(extratoFrom)) return false;
+                                        if (extratoTo && new Date(t.transactionDate) > new Date(extratoTo)) return false;
+                                        return true;
+                                    }), accounts)}>
                                     <Download className="mr-2 h-4 w-4" /> Exportar CSV
                                 </Button>
                             </div>
                             <Card className="border-emerald-100">
                                 <CardHeader><CardTitle className="text-emerald-800">Extrato Completo</CardTitle></CardHeader>
                                 <CardContent>
-                                    <TransactionTable transactions={filteredTransactions} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
+                                    <TransactionTable transactions={filteredTransactions.filter((t: any) => {
+                                        if (extratoFrom && new Date(t.transactionDate) < new Date(extratoFrom)) return false;
+                                        if (extratoTo && new Date(t.transactionDate) > new Date(extratoTo)) return false;
+                                        return true;
+                                    })} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
                                 </CardContent>
                             </Card>
+                        </TabsContent>
+
+                        {/* ── TRANSFERENCIAS ───────────────── */}
+                        <TabsContent value="transferencias" className="mt-4">
+                            <TransferenciasTab transactions={filteredTransactions} accounts={allAccounts} onRefresh={() => {
+                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+                            }} />
                         </TabsContent>
 
                         {/* ── CHEQUES ───────────────── */}
@@ -785,6 +862,98 @@ function CategoriesManager({ categories, onRefresh }: { categories: any[]; onRef
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+function TransferenciasTab({ transactions, accounts, onRefresh }: { transactions: any[]; accounts: any[]; onRefresh: () => void }) {
+    const { toast } = useToast();
+    const queryClient = useQueryClient();
+    const [editingTransfer, setEditingTransfer] = useState<any>(null);
+    const [editDescription, setEditDescription] = useState("");
+    const [editAmount, setEditAmount] = useState("");
+    const [editDate, setEditDate] = useState("");
+
+    const transfers = transactions.filter((t: any) => t.category === "transferencia" || t.referenceType === "transfer");
+
+    const editMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PUT", `/api/farm/cash-transactions/${id}`, data),
+        onSuccess: () => {
+            onRefresh();
+            toast({ title: "Transferencia atualizada" });
+            setEditingTransfer(null);
+        },
+        onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
+    });
+
+    function openEdit(t: any) {
+        setEditDescription(t.description || "");
+        setEditAmount(String(t.amount || ""));
+        setEditDate(t.transactionDate ? new Date(t.transactionDate).toISOString().split("T")[0] : "");
+        setEditingTransfer(t);
+    }
+
+    return (
+        <div className="space-y-4">
+            <Card className="border-emerald-100">
+                <CardHeader><CardTitle className="text-emerald-800 flex items-center gap-2"><ArrowLeftRight className="h-5 w-5" /> Transferencias Recentes</CardTitle></CardHeader>
+                <CardContent>
+                    {transfers.length === 0 ? (
+                        <div className="py-8 text-center">
+                            <ArrowLeftRight className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                            <p className="text-gray-500 text-sm">Nenhuma transferencia encontrada</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {transfers.slice(0, 20).map((t: any) => {
+                                const acc = accounts.find((a: any) => a.id === t.accountId);
+                                return (
+                                    <div key={t.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium">{t.description || "Transferencia"}</p>
+                                            <p className="text-xs text-gray-500">
+                                                {new Date(t.transactionDate).toLocaleDateString("pt-BR")} - Conta: {acc?.name || "--"}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`font-mono font-semibold text-sm ${t.type === "entrada" ? "text-emerald-700" : "text-red-600"}`}>
+                                                {t.type === "entrada" ? "+" : "-"}{formatCurrency(parseFloat(t.amount), t.currency || "USD")}
+                                            </span>
+                                            <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
+                                                onClick={() => openEdit(t)}>
+                                                <Pencil className="h-3 w-3 mr-1" /> Editar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Edit transfer dialog */}
+            <Dialog open={!!editingTransfer} onOpenChange={(o) => !o && setEditingTransfer(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader><DialogTitle>Editar Transferencia</DialogTitle></DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div><Label>Descricao</Label><Input value={editDescription} onChange={e => setEditDescription(e.target.value)} /></div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div><Label>Valor</Label><Input type="number" step="0.01" value={editAmount} onChange={e => setEditAmount(e.target.value)} /></div>
+                            <div><Label>Data</Label><Input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} /></div>
+                        </div>
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700"
+                            onClick={() => editMutation.mutate({
+                                id: editingTransfer.id,
+                                data: { description: editDescription, amount: editAmount, transactionDate: editDate }
+                            })}
+                            disabled={editMutation.isPending}>
+                            {editMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Alteracoes"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function CreateTransactionDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: () => void }) {
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
@@ -836,6 +1005,7 @@ function TransferDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: (
     const [amount, setAmount] = useState("");
     const [exchangeRate, setExchangeRate] = useState("");
     const [description, setDescription] = useState("");
+    const [transferDate, setTransferDate] = useState(new Date().toISOString().split("T")[0]);
 
     const sourceAccount = accounts.find((a: any) => a.id === sourceAccountId);
     const destAccount = accounts.find((a: any) => a.id === destAccountId);
@@ -848,12 +1018,13 @@ function TransferDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: (
             amount: parseFloat(amount),
             exchangeRate: showExchangeRate ? parseFloat(exchangeRate) || 1 : undefined,
             description,
+            transactionDate: transferDate || undefined,
         }),
         onSuccess: () => {
             toast({ title: "Transferencia realizada!" });
             setOpen(false);
             onSuccess();
-            setSourceAccountId(""); setDestAccountId(""); setAmount(""); setExchangeRate(""); setDescription("");
+            setSourceAccountId(""); setDestAccountId(""); setAmount(""); setExchangeRate(""); setDescription(""); setTransferDate(new Date().toISOString().split("T")[0]);
         },
         onError: () => toast({ title: "Erro ao transferir", variant: "destructive" }),
     });
@@ -908,9 +1079,15 @@ function TransferDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: (
                             )}
                         </div>
                     )}
-                    <div>
-                        <Label>Descricao</Label>
-                        <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Ex: Troco de moeda" />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label>Descricao</Label>
+                            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Ex: Troco de moeda" />
+                        </div>
+                        <div>
+                            <Label>Data</Label>
+                            <Input type="date" value={transferDate} onChange={e => setTransferDate(e.target.value)} />
+                        </div>
                     </div>
                     <Button className="w-full bg-emerald-600 hover:bg-emerald-700"
                         onClick={() => transfer.mutate()}

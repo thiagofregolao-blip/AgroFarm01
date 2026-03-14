@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2 } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight } from "lucide-react";
 import { useState, useRef } from "react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -78,6 +78,66 @@ export default function FarmStock() {
         }
     });
 
+    // Transfer state
+    const [transferProductId, setTransferProductId] = useState("");
+    const [transferFromWarehouse, setTransferFromWarehouse] = useState("");
+    const [transferToWarehouse, setTransferToWarehouse] = useState("");
+    const [transferQty, setTransferQty] = useState("");
+    const [transferNotes, setTransferNotes] = useState("");
+
+    const transferMutation = useMutation({
+        mutationFn: async () => {
+            const res = await apiRequest("POST", "/api/farm/stock/transfer", {
+                productId: transferProductId,
+                fromWarehouseId: transferFromWarehouse || null,
+                toWarehouseId: transferToWarehouse || null,
+                quantity: transferQty,
+                notes: transferNotes,
+            });
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/stock/movements"] });
+            toast({ title: "Transferencia realizada", description: "Estoque movimentado com sucesso." });
+            setTransferProductId("");
+            setTransferFromWarehouse("");
+            setTransferToWarehouse("");
+            setTransferQty("");
+            setTransferNotes("");
+        },
+        onError: (err: any) => {
+            toast({ title: "Erro na transferencia", description: err.message, variant: "destructive" });
+        },
+    });
+
+    const handleTransfer = () => {
+        if (!transferProductId) {
+            toast({ title: "Selecione um produto", variant: "destructive" }); return;
+        }
+        const qty = parseFloat(transferQty);
+        if (!qty || qty <= 0) {
+            toast({ title: "Quantidade deve ser maior que zero", variant: "destructive" }); return;
+        }
+        if (transferFromWarehouse && transferFromWarehouse === transferToWarehouse) {
+            toast({ title: "Deposito origem e destino devem ser diferentes", variant: "destructive" }); return;
+        }
+        // Check available stock for selected product in source warehouse
+        const sourceItem = stock.find((s: any) =>
+            s.productId === transferProductId &&
+            (transferFromWarehouse ? String(s.propertyId) === transferFromWarehouse : !s.propertyId)
+        );
+        if (sourceItem && qty > parseFloat(sourceItem.quantity)) {
+            toast({ title: "Quantidade excede estoque disponivel", description: `Disponivel: ${parseFloat(sourceItem.quantity).toFixed(2)}`, variant: "destructive" }); return;
+        }
+        transferMutation.mutate();
+    };
+
+    // Filter transfer movements
+    const transferMovements = movements.filter((m: any) =>
+        m.referenceType === "transfer" || (m.notes && m.notes.toLowerCase().includes("transferencia"))
+    );
+
     const handleDelete = (id: string, name: string) => {
         if (confirm(`Tem certeza que deseja excluir '${name}' do estoque?`)) {
             deleteStock.mutate(id);
@@ -123,6 +183,7 @@ export default function FarmStock() {
                         <TabsTrigger value="deposits"><Building2 className="h-4 w-4 mr-1" />Depósitos</TabsTrigger>
                         <TabsTrigger value="movements">Movimentações</TabsTrigger>
                         <TabsTrigger value="extrato"><FileText className="h-4 w-4 mr-1" />Extrato</TabsTrigger>
+                        <TabsTrigger value="transferencias"><ArrowLeftRight className="h-4 w-4 mr-1" />Transferencias</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="stock" className="mt-4">
@@ -375,6 +436,149 @@ export default function FarmStock() {
                                 </div>
                             </div>
                         )}
+                    </TabsContent>
+
+                    <TabsContent value="transferencias" className="mt-4 space-y-6">
+                        <Card className="border-emerald-100">
+                            <CardHeader>
+                                <CardTitle className="text-emerald-800 flex items-center gap-2">
+                                    <ArrowLeftRight className="h-5 w-5" /> Nova Transferencia
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="transfer-product">Produto</Label>
+                                        <Select value={transferProductId} onValueChange={setTransferProductId}>
+                                            <SelectTrigger id="transfer-product">
+                                                <SelectValue placeholder="Selecione o produto" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {stock.map((s: any) => (
+                                                    <SelectItem key={s.id} value={s.productId}>
+                                                        {s.productName} ({parseFloat(s.quantity).toFixed(2)} {s.productUnit})
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="transfer-qty">Quantidade</Label>
+                                        <Input
+                                            id="transfer-qty"
+                                            type="number"
+                                            min="0.01"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            value={transferQty}
+                                            onChange={e => setTransferQty(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="transfer-from">Deposito Origem</Label>
+                                        <Select value={transferFromWarehouse} onValueChange={setTransferFromWarehouse}>
+                                            <SelectTrigger id="transfer-from">
+                                                <SelectValue placeholder="Selecione origem" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Sem deposito</SelectItem>
+                                                {properties.map((p: any) => (
+                                                    <SelectItem key={p.id} value={String(p.id)}>
+                                                        {p.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="transfer-to">Deposito Destino</Label>
+                                        <Select value={transferToWarehouse} onValueChange={setTransferToWarehouse}>
+                                            <SelectTrigger id="transfer-to">
+                                                <SelectValue placeholder="Selecione destino" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Sem deposito</SelectItem>
+                                                {properties.filter((p: any) => String(p.id) !== transferFromWarehouse).map((p: any) => (
+                                                    <SelectItem key={p.id} value={String(p.id)}>
+                                                        {p.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="transfer-notes">Observacao (opcional)</Label>
+                                    <Input
+                                        id="transfer-notes"
+                                        placeholder="Motivo da transferencia..."
+                                        value={transferNotes}
+                                        onChange={e => setTransferNotes(e.target.value)}
+                                    />
+                                </div>
+
+                                <Button
+                                    onClick={handleTransfer}
+                                    disabled={transferMutation.isPending}
+                                    className="bg-emerald-700 hover:bg-emerald-800 text-white"
+                                >
+                                    {transferMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowLeftRight className="h-4 w-4 mr-2" />}
+                                    Transferir
+                                </Button>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-emerald-100">
+                            <CardHeader>
+                                <CardTitle className="text-emerald-800 text-base">Historico de Transferencias</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {transferMovements.length === 0 ? (
+                                    <p className="text-gray-500 text-sm text-center py-6">Nenhuma transferencia registrada.</p>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-emerald-50">
+                                                <tr>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Produto</th>
+                                                    <th className="text-center p-3 font-semibold text-emerald-800">Tipo</th>
+                                                    <th className="text-right p-3 font-semibold text-emerald-800">Quantidade</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Deposito</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Observacao</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {transferMovements.map((m: any) => (
+                                                    <tr key={m.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
+                                                        <td className="p-3 text-gray-600">{new Date(m.date || m.createdAt).toLocaleDateString("pt-BR")}</td>
+                                                        <td className="p-3 font-medium">{m.productName || m.product_name || "--"}</td>
+                                                        <td className="p-3 text-center">
+                                                            {m.type === "entrada" || m.type === "entry" ? (
+                                                                <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
+                                                                    <ArrowDownRight className="h-3 w-3" /> Entrada
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium">
+                                                                    <ArrowUpRight className="h-3 w-3" /> Saida
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="text-right p-3 font-mono">{parseFloat(m.quantity).toFixed(2)}</td>
+                                                        <td className="p-3 text-gray-600">{m.warehouseName || m.warehouse_name || "--"}</td>
+                                                        <td className="p-3 text-gray-500 text-xs max-w-[200px] truncate">{m.notes || "--"}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                 </Tabs>
             </div>

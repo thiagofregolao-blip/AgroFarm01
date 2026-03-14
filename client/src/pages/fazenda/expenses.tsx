@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, DollarSign, Loader2, Repeat, Download, Pencil, Trash2 } from "lucide-react";
+import { Plus, DollarSign, Loader2, Repeat, Download, Pencil, Trash2, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/format-currency";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
@@ -76,6 +76,24 @@ export default function FarmExpenses() {
         enabled: !!user,
     });
 
+    const { data: suppliers = [] } = useQuery({
+        queryKey: ["/api/farm/suppliers"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/suppliers"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: invoices = [] } = useQuery({
+        queryKey: ["/api/farm/invoices"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/invoices"); return r.json(); },
+        enabled: !!user,
+    });
+
+    const { data: cashAccounts = [] } = useQuery({
+        queryKey: ["/api/farm/cash-accounts"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/cash-accounts"); return r.json(); },
+        enabled: !!user,
+    });
+
     const filtered = filterCategory === "todos" ? expenses : expenses.filter((e: any) => e.category === filterCategory);
     const totalExpenses = expenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0);
     const totalFiltered = filtered.reduce((s: number, e: any) => s + parseFloat(e.amount), 0);
@@ -130,7 +148,7 @@ export default function FarmExpenses() {
                             </DialogTrigger>
                             <DialogContent className="max-w-lg">
                                 <DialogHeader><DialogTitle>Nova Despesa</DialogTitle></DialogHeader>
-                                <ExpenseForm properties={properties} seasons={seasons} onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
+                                <ExpenseForm properties={properties} seasons={seasons} suppliers={suppliers} invoices={invoices} cashAccounts={cashAccounts} onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
                             </DialogContent>
                         </Dialog>
                     </div>
@@ -247,6 +265,9 @@ export default function FarmExpenses() {
                             <ExpenseForm
                                 properties={properties}
                                 seasons={seasons}
+                                suppliers={suppliers}
+                                invoices={invoices}
+                                cashAccounts={cashAccounts}
                                 onSave={(data: any) => updateMutation.mutate({ id: editingExpense.id, data })}
                                 saving={updateMutation.isPending}
                                 initialData={editingExpense}
@@ -259,7 +280,7 @@ export default function FarmExpenses() {
     );
 }
 
-function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) {
+function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, onSave, saving, initialData }: any) {
     const [category, setCategory] = useState(initialData?.category || "");
     const [description, setDescription] = useState(initialData?.description || "");
     const [amount, setAmount] = useState(initialData?.amount ? String(initialData.amount) : "");
@@ -270,16 +291,50 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
     const [paymentType, setPaymentType] = useState(initialData?.paymentType || "a_vista");
     const [dueDate, setDueDate] = useState(initialData?.dueDate ? new Date(initialData.dueDate).toISOString().substring(0, 10) : "");
     const [installments, setInstallments] = useState(initialData?.installments ? String(initialData.installments) : "1");
+    const [accountId, setAccountId] = useState(initialData?.accountId ? String(initialData.accountId) : "");
+
+    // Item #17 — expense with or without invoice
+    const [expenseType, setExpenseType] = useState<"sem_fatura" | "com_fatura">(initialData?.invoiceId ? "com_fatura" : "sem_fatura");
+    const [invoiceId, setInvoiceId] = useState(initialData?.invoiceId ? String(initialData.invoiceId) : "");
 
     // Recurring expense controls
     const [isRecurring, setIsRecurring] = useState(false);
     const [frequency, setFrequency] = useState("mensal");
     const [repeatTimes, setRepeatTimes] = useState("3");
 
-    const submittable = category && amount;
+    // Supplier validation state
+    const [triedSubmit, setTriedSubmit] = useState(false);
+
+    // Item #7 — currency symbol from supplier invoices
+    const supplierInvoices = invoices.filter((inv: any) => inv.supplier === supplier || inv.supplierName === supplier);
+    const latestInvoiceCurrency = supplierInvoices.length > 0 ? (supplierInvoices[supplierInvoices.length - 1].currency || "USD") : "USD";
+    const currencySymbol = latestInvoiceCurrency === "PYG" ? "Gs" : "$";
+
+    // Item #17 — pending invoices for selected supplier
+    const pendingInvoicesForSupplier = invoices.filter((inv: any) =>
+        (inv.supplier === supplier || inv.supplierName === supplier) &&
+        (inv.status === "pending" || inv.status === "pendente")
+    );
+
+    // When invoice selected, auto-fill amount and supplier
+    function handleInvoiceSelect(invId: string) {
+        setInvoiceId(invId);
+        if (invId) {
+            const inv = invoices.find((i: any) => String(i.id) === invId);
+            if (inv) {
+                setAmount(String(inv.totalAmount || inv.amount || ""));
+                if (inv.supplier || inv.supplierName) {
+                    setSupplier(inv.supplier || inv.supplierName);
+                }
+            }
+        }
+    }
+
+    const submittable = category && amount && supplier;
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        setTriedSubmit(true);
         if (!submittable) return;
         onSave({
             category,
@@ -292,7 +347,9 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
             paymentType,
             dueDate: dueDate || null,
             installments: paymentType === "a_prazo" ? parseInt(installments) : 1,
-            // Recurring fields — backend will interpret repeatTimes > 1
+            accountId: paymentType === "a_vista" && accountId ? accountId : null,
+            invoiceId: expenseType === "com_fatura" && invoiceId ? invoiceId : null,
+            // Recurring fields -- backend will interpret repeatTimes > 1
             frequency: isRecurring ? frequency : null,
             repeatTimes: isRecurring ? parseInt(repeatTimes) : 1,
         });
@@ -300,6 +357,24 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+            {/* Item #17 — Toggle com/sem fatura */}
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                <button
+                    type="button"
+                    onClick={() => { setExpenseType("sem_fatura"); setInvoiceId(""); }}
+                    className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${expenseType === "sem_fatura" ? "bg-white shadow text-emerald-700" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    Sem Fatura
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setExpenseType("com_fatura")}
+                    className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${expenseType === "com_fatura" ? "bg-white shadow text-emerald-700" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    <FileText className="h-3.5 w-3.5" /> Com Fatura
+                </button>
+            </div>
+
             <div>
                 <Label>Categoria *</Label>
                 <Select value={category} onValueChange={setCategory}>
@@ -307,32 +382,97 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
                     <SelectContent>{EXPENSE_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
                 </Select>
             </div>
+
+            {/* Item #16 — Supplier is required (must be registered) */}
+            <div>
+                <Label>Fornecedor *</Label>
+                <Select value={supplier} onValueChange={(v) => { setSupplier(v); setInvoiceId(""); }}>
+                    <SelectTrigger className={triedSubmit && !supplier ? "border-red-400" : ""}>
+                        <SelectValue placeholder="Selecione um fornecedor..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {suppliers.map((s: any) => (
+                            <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                        ))}
+                        <div className="border-t border-gray-100 mt-1 pt-1">
+                            <a href="/fazenda/fornecedores" className="block px-2 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer font-medium">
+                                + Cadastrar novo fornecedor
+                            </a>
+                        </div>
+                    </SelectContent>
+                </Select>
+                {triedSubmit && !supplier && (
+                    <p className="text-xs text-red-500 mt-1">Selecione um fornecedor cadastrado</p>
+                )}
+            </div>
+
+            {/* Item #17 — Invoice selection when "Com Fatura" */}
+            {expenseType === "com_fatura" && supplier && (
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
+                    <Label className="text-blue-700">Fatura pendente</Label>
+                    {pendingInvoicesForSupplier.length > 0 ? (
+                        <Select value={invoiceId} onValueChange={handleInvoiceSelect}>
+                            <SelectTrigger><SelectValue placeholder="Selecione uma fatura..." /></SelectTrigger>
+                            <SelectContent>
+                                {pendingInvoicesForSupplier.map((inv: any) => (
+                                    <SelectItem key={inv.id} value={String(inv.id)}>
+                                        #{inv.invoiceNumber || inv.id} - {formatCurrency(inv.totalAmount || inv.amount)} ({new Date(inv.invoiceDate || inv.createdAt).toLocaleDateString("pt-BR")})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    ) : (
+                        <p className="text-xs text-blue-600">Nenhuma fatura pendente para este fornecedor</p>
+                    )}
+                </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
-                <div><Label>Valor ($) *</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required /></div>
+                <div>
+                    <Label>Valor ({currencySymbol}) *</Label>
+                    <Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required />
+                </div>
                 <div><Label>Data</Label><Input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)} /></div>
             </div>
-            <div><Label>Descrição</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
-            <div><Label>Fornecedor</Label><Input value={supplier} onChange={e => setSupplier(e.target.value)} /></div>
+            <div><Label>Descricao</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
 
             <div>
                 <Label>Pagamento</Label>
                 <Select value={paymentType} onValueChange={setPaymentType}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="a_vista">À Vista</SelectItem>
+                        <SelectItem value="a_vista">A Vista</SelectItem>
                         <SelectItem value="a_prazo">A Prazo</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
 
+            {/* Item #1 — When "a vista", choose account to debit */}
+            {paymentType === "a_vista" && cashAccounts.length > 0 && (
+                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <Label className="text-emerald-700">Conta para debito</Label>
+                    <Select value={accountId} onValueChange={setAccountId}>
+                        <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                        <SelectContent>
+                            {cashAccounts.map((acc: any) => (
+                                <SelectItem key={acc.id} value={String(acc.id)}>
+                                    {acc.name} {acc.bankName ? `(${acc.bankName})` : ""} - {acc.currency || "USD"}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-emerald-600 mt-1">O valor sera debitado automaticamente desta conta</p>
+                </div>
+            )}
+
             {paymentType === "a_prazo" && (
                 <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
                     <div>
-                        <Label className="text-amber-700">Nº Parcelas</Label>
+                        <Label className="text-amber-700">N Parcelas</Label>
                         <Input type="number" min="1" max="60" value={installments} onChange={e => setInstallments(e.target.value)} />
                     </div>
                     <div>
-                        <Label className="text-amber-700">1º Vencimento</Label>
+                        <Label className="text-amber-700">1 Vencimento</Label>
                         <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
                     </div>
                     <p className="col-span-2 text-xs text-amber-600">
@@ -341,7 +481,7 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
                 </div>
             )}
 
-            {/* ── Recurring toggle ── */}
+            {/* Recurring toggle */}
             <div className="border rounded-lg p-3 space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="rounded" />
@@ -351,7 +491,7 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
                 {isRecurring && (
                     <div className="grid grid-cols-2 gap-3 pt-1">
                         <div>
-                            <Label className="text-xs text-gray-500">Frequência</Label>
+                            <Label className="text-xs text-gray-500">Frequencia</Label>
                             <Select value={frequency} onValueChange={setFrequency}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -362,11 +502,11 @@ function ExpenseForm({ properties, seasons, onSave, saving, initialData }: any) 
                             </Select>
                         </div>
                         <div>
-                            <Label className="text-xs text-gray-500">Qtd. de repetições</Label>
+                            <Label className="text-xs text-gray-500">Qtd. de repeticoes</Label>
                             <Input type="number" min="2" max="60" value={repeatTimes} onChange={e => setRepeatTimes(e.target.value)} />
                         </div>
                         <p className="col-span-2 text-xs text-emerald-600">
-                            ✅ Criará {repeatTimes} lançamentos com frequência {frequency}
+                            Criara {repeatTimes} lancamentos com frequencia {frequency}
                         </p>
                     </div>
                 )}

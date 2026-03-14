@@ -39,6 +39,7 @@ const farmNavGroups: NavGroup[] = [
             { labelKey: "nav_seasons",       href: "/fazenda/safras",        icon: Sprout,    moduleKey: "seasons" },
             { labelKey: "nav_applications",  href: "/fazenda/aplicacoes",    icon: BarChart3, moduleKey: "applications" },
             { labelKey: "nav_plot_costs",    href: "/fazenda/custos",        icon: TrendingUp,moduleKey: "plot_costs" },
+            { labelKey: "nav_productivity", href: "/fazenda/produtividade", icon: BarChart3, moduleKey: "productivity" },
         ],
     },
     {
