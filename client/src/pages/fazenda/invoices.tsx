@@ -64,6 +64,8 @@ export default function FarmInvoices() {
     const [expInstallments, setExpInstallments] = useState("1");
     const [expPropertyId, setExpPropertyId] = useState("");
     const [expSeasonId, setExpSeasonId] = useState("");
+    const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
+    const [supplierSearchTerm, setSupplierSearchTerm] = useState("");
 
     const { user } = useAuth();
 
@@ -634,14 +636,14 @@ export default function FarmInvoices() {
 
                             <div>
                                 <Label>Fornecedor *</Label>
-                                <Select value={expSupplier} onValueChange={setExpSupplier}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione um fornecedor..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {(suppliers as any[]).map((s: any) => (
-                                            <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSupplierSearchOpen(true); setSupplierSearchTerm(""); }}
+                                    className={`w-full flex items-center justify-between px-3 py-2 border rounded-md text-sm text-left transition-colors hover:bg-gray-50 cursor-pointer ${expSupplier ? "border-gray-300 text-gray-900" : "border-gray-300 text-gray-500"}`}
+                                >
+                                    <span>{expSupplier || "Buscar fornecedor..."}</span>
+                                    <Search className="h-4 w-4 text-gray-400" />
+                                </button>
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
@@ -1720,6 +1722,83 @@ export default function FarmInvoices() {
                             <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+            {/* Modal de Busca de Fornecedor */}
+            <Dialog open={supplierSearchOpen} onOpenChange={setSupplierSearchOpen}>
+                <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Search className="h-5 w-5 text-emerald-600" /> Buscar Fornecedor
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 flex-1 flex flex-col min-h-0">
+                        <Input
+                            placeholder="Digite o nome, RUC ou telefone..."
+                            value={supplierSearchTerm}
+                            onChange={e => setSupplierSearchTerm(e.target.value)}
+                            autoFocus
+                        />
+                        <div className="flex-1 overflow-y-auto min-h-0 max-h-[400px] space-y-1">
+                            {(() => {
+                                const term = supplierSearchTerm.toLowerCase().trim();
+                                const filtered = (suppliers as any[]).filter((s: any) => {
+                                    if (!term) return true;
+                                    return (s.name?.toLowerCase().includes(term)) ||
+                                        (s.ruc?.toLowerCase().includes(term)) ||
+                                        (s.phone?.toLowerCase().includes(term));
+                                });
+                                if (filtered.length === 0) {
+                                    return (
+                                        <div className="text-center py-8 text-gray-500">
+                                            <p className="text-sm">Nenhum fornecedor encontrado</p>
+                                            <a href="/fazenda/fornecedores" className="text-xs text-emerald-600 hover:underline mt-2 inline-block">
+                                                + Cadastrar novo fornecedor
+                                            </a>
+                                        </div>
+                                    );
+                                }
+                                return filtered.map((s: any) => (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setExpSupplier(s.name);
+                                            setSupplierSearchOpen(false);
+                                        }}
+                                        className={`w-full text-left p-3 rounded-lg border transition-colors cursor-pointer hover:bg-emerald-50 hover:border-emerald-300 ${expSupplier === s.name ? "bg-emerald-50 border-emerald-400" : "border-gray-200 bg-white"}`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <span className="font-medium text-sm text-gray-900">{s.name}</span>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    {s.ruc && <span className="text-xs text-gray-500">RUC: {s.ruc}</span>}
+                                                    {s.phone && <span className="text-xs text-gray-500">{s.phone}</span>}
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                {s.person_type && (
+                                                    <span className={`text-xs px-1.5 py-0.5 rounded ${s.person_type === "provedor" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                        {s.person_type === "provedor" ? "Provedor" : "Cliente"}
+                                                    </span>
+                                                )}
+                                                {s.entity_type && (
+                                                    <span className={`text-xs px-1.5 py-0.5 rounded ${s.entity_type === "fisica" ? "bg-purple-100 text-purple-700" : "bg-amber-100 text-amber-700"}`}>
+                                                        {s.entity_type === "fisica" ? "P.F." : "P.J."}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ));
+                            })()}
+                        </div>
+                        <div className="border-t pt-2">
+                            <a href="/fazenda/fornecedores" className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium">
+                                <Plus className="h-4 w-4" /> Cadastrar novo fornecedor
+                            </a>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </FarmLayout>

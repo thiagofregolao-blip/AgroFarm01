@@ -79,7 +79,6 @@ const financeNavGroups: NavGroup[] = [
     {
         label: "Saidas",
         items: [
-            { labelKey: "nav_expenses",          href: "/fazenda/despesas",       icon: DollarSign, moduleKey: "expenses" },
             { labelKey: "nav_accounts_payable",  href: "/fazenda/contas-pagar",   icon: Receipt,    moduleKey: "accounts_payable" },
             { labelKey: "nav_suppliers",          href: "/fazenda/fornecedores",  icon: Building2,  moduleKey: "suppliers" },
         ],
