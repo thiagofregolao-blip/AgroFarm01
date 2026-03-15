@@ -1396,12 +1396,13 @@ export function registerFarmRoutes(app: Express) {
 
             for (let r = 0; r < repeats; r++) {
                 const occurrenceDate = advanceDate(baseDate, r);
+                const sanitize = (v: any) => (!v || v === "__none__" || v === "undefined") ? null : v;
                 const expense = await farmStorage.createExpense({
                     farmerId,
-                    plotId: plotId || null,
-                    propertyId: propertyId || null,
-                    invoiceId: invoiceId || null,
-                    seasonId: seasonId || null,
+                    plotId: sanitize(plotId),
+                    propertyId: sanitize(propertyId),
+                    invoiceId: sanitize(invoiceId),
+                    seasonId: sanitize(seasonId),
                     category,
                     description: repeats > 1 ? `${description || category} (${r + 1}/${repeats})` : (description || undefined),
                     amount: String(amount),
