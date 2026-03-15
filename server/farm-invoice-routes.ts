@@ -223,10 +223,12 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 supplier: farmInvoices.supplier,
                 totalAmount: farmInvoices.totalAmount,
                 status: farmInvoices.status,
+                documentType: farmInvoices.documentType,
             }).from(farmInvoices).where(eq(farmInvoices.farmerId, farmerId));
 
             const parsedAmount = parseFloat(String(parsed.totalAmount)) || 0;
-            const duplicate = existingInvoices.find(inv => {
+            // Exclude remissions from duplicate check — a remission and its invoice share the same number
+            const duplicate = existingInvoices.filter(inv => inv.documentType !== "remision").find(inv => {
                 const invAmount = parseFloat(inv.totalAmount as string) || 0;
                 const sameNumber = parsed.invoiceNumber && inv.invoiceNumber &&
                     inv.invoiceNumber.replace(/\D/g, '') === parsed.invoiceNumber.replace(/\D/g, '');

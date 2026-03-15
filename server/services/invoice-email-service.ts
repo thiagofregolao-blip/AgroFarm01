@@ -229,6 +229,7 @@ export async function createDraftInvoice(
         id: farmInvoices.id, invoiceNumber: farmInvoices.invoiceNumber,
         supplier: farmInvoices.supplier, totalAmount: farmInvoices.totalAmount,
         sourceEmailId: farmInvoices.sourceEmailId,
+        documentType: farmInvoices.documentType,
     }).from(farmInvoices).where(eq(farmInvoices.farmerId, farmerId));
 
     if (emailId && existingInvs.find(inv => inv.sourceEmailId === emailId)) {
@@ -237,7 +238,8 @@ export async function createDraftInvoice(
     }
 
     const parsedAmt = parseFloat(String(extracted.totalAmount)) || 0;
-    const emailDuplicate = existingInvs.find(inv => {
+    // Exclude remissions from duplicate check — a remission and its invoice share the same number
+    const emailDuplicate = existingInvs.filter(inv => inv.documentType !== "remision").find(inv => {
         const invAmt = parseFloat(inv.totalAmount as string) || 0;
         const sameNum = extracted.invoiceNumber && inv.invoiceNumber &&
             inv.invoiceNumber.replace(/\D/g, '') === String(extracted.invoiceNumber).replace(/\D/g, '');

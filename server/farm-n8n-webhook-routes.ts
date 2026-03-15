@@ -647,9 +647,11 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                 const existingInvs = await db.select({
                     id: farmInvoices.id, invoiceNumber: farmInvoices.invoiceNumber,
                     supplier: farmInvoices.supplier, totalAmount: farmInvoices.totalAmount,
+                    documentType: farmInvoices.documentType,
                 }).from(farmInvoices).where(eq(farmInvoices.farmerId, farmer.id));
 
-                const invDuplicate = existingInvs.find(inv => {
+                // Exclude remissions from duplicate check — a remission and its invoice share the same number
+                const invDuplicate = existingInvs.filter(inv => inv.documentType !== "remision").find(inv => {
                     const invAmt = parseFloat(inv.totalAmount as string) || 0;
                     const sameNum = parsed.invoiceNumber && inv.invoiceNumber &&
                         inv.invoiceNumber.replace(/\D/g, '') === String(parsed.invoiceNumber).replace(/\D/g, '');
