@@ -1490,11 +1490,60 @@ export const farmAccountsReceivable = pgTable("farm_accounts_receivable", {
   status: text("status").notNull().default("pendente"), // pendente, parcial, recebido
   cashTransactionId: varchar("cash_transaction_id").references(() => farmCashTransactions.id),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  // Parcelas
+  installmentNumber: integer("installment_number").default(1),
+  totalInstallments: integer("total_installments").default(1),
+  seasonId: varchar("season_id"),
+  // Fatura pre-impressa
+  invoiceNumber: text("invoice_number"),
+  paymentCondition: text("payment_condition").default("contado"),
+  customerRuc: text("customer_ruc"),
+  customerAddress: text("customer_address"),
+  // IVA breakdown
+  subtotalExenta: decimal("subtotal_exenta", { precision: 15, scale: 2 }).default("0"),
+  subtotalGravada5: decimal("subtotal_gravada_5", { precision: 15, scale: 2 }).default("0"),
+  subtotalGravada10: decimal("subtotal_gravada_10", { precision: 15, scale: 2 }).default("0"),
+  iva5: decimal("iva_5", { precision: 15, scale: 2 }).default("0"),
+  iva10: decimal("iva_10", { precision: 15, scale: 2 }).default("0"),
+  observation: text("observation"),
 });
 
 export const insertFarmAccountReceivableSchema = createInsertSchema(farmAccountsReceivable).omit({ id: true, createdAt: true });
 export type InsertFarmAccountReceivable = z.infer<typeof insertFarmAccountReceivableSchema>;
 export type FarmAccountReceivable = typeof farmAccountsReceivable.$inferSelect;
+
+// Itens da fatura de venda (contas a receber)
+export const farmReceivableItems = pgTable("farm_receivable_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  receivableId: varchar("receivable_id").notNull().references(() => farmAccountsReceivable.id, { onDelete: "cascade" }),
+  productId: varchar("product_id").references(() => farmProductsCatalog.id),
+  productName: text("product_name").notNull(),
+  unit: text("unit").default("UN"),
+  quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
+  unitPrice: decimal("unit_price", { precision: 15, scale: 2 }).notNull(),
+  ivaRate: text("iva_rate").default("10"), // 'exenta' | '5' | '10'
+  totalPrice: decimal("total_price", { precision: 15, scale: 2 }).notNull(),
+});
+
+export type FarmReceivableItem = typeof farmReceivableItems.$inferSelect;
+
+// Configuracao do timbrado (fatura pre-impressa paraguaia)
+export const farmInvoiceConfig = pgTable("farm_invoice_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  timbrado: text("timbrado"),
+  timbradoStartDate: timestamp("timbrado_start_date"),
+  timbradoEndDate: timestamp("timbrado_end_date"),
+  establecimiento: text("establecimiento").default("001"),
+  puntoExpedicion: text("punto_expedicion").default("001"),
+  lastSequence: integer("last_sequence").default(0),
+  ruc: text("ruc"),
+  razonSocial: text("razon_social"),
+  direccion: text("direccion"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export type FarmInvoiceConfig = typeof farmInvoiceConfig.$inferSelect;
 
 // ==================== ORÇAMENTO POR SAFRA ====================
 

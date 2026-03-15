@@ -474,6 +474,65 @@ app.use((req, res, next) => {
     log(`⚠️  Migration farm_stock.property_id: ${migErr.message}`);
   }
 
+  // Migration: AR parcelas + fatura pre-impressa + invoice config
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+
+    // Novos campos na tabela farm_accounts_receivable
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS installment_number integer DEFAULT 1`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS total_installments integer DEFAULT 1`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS season_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS invoice_number text`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS payment_condition text DEFAULT 'contado'`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS customer_ruc text`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS customer_address text`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS subtotal_exenta numeric(15,2) DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS subtotal_gravada_5 numeric(15,2) DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS subtotal_gravada_10 numeric(15,2) DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS iva_5 numeric(15,2) DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS iva_10 numeric(15,2) DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS observation text`);
+
+    // Tabela de itens da fatura de venda
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_receivable_items (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        receivable_id varchar NOT NULL REFERENCES farm_accounts_receivable(id) ON DELETE CASCADE,
+        product_id varchar REFERENCES farm_products_catalog(id),
+        product_name text NOT NULL,
+        unit text DEFAULT 'UN',
+        quantity numeric(15,4) NOT NULL,
+        unit_price numeric(15,2) NOT NULL,
+        iva_rate text DEFAULT '10',
+        total_price numeric(15,2) NOT NULL
+      )
+    `);
+
+    // Tabela de configuracao do timbrado
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_invoice_config (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        timbrado text,
+        timbrado_start_date timestamp,
+        timbrado_end_date timestamp,
+        establecimiento text DEFAULT '001',
+        punto_expedicion text DEFAULT '001',
+        last_sequence integer DEFAULT 0,
+        ruc text,
+        razon_social text,
+        direccion text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+
+    log("✅ Migration: AR parcelas + fatura pre-impressa + invoice_config ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration AR parcelas/invoice_config: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes

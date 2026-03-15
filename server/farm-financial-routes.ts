@@ -247,18 +247,131 @@ export function registerFarmFinancialRoutes(app: Express) {
         }
     });
 
-    app.post("/api/farm/accounts-receivable", requireFarmer, async (req, res) => {
+    // Detail with items
+    app.get("/api/farm/accounts-receivable/:id", requireFarmer, async (req, res) => {
         try {
-            const { farmAccountsReceivable } = await import("../shared/schema");
+            const { farmAccountsReceivable, farmReceivableItems } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
 
-            const [ar] = await db.insert(farmAccountsReceivable).values({
-                ...req.body,
+            const [ar] = await db.select().from(farmAccountsReceivable).where(
+                and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
+            );
+            if (!ar) return res.status(404).json({ error: "Not found" });
+
+            const items = await db.select().from(farmReceivableItems).where(eq(farmReceivableItems.receivableId, ar.id));
+            res.json({ ...ar, items });
+        } catch (error) {
+            console.error("[ACCOUNTS_RECEIVABLE_DETAIL]", error);
+            res.status(500).json({ error: "Failed to get AR detail" });
+        }
+    });
+
+    app.post("/api/farm/accounts-receivable", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsReceivable, farmReceivableItems } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const totalInstallments = parseInt(req.body.totalInstallments) || 1;
+            const firstDueDate = parseLocalDate(req.body.dueDate) || new Date();
+            const totalAmount = parseFloat(req.body.totalAmount) || 0;
+            const perInstallmentAmount = (totalAmount / totalInstallments).toFixed(2);
+            const items = req.body.items || [];
+
+            // Calculate IVA from items
+            let subtotalExenta = 0, subtotalGravada5 = 0, subtotalGravada10 = 0;
+            for (const item of items) {
+                const total = parseFloat(item.totalPrice) || 0;
+                if (item.ivaRate === "exenta") subtotalExenta += total;
+                else if (item.ivaRate === "5") subtotalGravada5 += total;
+                else subtotalGravada10 += total;
+            }
+            const iva5 = subtotalGravada5 / 21;
+            const iva10 = subtotalGravada10 / 11;
+
+            const baseData = {
                 farmerId,
-                dueDate: parseLocalDate(req.body.dueDate) || new Date(),
-            }).returning();
-            res.json(ar);
+                buyer: req.body.buyer,
+                description: req.body.description || "",
+                currency: req.body.currency || "USD",
+                seasonId: req.body.seasonId || null,
+                invoiceNumber: req.body.invoiceNumber || null,
+                paymentCondition: req.body.paymentCondition || "contado",
+                customerRuc: req.body.customerRuc || null,
+                customerAddress: req.body.customerAddress || null,
+                subtotalExenta: String(subtotalExenta.toFixed(2)),
+                subtotalGravada5: String(subtotalGravada5.toFixed(2)),
+                subtotalGravada10: String(subtotalGravada10.toFixed(2)),
+                iva5: String(iva5.toFixed(2)),
+                iva10: String(iva10.toFixed(2)),
+                observation: req.body.observation || null,
+                supplier_id: req.body.supplier_id || null,
+                romaneioId: req.body.romaneioId || null,
+            };
+
+            if (totalInstallments <= 1) {
+                const [ar] = await db.insert(farmAccountsReceivable).values({
+                    ...baseData,
+                    totalAmount: String(totalAmount.toFixed(2)),
+                    dueDate: firstDueDate,
+                    installmentNumber: 1,
+                    totalInstallments: 1,
+                    status: "pendente",
+                }).returning();
+
+                // Insert items linked to this AR
+                if (items.length > 0) {
+                    await db.insert(farmReceivableItems).values(
+                        items.map((item: any) => ({
+                            receivableId: ar.id,
+                            productId: item.productId || null,
+                            productName: item.productName,
+                            unit: item.unit || "UN",
+                            quantity: String(item.quantity),
+                            unitPrice: String(item.unitPrice),
+                            ivaRate: item.ivaRate || "10",
+                            totalPrice: String(item.totalPrice),
+                        }))
+                    );
+                }
+                return res.json(ar);
+            }
+
+            // Generate N installments
+            const created = [];
+            for (let i = 0; i < totalInstallments; i++) {
+                const instDue = new Date(firstDueDate);
+                instDue.setMonth(instDue.getMonth() + i);
+                const [ar] = await db.insert(farmAccountsReceivable).values({
+                    ...baseData,
+                    totalAmount: perInstallmentAmount,
+                    dueDate: instDue,
+                    installmentNumber: i + 1,
+                    totalInstallments,
+                    description: `${baseData.description || baseData.buyer} — Parcela ${i + 1}/${totalInstallments}`,
+                    status: "pendente",
+                }).returning();
+                created.push(ar);
+
+                // Items only on first installment
+                if (i === 0 && items.length > 0) {
+                    await db.insert(farmReceivableItems).values(
+                        items.map((item: any) => ({
+                            receivableId: ar.id,
+                            productId: item.productId || null,
+                            productName: item.productName,
+                            unit: item.unit || "UN",
+                            quantity: String(item.quantity),
+                            unitPrice: String(item.unitPrice),
+                            ivaRate: item.ivaRate || "10",
+                            totalPrice: String(item.totalPrice),
+                        }))
+                    );
+                }
+            }
+            res.json(created);
         } catch (error) {
             console.error("[ACCOUNTS_RECEIVABLE_CREATE]", error);
             res.status(500).json({ error: "Failed to create account receivable" });
@@ -350,6 +463,165 @@ export function registerFarmFinancialRoutes(app: Express) {
         } catch (error) {
             console.error("[ACCOUNTS_RECEIVABLE_UPDATE]", error);
             res.status(500).json({ error: "Failed to update account receivable" });
+        }
+    });
+
+    // ============================================================================
+    // INVOICE CONFIG (Timbrado / Fatura Pre-Impressa)
+    // ============================================================================
+
+    app.get("/api/farm/invoice-config", requireFarmer, async (req, res) => {
+        try {
+            const { farmInvoiceConfig } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [config] = await db.select().from(farmInvoiceConfig).where(eq(farmInvoiceConfig.farmerId, farmerId));
+            res.json(config || null);
+        } catch (error) {
+            console.error("[INVOICE_CONFIG_GET]", error);
+            res.status(500).json({ error: "Failed to get invoice config" });
+        }
+    });
+
+    app.post("/api/farm/invoice-config", requireFarmer, async (req, res) => {
+        try {
+            const { farmInvoiceConfig } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [existing] = await db.select().from(farmInvoiceConfig).where(eq(farmInvoiceConfig.farmerId, farmerId));
+
+            if (existing) {
+                const { sql: sqlFn } = await import("drizzle-orm");
+                await db.execute(sqlFn`
+                    UPDATE farm_invoice_config SET
+                        timbrado = ${req.body.timbrado || existing.timbrado},
+                        timbrado_start_date = ${req.body.timbradoStartDate ? new Date(req.body.timbradoStartDate) : existing.timbradoStartDate},
+                        timbrado_end_date = ${req.body.timbradoEndDate ? new Date(req.body.timbradoEndDate) : existing.timbradoEndDate},
+                        establecimiento = ${req.body.establecimiento || existing.establecimiento},
+                        punto_expedicion = ${req.body.puntoExpedicion || existing.puntoExpedicion},
+                        ruc = ${req.body.ruc || existing.ruc},
+                        razon_social = ${req.body.razonSocial || existing.razonSocial},
+                        direccion = ${req.body.direccion || existing.direccion}
+                    WHERE id = ${existing.id}
+                `);
+                const [updated] = await db.select().from(farmInvoiceConfig).where(eq(farmInvoiceConfig.id, existing.id));
+                return res.json(updated);
+            }
+
+            const [created] = await db.insert(farmInvoiceConfig).values({
+                farmerId,
+                timbrado: req.body.timbrado,
+                timbradoStartDate: req.body.timbradoStartDate ? new Date(req.body.timbradoStartDate) : null,
+                timbradoEndDate: req.body.timbradoEndDate ? new Date(req.body.timbradoEndDate) : null,
+                establecimiento: req.body.establecimiento || "001",
+                puntoExpedicion: req.body.puntoExpedicion || "001",
+                ruc: req.body.ruc,
+                razonSocial: req.body.razonSocial,
+                direccion: req.body.direccion,
+            }).returning();
+            res.json(created);
+        } catch (error) {
+            console.error("[INVOICE_CONFIG_CREATE]", error);
+            res.status(500).json({ error: "Failed to save invoice config" });
+        }
+    });
+
+    // Generate next sequential invoice number
+    app.post("/api/farm/invoice-config/next", requireFarmer, async (req, res) => {
+        try {
+            const { farmInvoiceConfig } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const { sql: sqlFn } = await import("drizzle-orm");
+            const farmerId = (req.user as any).id;
+
+            const [config] = await db.select().from(farmInvoiceConfig).where(eq(farmInvoiceConfig.farmerId, farmerId));
+            if (!config) return res.status(400).json({ error: "Configure o timbrado primeiro" });
+
+            // Validate timbrado is within validity
+            const now = new Date();
+            if (config.timbradoEndDate && now > new Date(config.timbradoEndDate)) {
+                return res.status(400).json({ error: "Timbrado vencido! Atualize o timbrado." });
+            }
+
+            // Increment sequence atomically
+            const newSeq = (config.lastSequence || 0) + 1;
+            await db.execute(sqlFn`UPDATE farm_invoice_config SET last_sequence = ${newSeq} WHERE id = ${config.id}`);
+
+            const est = config.establecimiento || "001";
+            const pto = config.puntoExpedicion || "001";
+            const num = String(newSeq).padStart(7, "0");
+            const fullNumber = `${est}-${pto}-${num}`;
+
+            res.json({ invoiceNumber: fullNumber, sequence: newSeq, timbrado: config.timbrado });
+        } catch (error) {
+            console.error("[INVOICE_CONFIG_NEXT]", error);
+            res.status(500).json({ error: "Failed to generate invoice number" });
+        }
+    });
+
+    // Print data — returns all info needed to print on pre-printed invoice
+    app.get("/api/farm/accounts-receivable/:id/print-data", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsReceivable, farmReceivableItems, farmInvoiceConfig } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = (req.user as any).id;
+
+            const [ar] = await db.select().from(farmAccountsReceivable).where(
+                and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
+            );
+            if (!ar) return res.status(404).json({ error: "Not found" });
+
+            const items = await db.select().from(farmReceivableItems).where(eq(farmReceivableItems.receivableId, ar.id));
+            const [config] = await db.select().from(farmInvoiceConfig).where(eq(farmInvoiceConfig.farmerId, farmerId));
+
+            res.json({
+                // Emissor
+                emissor: config ? {
+                    ruc: config.ruc,
+                    razonSocial: config.razonSocial,
+                    direccion: config.direccion,
+                    timbrado: config.timbrado,
+                    timbradoStart: config.timbradoStartDate,
+                    timbradoEnd: config.timbradoEndDate,
+                } : null,
+                // Fatura
+                invoiceNumber: ar.invoiceNumber,
+                issueDate: ar.createdAt,
+                paymentCondition: ar.paymentCondition,
+                dueDate: ar.dueDate,
+                // Cliente
+                customer: {
+                    name: ar.buyer,
+                    ruc: ar.customerRuc,
+                    address: ar.customerAddress,
+                },
+                // Itens
+                items: items.map(i => ({
+                    productName: i.productName,
+                    unit: i.unit,
+                    quantity: i.quantity,
+                    unitPrice: i.unitPrice,
+                    ivaRate: i.ivaRate,
+                    totalPrice: i.totalPrice,
+                })),
+                // Totais
+                subtotalExenta: ar.subtotalExenta,
+                subtotalGravada5: ar.subtotalGravada5,
+                subtotalGravada10: ar.subtotalGravada10,
+                iva5: ar.iva5,
+                iva10: ar.iva10,
+                totalAmount: ar.totalAmount,
+                currency: ar.currency,
+            });
+        } catch (error) {
+            console.error("[AR_PRINT_DATA]", error);
+            res.status(500).json({ error: "Failed to get print data" });
         }
     });
 
