@@ -344,7 +344,9 @@ export class FarmStorage {
         if (!invoice) return;
 
         const skipStock = invoice?.skipStockEntry === true;
+        const isRemision = (invoice as any).documentType === "remision";
         const items = await this.getInvoiceItems(invoiceId);
+        console.log(`[FARM_CONFIRM] id=${invoiceId} type=${isRemision ? "remision" : "factura"} skipStock=${skipStock} items=${items.length} itemsWithProduct=${items.filter(i => i.productId).length}`);
 
         // Always save price history regardless of stock entry
         for (const item of items) {
@@ -390,9 +392,9 @@ export class FarmStorage {
                     type: "entry",
                     quantity: String(qty),
                     unitCost: String(cost),
-                    referenceType: "invoice",
+                    referenceType: isRemision ? "remision" : "invoice",
                     referenceId: invoiceId,
-                    notes: `Fatura item: ${item.productName}`,
+                    notes: isRemision ? `Remissao item: ${item.productName}` : `Fatura item: ${item.productName}`,
                 });
             }
             console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITH stock entry and price history.`);

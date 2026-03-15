@@ -167,7 +167,7 @@ export default function FarmInvoices() {
             setConfirmWarehouseId("");
             setConfirmSeasonId("");
         },
-        onError: () => toast({ title: "Erro ao confirmar fatura", variant: "destructive" }),
+        onError: (err: any) => toast({ title: `Erro ao confirmar: ${err?.message || "Falha desconhecida"}`, variant: "destructive" }),
     });
 
     const deleteMutation = useMutation({
@@ -1396,10 +1396,14 @@ export default function FarmInvoices() {
                                                                     size="sm"
                                                                     variant="outline"
                                                                     className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                                                                    onClick={() => {
+                                                                    onClick={(e: React.MouseEvent) => {
+                                                                        e.stopPropagation();
                                                                         setSelectedInvoice(rem.id);
+                                                                        confirmMutation.mutate({ id: rem.id });
                                                                     }}
+                                                                    disabled={confirmMutation.isPending}
                                                                 >
+                                                                    {confirmMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
                                                                     Aprovar
                                                                 </Button>
                                                             )}
@@ -1408,7 +1412,7 @@ export default function FarmInvoices() {
                                                                     size="sm"
                                                                     variant="ghost"
                                                                     className="ml-1"
-                                                                    onClick={() => window.open(`/api/farm/invoices/${rem.id}/file`, "_blank")}
+                                                                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); window.open(`/api/farm/invoices/${rem.id}/file`, "_blank"); }}
                                                                 >
                                                                     <Eye className="h-4 w-4" />
                                                                 </Button>
