@@ -60,9 +60,10 @@ const farmNavGroups: NavGroup[] = [
     {
         label: "Inteligencia",
         items: [
-            { labelKey: "nav_quotations", href: "/fazenda/cotacoes", icon: ArrowDownUp, moduleKey: "quotations" },
-            { labelKey: "nav_ndvi",       href: "/fazenda/ndvi",     icon: Satellite,   moduleKey: "ndvi" },
-            { labelKey: "nav_weather",    href: "/fazenda/clima",    icon: CloudRain,   moduleKey: "weather" },
+            { labelKey: "nav_soja_quotes", href: "/fazenda/cotacao-soja", icon: TrendingUp, moduleKey: "soja_quotes", alwaysOn: true },
+            { labelKey: "nav_quotations",  href: "/fazenda/cotacoes",     icon: ArrowDownUp, moduleKey: "quotations" },
+            { labelKey: "nav_ndvi",        href: "/fazenda/ndvi",         icon: Satellite,   moduleKey: "ndvi" },
+            { labelKey: "nav_weather",     href: "/fazenda/clima",        icon: CloudRain,   moduleKey: "weather" },
         ],
     },
 ];

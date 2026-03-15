@@ -428,6 +428,29 @@ app.use((req, res, next) => {
     log(`⚠️  Migration farm_guarantors/farm_issued_invoices: ${migErr.message}`);
   }
 
+  // Inline migration: soybean_price_cache table
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS soybean_price_cache (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        trade_date TIMESTAMP NOT NULL,
+        price_usd_bushel DECIMAL(15,4) NOT NULL,
+        price_usd_saca DECIMAL(15,4) NOT NULL,
+        source TEXT DEFAULT 'yahoo_finance',
+        fetched_at TIMESTAMP NOT NULL DEFAULT now(),
+        UNIQUE(trade_date)
+      )
+    `);
+
+    log("✅ Migration: soybean_price_cache table ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration soybean_price_cache: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes
@@ -445,6 +468,10 @@ app.use((req, res, next) => {
   // Register Quotation Network routes
   const { registerQuotationNetworkRoutes } = await import("./quotation-network-routes");
   registerQuotationNetworkRoutes(app);
+
+  // Register Soybean Price (Cotacao Soja) routes
+  const { registerSojaCotacaoRoutes } = await import("./soja-cotacao-routes");
+  registerSojaCotacaoRoutes(app);
 
   // Register NDVI satellite routes
   const { registerNdviRoutes } = await import("./ndvi-routes");

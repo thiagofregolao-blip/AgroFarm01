@@ -1972,10 +1972,21 @@ export const farmRemissionItems = pgTable("farm_remission_items", {
   unit: text("unit"),
 });
 
+// Cache de cotacoes de soja (CBOT)
+export const soybeanPriceCache = pgTable("soybean_price_cache", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tradeDate: timestamp("trade_date").notNull(),
+  priceUsdBushel: decimal("price_usd_bushel", { precision: 15, scale: 4 }).notNull(),
+  priceUsdSaca: decimal("price_usd_saca", { precision: 15, scale: 4 }).notNull(),
+  source: text("source").default("yahoo_finance"),
+  fetchedAt: timestamp("fetched_at").notNull().default(sql`now()`),
+});
+
 // ---- Types for new tables ----
 export type FarmSupplier = typeof farmSuppliers.$inferSelect;
 export type FarmCheque = typeof farmCheques.$inferSelect;
 export type FarmReceipt = typeof farmReceipts.$inferSelect;
 export type FarmRemission = typeof farmRemissions.$inferSelect;
 export type FarmRemissionItem = typeof farmRemissionItems.$inferSelect;
+export type SoybeanPriceCache = typeof soybeanPriceCache.$inferSelect;
 
