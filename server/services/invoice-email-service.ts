@@ -16,6 +16,7 @@ interface ExtractedInvoice {
     invoiceNumber: string | null;
     supplier: string;
     issueDate: string | null; // ISO date
+    dueDate: string | null; // ISO date — data de vencimento
     currency: string;
     totalAmount: number;
     items: Array<{
@@ -44,6 +45,7 @@ RETORNE APENAS UM JSON VÁLIDO no formato exato abaixo:
     "invoiceNumber": "Número da nota/fatura (ou null se não encontrar)",
     "supplier": "Nome da empresa fornecedora",
     "issueDate": "Data de emissão no formato YYYY-MM-DD (ou null)",
+    "dueDate": "Data de vencimento no formato YYYY-MM-DD (ou null). Procure por: Vencimiento, Fecha de Vencimiento, Vecto, Due Date, Cuotas X Vencimiento",
     "currency": "USD, PYG ou BRL (identifique pela moeda usada nos valores)",
     "totalAmount": 0.00,
     "items": [
@@ -67,6 +69,7 @@ REGRAS:
 5. Se a moeda for guarani (₲ ou Gs), use "PYG". Se for dólar ($, USD, U$), use "USD". Se for real (R$), use "BRL".
 6. Se não encontrar algum campo, use null.
 7. totalAmount deve ser a soma de todos os itens OU o valor total da fatura.
+8. IMPORTANTE: Procure a data de vencimento ("Vencimiento:", "Cuotas: 1 Vencimiento: DD/MM/YYYY"). NÃO confunda com data de emissão.
 
 RESPONDA APENAS JSON, sem texto adicional.`;
 
@@ -107,6 +110,7 @@ RESPONDA APENAS JSON, sem texto adicional.`;
             invoiceNumber: parsed.invoiceNumber || null,
             supplier: parsed.supplier || "Fornecedor não identificado",
             issueDate: parsed.issueDate || null,
+            dueDate: parsed.dueDate || null,
             currency: parsed.currency || "USD",
             totalAmount: typeof parsed.totalAmount === "number" ? parsed.totalAmount : 0,
             items: Array.isArray(parsed.items) ? parsed.items.map((item: any) => ({
@@ -193,25 +197,29 @@ export async function createDraftInvoice(
         return null;
     }
 
-    // Get active season
+    // Get season by dueDate range, fallback to active season
     let seasonId: string | null = null;
     try {
-        const { pool } = await import("../db");
-        const isNeon = (process.env.DATABASE_URL || "").includes("neon.tech");
-        let rows: any[];
-        if (isNeon) {
-            const result = await pool.query(
-                "SELECT id FROM farm_seasons WHERE farmer_id = $1 AND is_active = true LIMIT 1",
-                [farmerId]
-            );
-            rows = result.rows || [];
-        } else {
-            rows = await pool.unsafe(
-                "SELECT id FROM farm_seasons WHERE farmer_id = $1 AND is_active = true LIMIT 1",
-                [farmerId]
-            );
+        const dateForSeason = extracted.dueDate || extracted.issueDate || null;
+        if (dateForSeason) {
+            const seasonByDate = await db.execute(sql`
+                SELECT id FROM farm_seasons
+                WHERE farmer_id = ${farmerId}
+                  AND payment_start_date IS NOT NULL
+                  AND payment_end_date IS NOT NULL
+                  AND ${dateForSeason}::date BETWEEN payment_start_date AND payment_end_date
+                LIMIT 1
+            `);
+            const rows = Array.isArray(seasonByDate) ? seasonByDate : (seasonByDate as any).rows || [];
+            seasonId = rows[0]?.id || null;
         }
-        seasonId = rows[0]?.id || null;
+        if (!seasonId) {
+            const activeSeason = await db.execute(sql`
+                SELECT id FROM farm_seasons WHERE farmer_id = ${farmerId} AND is_active = true LIMIT 1
+            `);
+            const rows2 = Array.isArray(activeSeason) ? activeSeason : (activeSeason as any).rows || [];
+            seasonId = rows2[0]?.id || null;
+        }
     } catch (e) {
         console.error("[Invoice Email] Error getting season:", e);
     }
@@ -254,6 +262,7 @@ export async function createDraftInvoice(
         invoiceNumber: extracted.invoiceNumber,
         supplier: extracted.supplier,
         issueDate: extracted.issueDate ? new Date(extracted.issueDate.length === 10 ? extracted.issueDate + "T12:00:00" : extracted.issueDate) : null,
+        dueDate: extracted.dueDate ? new Date(extracted.dueDate.length === 10 ? extracted.dueDate + "T12:00:00" : extracted.dueDate) : null,
         currency: extracted.currency,
         totalAmount: String(extracted.totalAmount),
         status: "pending",

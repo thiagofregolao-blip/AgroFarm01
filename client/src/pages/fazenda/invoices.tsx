@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText, Search, Warehouse, Plus, DollarSign } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText, Search, Warehouse, Plus, DollarSign, Wheat } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -48,6 +48,7 @@ export default function FarmInvoices() {
     const [filterDate, setFilterDate] = useState("");
     const [confirmSkipStock, setConfirmSkipStock] = useState(false);
     const [confirmWarehouseId, setConfirmWarehouseId] = useState<string>("");
+    const [confirmSeasonId, setConfirmSeasonId] = useState<string>("");
 
     // Nova Despesa dialog state
     const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
@@ -151,10 +152,11 @@ export default function FarmInvoices() {
     };
 
     const confirmMutation = useMutation({
-        mutationFn: ({ id, skipStockEntry, warehouseId }: { id: string; skipStockEntry?: boolean; warehouseId?: string }) =>
+        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string }) =>
             apiRequest("POST", `/api/farm/invoices/${id}/confirm`, {
                 ...(skipStockEntry ? { skipStockEntry: true } : {}),
                 ...(warehouseId ? { warehouseId } : {}),
+                ...(seasonId ? { seasonId } : {}),
             }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
@@ -163,6 +165,7 @@ export default function FarmInvoices() {
             setSelectedInvoice(null);
             setConfirmSkipStock(false);
             setConfirmWarehouseId("");
+            setConfirmSeasonId("");
         },
         onError: () => toast({ title: "Erro ao confirmar fatura", variant: "destructive" }),
     });
@@ -872,8 +875,13 @@ export default function FarmInvoices() {
                                     ) : (
                                         <div className="flex gap-4 text-sm text-gray-600 mt-1 flex-wrap">
                                             <span>Fornecedor: <strong>{invoiceDetail.supplier || "—"}</strong></span>
-                                            <span>Data: <strong>{invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("pt-BR") : "—"}</strong></span>
+                                            <span>Emissao: <strong>{invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("pt-BR") : "—"}</strong></span>
+                                            <span>Vencimento: <strong>{invoiceDetail.dueDate ? new Date(invoiceDetail.dueDate).toLocaleDateString("pt-BR") : "—"}</strong></span>
                                             <span>Total: <strong>${invoiceDetail.totalAmount}</strong></span>
+                                            {invoiceDetail.seasonId && (() => {
+                                                const season = (seasons as any[]).find((s: any) => s.id === invoiceDetail.seasonId);
+                                                return season ? <span>Safra: <strong>{season.name}</strong></span> : null;
+                                            })()}
                                         </div>
                                     )}
                                 </CardHeader>
@@ -1059,6 +1067,24 @@ export default function FarmInvoices() {
                                                 </div>
                                             )}
 
+                                            {/* Safra selector */}
+                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                    <Wheat className="h-4 w-4 text-emerald-500" />
+                                                    Safra
+                                                </Label>
+                                                <Select value={confirmSeasonId || (invoiceDetail.seasonId || "")} onValueChange={setConfirmSeasonId}>
+                                                    <SelectTrigger className="mt-1">
+                                                        <SelectValue placeholder="Selecione a safra..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {(seasons as any[]).map((s: any) => (
+                                                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
                                             <div className="flex justify-end">
                                                 <Button
                                                     className="bg-emerald-600 hover:bg-emerald-700"
@@ -1066,6 +1092,7 @@ export default function FarmInvoices() {
                                                         id: selectedInvoice!,
                                                         skipStockEntry: confirmSkipStock || undefined,
                                                         warehouseId: !confirmSkipStock && confirmWarehouseId ? confirmWarehouseId : undefined,
+                                                        seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
                                                     })}
                                                     disabled={confirmMutation.isPending}
                                                 >
@@ -1136,72 +1163,95 @@ export default function FarmInvoices() {
                                             <p className="text-gray-500">Nenhuma fatura encontrada com os filtros aplicados</p>
                                         </div>
                                     ) : (
-                                    <div className="space-y-2">
-                                        {filteredInvoices.map((inv: any) => (
-                                            <div
-                                                key={inv.id}
-                                                className={`p-3 rounded-lg border cursor-pointer transition-colors overflow-hidden
-                      ${selectedInvoice === inv.id ? "border-emerald-300 bg-emerald-50" : "border-gray-100 hover:bg-gray-50"}`}
-                                                onClick={() => setSelectedInvoice(inv.id)}
-                                            >
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <FileText className={`h-4 w-4 shrink-0 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
-                                                    <p className="font-medium text-sm truncate flex-1 min-w-0">#{inv.invoiceNumber || "—"}</p>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (confirm("Excluir esta fatura? Esta ação não pode ser desfeita.")) {
-                                                                deleteMutation.mutate(inv.id);
-                                                            }
-                                                        }}
-                                                        className="p-1 rounded hover:bg-red-100 transition-colors shrink-0"
-                                                        title="Excluir fatura"
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm min-w-[800px]">
+                                            <thead className="bg-emerald-50">
+                                                <tr>
+                                                    <th className="text-left p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Nro. Fatura</th>
+                                                    <th className="text-left p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Safra</th>
+                                                    <th className="text-left p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Fornecedor</th>
+                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Emissao</th>
+                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Vencimento</th>
+                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Status</th>
+                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Origem</th>
+                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Entrada</th>
+                                                    <th className="text-right p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Valor</th>
+                                                    <th className="p-2.5"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredInvoices.map((inv: any) => {
+                                                    const season = inv.seasonId ? (seasons as any[]).find((s: any) => s.id === inv.seasonId) : null;
+                                                    return (
+                                                    <tr
+                                                        key={inv.id}
+                                                        className={`border-t cursor-pointer transition-colors ${
+                                                            selectedInvoice === inv.id ? "bg-emerald-50 border-emerald-200" : "border-gray-100 hover:bg-gray-50"
+                                                        }`}
+                                                        onClick={() => setSelectedInvoice(inv.id)}
                                                     >
-                                                        <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
-                                                    </button>
-                                                    {inv.hasFile && (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                window.open(`/api/farm/invoices/${inv.id}/file`, '_blank');
-                                                            }}
-                                                            className="p-1 rounded hover:bg-blue-100 transition-colors shrink-0"
-                                                            title="Ver arquivo original"
-                                                        >
-                                                            <Eye className="h-4 w-4 text-blue-400 hover:text-blue-600" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                {inv.supplier && (
-                                                    <p className="text-xs text-gray-600 truncate">{inv.supplier}</p>
-                                                )}
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                                                        <p className="text-xs text-gray-500 shrink-0">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "—"}</p>
-                                                        <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0 h-5 shrink-0">
-                                                            {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
-                                                        </Badge>
-                                                        <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 shrink-0 ${
-                                                            inv.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
-                                                            inv.source === "email_import" ? "border-blue-400 text-blue-700 bg-blue-50" :
-                                                            "border-gray-300 text-gray-600 bg-gray-50"
-                                                        }`}>
-                                                            {inv.source === "whatsapp" ? "WhatsApp" :
-                                                             inv.source === "email_import" ? "Email" : "Import"}
-                                                        </Badge>
-                                                        {inv.seasonId && (() => {
-                                                            const season = (seasons as any[]).find((s: any) => s.id === inv.seasonId);
-                                                            return season ? (
-                                                                <Badge variant="outline" className="text-[10px] px-2 py-0 h-5 shrink-0 border-emerald-400 text-emerald-700 bg-emerald-50">
+                                                        <td className="p-2.5 font-medium whitespace-nowrap">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <FileText className={`h-3.5 w-3.5 shrink-0 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
+                                                                #{inv.invoiceNumber || "—"}
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-2.5 whitespace-nowrap">
+                                                            {season ? (
+                                                                <Badge variant="outline" className="text-[10px] px-2 py-0 h-5 border-emerald-400 text-emerald-700 bg-emerald-50">
                                                                     {season.name}
                                                                 </Badge>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-                                                    <p className="font-bold text-sm text-gray-900 shrink-0">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-                                                </div>
-                                            </div>
-                                        ))}
+                                                            ) : <span className="text-gray-400 text-xs">--</span>}
+                                                        </td>
+                                                        <td className="p-2.5 whitespace-nowrap truncate max-w-[180px]">{inv.supplier || "—"}</td>
+                                                        <td className="p-2.5 text-center whitespace-nowrap text-xs">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "—"}</td>
+                                                        <td className="p-2.5 text-center whitespace-nowrap text-xs">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
+                                                        <td className="p-2.5 text-center">
+                                                            <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0 h-5">
+                                                                {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="p-2.5 text-center">
+                                                            <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 ${
+                                                                inv.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
+                                                                inv.source === "email_import" ? "border-blue-400 text-blue-700 bg-blue-50" :
+                                                                "border-gray-300 text-gray-600 bg-gray-50"
+                                                            }`}>
+                                                                {inv.source === "whatsapp" ? "WhatsApp" :
+                                                                 inv.source === "email_import" ? "Email" : "Import"}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="p-2.5 text-center whitespace-nowrap text-xs text-gray-500">
+                                                            {inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("pt-BR") + " " + new Date(inv.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                                                        </td>
+                                                        <td className="p-2.5 text-right font-mono font-semibold whitespace-nowrap">
+                                                            ${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                                        </td>
+                                                        <td className="p-2.5">
+                                                            <div className="flex items-center gap-1">
+                                                                {inv.hasFile && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); window.open(`/api/farm/invoices/${inv.id}/file`, '_blank'); }}
+                                                                        className="p-1 rounded hover:bg-blue-100 transition-colors"
+                                                                        title="Ver arquivo original"
+                                                                    >
+                                                                        <Eye className="h-3.5 w-3.5 text-blue-400 hover:text-blue-600" />
+                                                                    </button>
+                                                                )}
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); if (confirm("Excluir esta fatura?")) deleteMutation.mutate(inv.id); }}
+                                                                    className="p-1 rounded hover:bg-red-100 transition-colors"
+                                                                    title="Excluir fatura"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-600" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 );
                                 })()}

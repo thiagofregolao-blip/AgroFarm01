@@ -281,6 +281,12 @@ export function registerFarmInvoiceRoutes(app: Express) {
             }
 
             const farmerId = (req.user as any).id;
+
+            // Update seasonId if provided during confirmation
+            if (req.body.seasonId) {
+                await db.execute(sql`UPDATE farm_invoices SET season_id = ${req.body.seasonId} WHERE id = ${req.params.id}`);
+            }
+
             await farmStorage.confirmInvoice(req.params.id, farmerId);
 
             // Auto-create accounts payable entry linked to this invoice
