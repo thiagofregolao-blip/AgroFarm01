@@ -63,7 +63,7 @@ Se algum pre-requisito nao existir, crie-o antes de iniciar os testes.
 
 ---
 
-## BLOCO B - FATURAS (Itens #5, #8, #12, #13, #15)
+## BLOCO B - FATURAS (Itens #5, #6, #8, #9, #12, #13, #15, #31, #32)
 
 ### Teste B1 - Importar Fatura via WhatsApp (se disponivel)
 1. Acesse **Faturas > Faturas**
@@ -110,6 +110,38 @@ Se algum pre-requisito nao existir, crie-o antes de iniciar os testes.
 1. Verifique se ha uma safra com **periodo de pagamento** configurado (data inicio e fim de pagamento)
 2. Importe ou crie uma fatura com data dentro desse periodo
 3. **Verificar**: A safra foi vinculada automaticamente a fatura?
+- [ ] PASSOU
+- [ ] FALHOU - Motivo: ___
+
+### Teste B7 - Filtros de Busca na Lista de Faturas
+1. Acesse **Faturas > aba Faturas**
+2. **Verificar**: Existem campos de filtro (busca por fornecedor, numero da fatura, data)?
+3. Digite o nome de um fornecedor no campo de busca
+4. **Verificar**: A lista filtra mostrando so faturas desse fornecedor?
+5. Filtre por numero de fatura
+6. **Verificar**: Funciona corretamente?
+7. Filtre por periodo de data
+8. **Verificar**: So aparecem faturas do periodo?
+9. Limpe os filtros
+10. **Verificar**: Todas as faturas voltam a aparecer?
+- [ ] PASSOU
+- [ ] FALHOU - Motivo: ___
+
+### Teste B8 - Bot de Precos (Produtos Manuais no Estoque)
+1. Se o bot WhatsApp esta disponivel, envie uma consulta de preco para um produto que foi cadastrado MANUALMENTE no estoque (nao importado via fatura)
+2. **Verificar**: O bot retorna o preco do produto manual?
+3. Se o bot nao esta disponivel, verifique via API: `GET /api/farm/webhook/n8n/prices?product=NOME_PRODUTO`
+4. **Verificar**: O endpoint retorna resultados incluindo produtos do `farm_stock` (nao apenas do historico de faturas)?
+- [ ] PASSOU
+- [ ] FALHOU - Motivo: ___
+- [ ] NAO TESTAVEL (bot indisponivel e sem acesso a API)
+
+### Teste B9 - Simbolo de Moeda na Despesa Vinculada
+1. Tenha uma fatura importada com moeda detectada (ex: PYG ou USD)
+2. Abra o modal **Nova Despesa**
+3. Marque **"Despesa com fatura"** e selecione essa fatura
+4. **Verificar**: O simbolo da moeda da fatura aparece no campo de valor ou no resumo?
+5. **Verificar**: O valor e exibido na moeda correta da fatura?
 - [ ] PASSOU
 - [ ] FALHOU - Motivo: ___
 
@@ -485,7 +517,7 @@ Este e o teste mais importante. Simula um ciclo contabil completo.
 | Categoria | Total Testes | Passou | Falhou | Nao Testado |
 |-----------|-------------|--------|--------|-------------|
 | A - Fornecedores | 3 | | | |
-| B - Faturas | 6 | | | |
+| B - Faturas | 9 | | | |
 | C - Despesas | 6 | | | |
 | D - Contas a Pagar | 8 | | | |
 | E - Contas a Receber | 3 | | | |
@@ -494,7 +526,7 @@ Este e o teste mais importante. Simula um ciclo contabil completo.
 | H - Novos Modulos | 3 | | | |
 | I - Interface | 2 | | | |
 | J - Integridade Contabil | 2 | | | |
-| **TOTAL** | **39** | | | |
+| **TOTAL** | **42** | | | |
 
 ### Falhas Encontradas (detalhar cada uma)
 
