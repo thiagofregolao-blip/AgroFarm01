@@ -1127,10 +1127,11 @@ export const farmInvoices = pgTable("farm_invoices", {
   status: text("status").notNull().default("pending"), // pending, confirmed, cancelled
   skipStockEntry: boolean("skip_stock_entry").notNull().default(false), // Se true, não dá entrada no estoque ao confirmar
   rawPdfData: text("raw_pdf_data"), // Texto extraído do PDF para debug
-  source: text("source").notNull().default("manual"), // "manual" | "email_import"
+  source: text("source").notNull().default("manual"), // "manual" | "email_import" | "whatsapp"
   sourceEmailId: text("source_email_id"), // Message-ID do email original (evita duplicatas)
   sourceEmailFrom: text("source_email_from"), // Remetente do email
-  pdfBase64: text("pdf_base64"), // PDF original em base64 para download
+  pdfBase64: text("pdf_base64"), // Arquivo original em base64 (PDF ou imagem)
+  fileMimeType: text("file_mime_type"), // MIME type do arquivo original (application/pdf, image/jpeg, etc.)
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

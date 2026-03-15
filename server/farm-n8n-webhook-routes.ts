@@ -694,6 +694,9 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     invoiceNumber: parsed.invoiceNumber || `WPP-${Date.now().toString().slice(-6)}`,
                     seasonId,
                     supplierId,
+                    source: "whatsapp",
+                    pdfBase64: base64Image,
+                    fileMimeType: mimeType,
                 }).returning();
 
                 const allProducts = await farmStorage.getAllProducts();

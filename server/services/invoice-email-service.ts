@@ -253,7 +253,7 @@ export async function createDraftInvoice(
         seasonId,
         invoiceNumber: extracted.invoiceNumber,
         supplier: extracted.supplier,
-        issueDate: extracted.issueDate ? new Date(extracted.issueDate) : null,
+        issueDate: extracted.issueDate ? new Date(extracted.issueDate.length === 10 ? extracted.issueDate + "T12:00:00" : extracted.issueDate) : null,
         currency: extracted.currency,
         totalAmount: String(extracted.totalAmount),
         status: "pending",
@@ -262,6 +262,7 @@ export async function createDraftInvoice(
         sourceEmailFrom: emailFrom,
         rawPdfData: rawPdfText || "PDF processado via Gemini AI",
         pdfBase64: pdfBase64 || null,
+        fileMimeType: "application/pdf",
     } as any).returning();
 
     // Create invoice items

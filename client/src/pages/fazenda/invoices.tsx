@@ -769,6 +769,14 @@ export default function FarmInvoices() {
                                             <Badge className="ml-2" variant={invoiceDetail.status === "confirmed" ? "default" : "secondary"}>
                                                 {invoiceDetail.status === "confirmed" ? "Confirmada" : "Pendente"}
                                             </Badge>
+                                            <Badge variant="outline" className={`ml-1 text-[10px] ${
+                                                invoiceDetail.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
+                                                invoiceDetail.source === "email_import" ? "border-blue-400 text-blue-700 bg-blue-50" :
+                                                "border-gray-300 text-gray-600 bg-gray-50"
+                                            }`}>
+                                                {invoiceDetail.source === "whatsapp" ? "WhatsApp" :
+                                                 invoiceDetail.source === "email_import" ? "Email" : "Import"}
+                                            </Badge>
                                         </CardTitle>
                                         <div className="flex items-center gap-2">
                                             {!editingInvoice && (
@@ -798,12 +806,12 @@ export default function FarmInvoices() {
                                                     </Button>
                                                 </>
                                             )}
-                                            {invoiceDetail.source === "email_import" && (
+                                            {invoiceDetail.hasFile && (
                                                 <Button variant="outline" size="sm" onClick={(e) => {
                                                     e.stopPropagation();
-                                                    window.open(`/api/farm/invoices/${selectedInvoice}/pdf`, '_blank');
+                                                    window.open(`/api/farm/invoices/${selectedInvoice}/file`, '_blank');
                                                 }}>
-                                                    <Download className="mr-1 h-3 w-3" /> PDF
+                                                    <Eye className="mr-1 h-3 w-3" /> Ver Original
                                                 </Button>
                                             )}
                                             <Button variant="ghost" size="sm" onClick={() => { setSelectedInvoice(null); setEditingInvoice(false); }}>Fechar</Button>
@@ -1151,16 +1159,16 @@ export default function FarmInvoices() {
                                                     >
                                                         <Trash2 className="h-4 w-4 text-red-400 hover:text-red-600" />
                                                     </button>
-                                                    {inv.source === "email_import" && (
+                                                    {inv.hasFile && (
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                window.open(`/api/farm/invoices/${inv.id}/pdf`, '_blank');
+                                                                window.open(`/api/farm/invoices/${inv.id}/file`, '_blank');
                                                             }}
                                                             className="p-1 rounded hover:bg-blue-100 transition-colors shrink-0"
-                                                            title="Baixar PDF"
+                                                            title="Ver arquivo original"
                                                         >
-                                                            <Download className="h-4 w-4 text-blue-400 hover:text-blue-600" />
+                                                            <Eye className="h-4 w-4 text-blue-400 hover:text-blue-600" />
                                                         </button>
                                                     )}
                                                 </div>
@@ -1168,10 +1176,18 @@ export default function FarmInvoices() {
                                                     <p className="text-xs text-gray-600 truncate">{inv.supplier}</p>
                                                 )}
                                                 <div className="flex items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-2 min-w-0">
+                                                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
                                                         <p className="text-xs text-gray-500 shrink-0">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "—"}</p>
                                                         <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0 h-5 shrink-0">
                                                             {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                                        </Badge>
+                                                        <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 shrink-0 ${
+                                                            inv.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
+                                                            inv.source === "email_import" ? "border-blue-400 text-blue-700 bg-blue-50" :
+                                                            "border-gray-300 text-gray-600 bg-gray-50"
+                                                        }`}>
+                                                            {inv.source === "whatsapp" ? "WhatsApp" :
+                                                             inv.source === "email_import" ? "Email" : "Import"}
                                                         </Badge>
                                                     </div>
                                                     <p className="font-bold text-sm text-gray-900 shrink-0">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>

@@ -17,7 +17,12 @@ export function registerFarmInvoiceRoutes(app: Express) {
     app.get("/api/farm/invoices", requireFarmer, async (req, res) => {
         try {
             const invoices = await farmStorage.getInvoices((req.user as any).id);
-            res.json(invoices);
+            // Strip pdfBase64 from list response (can be megabytes), add hasFile flag
+            const light = invoices.map((inv: any) => {
+                const { pdfBase64, rawPdfData, ...rest } = inv;
+                return { ...rest, hasFile: !!pdfBase64 };
+            });
+            res.json(light);
         } catch (error) {
             console.error("[FARM_INVOICES_GET]", error);
             res.status(500).json({ error: "Failed to get invoices" });
@@ -71,10 +76,32 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const invoice = await farmStorage.getInvoiceById(req.params.id);
             if (!invoice) return res.status(404).json({ error: "Invoice not found" });
             const items = await farmStorage.getInvoiceItems(req.params.id);
-            res.json({ ...invoice, items });
+            const { pdfBase64, rawPdfData, ...rest } = invoice as any;
+            res.json({ ...rest, hasFile: !!pdfBase64, items });
         } catch (error) {
             console.error("[FARM_INVOICE_GET]", error);
             res.status(500).json({ error: "Failed to get invoice" });
+        }
+    });
+
+    // Download the stored invoice file (PDF or image)
+    app.get("/api/farm/invoices/:id/file", requireFarmer, async (req, res) => {
+        try {
+            const invoice = await farmStorage.getInvoiceById(req.params.id);
+            if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+            if (!(invoice as any).pdfBase64) return res.status(404).json({ error: "No file stored for this invoice" });
+
+            const mimeType = (invoice as any).fileMimeType || "application/pdf";
+            const buffer = Buffer.from((invoice as any).pdfBase64, "base64");
+            const ext = mimeType.includes("pdf") ? "pdf" : mimeType.includes("png") ? "png" : "jpg";
+            const filename = `fatura-${invoice.invoiceNumber || invoice.id}.${ext}`;
+
+            res.setHeader("Content-Type", mimeType);
+            res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+            res.send(buffer);
+        } catch (error) {
+            console.error("[FARM_INVOICE_FILE]", error);
+            res.status(500).json({ error: "Failed to get invoice file" });
         }
     });
 
@@ -161,8 +188,9 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 }
             }
 
-            // Create invoice record
+            // Create invoice record — store full file as base64
             const skipStockEntry = req.body?.skipStockEntry === "true";
+            const fileBase64 = req.file.buffer.toString("base64");
             const invoice = await farmStorage.createInvoice({
                 farmerId,
                 seasonId,
@@ -175,6 +203,9 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 status: "pending",
                 skipStockEntry,
                 rawPdfData: parsed.rawText.substring(0, 5000),
+                source: "manual",
+                pdfBase64: fileBase64,
+                fileMimeType: mimeType,
             });
 
             // Create invoice items (try to match with catalog products, auto-create if not found)
