@@ -588,125 +588,88 @@ export default function FarmInvoices() {
 
                 {/* Nova Despesa Dialog */}
                 <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
-                    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                        <DialogHeader>
+                    <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0">
+                        <DialogHeader className="px-6 pt-5 pb-3 border-b">
                             <DialogTitle>Nova Despesa</DialogTitle>
                         </DialogHeader>
-                        <div className="space-y-4">
-                            {/* Checkbox: tem fatura? */}
-                            <div
-                                className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${expHasFatura ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                                onClick={() => { setExpHasFatura(!expHasFatura); if (expHasFatura) setExpInvoiceId(""); }}
-                            >
-                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors ${expHasFatura ? "bg-blue-500 text-white" : "border-2 border-gray-300"}`}>
-                                    {expHasFatura && <Check className="h-3.5 w-3.5" />}
-                                </div>
-                                <div>
+                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                            {/* Linha 1: Checkbox fatura + selecao fatura */}
+                            <div className="flex items-center gap-4">
+                                <div
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all flex-shrink-0 ${expHasFatura ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                                    onClick={() => { setExpHasFatura(!expHasFatura); if (expHasFatura) setExpInvoiceId(""); }}
+                                >
+                                    <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors ${expHasFatura ? "bg-blue-500 text-white" : "border-2 border-gray-300"}`}>
+                                        {expHasFatura && <Check className="h-3 w-3" />}
+                                    </div>
                                     <span className={`text-sm font-medium ${expHasFatura ? "text-blue-800" : "text-gray-700"}`}>Despesa com fatura</span>
-                                    <p className="text-xs text-gray-500">Marque se esta despesa esta vinculada a uma fatura importada</p>
                                 </div>
+                                {expHasFatura && (
+                                    <div className="flex-1">
+                                        <Select value={expInvoiceId} onValueChange={handleExpInvoiceSelect}>
+                                            <SelectTrigger><SelectValue placeholder="Escolha uma fatura..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {(invoices as any[]).filter((i: any) => i.status === "pending" || i.status === "pendente").map((inv: any) => (
+                                                    <SelectItem key={inv.id} value={String(inv.id)}>
+                                                        #{inv.invoiceNumber || "S/N"} - {inv.supplier || "?"} - ${parseFloat(inv.totalAmount || "0").toFixed(2)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Se tem fatura, selecionar */}
-                            {expHasFatura && (
-                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                    <Label className="text-blue-700 text-sm">Selecione a fatura</Label>
-                                    <Select value={expInvoiceId} onValueChange={handleExpInvoiceSelect}>
-                                        <SelectTrigger><SelectValue placeholder="Escolha uma fatura..." /></SelectTrigger>
+                            {/* Linha 2: Categoria + Fornecedor + Descricao */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <Label className="text-xs text-gray-500">Categoria *</Label>
+                                    <Select value={expCategory} onValueChange={setExpCategory}>
+                                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                         <SelectContent>
-                                            {(invoices as any[]).filter((i: any) => i.status === "pending" || i.status === "pendente").map((inv: any) => (
-                                                <SelectItem key={inv.id} value={String(inv.id)}>
-                                                    #{inv.invoiceNumber || "S/N"} - {inv.supplier || "?"} - ${parseFloat(inv.totalAmount || "0").toFixed(2)}
-                                                </SelectItem>
-                                            ))}
+                                            {EXPENSE_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
-                            )}
-
-                            <div>
-                                <Label>Categoria *</Label>
-                                <Select value={expCategory} onValueChange={setExpCategory}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {EXPENSE_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div>
-                                <Label>Fornecedor *</Label>
-                                <button
-                                    type="button"
-                                    onClick={() => { setSupplierSearchOpen(true); setSupplierSearchTerm(""); }}
-                                    className={`w-full flex items-center justify-between px-3 py-2 border rounded-md text-sm text-left transition-colors hover:bg-gray-50 cursor-pointer ${expSupplier ? "border-gray-300 text-gray-900" : "border-gray-300 text-gray-500"}`}
-                                >
-                                    <span>{expSupplier || "Buscar fornecedor..."}</span>
-                                    <Search className="h-4 w-4 text-gray-400" />
-                                </button>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <Label>Valor *</Label>
+                                    <Label className="text-xs text-gray-500">Fornecedor *</Label>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setSupplierSearchOpen(true); setSupplierSearchTerm(""); }}
+                                        className={`w-full flex items-center justify-between px-3 py-2 border rounded-md text-sm text-left transition-colors hover:bg-gray-50 cursor-pointer h-10 ${expSupplier ? "border-gray-300 text-gray-900" : "border-gray-300 text-gray-500"}`}
+                                    >
+                                        <span className="truncate">{expSupplier || "Buscar..."}</span>
+                                        <Search className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                    </button>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-gray-500">Descricao</Label>
+                                    <Input value={expDescription} onChange={e => setExpDescription(e.target.value)} placeholder="Descricao..." />
+                                </div>
+                            </div>
+
+                            {/* Linha 3: Valor + Data + Pagamento + Propriedade + Safra */}
+                            <div className="grid grid-cols-5 gap-3">
+                                <div>
+                                    <Label className="text-xs text-gray-500">Valor *</Label>
                                     <Input type="number" step="0.01" placeholder="0.00" value={expAmount} onChange={e => setExpAmount(e.target.value)} />
                                 </div>
                                 <div>
-                                    <Label>Data</Label>
+                                    <Label className="text-xs text-gray-500">Data</Label>
                                     <Input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} />
                                 </div>
-                            </div>
-
-                            <div><Label>Descricao</Label><Input value={expDescription} onChange={e => setExpDescription(e.target.value)} placeholder="Descricao da despesa..." /></div>
-
-                            <div>
-                                <Label>Pagamento</Label>
-                                <Select value={expPaymentType} onValueChange={setExpPaymentType}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="a_vista">A Vista</SelectItem>
-                                        <SelectItem value="a_prazo">A Prazo</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* A Vista: selecionar conta para debito */}
-                            {expPaymentType === "a_vista" && (cashAccounts as any[]).length > 0 && (
-                                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 space-y-2">
-                                    <Label className="text-emerald-700 flex items-center gap-1.5">
-                                        <Wallet className="h-4 w-4" /> Conta para debito
-                                    </Label>
-                                    <Select value={expAccountId} onValueChange={setExpAccountId}>
-                                        <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                                <div>
+                                    <Label className="text-xs text-gray-500">Pagamento</Label>
+                                    <Select value={expPaymentType} onValueChange={setExpPaymentType}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            {(cashAccounts as any[]).map((acc: any) => (
-                                                <SelectItem key={acc.id} value={String(acc.id)}>
-                                                    {acc.name} {acc.bankName ? `(${acc.bankName})` : ""} - {acc.currency || "USD"}
-                                                </SelectItem>
-                                            ))}
+                                            <SelectItem value="a_vista">A Vista</SelectItem>
+                                            <SelectItem value="a_prazo">A Prazo</SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    <p className="text-xs text-emerald-600">O valor sera debitado automaticamente desta conta e lancado no fluxo de caixa</p>
                                 </div>
-                            )}
-
-                            {/* A Prazo: parcelas e vencimento */}
-                            {expPaymentType === "a_prazo" && (
-                                <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 grid grid-cols-2 gap-3">
-                                    <div>
-                                        <Label className="text-amber-700">N Parcelas</Label>
-                                        <Input type="number" min="1" max="60" value={expInstallments} onChange={e => setExpInstallments(e.target.value)} />
-                                    </div>
-                                    <div>
-                                        <Label className="text-amber-700">1o Vencimento</Label>
-                                        <Input type="date" value={expDueDate} onChange={e => setExpDueDate(e.target.value)} />
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <Label>Propriedade</Label>
+                                    <Label className="text-xs text-gray-500">Propriedade</Label>
                                     <Select value={expPropertyId} onValueChange={setExpPropertyId}>
                                         <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                                         <SelectContent>
@@ -718,7 +681,7 @@ export default function FarmInvoices() {
                                     </Select>
                                 </div>
                                 <div>
-                                    <Label>Safra</Label>
+                                    <Label className="text-xs text-gray-500">Safra</Label>
                                     <Select value={expSeasonId} onValueChange={setExpSeasonId}>
                                         <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                                         <SelectContent>
@@ -731,8 +694,52 @@ export default function FarmInvoices() {
                                 </div>
                             </div>
 
+                            {/* Linha condicional: A Vista conta ou A Prazo parcelas */}
+                            {expPaymentType === "a_vista" && (cashAccounts as any[]).length > 0 && (
+                                <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                                    <Wallet className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                                    <div className="flex-1 grid grid-cols-2 gap-3 items-center">
+                                        <Select value={expAccountId} onValueChange={setExpAccountId}>
+                                            <SelectTrigger><SelectValue placeholder="Selecione a conta para debito..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {(cashAccounts as any[]).map((acc: any) => (
+                                                    <SelectItem key={acc.id} value={String(acc.id)}>
+                                                        {acc.name} {acc.bankName ? `(${acc.bankName})` : ""} - {acc.currency || "USD"}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-xs text-emerald-600">Debito automatico no fluxo de caixa</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {expPaymentType === "a_prazo" && (
+                                <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                    <div className="grid grid-cols-2 gap-3 flex-1">
+                                        <div>
+                                            <Label className="text-xs text-amber-700">N Parcelas</Label>
+                                            <Input type="number" min="1" max="60" value={expInstallments} onChange={e => setExpInstallments(e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <Label className="text-xs text-amber-700">1o Vencimento</Label>
+                                            <Input type="date" value={expDueDate} onChange={e => setExpDueDate(e.target.value)} />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer fixo */}
+                        <div className="px-6 py-3 border-t bg-gray-50 flex items-center justify-end gap-3">
                             <Button
-                                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                                variant="outline"
+                                onClick={() => setExpenseDialogOpen(false)}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                className="bg-emerald-600 hover:bg-emerald-700"
                                 onClick={handleExpenseSubmit}
                                 disabled={createExpenseMutation.isPending || !expCategory || !expAmount || !expSupplier}
                             >
