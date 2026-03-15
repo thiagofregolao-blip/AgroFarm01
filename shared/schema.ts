@@ -1199,6 +1199,8 @@ export const farmExpenses = pgTable("farm_expenses", {
   equipmentId: varchar("equipment_id").references(() => farmEquipment.id),
   plotId: varchar("plot_id").references(() => farmPlots.id),
   propertyId: varchar("property_id").references(() => farmProperties.id),
+  invoiceId: varchar("invoice_id").references(() => farmInvoices.id),
+  seasonId: varchar("season_id"),
   category: text("category").notNull(),
   supplier: text("supplier"),
   description: text("description"),

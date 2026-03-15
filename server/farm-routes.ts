@@ -1374,7 +1374,7 @@ export function registerFarmRoutes(app: Express) {
             const {
                 plotId, propertyId, seasonId, category, description, amount,
                 expenseDate, paymentType, dueDate, installments, supplier,
-                frequency, repeatTimes,
+                frequency, repeatTimes, invoiceId, accountId,
             } = req.body;
             if (!category || !amount) return res.status(400).json({ error: "Category and amount required" });
 
@@ -1400,6 +1400,8 @@ export function registerFarmRoutes(app: Express) {
                     farmerId,
                     plotId: plotId || null,
                     propertyId: propertyId || null,
+                    invoiceId: invoiceId || null,
+                    seasonId: seasonId || null,
                     category,
                     description: repeats > 1 ? `${description || category} (${r + 1}/${repeats})` : (description || undefined),
                     amount: String(amount),
@@ -1443,7 +1445,6 @@ export function registerFarmRoutes(app: Express) {
                         console.log(`[EXPENSE→AP] Auto-created ${totalInst} AP entries for expense ${expense.id}`);
                     } else {
                         // a_vista: cria AP como pago + movimentacao no fluxo de caixa
-                        const accountId = req.body.accountId;
                         const [ap] = await db.insert(farmAccountsPayable).values({
                             farmerId,
                             expenseId: expense.id,
@@ -1485,9 +1486,9 @@ export function registerFarmRoutes(app: Express) {
 
             console.log(`[EXPENSE_CREATE] Farmer ${farmerId}: created ${repeats} expense(s) with freq=${freq}`);
             res.status(201).json(repeats > 1 ? createdExpenses : createdExpenses[0]);
-        } catch (error) {
-            console.error("[FARM_EXPENSE_CREATE]", error);
-            res.status(500).json({ error: "Failed to create expense" });
+        } catch (error: any) {
+            console.error("[FARM_EXPENSE_CREATE]", error?.message || error, JSON.stringify(req.body));
+            res.status(500).json({ error: `Failed to create expense: ${error?.message || 'unknown'}` });
         }
     });
 

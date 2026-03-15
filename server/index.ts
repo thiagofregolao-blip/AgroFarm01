@@ -369,6 +369,17 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS transfer_date TIMESTAMP`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS warehouse_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS skip_stock_entry BOOLEAN DEFAULT false`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS equipment_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS supplier TEXT`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS image_base64 TEXT`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pendente'`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS payment_type TEXT NOT NULL DEFAULT 'a_vista'`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS due_date TIMESTAMP`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS installments INTEGER DEFAULT 1`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS installments_paid INTEGER DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(15,2) DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS invoice_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS season_id VARCHAR`);
 
     log("✅ Migration: Sprint 24-items tables and columns ensured");
   } catch (migErr: any) {
