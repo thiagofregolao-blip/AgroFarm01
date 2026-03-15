@@ -418,14 +418,24 @@ Se for 'invoice', extraia TAMBÉM o fornecedor, o número da nota (se houver) e 
 
 Se for 'romaneio', extraia os dados de pesagem no campo "romaneioData".
 
-Retorne APENAS UM JSON VÁLIDO no formato exato:
+IMPORTANTE para faturas (invoice):
+- Extraia a data de emissao ("Fecha y hora", "Data de emissao") no formato YYYY-MM-DD
+- Extraia a data de vencimento ("Vencimiento", "Vencimento", "Due Date") no formato YYYY-MM-DD
+- Extraia a moeda ("Moneda", "Currency"): "USD" para US Dollar, "PYG" para Guarani, "BRL" para Real
+- Extraia as condicoes de pagamento ("Condicion de Venta": "Credito" ou "Contado")
+
+Retorne APENAS UM JSON VALIDO no formato exato:
 {
   "type": "expense" | "invoice" | "romaneio" | "unknown",
   "totalAmount": 150.50,
-  "description": "Breve resumo geral (ex: Compra de peças para trator)",
+  "description": "Breve resumo geral (ex: Compra de pecas para trator)",
   "category": "diesel" | "pecas" | "frete" | "mao_de_obra" | "outro",
   "invoiceNumber": "123456",
   "supplier": "Nome da Empresa Fornecedora",
+  "issueDate": "2025-10-02",
+  "dueDate": "2026-04-01",
+  "currency": "USD",
+  "paymentCondition": "Credito",
   "items": [
     {
       "productName": "Nome do Produto Exato da Nota",
@@ -640,21 +650,32 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     });
                 }
 
-                // Detect currency from parsed data
+                // Parse dates from Gemini response
                 const detectedCurrency = parsed.currency || (amount > 10000 ? "PYG" : "USD");
+                const safeDateParse = (d: string | null | undefined): Date | null => {
+                    if (!d) return null;
+                    const s = String(d);
+                    return new Date(s.length === 10 ? s + "T12:00:00" : s);
+                };
+                const invoiceIssueDate = safeDateParse(parsed.issueDate);
+                const invoiceDueDate = safeDateParse(parsed.dueDate);
 
-                // Auto-link to season based on payment period
+                // Auto-link to season based on dueDate (or issueDate, or now)
+                const dateForSeason = invoiceDueDate || invoiceIssueDate || new Date();
                 let seasonId = null;
+                let seasonName: string | null = null;
                 try {
                     const seasons = await farmStorage.getSeasons(farmer.id);
-                    const now = new Date();
                     const matchedSeason = seasons.find((s: any) => {
                         if (!s.paymentStartDate || !s.paymentEndDate) return false;
                         const start = new Date(s.paymentStartDate);
                         const end = new Date(s.paymentEndDate);
-                        return now >= start && now <= end;
+                        return dateForSeason >= start && dateForSeason <= end;
                     });
-                    if (matchedSeason) seasonId = matchedSeason.id;
+                    if (matchedSeason) {
+                        seasonId = matchedSeason.id;
+                        seasonName = matchedSeason.name;
+                    }
                 } catch (err) {
                     console.error("[WEBHOOK_INVOICE_SEASON]", err);
                 }
@@ -688,6 +709,8 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     farmerId: farmer.id,
                     totalAmount: String(amount),
                     currency: detectedCurrency,
+                    issueDate: invoiceIssueDate || new Date(),
+                    dueDate: invoiceDueDate || null,
                     notes: `[Via WhatsApp] ${parsed.description}`,
                     status: 'pending',
                     supplier: parsed.supplier || "Via WhatsApp",
@@ -745,7 +768,29 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     }
                 }
 
-                return res.json({ message: `✅ Fatura de R$ ${amount.toFixed(2)} recebida da ${parsed.supplier || 'empresa'} com ${itemsCount} itens! Eles já estão aguardando sua revisão no painel AgroFarm.` });
+                // Build detailed WhatsApp response message
+                const itemsList = (parsed.items || []).map((it: any, idx: number) =>
+                    `  ${idx + 1}. ${it.productName} — ${it.quantity} ${it.unit || 'UN'} x $${(parseFloat(it.unitPrice) || 0).toFixed(2)} = $${(parseFloat(it.totalPrice) || 0).toFixed(2)}`
+                ).join('\n');
+
+                const issueDateStr = invoiceIssueDate ? invoiceIssueDate.toLocaleDateString('pt-BR') : '—';
+                const dueDateStr = invoiceDueDate ? invoiceDueDate.toLocaleDateString('pt-BR') : '—';
+                const currSymbol = detectedCurrency === 'PYG' ? 'Gs.' : '$';
+
+                let msg = `✅ *Fatura recebida!*\n\n`;
+                msg += `📋 *Nº:* ${newInvoice.invoiceNumber || 'S/N'}\n`;
+                msg += `🏢 *Fornecedor:* ${parsed.supplier || 'Desconhecido'}\n`;
+                msg += `📅 *Emissão:* ${issueDateStr}\n`;
+                msg += `📆 *Vencimento:* ${dueDateStr}\n`;
+                msg += `💰 *Total:* ${currSymbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n`;
+                msg += `💱 *Moeda:* ${detectedCurrency}\n`;
+                if (seasonName) msg += `🌱 *Safra:* ${seasonName}\n`;
+                if (itemsCount > 0) {
+                    msg += `\n📦 *Itens (${itemsCount}):*\n${itemsList}\n`;
+                }
+                msg += `\n_Aguardando sua revisão no painel AgroFarm._`;
+
+                return res.json({ message: msg });
             }
             else if (parsed.type === "romaneio") {
                 // ===== ROMANEIO (Grain Delivery Ticket) =====

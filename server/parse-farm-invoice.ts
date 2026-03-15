@@ -99,12 +99,12 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
             }
         }
 
-        // Issue date: "Fecha y hora:" 
+        // Issue date: "Fecha y hora:"
         if (!issueDate) {
             const dateMatch = line.match(/Fecha\s*y\s*hora:\s*(\d{2}-\d{2}-\d{4})/i);
             if (dateMatch) {
                 const parts = dateMatch[1].split('-');
-                issueDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                issueDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]), 12, 0, 0);
             }
         }
 
@@ -129,13 +129,13 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
             totalAmount = parseNumber(totalMatch[1]);
         }
 
-        // Due date: "Fecha de Vencimiento:", "Vencimiento:", "Fecha Venc.:", "Plazo:"
+        // Due date: "Vencimiento:", "Fecha de Vencimiento:", "Fecha Venc.:", also "Cuotas: 1 Vencimiento: DD-MM-YYYY"
         if (!dueDate) {
-            const dueDateMatch = line.match(/(?:Fecha\s*(?:de\s*)?Venc(?:imiento)?|Vencimiento|Plazo\s*de\s*pago)\s*:?\s*(\d{2}[-/]\d{2}[-/]\d{4})/i);
+            const dueDateMatch = line.match(/Venc(?:imiento|to)?\.?\s*:?\s*(\d{2}[-/]\d{2}[-/]\d{4})/i);
             if (dueDateMatch) {
                 const sep = dueDateMatch[1].includes('/') ? '/' : '-';
                 const parts = dueDateMatch[1].split(sep);
-                dueDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                dueDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]), 12, 0, 0);
             }
         }
 
@@ -513,14 +513,21 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
 
         // Sanitize and validate fields
         // Determine dueDate: from explicit field, from payment terms + issueDate, or null
+        // Parse dates safely (add T12:00:00 to avoid timezone shift)
+        const safeDateParse = (d: string | null | undefined): Date | null => {
+            if (!d) return null;
+            const s = String(d);
+            return new Date(s.length === 10 ? s + "T12:00:00" : s);
+        };
+
         let parsedDueDate: Date | null = null;
         if (parsed.dueDate) {
-            parsedDueDate = new Date(parsed.dueDate);
+            parsedDueDate = safeDateParse(parsed.dueDate);
         } else if (parsed.paymentTerms && parsed.issueDate) {
             const daysMatch = String(parsed.paymentTerms).match(/(\d+)\s*(?:DDL|dias|días|d)/i);
             if (daysMatch) {
-                parsedDueDate = new Date(parsed.issueDate);
-                parsedDueDate.setDate(parsedDueDate.getDate() + parseInt(daysMatch[1]));
+                parsedDueDate = safeDateParse(parsed.issueDate);
+                if (parsedDueDate) parsedDueDate.setDate(parsedDueDate.getDate() + parseInt(daysMatch[1]));
             }
         }
 
@@ -529,7 +536,7 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
             supplier: parsed.supplier || "Fornecedor Desconhecido",
             clientName: parsed.clientName || "",
             clientDocument: parsed.clientDocument || "",
-            issueDate: parsed.issueDate ? new Date(parsed.issueDate) : new Date(),
+            issueDate: safeDateParse(parsed.issueDate) || new Date(),
             dueDate: parsedDueDate,
             currency: parsed.currency || "USD",
             subtotal: Number(parsed.totalAmount) || 0,
