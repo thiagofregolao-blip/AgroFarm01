@@ -734,32 +734,35 @@ function EditAPForm({ item, seasons, onSave, saving }: any) {
     const [description, setDescription] = useState(item.description || "");
     const [totalAmount, setTotalAmount] = useState(String(item.totalAmount || ""));
     const [dueDate, setDueDate] = useState(item.dueDate ? new Date(item.dueDate).toISOString().split("T")[0] : "");
-    const [seasonId, setSeasonId] = useState(item.seasonId || item.season_id || "__none__");
+    const [seasonId, setSeasonId] = useState(String(item.seasonId || item.season_id || "__none__"));
+
+    const handleSave = () => {
+        if (!supplier || !totalAmount || !dueDate || saving) return;
+        onSave({ supplier, description, totalAmount, dueDate, seasonId: seasonId === "__none__" ? null : seasonId || null });
+    };
 
     return (
-        <form onSubmit={(e) => {
-            e.preventDefault();
-            onSave({ supplier, description, totalAmount, dueDate, seasonId: seasonId === "__none__" ? null : seasonId || null });
-        }} className="space-y-4">
-            <div><Label>Fornecedor *</Label><Input value={supplier} onChange={e => setSupplier(e.target.value)} required /></div>
+        <div className="space-y-4">
+            <div><Label>Fornecedor *</Label><Input value={supplier} onChange={e => setSupplier(e.target.value)} /></div>
             <div><Label>Descricao</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
-            <div><Label>Valor Total ($) *</Label><Input type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} required /></div>
-            <div><Label>Vencimento *</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} required /></div>
+            <div><Label>Valor Total ($) *</Label><Input type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} /></div>
+            <div><Label>Vencimento *</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
             {(seasons || []).length > 0 && (
                 <div>
                     <Label>Safra (opcional)</Label>
-                    <Select value={seasonId} onValueChange={setSeasonId}>
+                    <Select value={String(seasonId)} onValueChange={setSeasonId}>
                         <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="__none__">Nenhuma</SelectItem>
-                            {seasons.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                            {seasons.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>
             )}
-            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={saving || !supplier || !totalAmount || !dueDate}>
+            <Button type="button" className="w-full bg-blue-600 hover:bg-blue-700" disabled={saving || !supplier || !totalAmount || !dueDate}
+                onClick={handleSave}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Alteracoes"}
             </Button>
-        </form>
+        </div>
     );
 }

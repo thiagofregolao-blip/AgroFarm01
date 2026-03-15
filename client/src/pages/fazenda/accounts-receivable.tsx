@@ -431,12 +431,12 @@ function EditARForm({ item, suppliers, onSave, saving }: any) {
     const [description, setDescription] = useState(item.description || "");
     const [totalAmount, setTotalAmount] = useState(String(item.totalAmount || ""));
     const [dueDate, setDueDate] = useState(item.dueDate ? new Date(item.dueDate).toISOString().split("T")[0] : "");
-    const [supplierId, setSupplierId] = useState(String(item.supplier_id || item.supplierId || ""));
+    const [supplierId, setSupplierId] = useState(item.supplier_id || item.supplierId ? String(item.supplier_id || item.supplierId) : "__none__");
 
     return (
         <form onSubmit={(e) => {
             e.preventDefault();
-            onSave({ buyer, description, totalAmount, dueDate, supplier_id: supplierId || null });
+            onSave({ buyer, description, totalAmount, dueDate, supplier_id: supplierId === "__none__" ? null : supplierId });
         }} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <div><Label>Comprador *</Label><Input value={buyer} onChange={e => setBuyer(e.target.value)} required /></div>
@@ -445,7 +445,7 @@ function EditARForm({ item, suppliers, onSave, saving }: any) {
                     <Select value={supplierId} onValueChange={setSupplierId}>
                         <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Nenhum</SelectItem>
+                            <SelectItem value="__none__">Nenhum</SelectItem>
                             {suppliers.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                         </SelectContent>
                     </Select>

@@ -39,13 +39,19 @@ export default function FornecedoresPage() {
             const url = editing ? `/api/farm/suppliers/${editing.id}` : "/api/farm/suppliers";
             const method = editing ? "PUT" : "POST";
             const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
-            if (!res.ok) throw new Error("Erro ao salvar");
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                throw new Error(body?.error || "Erro ao salvar");
+            }
             return res.json();
         },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["/api/farm/suppliers"] });
             setModalOpen(false);
             toast({ title: editing ? "Fornecedor atualizado" : "Fornecedor cadastrado" });
+        },
+        onError: (err: Error) => {
+            toast({ title: err.message, variant: "destructive" });
         },
     });
 

@@ -451,6 +451,23 @@ app.use((req, res, next) => {
     log(`⚠️  Migration soybean_price_cache: ${migErr.message}`);
   }
 
+  // Migration: Add property_id to farm_stock for per-warehouse stock tracking
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+
+    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS property_id VARCHAR`);
+    // Drop the old unique constraint that only covers (farmer_id, product_id)
+    await db.execute(sql`ALTER TABLE farm_stock DROP CONSTRAINT IF EXISTS farm_stock_farmer_id_product_id_unique`);
+    // Create new unique constraint that includes property_id (using COALESCE for NULLs)
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_stock_farmer_product_property ON farm_stock (farmer_id, product_id, COALESCE(property_id, '__none__'))`);
+
+    log("✅ Migration: farm_stock.property_id column + unique index ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_stock.property_id: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes

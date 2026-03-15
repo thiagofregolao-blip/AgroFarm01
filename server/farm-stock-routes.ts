@@ -149,21 +149,47 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.post("/api/farm/stock/transfer", requireFarmer, async (req: Request, res: Response) => {
         try {
-            const { productId, fromWarehouseId, toWarehouseId, quantity, notes } = req.body;
+            const { productId, fromWarehouseId: rawFrom, toWarehouseId: rawTo, quantity, notes } = req.body;
             const farmerId = (req.user as any).id;
             const qty = parseFloat(quantity);
             if (!productId || !qty || qty <= 0) {
                 return res.status(400).json({ error: "productId and positive quantity are required" });
             }
 
-            // Create saida movement from source
+            // Normalize "none" to null (frontend sends "none" for "Sem deposito")
+            const fromWarehouseId = (rawFrom && rawFrom !== 'none') ? rawFrom : null;
+            const toWarehouseId = (rawTo && rawTo !== 'none') ? rawTo : null;
+
+            // Validate source stock has enough quantity
+            const fromPropId = fromWarehouseId || null;
+            const fromCoalesced = fromPropId || '__none__';
+            const sourceRows = await db.execute(sql`
+                SELECT * FROM farm_stock
+                WHERE farmer_id = ${farmerId} AND product_id = ${productId}
+                  AND COALESCE(property_id, '__none__') = ${fromCoalesced}
+                LIMIT 1
+            `);
+            const sourceStock = ((sourceRows as any).rows ?? sourceRows)[0];
+            if (!sourceStock || parseFloat(sourceStock.quantity) < qty) {
+                const available = sourceStock ? parseFloat(sourceStock.quantity).toFixed(2) : '0';
+                return res.status(400).json({ error: `Estoque insuficiente no deposito origem. Disponivel: ${available}` });
+            }
+
+            // 1. Decrease stock in source deposit
+            await farmStorage.upsertStock(farmerId, productId, -qty, 0, fromPropId);
+
+            // 2. Increase stock in destination deposit (use source avg cost)
+            const avgCost = parseFloat(sourceStock.average_cost) || 0;
+            await farmStorage.upsertStock(farmerId, productId, qty, avgCost, toWarehouseId || null);
+
+            // 3. Create saida movement from source (history -- kept as-is)
             await db.execute(sql`
                 INSERT INTO farm_stock_movements (farmer_id, product_id, type, quantity, unit_cost, reference_type, warehouse_id, notes)
                 VALUES (${farmerId}, ${productId}, 'saida', ${qty}, 0, 'transfer', ${fromWarehouseId ?? null},
                     ${'Transferencia para deposito ' + (toWarehouseId || 'outro') + '. ' + (notes || '')})
             `);
 
-            // Create entrada movement to destination
+            // 4. Create entrada movement to destination (history -- kept as-is)
             await db.execute(sql`
                 INSERT INTO farm_stock_movements (farmer_id, product_id, type, quantity, unit_cost, reference_type, warehouse_id, notes)
                 VALUES (${farmerId}, ${productId}, 'entrada', ${qty}, 0, 'transfer', ${toWarehouseId ?? null},

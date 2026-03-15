@@ -274,6 +274,36 @@ export function registerFarmCashFlowRoutes(app: Express) {
         }
     });
 
+    app.put("/api/farm/cash-transactions/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmCashTransactions } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+
+            const farmerId = (req.user as any).id;
+            const { description, amount, transactionDate } = req.body;
+
+            const updates: any = {};
+            if (description !== undefined) updates.description = description;
+            if (amount !== undefined) updates.amount = String(parseFloat(amount));
+            if (transactionDate !== undefined) updates.transactionDate = new Date(transactionDate);
+
+            if (Object.keys(updates).length === 0) {
+                return res.status(400).json({ error: "No fields to update" });
+            }
+
+            const [updated] = await db.update(farmCashTransactions).set(updates).where(
+                and(eq(farmCashTransactions.id, req.params.id), eq(farmCashTransactions.farmerId, farmerId))
+            ).returning();
+
+            if (!updated) return res.status(404).json({ error: "Transaction not found" });
+            res.json(updated);
+        } catch (error) {
+            console.error("[CASH_TRANSACTION_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update transaction" });
+        }
+    });
+
     app.delete("/api/farm/cash-transactions/:id", requireFarmer, async (req, res) => {
         try {
             const { farmCashTransactions, farmCashAccounts } = await import("../shared/schema");

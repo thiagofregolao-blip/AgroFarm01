@@ -76,15 +76,24 @@ export function registerFarmFinancialRoutes(app: Express) {
 
     app.put("/api/farm/accounts-payable/:id", requireFarmer, async (req, res) => {
         try {
-            const { farmAccountsPayable } = await import("../shared/schema");
-            const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
+            const { sql } = await import("drizzle-orm");
             const farmerId = (req.user as any).id;
+            const { supplier, description, totalAmount, dueDate, seasonId } = req.body;
 
-            const [updated] = await db.update(farmAccountsPayable).set(req.body).where(
-                and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
-            ).returning();
-            res.json(updated);
+            const result = await db.execute(sql`
+                UPDATE farm_accounts_payable
+                SET supplier = ${supplier},
+                    description = ${description || null},
+                    total_amount = ${parseFloat(totalAmount)},
+                    due_date = ${dueDate}::timestamp,
+                    season_id = ${seasonId || null}
+                WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
+                RETURNING *
+            `);
+            const rows = (result as any).rows ?? result;
+            if (!rows.length) return res.status(404).json({ error: "Not found" });
+            res.json(rows[0]);
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_UPDATE]", error);
             res.status(500).json({ error: "Failed to update account payable" });

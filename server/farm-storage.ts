@@ -190,25 +190,22 @@ export class FarmStorage {
     }
 
     // ==================== Stock ====================
-    async getStock(farmerId: string): Promise<(FarmStock & { productName: string; productUnit: string; productCategory: string | null; productImageUrl: string | null; productDosePerHa: string | null })[]> {
+    async getStock(farmerId: string): Promise<any[]> {
         await dbReady;
-        const result = await db.select({
-            id: farmStock.id,
-            farmerId: farmStock.farmerId,
-            productId: farmStock.productId,
-            quantity: farmStock.quantity,
-            averageCost: farmStock.averageCost,
-            updatedAt: farmStock.updatedAt,
-            productName: farmProductsCatalog.name,
-            productUnit: farmProductsCatalog.unit,
-            productCategory: farmProductsCatalog.category,
-            productImageUrl: farmProductsCatalog.imageUrl,
-            productDosePerHa: farmProductsCatalog.dosePerHa,
-        }).from(farmStock)
-            .innerJoin(farmProductsCatalog, eq(farmStock.productId, farmProductsCatalog.id))
-            .where(eq(farmStock.farmerId, farmerId))
-            .orderBy(farmProductsCatalog.name);
-        return result;
+        const rows = await db.execute(sql`
+            SELECT s.id, s.farmer_id AS "farmerId", s.product_id AS "productId",
+                   s.quantity, s.average_cost AS "averageCost", s.updated_at AS "updatedAt",
+                   s.property_id AS "propertyId",
+                   p.name AS "productName", p.unit AS "productUnit", p.category AS "productCategory",
+                   p.image_url AS "productImageUrl", p.dose_per_ha AS "productDosePerHa",
+                   fp.name AS "propertyName"
+            FROM farm_stock s
+            INNER JOIN farm_products_catalog p ON s.product_id = p.id
+            LEFT JOIN farm_properties fp ON s.property_id = fp.id
+            WHERE s.farmer_id = ${farmerId}
+            ORDER BY p.name
+        `);
+        return (rows as any).rows ?? rows;
     }
 
     async updateStockManual(id: string, farmerId: string, data: { quantity: number; averageCost: number; reason: string }): Promise<FarmStock> {
@@ -247,16 +244,24 @@ export class FarmStorage {
         });
     }
 
-    async upsertStock(farmerId: string, productId: string, quantityChange: number, unitCost: number): Promise<FarmStock> {
+    async upsertStock(farmerId: string, productId: string, quantityChange: number, unitCost: number, propertyId?: string | null): Promise<any> {
         await dbReady;
 
-        // Check existing stock
-        const [existing] = await db.select().from(farmStock)
-            .where(and(eq(farmStock.farmerId, farmerId), eq(farmStock.productId, productId)));
+        // Use raw SQL to respect the new unique index that includes property_id
+        const propId = propertyId || null;
+        const coalesced = propId || '__none__';
+
+        const existingRows = await db.execute(sql`
+            SELECT * FROM farm_stock
+            WHERE farmer_id = ${farmerId} AND product_id = ${productId}
+              AND COALESCE(property_id, '__none__') = ${coalesced}
+            LIMIT 1
+        `);
+        const existing = ((existingRows as any).rows ?? existingRows)[0];
 
         if (existing) {
             const oldQty = parseFloat(existing.quantity);
-            const oldCost = parseFloat(existing.averageCost);
+            const oldCost = parseFloat(existing.average_cost);
             const newQty = oldQty + quantityChange;
 
             // Weighted average cost (only update on entry)
@@ -265,25 +270,19 @@ export class FarmStorage {
                 newAvgCost = ((oldQty * oldCost) + (quantityChange * unitCost)) / newQty;
             }
 
-            const [updated] = await db.update(farmStock)
-                .set({
-                    quantity: String(newQty),
-                    averageCost: String(newAvgCost),
-                    updatedAt: new Date(),
-                })
-                .where(eq(farmStock.id, existing.id))
-                .returning();
-            return updated;
+            const updatedRows = await db.execute(sql`
+                UPDATE farm_stock SET quantity = ${String(newQty)}, average_cost = ${String(newAvgCost)}, updated_at = now()
+                WHERE id = ${existing.id}
+                RETURNING *
+            `);
+            return ((updatedRows as any).rows ?? updatedRows)[0];
         } else {
-            const [created] = await db.insert(farmStock)
-                .values({
-                    farmerId,
-                    productId,
-                    quantity: String(quantityChange),
-                    averageCost: String(unitCost),
-                })
-                .returning();
-            return created;
+            const createdRows = await db.execute(sql`
+                INSERT INTO farm_stock (farmer_id, product_id, quantity, average_cost, property_id)
+                VALUES (${farmerId}, ${productId}, ${String(quantityChange)}, ${String(unitCost)}, ${propId})
+                RETURNING *
+            `);
+            return ((createdRows as any).rows ?? createdRows)[0];
         }
     }
 
