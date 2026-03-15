@@ -418,6 +418,13 @@ Se for 'invoice', extraia TAMBÉM o fornecedor, o número da nota (se houver) e 
 
 Se for 'romaneio', extraia os dados de pesagem no campo "romaneioData".
 
+MUITO IMPORTANTE para romaneios:
+- O campo "buyer" deve ser o nome da EMPRESA/SILO/COOPERATIVA que RECEBE a carga (ex: Unigranos S.A., C.Vale, Agridesa, ADM, Cargill, Bunge, Coamo).
+- Este nome geralmente aparece no CABECALHO/LOGO do documento, no topo da pagina, como razao social da empresa emissora do ticket.
+- NAO confunda com "Nombre o Razon Social" do DESTINATARIO/CLIENTE/PRODUTOR que ENTREGA a carga — esse e o agricultor/produtor, NAO o buyer.
+- Se o documento tiver logo ou nome da empresa no topo (ex: "unigranos s.a.", "C.VALE SA"), ESSE e o buyer.
+- O "Nombre o Razon Social" ou "RUC o CI del Destinatario" geralmente e o PRODUTOR que esta entregando grao — ignore esse nome para o campo buyer.
+
 IMPORTANTE para faturas (invoice):
 - Extraia a data de emissao ("Fecha y hora", "Data de emissao") no formato YYYY-MM-DD
 - Extraia a data de vencimento ("Vencimiento", "Vencimento", "Due Date") no formato YYYY-MM-DD
@@ -447,7 +454,7 @@ Retorne APENAS UM JSON VALIDO no formato exato:
   ],
   "romaneioData": {
     "ticketNumber": "12345",
-    "buyer": "C.Vale / Agridesa / etc",
+    "buyer": "Nome da EMPRESA/SILO do cabecalho/logo do documento (ex: Unigranos S.A., C.Vale, Agridesa) - NAO e o produtor/destinatario",
     "crop": "Soja",
     "grossWeight": 43000,
     "tare": 15000,
