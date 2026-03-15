@@ -405,12 +405,20 @@ REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
 - Pneus, baterias, peças automotivas
 - Qualquer coisa relacionada a manutenção de tratores, colheitadeiras, caminhões, veículos
 
-**invoice** (Fatura de Insumos Agrícolas) — use APENAS quando os itens são:
-- Defensivos agrícolas (herbicidas, fungicidas, inseticidas, acaricidas): Glifosato, Atrazina, Flumitop, etc.
+**invoice** (Fatura de Insumos Agrícolas) — use APENAS quando:
+- O documento diz "FACTURA ELECTRONICA" ou "FACTURA" no cabecalho (NAO "Nota de Remision")
+- Os itens são defensivos agrícolas (herbicidas, fungicidas, inseticidas, acaricidas): Glifosato, Atrazina, Flumitop, etc.
 - Sementes (soja, milho, trigo, etc.)
 - Fertilizantes e adubos (NPK, ureia, MAP, KCl, etc.)
 - Adjuvantes, espalhantes, reguladores de crescimento
 - Produtos fitossanitários em geral
+
+**remision** (Nota de Remision / Guia de Remessa) — use quando o documento diz "NOTA DE REMISION" ou "NOTA DE REMISSAO" no cabecalho:
+- E um comprovante de ENTREGA de mercadoria, NAO uma fatura de compra
+- Geralmente NAO tem precos/valores, apenas produtos e quantidades
+- Pode referenciar uma fatura associada ("Facturas asociadas")
+- Tem dados de transporte (placa, motorista, km)
+- NAO confunda com fatura! Se diz "NOTA DE REMISION" NAO e invoice!
 
 **unknown** — quando não for possível determinar com certeza.
 
@@ -433,7 +441,7 @@ IMPORTANTE para faturas (invoice):
 
 Retorne APENAS UM JSON VALIDO no formato exato:
 {
-  "type": "expense" | "invoice" | "romaneio" | "unknown",
+  "type": "expense" | "invoice" | "romaneio" | "remision" | "unknown",
   "totalAmount": 150.50,
   "description": "Breve resumo geral (ex: Compra de pecas para trator)",
   "category": "diesel" | "pecas" | "frete" | "mao_de_obra" | "outro",
@@ -884,6 +892,28 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                     rd.truckPlate ? `🚛 Placa: ${rd.truckPlate}` : null,
                     rd.truckPlate ? `` : null,
                     plots.length > 0 ? `📍 *De qual talhão é esse romaneio?*\n${plotList}` : `Romaneio salvo! Confirme o talhão pelo painel. 🌾`,
+                ].filter(l => l !== null).join("\n");
+
+                return res.json({ message: summary });
+            }
+            else if (parsed.type === "remision") {
+                // ===== REMISION — Nota de Remissao (entrega de mercadoria, nao e fatura) =====
+                const items = parsed.items || [];
+                const itemsList = items.map((p: any, i: number) =>
+                    `  ${i + 1}. ${p.productName || 'Item'} — ${p.quantity || 0} ${p.unit || 'UN'}`
+                ).join("\n");
+
+                const summary = [
+                    `📦 *Nota de Remissao recebida!*`,
+                    ``,
+                    `📋 *N°:* ${parsed.invoiceNumber || 'S/N'}`,
+                    `🏢 *Empresa:* ${parsed.supplier || 'N/A'}`,
+                    `📅 *Data:* ${parsed.issueDate || 'N/A'}`,
+                    ``,
+                    items.length > 0 ? `📦 *Produtos (${items.length}):*\n${itemsList}` : null,
+                    ``,
+                    `⚠️ *Este documento e uma Nota de Remissao (comprovante de entrega), NAO uma fatura.*`,
+                    `Se voce precisa registrar como fatura, envie o documento da FACTURA ELECTRONICA correspondente.`,
                 ].filter(l => l !== null).join("\n");
 
                 return res.json({ message: summary });
