@@ -38,6 +38,7 @@ export interface ParsedInvoice {
     totalAmount: number;
     items: ParsedInvoiceItem[];
     rawText: string;
+    documentType?: "factura" | "remision" | "unknown"; // Tipo detectado automaticamente
 }
 
 /**
@@ -60,6 +61,15 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
     let subtotal = 0;
     let totalAmount = 0;
     const items: ParsedInvoiceItem[] = [];
+
+    // Detect document type: FACTURA vs NOTA DE REMISION
+    const fullText = text.toUpperCase();
+    let documentType: "factura" | "remision" | "unknown" = "unknown";
+    if (fullText.includes("NOTA DE REMISI") || fullText.includes("NOTA DE REMISSAO") || fullText.includes("REMISION")) {
+        documentType = "remision";
+    } else if (fullText.includes("FACTURA ELECTR") || fullText.includes("FACTURA") || fullText.includes("NOTA FISCAL")) {
+        documentType = "factura";
+    }
 
     // Extract header info
     for (let i = 0; i < lines.length; i++) {
@@ -298,6 +308,7 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         totalAmount: totalAmount || subtotal,
         items,
         rawText: text,
+        documentType,
     };
 }
 
@@ -438,15 +449,23 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
     const model = "gemini-2.0-flash"; // Align with what works in GeminiClient
 
     const prompt = `
-    VOCÊ É UM EXTRATOR DE DADOS DE NOTAS FISCAIS AGRÍCOLAS.
-    Analise esta imagem de nota fiscal/fatura e extraia os dados estruturados.
-    
+    VOCÊ É UM EXTRATOR DE DADOS DE DOCUMENTOS AGRÍCOLAS.
+    Analise esta imagem e extraia os dados estruturados.
+
+    PRIMEIRO, identifique o tipo do documento:
+    - "factura" = FACTURA ELECTRONICA (documento de compra/venda com precos e valores)
+    - "remision" = NOTA DE REMISION / NOTA DE REMISSAO (comprovante de ENTREGA de mercadoria, geralmente SEM precos)
+    - "unknown" = nao conseguiu identificar
+
+    DICA: Olhe o CABECALHO do documento. Se diz "NOTA DE REMISION" ou "NOTA DE REMISSAO" = remision. Se diz "FACTURA ELECTRONICA" ou "FACTURA" = factura.
+
     RETORNE APENAS UM JSON VÁLIDO. SEM MARKDOWN (\`\`\`). SEM COMENTÁRIOS.
-    
+
     ESTRUTURA JSON DESEJADA:
     {
+      "documentType": "factura" | "remision" | "unknown",
       "invoiceNumber": "string (número da nota)",
-      "supplier": "string (nome do fornecedor)",
+      "supplier": "string (nome do fornecedor/empresa emissora do documento)",
       "clientName": "string (nome do cliente/comprador)",
       "clientDocument": "string (CPF/CNPJ/RUC do cliente)",
       "issueDate": "YYYY-MM-DD (data de emissão)",
@@ -573,7 +592,8 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
                     expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined
                 };
             }) : [],
-            rawText: "Extracted via Gemini Vision"
+            rawText: "Extracted via Gemini Vision",
+            documentType: parsed.documentType || "unknown",
         };
 
     } catch (error) {

@@ -123,6 +123,11 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 return res.status(400).json({ error: "Unsupported file type. Use PDF or Image (JPG, PNG)." });
             }
 
+            // Auto-detect: se a IA detectou que e Nota de Remision, forcar skipStockEntry e zerar valores
+            const isRemision = parsed.documentType === "remision" || req.body?.isRemision === "true";
+            if (parsed.documentType === "remision") {
+                console.log(`[INVOICE_IMPORT] Documento detectado como NOTA DE REMISION (auto-detected by AI)`);
+            }
 
             // Verificacao de duplicidade
             const farmerId = (req.user as any).id;
@@ -189,7 +194,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             }
 
             // Create invoice record — store full file as base64
-            const skipStockEntry = req.body?.skipStockEntry === "true";
+            const skipStockEntry = req.body?.skipStockEntry === "true" || isRemision;
             const fileBase64 = req.file.buffer.toString("base64");
             const invoice = await farmStorage.createInvoice({
                 farmerId,
@@ -197,9 +202,9 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 invoiceNumber: parsed.invoiceNumber,
                 supplier: parsed.supplier,
                 issueDate: parsed.issueDate,
-                dueDate: invoiceDueDate,
+                dueDate: isRemision ? null : invoiceDueDate,
                 currency: parsed.currency,
-                totalAmount: String(parsed.totalAmount),
+                totalAmount: isRemision ? "0" : String(parsed.totalAmount),
                 status: "pending",
                 skipStockEntry,
                 rawPdfData: parsed.rawText.substring(0, 5000),
@@ -259,11 +264,16 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
             // Return parsed data for review
             const items = await farmStorage.getInvoiceItems(invoice.id);
+            const docLabel = isRemision ? "Remissao" : "Fatura";
             res.status(201).json({
                 invoice,
                 items,
                 parsedItemCount: parsed.items.length,
-                message: `Fatura ${parsed.invoiceNumber} importada com ${parsed.items.length} itens.`,
+                documentType: parsed.documentType || "unknown",
+                isRemision,
+                message: isRemision
+                    ? `Remissao ${parsed.invoiceNumber} importada com ${parsed.items.length} produtos (sem valores, apenas entrada de mercadoria).`
+                    : `Fatura ${parsed.invoiceNumber} importada com ${parsed.items.length} itens.`,
             });
         } catch (error) {
             console.error("[FARM_INVOICE_IMPORT]", error);
