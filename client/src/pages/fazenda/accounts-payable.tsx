@@ -8,12 +8,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil, History } from "lucide-react";
+import { Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil, History, Search, CreditCard } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
 function exportToCSV(data: any[], filename: string) {
@@ -186,11 +185,12 @@ export default function AccountsPayable() {
                     ))}
                 </div>
 
-                {/* Tabs: Contas / Pagamento */}
+                {/* Tabs: Contas / Pagamento / Historico */}
                 <Tabs defaultValue="contas">
                     <TabsList className="bg-emerald-50 text-emerald-800">
                         <TabsTrigger value="contas">Contas</TabsTrigger>
                         <TabsTrigger value="pagamento">Pagamento</TabsTrigger>
+                        <TabsTrigger value="historico">Historico</TabsTrigger>
                     </TabsList>
 
                     {/* ── CONTAS TAB ─────────────────────────────────────────── */}
@@ -309,14 +309,19 @@ export default function AccountsPayable() {
                     </TabsContent>
 
                     {/* ── PAGAMENTO TAB ──────────────────────────────────────── */}
-                    <TabsContent value="pagamento" className="space-y-6 mt-4">
+                    <TabsContent value="pagamento" className="space-y-4 mt-4">
                         <PagamentoTab
                             items={items as any[]}
-                            suppliers={suppliers as any[]}
                             accounts={accounts as any[]}
+                            seasons={seasons as any[]}
                             onPay={(id, data) => pay.mutate({ id, data })}
                             paying={pay.isPending}
                         />
+                    </TabsContent>
+
+                    {/* ── HISTORICO TAB ──────────────────────────────────────── */}
+                    <TabsContent value="historico" className="mt-4">
+                        <HistoricoTab items={items as any[]} />
                     </TabsContent>
                 </Tabs>
 
@@ -334,33 +339,41 @@ export default function AccountsPayable() {
     );
 }
 
-// ─── Pagamento Tab Component ──────────────────────────────────────────────────
-function PagamentoTab({ items, suppliers, accounts, onPay, paying }: {
-    items: any[]; suppliers: any[]; accounts: any[]; onPay: (id: string, data: any) => void; paying: boolean;
+// ─── Pagamento Tab ────────────────────────────────────────────────────────────
+function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
+    items: any[]; accounts: any[]; seasons: any[]; onPay: (id: string, data: any) => void; paying: boolean;
 }) {
-    const [selectedSupplier, setSelectedSupplier] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
+    const [filterDateFrom, setFilterDateFrom] = useState("");
+    const [filterDateTo, setFilterDateTo] = useState("");
+    const [filterSeason, setFilterSeason] = useState("todos");
     const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+    const [payModalOpen, setPayModalOpen] = useState(false);
+
+    // Payment modal state
     const [paymentRows, setPaymentRows] = useState<{ accountId: string; amount: string; paymentMethod: string }[]>([
         { accountId: "", amount: "", paymentMethod: "transferencia" },
     ]);
-
-    // Cheque fields
     const [chequeBanco, setChequeBanco] = useState("");
     const [chequeNumero, setChequeNumero] = useState("");
     const [chequeTipo, setChequeTipo] = useState("proprio");
 
-    const pendingForSupplier = items.filter((i: any) =>
-        i.supplier === selectedSupplier && i.status !== "pago"
-    );
+    // Filter pending items
+    const pendingItems = items.filter((i: any) => i.status !== "pago");
+    const filteredPending = pendingItems.filter((i: any) => {
+        const termMatch = !searchTerm ||
+            i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            i.description?.toLowerCase().includes(searchTerm.toLowerCase());
+        const dateFromMatch = !filterDateFrom || new Date(i.dueDate) >= new Date(filterDateFrom);
+        const dateToMatch = !filterDateTo || new Date(i.dueDate) <= new Date(filterDateTo);
+        const seasonMatch = filterSeason === "todos" || String(i.season_id || i.seasonId || "") === filterSeason;
+        return termMatch && dateFromMatch && dateToMatch && seasonMatch;
+    });
 
-    const checkedItems = pendingForSupplier.filter((i: any) => checkedIds.has(i.id));
+    const checkedItems = filteredPending.filter((i: any) => checkedIds.has(i.id));
     const totalChecked = checkedItems.reduce((s: number, i: any) =>
         s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0
     );
-
-    const totalAllocated = paymentRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-    const allRowsValid = paymentRows.every(r => r.accountId && parseFloat(r.amount) > 0);
-    const hasChequeMethod = paymentRows.some(r => r.paymentMethod === "cheque");
 
     const toggleCheck = (id: string) => {
         setCheckedIds(prev => {
@@ -370,18 +383,29 @@ function PagamentoTab({ items, suppliers, accounts, onPay, paying }: {
         });
     };
 
+    const toggleAll = () => {
+        if (checkedIds.size === filteredPending.length) {
+            setCheckedIds(new Set());
+        } else {
+            setCheckedIds(new Set(filteredPending.map((i: any) => i.id)));
+        }
+    };
+
+    const totalAllocated = paymentRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    const allRowsValid = paymentRows.every(r => r.accountId && parseFloat(r.amount) > 0);
+    const hasChequeMethod = paymentRows.some(r => r.paymentMethod === "cheque");
+
     const addRow = () => setPaymentRows(prev => [...prev, { accountId: "", amount: "", paymentMethod: "transferencia" }]);
     const removeRow = (idx: number) => { if (paymentRows.length > 1) setPaymentRows(prev => prev.filter((_, i) => i !== idx)); };
     const updateRow = (idx: number, field: string, value: string) => {
         setPaymentRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
     };
 
-    // Auto-fill total when items are checked
-    const handleAutoFill = () => {
-        if (paymentRows.length === 1) {
-            setPaymentRows([{ ...paymentRows[0], amount: totalChecked.toFixed(2) }]);
-        }
-    };
+    function openPayModal() {
+        setPaymentRows([{ accountId: "", amount: totalChecked.toFixed(2), paymentMethod: "transferencia" }]);
+        setChequeBanco(""); setChequeNumero(""); setChequeTipo("proprio");
+        setPayModalOpen(true);
+    }
 
     async function handleConfirmPayment() {
         if (checkedIds.size === 0 || !allRowsValid) return;
@@ -403,92 +427,167 @@ function PagamentoTab({ items, suppliers, accounts, onPay, paying }: {
             onPay(item.id, payload);
         }
         setCheckedIds(new Set());
+        setPayModalOpen(false);
     }
 
-    // Payment history: recently paid items
-    const recentPaid = items
-        .filter((i: any) => i.status === "pago")
-        .sort((a: any, b: any) => new Date(b.updatedAt || b.dueDate).getTime() - new Date(a.updatedAt || a.dueDate).getTime())
-        .slice(0, 10);
+    const isOverdue = (item: any) => (item.status === "aberto" || item.status === "parcial") && new Date(item.dueDate) < new Date();
 
     return (
-        <div className="space-y-6">
-            {/* Supplier select */}
+        <>
+            {/* Filters + Pay button */}
             <Card className="border-emerald-100">
-                <CardContent className="p-4 space-y-4">
-                    <div>
-                        <Label className="font-semibold">Selecione o Fornecedor</Label>
-                        <Select value={selectedSupplier} onValueChange={v => { setSelectedSupplier(v); setCheckedIds(new Set()); }}>
-                            <SelectTrigger className="w-full max-w-md mt-1"><SelectValue placeholder="Selecione um fornecedor..." /></SelectTrigger>
-                            <SelectContent>
-                                {suppliers.map((s: any) => (
-                                    <SelectItem key={s.id || s.name} value={s.name}>{s.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Pending accounts for supplier */}
-                    {selectedSupplier && (
-                        pendingForSupplier.length === 0 ? (
-                            <p className="text-sm text-gray-500">Nenhuma conta pendente para este fornecedor.</p>
-                        ) : (
-                            <div className="space-y-2">
-                                <p className="text-sm font-medium text-gray-700">{pendingForSupplier.length} conta(s) pendente(s):</p>
-                                <div className="border border-gray-200 rounded-lg divide-y divide-gray-100">
-                                    {pendingForSupplier.map((item: any) => {
-                                        const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
-                                        return (
-                                            <label key={item.id} className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 ${checkedIds.has(item.id) ? "bg-amber-50" : ""}`}>
-                                                <input type="checkbox" className="rounded" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium">{item.description || "Sem descricao"}</p>
-                                                    <p className="text-xs text-gray-500">
-                                                        Parcela {item.installmentNumber}/{item.totalInstallments} - Venc: {new Date(item.dueDate).toLocaleDateString("pt-BR")}
-                                                    </p>
-                                                </div>
-                                                <span className="text-sm font-mono font-semibold text-red-600">{formatCurrency(remaining, item.currency || "USD")}</span>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                                {checkedIds.size > 0 && (
-                                    <div className="flex items-center justify-between p-2 bg-amber-50 rounded-lg border border-amber-200">
-                                        <span className="text-sm font-medium text-amber-800">{checkedIds.size} conta(s) selecionada(s)</span>
-                                        <span className="text-sm font-bold text-amber-800">Total: {formatCurrency(totalChecked)}</span>
-                                    </div>
-                                )}
+                <CardContent className="p-4">
+                    <div className="flex flex-wrap gap-3 items-end">
+                        <div className="flex-1 min-w-[200px]">
+                            <Label className="text-xs text-gray-500">Buscar</Label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                                <Input
+                                    placeholder="Fornecedor ou descricao..."
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="pl-9"
+                                />
                             </div>
-                        )
-                    )}
+                        </div>
+                        <div>
+                            <Label className="text-xs text-gray-500">Vencimento de</Label>
+                            <Input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-36" />
+                        </div>
+                        <div>
+                            <Label className="text-xs text-gray-500">ate</Label>
+                            <Input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-36" />
+                        </div>
+                        <div>
+                            <Label className="text-xs text-gray-500">Safra</Label>
+                            <Select value={filterSeason} onValueChange={setFilterSeason}>
+                                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todos">Todas</SelectItem>
+                                    {seasons.map((s: any) => (
+                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Button
+                            className="bg-green-600 hover:bg-green-700"
+                            disabled={checkedIds.size === 0}
+                            onClick={openPayModal}
+                        >
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Realizar Pagamento {checkedIds.size > 0 && `(${checkedIds.size})`}
+                        </Button>
+                    </div>
                 </CardContent>
             </Card>
 
-            {/* Payment form */}
-            {checkedIds.size > 0 && (
-                <Card className="border-emerald-100">
-                    <CardContent className="p-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="font-semibold text-emerald-800">Forma de Pagamento</Label>
-                            <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700" onClick={addRow}>
-                                <PlusCircle className="mr-1 h-3 w-3" /> Adicionar metodo
-                            </Button>
+            {/* Pending items list with checkboxes */}
+            {filteredPending.length === 0 ? (
+                <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                    <Receipt className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">Nenhuma conta pendente encontrada</p>
+                </CardContent></Card>
+            ) : (
+                <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                    <table className="w-full text-sm">
+                        <thead className="bg-emerald-50">
+                            <tr>
+                                <th className="p-3 w-10">
+                                    <input
+                                        type="checkbox"
+                                        className="rounded"
+                                        checked={checkedIds.size === filteredPending.length && filteredPending.length > 0}
+                                        onChange={toggleAll}
+                                    />
+                                </th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
+                                <th className="text-right p-3 font-semibold text-emerald-800">Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredPending.map((item: any) => {
+                                const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
+                                const overdue = isOverdue(item);
+                                return (
+                                    <tr
+                                        key={item.id}
+                                        className={`border-t border-gray-100 cursor-pointer transition-colors ${checkedIds.has(item.id) ? "bg-amber-50" : overdue ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}`}
+                                        onClick={() => toggleCheck(item.id)}
+                                    >
+                                        <td className="p-3" onClick={e => e.stopPropagation()}>
+                                            <input type="checkbox" className="rounded" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} />
+                                        </td>
+                                        <td className="p-3 font-medium">{item.supplier}</td>
+                                        <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
+                                        <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
+                                        <td className="p-3">{new Date(item.dueDate).toLocaleDateString("pt-BR")}</td>
+                                        <td className="p-3">
+                                            {overdue
+                                                ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3" /> Vencido</span>
+                                                : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><Clock className="h-3 w-3" /> {item.status === "parcial" ? "Parcial" : "Aberto"}</span>
+                                            }
+                                        </td>
+                                        <td className="text-right p-3 font-mono font-semibold text-red-600">{formatCurrency(remaining, item.currency || "USD")}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    {checkedIds.size > 0 && (
+                        <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border-t border-amber-200">
+                            <span className="text-sm font-medium text-amber-800">{checkedIds.size} conta(s) selecionada(s)</span>
+                            <span className="text-sm font-bold text-amber-800">Total: {formatCurrency(totalChecked)}</span>
                         </div>
-                        {paymentRows.map((row, idx) => (
-                            <div key={idx} className="p-3 border border-gray-200 rounded-lg space-y-2 bg-white">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs font-medium text-gray-500">Metodo {idx + 1}</span>
-                                    {paymentRows.length > 1 && (
-                                        <button type="button" onClick={() => removeRow(idx)} className="text-red-400 hover:text-red-600">
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="grid grid-cols-3 gap-2">
+                    )}
+                </div>
+            )}
+
+            {/* Payment Modal */}
+            <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
+                <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0">
+                    <DialogHeader className="px-6 pt-5 pb-3 border-b">
+                        <DialogTitle>Realizar Pagamento</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                        {/* Resumo das contas selecionadas */}
+                        <div className="bg-gray-50 rounded-lg border p-3">
+                            <p className="text-xs font-semibold text-gray-500 mb-2">Contas selecionadas ({checkedItems.length})</p>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                {checkedItems.map((item: any) => {
+                                    const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
+                                    return (
+                                        <div key={item.id} className="flex items-center justify-between text-sm">
+                                            <span className="text-gray-700">{item.supplier} - {item.description || "Sem descricao"} ({item.installmentNumber}/{item.totalInstallments})</span>
+                                            <span className="font-mono font-semibold text-red-600">{formatCurrency(remaining, item.currency || "USD")}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
+                                <span className="text-sm font-bold text-gray-800">Total a pagar</span>
+                                <span className="text-lg font-bold text-red-600">{formatCurrency(totalChecked)}</span>
+                            </div>
+                        </div>
+
+                        {/* Forma de pagamento */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Label className="font-semibold text-emerald-800">Forma de Pagamento</Label>
+                                <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700" onClick={addRow}>
+                                    <PlusCircle className="mr-1 h-3 w-3" /> Adicionar metodo
+                                </Button>
+                            </div>
+                            {paymentRows.map((row, idx) => (
+                                <div key={idx} className="grid grid-cols-3 gap-3 items-end">
                                     <div>
-                                        <Label className="text-xs">Conta Bancaria *</Label>
+                                        <Label className="text-xs text-gray-500">Conta Bancaria *</Label>
                                         <Select value={row.accountId} onValueChange={v => updateRow(idx, "accountId", v)}>
-                                            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                             <SelectContent>
                                                 {accounts.map((a: any) => (
                                                     <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>
@@ -497,40 +596,44 @@ function PagamentoTab({ items, suppliers, accounts, onPay, paying }: {
                                         </Select>
                                     </div>
                                     <div>
-                                        <Label className="text-xs">Valor *</Label>
-                                        <Input type="number" step="0.01" className="h-8 text-sm" value={row.amount} onChange={e => updateRow(idx, "amount", e.target.value)} placeholder="0.00" />
+                                        <Label className="text-xs text-gray-500">Valor *</Label>
+                                        <Input type="number" step="0.01" value={row.amount} onChange={e => updateRow(idx, "amount", e.target.value)} placeholder="0.00" />
                                     </div>
-                                    <div>
-                                        <Label className="text-xs">Metodo</Label>
-                                        <Select value={row.paymentMethod} onValueChange={v => updateRow(idx, "paymentMethod", v)}>
-                                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="transferencia">Transferencia</SelectItem>
-                                                <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                                                <SelectItem value="cheque">Cheque</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                    <div className="flex gap-2 items-end">
+                                        <div className="flex-1">
+                                            <Label className="text-xs text-gray-500">Metodo</Label>
+                                            <Select value={row.paymentMethod} onValueChange={v => updateRow(idx, "paymentMethod", v)}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                                                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                                                    <SelectItem value="cheque">Cheque</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        {paymentRows.length > 1 && (
+                                            <Button type="button" variant="ghost" size="sm" className="text-red-400 hover:text-red-600 h-10" onClick={() => removeRow(idx)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
 
                         {/* Cheque fields */}
                         {hasChequeMethod && (
-                            <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                                <p className="text-xs font-semibold text-blue-700">Dados do Cheque</p>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <div><Label className="text-xs">Banco *</Label><Input className="h-8 text-sm" value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} placeholder="Nome do banco" /></div>
-                                    <div><Label className="text-xs">Numero *</Label><Input className="h-8 text-sm" value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="000000" /></div>
-                                    <div><Label className="text-xs">Tipo</Label>
-                                        <Select value={chequeTipo} onValueChange={setChequeTipo}>
-                                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="proprio">Proprio</SelectItem>
-                                                <SelectItem value="terceiro">Terceiro</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                            <div className="grid grid-cols-3 gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                <div><Label className="text-xs text-blue-700">Banco *</Label><Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} placeholder="Nome do banco" /></div>
+                                <div><Label className="text-xs text-blue-700">Numero *</Label><Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="000000" /></div>
+                                <div><Label className="text-xs text-blue-700">Tipo</Label>
+                                    <Select value={chequeTipo} onValueChange={setChequeTipo}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="proprio">Proprio</SelectItem>
+                                            <SelectItem value="terceiro">Terceiro</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                         )}
@@ -540,46 +643,88 @@ function PagamentoTab({ items, suppliers, accounts, onPay, paying }: {
                                 Total alocado: {formatCurrency(totalAllocated)} / Total selecionado: {formatCurrency(totalChecked)}
                             </p>
                         )}
+                    </div>
 
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="text-xs" onClick={handleAutoFill}>
-                                Preencher valor total
-                            </Button>
-                            <Button className="flex-1 bg-green-600 hover:bg-green-700"
-                                disabled={paying || !allRowsValid || checkedIds.size === 0 || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
-                                onClick={handleConfirmPayment}>
-                                {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckSquare className="mr-2 h-4 w-4" />}
-                                Confirmar Pagamento ({checkedIds.size} conta(s))
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                    {/* Footer fixo */}
+                    <div className="px-6 py-3 border-t bg-gray-50 flex items-center justify-end gap-3">
+                        <Button variant="outline" onClick={() => setPayModalOpen(false)}>Cancelar</Button>
+                        <Button
+                            className="bg-green-600 hover:bg-green-700"
+                            disabled={paying || !allRowsValid || checkedIds.size === 0 || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
+                            onClick={handleConfirmPayment}
+                        >
+                            {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+                            Confirmar Pagamento ({checkedIds.size} conta(s))
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
 
-            {/* Payment history */}
+// ─── Historico Tab ────────────────────────────────────────────────────────────
+function HistoricoTab({ items }: { items: any[] }) {
+    const [searchTerm, setSearchTerm] = useState("");
+
+    const paidItems = items
+        .filter((i: any) => i.status === "pago")
+        .sort((a: any, b: any) => new Date(b.paidDate || b.updatedAt || b.dueDate).getTime() - new Date(a.paidDate || a.updatedAt || a.dueDate).getTime());
+
+    const filteredPaid = paidItems.filter((i: any) =>
+        !searchTerm || i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) || i.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div className="space-y-4">
             <Card className="border-emerald-100">
                 <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                        <History className="h-4 w-4 text-emerald-600" />
-                        <h3 className="font-semibold text-emerald-800">Historico de Pagamentos</h3>
-                    </div>
-                    {recentPaid.length === 0 ? (
-                        <p className="text-sm text-gray-500">Nenhum pagamento registrado.</p>
-                    ) : (
-                        <div className="border border-gray-200 rounded-lg divide-y divide-gray-100">
-                            {recentPaid.map((item: any) => (
-                                <div key={item.id} className="flex items-center justify-between p-3">
-                                    <div>
-                                        <p className="text-sm font-medium">{item.supplier}</p>
-                                        <p className="text-xs text-gray-500">{item.description || "Sem descricao"} - {new Date(item.updatedAt || item.dueDate).toLocaleDateString("pt-BR")}</p>
-                                    </div>
-                                    <span className="text-sm font-mono font-semibold text-green-600">{formatCurrency(item.totalAmount, item.currency || "USD")}</span>
-                                </div>
-                            ))}
+                    <div className="flex items-center gap-3">
+                        <div className="relative flex-1 max-w-sm">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                            <Input
+                                placeholder="Buscar no historico..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="pl-9"
+                            />
                         </div>
-                    )}
+                        <span className="text-xs text-gray-400">{filteredPaid.length} pagamento(s)</span>
+                    </div>
                 </CardContent>
             </Card>
+
+            {filteredPaid.length === 0 ? (
+                <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                    <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">Nenhum pagamento registrado</p>
+                </CardContent></Card>
+            ) : (
+                <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                    <table className="w-full text-sm">
+                        <thead className="bg-emerald-50">
+                            <tr>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Data Pgto</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
+                                <th className="text-right p-3 font-semibold text-emerald-800">Valor Pago</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredPaid.map((item: any) => (
+                                <tr key={item.id} className="border-t border-gray-100">
+                                    <td className="p-3 text-gray-700">{new Date(item.paidDate || item.updatedAt || item.dueDate).toLocaleDateString("pt-BR")}</td>
+                                    <td className="p-3 font-medium">{item.supplier}</td>
+                                    <td className="p-3 text-gray-600 max-w-[250px] truncate">{item.description || "--"}</td>
+                                    <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
+                                    <td className="text-right p-3 font-mono font-semibold text-green-600">{formatCurrency(item.totalAmount, item.currency || "USD")}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 }

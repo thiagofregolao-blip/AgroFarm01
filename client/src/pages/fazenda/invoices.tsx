@@ -1424,34 +1424,47 @@ export default function FarmInvoices() {
                                     </Button>
                                 </div>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="p-0">
                                 {expensesWithoutInvoice.length === 0 ? (
                                     <p className="text-sm text-gray-500 text-center py-8">Nenhuma despesa sem fatura lancada</p>
                                 ) : (
-                                    <div className="space-y-2">
-                                        {expensesWithoutInvoice.map((exp: any) => (
-                                            <div key={exp.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-medium text-sm">{exp.description || exp.category}</span>
-                                                        <Badge variant="outline" className="text-xs">{exp.category}</Badge>
-                                                        <Badge variant={exp.status === "confirmed" ? "default" : "secondary"} className="text-xs">
-                                                            {exp.status === "confirmed" ? "Confirmada" : "Pendente"}
-                                                        </Badge>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                                                        {exp.supplier && <span>Fornecedor: {exp.supplier}</span>}
-                                                        <span>{new Date(exp.expenseDate || exp.createdAt).toLocaleDateString("pt-BR")}</span>
-                                                        <span className={`font-semibold ${exp.paymentType === "a_prazo" ? "text-amber-600" : "text-emerald-600"}`}>
-                                                            {exp.paymentType === "a_prazo" ? "A Prazo" : "A Vista"}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <span className="font-bold text-emerald-700">$ {parseFloat(exp.amount || "0").toFixed(2)}</span>
-                                                </div>
-                                            </div>
-                                        ))}
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-emerald-50">
+                                                <tr>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Pagamento</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Parcelas</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
+                                                    <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {expensesWithoutInvoice.map((exp: any) => (
+                                                    <tr key={exp.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                                                        <td className="p-3 text-gray-700">{new Date(exp.expenseDate || exp.createdAt).toLocaleDateString("pt-BR")}</td>
+                                                        <td className="p-3 font-medium">{exp.supplier || "--"}</td>
+                                                        <td className="p-3"><Badge variant="outline" className="text-xs">{exp.category}</Badge></td>
+                                                        <td className="p-3">
+                                                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${exp.paymentType === "a_prazo" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                                {exp.paymentType === "a_prazo" ? "A Prazo" : "A Vista"}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 text-gray-600">{exp.paymentType === "a_prazo" && exp.dueDate ? new Date(exp.dueDate).toLocaleDateString("pt-BR") : "--"}</td>
+                                                        <td className="p-3 text-gray-600">{exp.paymentType === "a_prazo" ? `${exp.installmentsPaid || 0}/${exp.installments || 1}` : "--"}</td>
+                                                        <td className="p-3">
+                                                            <Badge variant={exp.status === "confirmed" ? "default" : "secondary"} className="text-xs">
+                                                                {exp.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="text-right p-3 font-mono font-bold text-emerald-700">$ {parseFloat(exp.amount || "0").toFixed(2)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </CardContent>
