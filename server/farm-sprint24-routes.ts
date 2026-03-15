@@ -1,5 +1,5 @@
 import { Express, Request, Response } from "express";
-import { requireFarmer } from "./farm-middleware";
+import { requireFarmer, parseLocalDate } from "./farm-middleware";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
@@ -115,8 +115,8 @@ export function registerFarmSprint24Routes(app: Express) {
             const invRows = await db.execute(sql`
                 INSERT INTO farm_issued_invoices (farmer_id, client_id, invoice_number, description, total_amount, currency, issue_date, due_date, notes, season_id)
                 VALUES (${farmerId}, ${clientId ?? null}, ${invoiceNumber ?? null}, ${description ?? null}, ${totalAmount ?? '0'}, ${currency ?? 'USD'},
-                    ${issueDate ? new Date(issueDate).toISOString() : new Date().toISOString()}::timestamp,
-                    ${dueDate ? new Date(dueDate).toISOString() : null}::timestamp,
+                    ${(parseLocalDate(issueDate) || new Date()).toISOString()}::timestamp,
+                    ${parseLocalDate(dueDate)?.toISOString() ?? null}::timestamp,
                     ${notes ?? null}, ${seasonId ?? null})
                 RETURNING *
             `);
@@ -130,7 +130,7 @@ export function registerFarmSprint24Routes(app: Express) {
                 description: `Fatura #${invoiceNumber || inv.id} - ${description || ''}`,
                 totalAmount: totalAmount || '0',
                 currency: currency || 'USD',
-                dueDate: dueDate ? new Date(dueDate) : new Date(),
+                dueDate: parseLocalDate(dueDate) || new Date(),
                 status: 'pendente',
                 supplierId: clientId || null,
             });
@@ -256,8 +256,8 @@ export function registerFarmSprint24Routes(app: Express) {
             const { category, supplier, description, amount, expenseDate, paymentType, dueDate, installments } = req.body;
             await db.execute(sql`
                 UPDATE farm_expenses SET category=${category}, supplier=${supplier ?? null},
-                description=${description ?? null}, amount=${amount}, expense_date=${expenseDate ? new Date(expenseDate) : sql`now()`},
-                payment_type=${paymentType ?? 'a_vista'}, due_date=${dueDate ? new Date(dueDate) : null},
+                description=${description ?? null}, amount=${amount}, expense_date=${parseLocalDate(expenseDate) || sql`now()`},
+                payment_type=${paymentType ?? 'a_vista'}, due_date=${parseLocalDate(dueDate)},
                 installments=${installments ?? 1}
                 WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
             `);
@@ -398,7 +398,7 @@ export function registerFarmSprint24Routes(app: Express) {
             const { sourceAccountId, destAccountId, fromAccountId, toAccountId, amount, exchangeRate, description } = req.body;
             const srcId = sourceAccountId || fromAccountId;
             const dstId = destAccountId || toAccountId;
-            const nowISO = req.body.transferDate ? new Date(req.body.transferDate).toISOString() : new Date().toISOString();
+            const nowISO = (parseLocalDate(req.body.transferDate) || new Date()).toISOString();
 
             // Get source account info
             const srcRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${srcId} AND farmer_id = ${req.user!.id}`);

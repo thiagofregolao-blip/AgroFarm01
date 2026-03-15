@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { requireFarmer } from "./farm-middleware";
+import { requireFarmer, parseLocalDate } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -22,10 +22,10 @@ export function registerFarmSeasonRoutes(app: Express) {
                 farmerId: (req.user as any).id,
                 name: req.body.name,
                 crop: req.body.crop || null,
-                startDate: req.body.startDate ? new Date(req.body.startDate) : null,
-                endDate: req.body.endDate ? new Date(req.body.endDate) : null,
-                paymentStartDate: req.body.paymentStartDate ? new Date(req.body.paymentStartDate) : null,
-                paymentEndDate: req.body.paymentEndDate ? new Date(req.body.paymentEndDate) : null,
+                startDate: parseLocalDate(req.body.startDate),
+                endDate: parseLocalDate(req.body.endDate),
+                paymentStartDate: parseLocalDate(req.body.paymentStartDate),
+                paymentEndDate: parseLocalDate(req.body.paymentEndDate),
                 isActive: req.body.isActive ?? true,
             });
             res.json(season);
@@ -40,10 +40,10 @@ export function registerFarmSeasonRoutes(app: Express) {
             const data: any = {};
             if (req.body.name !== undefined) data.name = req.body.name;
             if (req.body.crop !== undefined) data.crop = req.body.crop || null;
-            if (req.body.startDate !== undefined) data.startDate = req.body.startDate ? new Date(req.body.startDate) : null;
-            if (req.body.endDate !== undefined) data.endDate = req.body.endDate ? new Date(req.body.endDate) : null;
-            if (req.body.paymentStartDate !== undefined) data.paymentStartDate = req.body.paymentStartDate ? new Date(req.body.paymentStartDate) : null;
-            if (req.body.paymentEndDate !== undefined) data.paymentEndDate = req.body.paymentEndDate ? new Date(req.body.paymentEndDate) : null;
+            if (req.body.startDate !== undefined) data.startDate = parseLocalDate(req.body.startDate);
+            if (req.body.endDate !== undefined) data.endDate = parseLocalDate(req.body.endDate);
+            if (req.body.paymentStartDate !== undefined) data.paymentStartDate = parseLocalDate(req.body.paymentStartDate);
+            if (req.body.paymentEndDate !== undefined) data.paymentEndDate = parseLocalDate(req.body.paymentEndDate);
             if (req.body.isActive !== undefined) data.isActive = req.body.isActive;
             const season = await farmStorage.updateSeason(req.params.id, data);
             res.json(season);

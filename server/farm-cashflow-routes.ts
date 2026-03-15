@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { requireFarmer } from "./farm-middleware";
+import { requireFarmer, parseLocalDate } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -149,7 +149,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
                 referenceType: referenceType || "manual",
                 expenseId: expenseId || null,
                 invoiceId: invoiceId || null,
-                transactionDate: transactionDate ? new Date(transactionDate) : new Date(),
+                transactionDate: parseLocalDate(transactionDate) || new Date(),
             }).returning();
 
             const balanceChange = type === "entrada" ? parsedAmount : -parsedAmount;
@@ -286,7 +286,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const updates: any = {};
             if (description !== undefined) updates.description = description;
             if (amount !== undefined) updates.amount = String(parseFloat(amount));
-            if (transactionDate !== undefined) updates.transactionDate = new Date(transactionDate);
+            if (transactionDate !== undefined) updates.transactionDate = parseLocalDate(transactionDate);
 
             if (Object.keys(updates).length === 0) {
                 return res.status(400).json({ error: "No fields to update" });

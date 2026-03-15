@@ -3,7 +3,7 @@
  * Extracted from farm-routes.ts
  */
 import { Express } from "express";
-import { requireFarmer } from "./farm-middleware";
+import { requireFarmer, parseLocalDate } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -180,7 +180,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             const farmerId = (req.user as any).id;
             const repeats = repeatTimes && parseInt(repeatTimes) > 1 ? parseInt(repeatTimes) : 1;
             const freq = frequency || "mensal";
-            const baseDate = expenseDate ? new Date(expenseDate) : new Date();
+            const baseDate = parseLocalDate(expenseDate) || new Date();
 
             // Helper: advance date by frequency
             const advanceDate = (date: Date, n: number): Date => {
@@ -207,7 +207,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                     amount: String(amount),
                     expenseDate: occurrenceDate,
                     paymentType: paymentType || "a_vista",
-                    dueDate: dueDate ? new Date(dueDate) : undefined,
+                    dueDate: parseLocalDate(dueDate) || undefined,
                     installments: installments ? parseInt(installments) : 1,
                     supplier: supplier || undefined,
                 });
@@ -220,7 +220,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                     const { eq, and, sql: sqlFn } = await import("drizzle-orm");
 
                     if (paymentType === "a_prazo") {
-                        const apDueDate = dueDate ? new Date(dueDate) : new Date(occurrenceDate);
+                        const apDueDate = parseLocalDate(dueDate) || new Date(occurrenceDate);
                         if (!dueDate) apDueDate.setDate(apDueDate.getDate() + 30);
 
                         const totalInst = installments ? parseInt(installments) : 1;
@@ -316,7 +316,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                 paymentStatus: paymentStatus || (accountId ? "pago" : "pendente"),
                 paymentType: paymentType || "a_vista",
             };
-            if (dueDate) updateData.dueDate = new Date(dueDate);
+            if (dueDate) updateData.dueDate = parseLocalDate(dueDate);
             if (installments) updateData.installments = parseInt(installments);
             if (isPago) {
                 updateData.paidAmount = String(amount);

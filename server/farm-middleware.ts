@@ -61,3 +61,15 @@ export function getFarmerId(req: any): string | null {
     const id = (req.user as any)?.id;
     return id ? id.toString() : null;
 }
+
+// Helper: parse date string safely, avoiding UTC midnight timezone shift
+// "2026-03-15" -> new Date("2026-03-15T12:00:00") to stay on the correct day in any timezone
+export function parseLocalDate(value: string | Date | null | undefined): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    const s = String(value);
+    if (s.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        return new Date(s + "T12:00:00");
+    }
+    return new Date(s);
+}

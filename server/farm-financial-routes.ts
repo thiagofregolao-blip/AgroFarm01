@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { requireFarmer } from "./farm-middleware";
+import { requireFarmer, parseLocalDate } from "./farm-middleware";
 
 export function registerFarmFinancialRoutes(app: Express) {
 
@@ -34,7 +34,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const farmerId = (req.user as any).id;
 
             const totalInstallments = parseInt(req.body.totalInstallments) || 1;
-            const firstDueDate = req.body.dueDate ? new Date(req.body.dueDate) : new Date();
+            const firstDueDate = parseLocalDate(req.body.dueDate) || new Date();
             const perInstallmentAmount = (parseFloat(req.body.totalAmount) / totalInstallments).toFixed(2);
 
             if (totalInstallments <= 1) {
@@ -256,7 +256,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const [ar] = await db.insert(farmAccountsReceivable).values({
                 ...req.body,
                 farmerId,
-                dueDate: req.body.dueDate ? new Date(req.body.dueDate) : new Date(),
+                dueDate: parseLocalDate(req.body.dueDate) || new Date(),
             }).returning();
             res.json(ar);
         } catch (error) {

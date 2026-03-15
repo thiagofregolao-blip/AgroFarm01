@@ -3,7 +3,7 @@
  * Extracted from farm-routes.ts
  */
 import { Express, Request, Response, NextFunction } from "express";
-import { requireFarmer, requireAdminManuals, upload } from "./farm-middleware";
+import { requireFarmer, requireAdminManuals, upload, parseLocalDate } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -375,7 +375,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             if (category !== undefined) updateData.category = category;
             if (amount !== undefined) updateData.amount = String(amount);
             if (description !== undefined) updateData.description = description;
-            if (expenseDate !== undefined) updateData.expenseDate = expenseDate ? new Date(expenseDate) : null;
+            if (expenseDate !== undefined) updateData.expenseDate = parseLocalDate(expenseDate);
             if (equipmentId !== undefined) updateData.equipmentId = equipmentId || null;
 
             const [updated] = await db.update(farmExpenses)
