@@ -1411,11 +1411,13 @@ export function registerFarmRoutes(app: Express) {
                 });
                 createdExpenses.push(expense);
 
-                // AUTO: Despesa a prazo → Conta a Pagar automática
-                if (paymentType === "a_prazo") {
-                    try {
-                        const { farmAccountsPayable } = await import("../shared/schema");
-                        const { db } = await import("./db");
+                // AUTO: Toda despesa gera Conta a Pagar
+                try {
+                    const { farmAccountsPayable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
+                    const { db } = await import("./db");
+                    const { eq, and, sql: sqlFn } = await import("drizzle-orm");
+
+                    if (paymentType === "a_prazo") {
                         const apDueDate = dueDate ? new Date(dueDate) : new Date(occurrenceDate);
                         if (!dueDate) apDueDate.setDate(apDueDate.getDate() + 30);
 
@@ -1439,9 +1441,45 @@ export function registerFarmRoutes(app: Express) {
                             });
                         }
                         console.log(`[EXPENSE→AP] Auto-created ${totalInst} AP entries for expense ${expense.id}`);
-                    } catch (apErr) {
-                        console.error("[EXPENSE→AP_ERROR]", apErr);
+                    } else {
+                        // a_vista: cria AP como pago + movimentacao no fluxo de caixa
+                        const accountId = req.body.accountId;
+                        const [ap] = await db.insert(farmAccountsPayable).values({
+                            farmerId,
+                            expenseId: expense.id,
+                            supplier: supplier || category,
+                            description: description || category,
+                            totalAmount: String(amount),
+                            currency: "USD",
+                            dueDate: occurrenceDate,
+                            status: accountId ? "pago" : "aberto",
+                            paidAmount: accountId ? String(amount) : "0",
+                            paidDate: accountId ? occurrenceDate : null,
+                        }).returning();
+
+                        // Se accountId informado, debitar da conta automaticamente
+                        if (accountId) {
+                            const payAmt = parseFloat(String(amount));
+                            await db.insert(farmCashTransactions).values({
+                                farmerId,
+                                accountId,
+                                type: "saida",
+                                amount: String(payAmt),
+                                currency: "USD",
+                                category: category || "despesa",
+                                description: `Despesa: ${supplier || ''} - ${description || category}`.trim(),
+                                paymentMethod: "transferencia",
+                                referenceType: "pagamento_despesa",
+                            });
+                            await db.update(farmCashAccounts)
+                                .set({ currentBalance: sqlFn`current_balance - ${payAmt}` })
+                                .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
+                            console.log(`[EXPENSE→CASH] Auto-debited ${payAmt} from account ${accountId} for expense ${expense.id}`);
+                        }
+                        console.log(`[EXPENSE→AP] Auto-created AP (a_vista) for expense ${expense.id}`);
                     }
+                } catch (apErr) {
+                    console.error("[EXPENSE→AP_ERROR]", apErr);
                 }
             }
 

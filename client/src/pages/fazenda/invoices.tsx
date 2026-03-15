@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText, Search, Warehouse } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText, Search, Warehouse, Plus, DollarSign } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -48,6 +48,22 @@ export default function FarmInvoices() {
     const [filterDate, setFilterDate] = useState("");
     const [confirmSkipStock, setConfirmSkipStock] = useState(false);
     const [confirmWarehouseId, setConfirmWarehouseId] = useState<string>("");
+
+    // Nova Despesa dialog state
+    const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+    const [expCategory, setExpCategory] = useState("");
+    const [expDescription, setExpDescription] = useState("");
+    const [expAmount, setExpAmount] = useState("");
+    const [expSupplier, setExpSupplier] = useState("");
+    const [expDate, setExpDate] = useState(new Date().toISOString().substring(0, 10));
+    const [expPaymentType, setExpPaymentType] = useState("a_vista");
+    const [expAccountId, setExpAccountId] = useState("");
+    const [expHasFatura, setExpHasFatura] = useState(false);
+    const [expInvoiceId, setExpInvoiceId] = useState("");
+    const [expDueDate, setExpDueDate] = useState("");
+    const [expInstallments, setExpInstallments] = useState("1");
+    const [expPropertyId, setExpPropertyId] = useState("");
+    const [expSeasonId, setExpSeasonId] = useState("");
 
     const { user } = useAuth();
 
@@ -248,6 +264,71 @@ export default function FarmInvoices() {
         onError: () => toast({ title: "Erro ao atualizar item", variant: "destructive" }),
     });
 
+    const EXPENSE_CATEGORIES = [
+        { value: "diesel", label: "Diesel / Combustivel" },
+        { value: "frete", label: "Frete / Transporte" },
+        { value: "mao_de_obra", label: "Mao de Obra" },
+        { value: "manutencao", label: "Manutencao de Equipamentos" },
+        { value: "arrendamento", label: "Arrendamento" },
+        { value: "energia", label: "Energia / Agua" },
+        { value: "financiamento", label: "Parcela de Financiamento" },
+        { value: "insumos", label: "Insumos Agricolas" },
+        { value: "impostos", label: "Impostos e Taxas" },
+        { value: "salario", label: "Salario / Pro-Labore" },
+        { value: "outro", label: "Outro" },
+    ];
+
+    const createExpenseMutation = useMutation({
+        mutationFn: (data: any) => apiRequest("POST", "/api/farm/expenses", data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+            toast({ title: "Despesa lancada com sucesso!" });
+            setExpenseDialogOpen(false);
+            setExpCategory(""); setExpDescription(""); setExpAmount(""); setExpSupplier("");
+            setExpDate(new Date().toISOString().substring(0, 10)); setExpPaymentType("a_vista");
+            setExpAccountId(""); setExpHasFatura(false); setExpInvoiceId("");
+            setExpDueDate(""); setExpInstallments("1"); setExpPropertyId(""); setExpSeasonId("");
+        },
+        onError: () => toast({ title: "Erro ao lancar despesa", variant: "destructive" }),
+    });
+
+    function handleExpenseSubmit() {
+        if (!expCategory || !expAmount || !expSupplier) {
+            toast({ title: "Preencha categoria, fornecedor e valor", variant: "destructive" });
+            return;
+        }
+        createExpenseMutation.mutate({
+            category: expCategory,
+            description: expDescription,
+            amount: expAmount,
+            supplier: expSupplier,
+            expenseDate: expDate,
+            paymentType: expPaymentType,
+            accountId: expPaymentType === "a_vista" && expAccountId ? expAccountId : null,
+            invoiceId: expHasFatura && expInvoiceId ? expInvoiceId : null,
+            dueDate: expPaymentType === "a_prazo" ? expDueDate : null,
+            installments: expPaymentType === "a_prazo" ? parseInt(expInstallments) : 1,
+            propertyId: expPropertyId || null,
+            seasonId: expSeasonId || null,
+        });
+    }
+
+    // When invoice selected in expense form, auto-fill amount
+    function handleExpInvoiceSelect(invId: string) {
+        setExpInvoiceId(invId);
+        const inv = (invoices as any[]).find((i: any) => String(i.id) === invId);
+        if (inv) {
+            setExpAmount(String(inv.totalAmount || ""));
+            if (inv.supplier) setExpSupplier(inv.supplier);
+        }
+    }
+
+    // Expenses without invoice for the new tab
+    const expensesWithoutInvoice = (expenses as any[]).filter((e: any) => !e.invoiceId && !e.equipmentId);
+
     const autoRegisterSupplier = async (supplierName: string, ruc: string) => {
         try {
             const existing = (suppliers as any[]).find((s: any) => s.ruc === ruc);
@@ -382,13 +463,23 @@ export default function FarmInvoices() {
                         <h1 className="text-2xl font-bold text-emerald-800">Importação de Faturas</h1>
                         <p className="text-emerald-600 text-sm">Importe faturas PDF para registrar entrada no estoque</p>
                     </div>
-                    <Button
-                        className="bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => setImportDialogOpen(true)}
-                    >
-                        <Upload className="mr-2 h-4 w-4" />
-                        Importar PDF
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            className="bg-emerald-600 hover:bg-emerald-700"
+                            onClick={() => setImportDialogOpen(true)}
+                        >
+                            <Upload className="mr-2 h-4 w-4" />
+                            Importar PDF
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            onClick={() => setExpenseDialogOpen(true)}
+                        >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Nova Despesa
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Import Modal */}
@@ -493,11 +584,169 @@ export default function FarmInvoices() {
                     </DialogContent>
                 </Dialog>
 
+                {/* Nova Despesa Dialog */}
+                <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+                    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>Nova Despesa</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            {/* Checkbox: tem fatura? */}
+                            <div
+                                className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${expHasFatura ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                                onClick={() => { setExpHasFatura(!expHasFatura); if (expHasFatura) setExpInvoiceId(""); }}
+                            >
+                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 transition-colors ${expHasFatura ? "bg-blue-500 text-white" : "border-2 border-gray-300"}`}>
+                                    {expHasFatura && <Check className="h-3.5 w-3.5" />}
+                                </div>
+                                <div>
+                                    <span className={`text-sm font-medium ${expHasFatura ? "text-blue-800" : "text-gray-700"}`}>Despesa com fatura</span>
+                                    <p className="text-xs text-gray-500">Marque se esta despesa esta vinculada a uma fatura importada</p>
+                                </div>
+                            </div>
+
+                            {/* Se tem fatura, selecionar */}
+                            {expHasFatura && (
+                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                    <Label className="text-blue-700 text-sm">Selecione a fatura</Label>
+                                    <Select value={expInvoiceId} onValueChange={handleExpInvoiceSelect}>
+                                        <SelectTrigger><SelectValue placeholder="Escolha uma fatura..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {(invoices as any[]).filter((i: any) => i.status === "pending" || i.status === "pendente").map((inv: any) => (
+                                                <SelectItem key={inv.id} value={String(inv.id)}>
+                                                    #{inv.invoiceNumber || "S/N"} - {inv.supplier || "?"} - ${parseFloat(inv.totalAmount || "0").toFixed(2)}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            <div>
+                                <Label>Categoria *</Label>
+                                <Select value={expCategory} onValueChange={setExpCategory}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {EXPENSE_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div>
+                                <Label>Fornecedor *</Label>
+                                <Select value={expSupplier} onValueChange={setExpSupplier}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione um fornecedor..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {(suppliers as any[]).map((s: any) => (
+                                            <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label>Valor *</Label>
+                                    <Input type="number" step="0.01" placeholder="0.00" value={expAmount} onChange={e => setExpAmount(e.target.value)} />
+                                </div>
+                                <div>
+                                    <Label>Data</Label>
+                                    <Input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} />
+                                </div>
+                            </div>
+
+                            <div><Label>Descricao</Label><Input value={expDescription} onChange={e => setExpDescription(e.target.value)} placeholder="Descricao da despesa..." /></div>
+
+                            <div>
+                                <Label>Pagamento</Label>
+                                <Select value={expPaymentType} onValueChange={setExpPaymentType}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="a_vista">A Vista</SelectItem>
+                                        <SelectItem value="a_prazo">A Prazo</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* A Vista: selecionar conta para debito */}
+                            {expPaymentType === "a_vista" && (cashAccounts as any[]).length > 0 && (
+                                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 space-y-2">
+                                    <Label className="text-emerald-700 flex items-center gap-1.5">
+                                        <Wallet className="h-4 w-4" /> Conta para debito
+                                    </Label>
+                                    <Select value={expAccountId} onValueChange={setExpAccountId}>
+                                        <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {(cashAccounts as any[]).map((acc: any) => (
+                                                <SelectItem key={acc.id} value={String(acc.id)}>
+                                                    {acc.name} {acc.bankName ? `(${acc.bankName})` : ""} - {acc.currency || "USD"}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-emerald-600">O valor sera debitado automaticamente desta conta e lancado no fluxo de caixa</p>
+                                </div>
+                            )}
+
+                            {/* A Prazo: parcelas e vencimento */}
+                            {expPaymentType === "a_prazo" && (
+                                <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-amber-700">N Parcelas</Label>
+                                        <Input type="number" min="1" max="60" value={expInstallments} onChange={e => setExpInstallments(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <Label className="text-amber-700">1o Vencimento</Label>
+                                        <Input type="date" value={expDueDate} onChange={e => setExpDueDate(e.target.value)} />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label>Propriedade</Label>
+                                    <Select value={expPropertyId} onValueChange={setExpPropertyId}>
+                                        <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">Todas</SelectItem>
+                                            {(properties as any[]).map((p: any) => (
+                                                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Label>Safra</Label>
+                                    <Select value={expSeasonId} onValueChange={setExpSeasonId}>
+                                        <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">Nenhuma</SelectItem>
+                                            {(seasons as any[]).map((s: any) => (
+                                                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <Button
+                                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                                onClick={handleExpenseSubmit}
+                                disabled={createExpenseMutation.isPending || !expCategory || !expAmount || !expSupplier}
+                            >
+                                {createExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DollarSign className="mr-2 h-4 w-4" />}
+                                Lancar Despesa
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
                 <Tabs defaultValue="invoices" className="space-y-4">
                     <TabsList className="bg-emerald-50 text-emerald-800">
                         <TabsTrigger value="invoices">Faturas</TabsTrigger>
                         <TabsTrigger value="remissions">Remissoes</TabsTrigger>
                         <TabsTrigger value="receipts">Recibos de Frota</TabsTrigger>
+                        <TabsTrigger value="expenses-nofatura">Despesas s/ Fatura</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="invoices">
@@ -1148,6 +1397,53 @@ export default function FarmInvoices() {
                                             </table>
                                         </div>
                                     </>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* Aba Despesas sem Fatura */}
+                    <TabsContent value="expenses-nofatura">
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-emerald-800 flex items-center gap-2">
+                                        <DollarSign className="h-5 w-5" /> Despesas sem Fatura
+                                    </CardTitle>
+                                    <Button variant="outline" size="sm" onClick={() => setExpenseDialogOpen(true)}>
+                                        <Plus className="mr-1 h-3 w-3" /> Nova Despesa
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                {expensesWithoutInvoice.length === 0 ? (
+                                    <p className="text-sm text-gray-500 text-center py-8">Nenhuma despesa sem fatura lancada</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {expensesWithoutInvoice.map((exp: any) => (
+                                            <div key={exp.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-medium text-sm">{exp.description || exp.category}</span>
+                                                        <Badge variant="outline" className="text-xs">{exp.category}</Badge>
+                                                        <Badge variant={exp.status === "confirmed" ? "default" : "secondary"} className="text-xs">
+                                                            {exp.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                                                        {exp.supplier && <span>Fornecedor: {exp.supplier}</span>}
+                                                        <span>{new Date(exp.expenseDate || exp.createdAt).toLocaleDateString("pt-BR")}</span>
+                                                        <span className={`font-semibold ${exp.paymentType === "a_prazo" ? "text-amber-600" : "text-emerald-600"}`}>
+                                                            {exp.paymentType === "a_prazo" ? "A Prazo" : "A Vista"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="font-bold text-emerald-700">$ {parseFloat(exp.amount || "0").toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 )}
                             </CardContent>
                         </Card>
