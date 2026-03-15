@@ -441,7 +441,7 @@ function CreateARForm({ suppliers, seasons, products, invoiceConfig, onSave, sav
     const [invoiceNumber, setInvoiceNumber] = useState("");
     const [emissionDate, setEmissionDate] = useState(new Date().toISOString().split("T")[0]);
     const [paymentCondition, setPaymentCondition] = useState("contado");
-    const [seasonId, setSeasonId] = useState("");
+    const [seasonId, setSeasonId] = useState("__none__");
     const [totalInstallments, setTotalInstallments] = useState(1);
     const [customDueDate, setCustomDueDate] = useState(false);
     const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
@@ -515,7 +515,7 @@ function CreateARForm({ suppliers, seasons, products, invoiceConfig, onSave, sav
     useEffect(() => {
         if (paymentCondition === "contado") {
             setDueDate(emissionDate);
-        } else if (seasonId && !customDueDate) {
+        } else if (seasonId && seasonId !== "__none__" && !customDueDate) {
             const season = seasons.find((s: any) => String(s.id) === seasonId);
             if (season?.paymentEndDate) {
                 setDueDate(new Date(season.paymentEndDate).toISOString().split("T")[0]);
@@ -549,7 +549,7 @@ function CreateARForm({ suppliers, seasons, products, invoiceConfig, onSave, sav
             totalAmount: totalGeral.toFixed(2),
             dueDate,
             totalInstallments: paymentCondition === "credito" ? totalInstallments : 1,
-            seasonId: seasonId || null,
+            seasonId: seasonId === "__none__" ? null : seasonId,
             invoiceNumber: invoiceNumber || null,
             paymentCondition,
             customerRuc: customerRuc || null,
@@ -744,7 +744,7 @@ function CreateARForm({ suppliers, seasons, products, invoiceConfig, onSave, sav
                         <Select value={seasonId} onValueChange={setSeasonId}>
                             <SelectTrigger className="text-sm"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">Nenhuma</SelectItem>
+                                <SelectItem value="__none__">Nenhuma</SelectItem>
                                 {seasons.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
