@@ -161,7 +161,7 @@ export default function FarmInvoices() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
-            toast({ title: confirmSkipStock ? "Fatura confirmada (somente valor, sem estoque)." : "Fatura confirmada! Estoque atualizado." });
+            toast({ title: confirmSkipStock ? "Fatura confirmada (somente valor, sem estoque)." : "Confirmado! Estoque atualizado." });
             setSelectedInvoice(null);
             setConfirmSkipStock(false);
             setConfirmWarehouseId("");
@@ -1260,6 +1260,83 @@ export default function FarmInvoices() {
                     </TabsContent>
 
                     <TabsContent value="remissions">
+                        {/* Selected remission detail — same layout as invoice detail */}
+                        {selectedInvoice && invoiceDetail && (invoiceDetail as any).documentType === "remision" && (
+                            <Card className="border-purple-200 bg-white mb-4">
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-purple-800 flex items-center gap-2">
+                                            Remissao #{invoiceDetail.invoiceNumber || "--"}
+                                            <Badge className={`ml-2 ${
+                                                invoiceDetail.status === "conciliada" ? "bg-blue-100 text-blue-700" :
+                                                invoiceDetail.status === "confirmed" ? "bg-emerald-100 text-emerald-700" :
+                                                "bg-yellow-100 text-yellow-700"
+                                            }`}>
+                                                {invoiceDetail.status === "conciliada" ? "Conciliada" : invoiceDetail.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                            </Badge>
+                                            {invoiceDetail.source === "whatsapp" && (
+                                                <Badge className="ml-1 bg-green-100 text-green-700 text-xs">WhatsApp</Badge>
+                                            )}
+                                        </CardTitle>
+                                        <div className="flex items-center gap-2">
+                                            {invoiceDetail.hasFile && (
+                                                <Button variant="outline" size="sm" onClick={() => window.open(`/api/farm/invoices/${selectedInvoice}/file`, "_blank")}>
+                                                    <Eye className="mr-1 h-3 w-3" /> Ver Original
+                                                </Button>
+                                            )}
+                                            <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null)}>Fechar</Button>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Fornecedor: <strong>{invoiceDetail.supplier}</strong>
+                                        {" "} Emissao: {invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toLocaleDateString("pt-BR") : "--"}
+                                    </p>
+                                </CardHeader>
+                                <CardContent>
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-purple-50">
+                                            <tr>
+                                                <th className="text-left p-2 font-semibold text-purple-800">Cod</th>
+                                                <th className="text-left p-2 font-semibold text-purple-800">Produto (Remissao)</th>
+                                                <th className="text-left p-2 font-semibold text-purple-800">Un</th>
+                                                <th className="text-right p-2 font-semibold text-purple-800">Qtd</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(invoiceDetail.items || []).map((item: any, idx: number) => (
+                                                <tr key={item.id || idx} className="border-t border-gray-100">
+                                                    <td className="p-2 text-gray-400">{item.productCode || "--"}</td>
+                                                    <td className="p-2 font-medium">{item.productName}</td>
+                                                    <td className="p-2 text-gray-600">{item.unit}</td>
+                                                    <td className="p-2 text-right">{parseFloat(item.quantity || 0).toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+
+                                    {invoiceDetail.status === "pending" && (
+                                        <div className="mt-4 flex gap-2">
+                                            <Button
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                onClick={() => {
+                                                    confirmMutation.mutate({ id: selectedInvoice! });
+                                                }}
+                                                disabled={confirmMutation.isPending}
+                                            >
+                                                {confirmMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+                                                Aprovar Remissao (entrada no estoque)
+                                            </Button>
+                                            <Button variant="outline" className="text-red-600 border-red-300" onClick={() => {
+                                                deleteMutation.mutate(selectedInvoice!);
+                                            }}>
+                                                Excluir
+                                            </Button>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+
                         <Card className="border-emerald-100">
                             <CardHeader>
                                 <CardTitle className="text-emerald-800 flex items-center gap-2">
@@ -1290,7 +1367,7 @@ export default function FarmInvoices() {
                                             </thead>
                                             <tbody>
                                                 {(remissions as any[]).map((rem: any) => (
-                                                    <tr key={rem.id} className="border-t border-gray-100 hover:bg-emerald-50/50">
+                                                    <tr key={rem.id} className="border-t border-gray-100 hover:bg-emerald-50/50 cursor-pointer" onClick={() => setSelectedInvoice(rem.id)}>
                                                         <td className="p-3 font-medium">{rem.supplier || "--"}</td>
                                                         <td className="p-3 font-mono text-sm">{rem.invoiceNumber || rem.id.slice(0, 8)}</td>
                                                         <td className="p-3 text-gray-600">
