@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { requireFarmer, upload } from "./farm-middleware";
+import { requireFarmer, upload, parseLocalDate } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -810,7 +810,7 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                     farmerId: farmer.id,
                     buyer: rd.buyer || parsed.supplier || "Desconhecido",
                     crop: rd.crop || "Soja",
-                    deliveryDate: rd.deliveryDate ? new Date(rd.deliveryDate) : new Date(),
+                    deliveryDate: rd.deliveryDate ? (parseLocalDate(rd.deliveryDate) || new Date()) : new Date(),
                     grossWeight: String(grossW),
                     tare: String(tareW),
                     netWeight: String(netW),
@@ -854,23 +854,30 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                 }
 
                 const plotList = plots.map((p, i) => `${i + 1}️⃣ ${p.name}`).join("\n");
+                const deliveryDateStr = rd.deliveryDate
+                    ? (parseLocalDate(rd.deliveryDate) || new Date()).toLocaleDateString("pt-BR")
+                    : new Date().toLocaleDateString("pt-BR");
+
                 const summary = [
                     `✅ *Romaneio #${rd.ticketNumber || 'S/N'} recebido!*`,
                     ``,
                     `🏢 Comprador: *${rd.buyer || parsed.supplier || 'N/A'}*`,
                     `🌾 Cultura: *${rd.crop || 'Soja'}*`,
-                    `📅 Data: ${rd.deliveryDate ? new Date(rd.deliveryDate).toLocaleDateString("pt-BR") : "Hoje"}`,
+                    `📅 Data: ${deliveryDateStr}`,
                     ``,
                     `⚖️ Peso Bruto: ${grossW.toLocaleString()} kg`,
                     `📦 Tara: ${tareW.toLocaleString()} kg`,
                     `📊 Peso Neto: ${netW.toLocaleString()} kg`,
+                    ``,
                     moistureVal != null ? `💧 Umidade: ${moistureVal}%` : null,
                     impurityVal != null ? `🔬 Impureza: ${impurityVal}%` : null,
-                    `✨ Peso Final: *${finalW.toLocaleString()} kg* (${(finalW / 1000).toFixed(2)} ton)`,
-                    rd.truckPlate ? `🚛 Placa: ${rd.truckPlate}` : null,
                     ``,
+                    `✨ Peso Final: *${finalW.toLocaleString()} kg* (${(finalW / 1000).toFixed(2)} ton)`,
+                    ``,
+                    rd.truckPlate ? `🚛 Placa: ${rd.truckPlate}` : null,
+                    rd.truckPlate ? `` : null,
                     plots.length > 0 ? `📍 *De qual talhão é esse romaneio?*\n${plotList}` : `Romaneio salvo! Confirme o talhão pelo painel. 🌾`,
-                ].filter(Boolean).join("\n");
+                ].filter(l => l !== null).join("\n");
 
                 return res.json({ message: summary });
             }

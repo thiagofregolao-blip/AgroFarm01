@@ -471,7 +471,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
                 farmerId,
                 buyer: parsed.buyer,
                 crop: parsed.crop,
-                deliveryDate: parsed.deliveryDate || new Date(),
+                deliveryDate: parsed.deliveryDate ? (parseLocalDate(parsed.deliveryDate) || new Date()) : new Date(),
                 grossWeight: String(parsed.grossWeight),
                 tare: String(parsed.tare),
                 netWeight: String(parsed.netWeight),

@@ -1189,6 +1189,14 @@ export default function FarmInvoices() {
                                                             {inv.source === "whatsapp" ? "WhatsApp" :
                                                              inv.source === "email_import" ? "Email" : "Import"}
                                                         </Badge>
+                                                        {inv.seasonId && (() => {
+                                                            const season = (seasons as any[]).find((s: any) => s.id === inv.seasonId);
+                                                            return season ? (
+                                                                <Badge variant="outline" className="text-[10px] px-2 py-0 h-5 shrink-0 border-emerald-400 text-emerald-700 bg-emerald-50">
+                                                                    {season.name}
+                                                                </Badge>
+                                                            ) : null;
+                                                        })()}
                                                     </div>
                                                     <p className="font-bold text-sm text-gray-900 shrink-0">${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
                                                 </div>
