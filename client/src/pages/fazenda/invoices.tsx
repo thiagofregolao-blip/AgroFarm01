@@ -174,10 +174,11 @@ export default function FarmInvoices() {
         mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/invoices/${id}`),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
-            toast({ title: "🗑️ Fatura excluída com sucesso." });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices", "remision"] });
+            toast({ title: "Excluido com sucesso." });
             setSelectedInvoice(null);
         },
-        onError: () => toast({ title: "Erro ao excluir fatura", variant: "destructive" }),
+        onError: () => toast({ title: "Erro ao excluir", variant: "destructive" }),
     });
 
     const conciliateMutation = useMutation({
@@ -1452,32 +1453,57 @@ export default function FarmInvoices() {
                                                             --
                                                         </td>
                                                         <td className="p-3 text-right">
-                                                            {rem.status === "pending" && (
+                                                            <div className="flex items-center gap-1 justify-end">
+                                                                {rem.status === "pending" && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                                                        onClick={(e: React.MouseEvent) => {
+                                                                            e.stopPropagation();
+                                                                            setSelectedInvoice(rem.id);
+                                                                            confirmMutation.mutate({ id: rem.id });
+                                                                        }}
+                                                                        disabled={confirmMutation.isPending}
+                                                                    >
+                                                                        {confirmMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
+                                                                        Aprovar
+                                                                    </Button>
+                                                                )}
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                                                                    onClick={(e: React.MouseEvent) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedInvoice(rem.id);
-                                                                        confirmMutation.mutate({ id: rem.id });
-                                                                    }}
-                                                                    disabled={confirmMutation.isPending}
+                                                                    className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                                                                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); setSelectedInvoice(rem.id); }}
                                                                 >
-                                                                    {confirmMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
-                                                                    Aprovar
+                                                                    <Pencil className="mr-1 h-3 w-3" /> Editar
                                                                 </Button>
-                                                            )}
-                                                            {rem.hasFile && (
+                                                                {rem.hasFile && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="h-7"
+                                                                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); window.open(`/api/farm/invoices/${rem.id}/file`, "_blank"); }}
+                                                                        aria-label="Ver arquivo"
+                                                                    >
+                                                                        <Eye className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                )}
                                                                 <Button
                                                                     size="sm"
                                                                     variant="ghost"
-                                                                    className="ml-1"
-                                                                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); window.open(`/api/farm/invoices/${rem.id}/file`, "_blank"); }}
+                                                                    className="h-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                                    onClick={(e: React.MouseEvent) => {
+                                                                        e.stopPropagation();
+                                                                        if (confirm(`Excluir remissao "${rem.supplier || rem.invoiceNumber}" ?`)) {
+                                                                            deleteMutation.mutate(rem.id);
+                                                                        }
+                                                                    }}
+                                                                    aria-label="Excluir"
                                                                 >
-                                                                    <Eye className="h-4 w-4" />
+                                                                    <Trash2 className="h-3.5 w-3.5" />
                                                                 </Button>
-                                                            )}
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}
