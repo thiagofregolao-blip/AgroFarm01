@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Scale, Loader2, Wheat, TrendingUp, Truck, Upload, Camera, Check, X, Clock, MessageSquare, FileImage, MapPin, Calculator, ShieldAlert, Award } from "lucide-react";
+import { Plus, Scale, Loader2, Wheat, TrendingUp, Truck, Upload, Camera, Check, X, Clock, MessageSquare, FileImage, MapPin, Calculator, ShieldAlert, Award, Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import SiloVisualization from "@/components/fazenda/silo-visualization";
 export default function FarmRomaneios() {
     const queryClient = useQueryClient();
@@ -141,7 +142,7 @@ export default function FarmRomaneios() {
             }
 
             const result = await res.json();
-            setImportedData(result.parsed);
+            setImportedData({ ...result.parsed, pdfBase64: result.fileBase64, fileMimeType: result.fileMimeType });
             toast({ title: "📸 Romaneio extraído!", description: `Ticket #${result.parsed.ticketNumber || 'S/N'} — revise e confirme.` });
         } catch (error: any) {
             toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
@@ -308,6 +309,7 @@ export default function FarmRomaneios() {
                                         <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Peso Líq.</th>
                                         <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Peso Final</th>
                                         <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Valor</th>
+                                        <th className="text-center p-3 font-semibold text-emerald-800 whitespace-nowrap">Origem</th>
                                         <th className="p-3"></th>
                                     </tr>
                                 </thead>
@@ -323,10 +325,24 @@ export default function FarmRomaneios() {
                                             <td className="text-right p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
                                                 {r.totalValue ? `$ ${parseFloat(r.totalValue).toFixed(2)}` : "—"}
                                             </td>
+                                            <td className="p-3 text-center">
+                                                <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 ${
+                                                    r.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
+                                                    r.source === "import" ? "border-blue-400 text-blue-700 bg-blue-50" :
+                                                    "border-gray-300 text-gray-600 bg-gray-50"
+                                                }`}>
+                                                    {r.source === "whatsapp" ? "WhatsApp" :
+                                                     r.source === "import" ? "Import" : "Manual"}
+                                                </Badge>
+                                            </td>
                                             <td className="p-3">
                                                 <div className="flex items-center gap-1">
-                                                    {r.source === "whatsapp" && <MessageSquare className="h-3.5 w-3.5 text-green-500" />}
-                                                    {r.source === "import" && <Camera className="h-3.5 w-3.5 text-blue-500" />}
+                                                    {r.hasFile && (
+                                                        <Button variant="ghost" size="sm" className="text-blue-500 h-7 text-xs"
+                                                            onClick={() => window.open(`/api/farm/romaneios/${r.id}/file`, '_blank')}>
+                                                            <Eye className="h-3.5 w-3.5 mr-1" />Ver
+                                                        </Button>
+                                                    )}
                                                     <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
                                                         onClick={() => { if (confirm("Remover este romaneio?")) del.mutate(r.id); }}>
                                                         Excluir
@@ -467,9 +483,15 @@ function PendingRomaneioCard({ romaneio, plots, seasons, globalSilos, onConfirm,
                         <span className="font-semibold text-amber-800">Ticket #{romaneio.ticketNumber || "S/N"}</span>
                         <span className="text-gray-400">•</span>
                         <span className="text-gray-500">{new Date(romaneio.deliveryDate).toLocaleDateString("pt-BR")}</span>
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 flex items-center gap-1">
-                            <MessageSquare className="h-3 w-3" /> WhatsApp
-                        </span>
+                        <Badge variant="outline" className="text-[10px] px-2 py-0 h-5 border-green-400 text-green-700 bg-green-50">
+                            WhatsApp
+                        </Badge>
+                        {romaneio.hasFile && (
+                            <Button variant="ghost" size="sm" className="h-5 text-[10px] text-blue-600 px-1"
+                                onClick={() => window.open(`/api/farm/romaneios/${romaneio.id}/file`, '_blank')}>
+                                <Eye className="h-3 w-3 mr-0.5" />Ver
+                            </Button>
+                        )}
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
                         <div><span className="text-gray-400">Comprador:</span> <strong>{romaneio.buyer}</strong></div>
@@ -599,6 +621,8 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
             documentNumber: d.documentNumber || null,
             source: initialData ? "import" : "manual",
             notes: notes || null,
+            pdfBase64: d.pdfBase64 || null,
+            fileMimeType: d.fileMimeType || null,
         });
     };
 

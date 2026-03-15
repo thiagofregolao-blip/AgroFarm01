@@ -1423,6 +1423,8 @@ export const farmRomaneios = pgTable("farm_romaneios", {
   status: text("status").notNull().default("confirmed"), // pending (WhatsApp), confirmed
   notes: text("notes"),
   globalSiloId: varchar("global_silo_id").references(() => globalSilos.id), // Vinculo Inteligência de Romaneios
+  pdfBase64: text("pdf_base64"), // Arquivo original (PDF/imagem) em base64
+  fileMimeType: text("file_mime_type"), // MIME type do arquivo (application/pdf, image/jpeg, etc.)
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

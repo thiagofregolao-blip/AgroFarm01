@@ -784,6 +784,8 @@ Retorne APENAS UM JSON VÁLIDO no formato exato:
                     source: "whatsapp",
                     status: "pending",
                     notes: caption || "",
+                    pdfBase64: base64Image,
+                    fileMimeType: mimeType,
                 }).returning();
 
                 // Get plots for the farmer

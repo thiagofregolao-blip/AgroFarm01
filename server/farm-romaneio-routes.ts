@@ -3,7 +3,7 @@
  * Extracted from farm-routes.ts
  */
 import { Express } from "express";
-import { requireFarmer, upload } from "./farm-middleware";
+import { requireFarmer, upload, parseLocalDate } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -36,13 +36,17 @@ export function registerFarmRomaneioRoutes(app: Express) {
                 .where(eq(farmRomaneios.farmerId, farmerId))
                 .orderBy(desc(farmRomaneios.deliveryDate));
 
-            res.json(romaneios.map((r: any) => ({
-                ...r.romaneio,
-                plotName: r.plotName,
-                plotArea: r.plotArea,
-                propertyName: r.propertyName,
-                seasonName: r.seasonName,
-            })));
+            res.json(romaneios.map((r: any) => {
+                const { pdfBase64, ...rest } = r.romaneio;
+                return {
+                    ...rest,
+                    hasFile: !!pdfBase64,
+                    plotName: r.plotName,
+                    plotArea: r.plotArea,
+                    propertyName: r.propertyName,
+                    seasonName: r.seasonName,
+                };
+            }));
         } catch (error) {
             console.error("[ROMANEIOS_GET]", error);
             res.status(500).json({ error: "Failed to get romaneios" });
@@ -58,7 +62,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
 
             const body = { ...req.body };
             if (body.deliveryDate && typeof body.deliveryDate === "string") {
-                body.deliveryDate = new Date(body.deliveryDate);
+                body.deliveryDate = parseLocalDate(body.deliveryDate) || new Date();
             }
 
             const [romaneio] = await db.insert(farmRomaneios).values({
@@ -110,6 +114,31 @@ export function registerFarmRomaneioRoutes(app: Express) {
         } catch (error) {
             console.error("[ROMANEIO_CREATE]", error);
             res.status(500).json({ error: "Failed to create romaneio" });
+        }
+    });
+
+    // Download the stored romaneio file (PDF or image)
+    app.get("/api/farm/romaneios/:id/file", requireFarmer, async (req, res) => {
+        try {
+            const { farmRomaneios } = await import("../shared/schema");
+            const { eq } = await import("drizzle-orm");
+            const { db } = await import("./db");
+
+            const [rom] = await db.select().from(farmRomaneios).where(eq(farmRomaneios.id, req.params.id));
+            if (!rom) return res.status(404).json({ error: "Romaneio not found" });
+            if (!(rom as any).pdfBase64) return res.status(404).json({ error: "No file stored for this romaneio" });
+
+            const mimeType = (rom as any).fileMimeType || "image/jpeg";
+            const buffer = Buffer.from((rom as any).pdfBase64, "base64");
+            const ext = mimeType.includes("pdf") ? "pdf" : mimeType.includes("png") ? "png" : "jpg";
+            const filename = `romaneio-${rom.ticketNumber || rom.id}.${ext}`;
+
+            res.setHeader("Content-Type", mimeType);
+            res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+            res.send(buffer);
+        } catch (error) {
+            console.error("[ROMANEIO_FILE]", error);
+            res.status(500).json({ error: "Failed to get romaneio file" });
         }
     });
 
@@ -166,9 +195,12 @@ export function registerFarmRomaneioRoutes(app: Express) {
             parsed.globalSiloId = matchedSiloId;
 
             // Return parsed data for frontend preview (don't save yet)
+            // Include file as base64 so frontend can send it back on save
             res.json({
                 message: "Romaneio extraído com sucesso!",
                 parsed,
+                fileBase64: file.buffer.toString("base64"),
+                fileMimeType: file.mimetype,
             });
         } catch (error) {
             console.error("[ROMANEIO_IMPORT]", error);
