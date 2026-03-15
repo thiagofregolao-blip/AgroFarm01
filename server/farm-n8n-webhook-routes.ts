@@ -897,26 +897,118 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                 return res.json({ message: summary });
             }
             else if (parsed.type === "remision") {
-                // ===== REMISION — Nota de Remissao (entrega de mercadoria, nao e fatura) =====
-                const items = parsed.items || [];
-                const itemsList = items.map((p: any, i: number) =>
-                    `  ${i + 1}. ${p.productName || 'Item'} — ${p.quantity || 0} ${p.unit || 'UN'}`
-                ).join("\n");
+                // ===== REMISION — Nota de Remissao (salva como invoice com documentType remision) =====
+                const safeDateParse = (d: string | null | undefined): Date | null => {
+                    if (!d) return null;
+                    const s = String(d);
+                    return new Date(s.length === 10 ? s + "T12:00:00" : s);
+                };
+                const remIssueDate = safeDateParse(parsed.issueDate);
 
-                const summary = [
-                    `📦 *Nota de Remissao recebida!*`,
-                    ``,
-                    `📋 *N°:* ${parsed.invoiceNumber || 'S/N'}`,
-                    `🏢 *Empresa:* ${parsed.supplier || 'N/A'}`,
-                    `📅 *Data:* ${parsed.issueDate || 'N/A'}`,
-                    ``,
-                    items.length > 0 ? `📦 *Produtos (${items.length}):*\n${itemsList}` : null,
-                    ``,
-                    `⚠️ *Este documento e uma Nota de Remissao (comprovante de entrega), NAO uma fatura.*`,
-                    `Se voce precisa registrar como fatura, envie o documento da FACTURA ELECTRONICA correspondente.`,
-                ].filter(l => l !== null).join("\n");
+                // Auto-register supplier
+                let remSupplierId = null;
+                if (parsed.supplier) {
+                    try {
+                        const existingSup = await db.execute(sql`
+                            SELECT id FROM farm_suppliers WHERE farmer_id = ${farmer.id} AND is_active = true
+                            AND name ILIKE ${'%' + parsed.supplier.substring(0, 15) + '%'}
+                            LIMIT 1
+                        `);
+                        const supRows = (existingSup as any).rows ?? existingSup;
+                        if (supRows.length > 0) {
+                            remSupplierId = supRows[0].id;
+                        } else {
+                            const newSup = await db.execute(sql`
+                                INSERT INTO farm_suppliers (farmer_id, name, person_type, entity_type)
+                                VALUES (${farmer.id}, ${parsed.supplier}, 'provedor', 'juridica')
+                                RETURNING id
+                            `);
+                            remSupplierId = ((newSup as any).rows ?? newSup)[0]?.id;
+                        }
+                    } catch (err) {
+                        console.error("[WEBHOOK_REMISION_SUPPLIER]", err);
+                    }
+                }
 
-                return res.json({ message: summary });
+                // Save as invoice with documentType = remision
+                const [newRemision] = await db.insert(farmInvoices).values({
+                    farmerId: farmer.id,
+                    totalAmount: "0",
+                    currency: parsed.currency || "USD",
+                    issueDate: remIssueDate || new Date(),
+                    dueDate: null,
+                    notes: `[Remissao via WhatsApp] ${parsed.description || ''}`,
+                    status: 'pending',
+                    supplier: parsed.supplier || "Via WhatsApp",
+                    invoiceNumber: parsed.invoiceNumber || `REM-${Date.now().toString().slice(-6)}`,
+                    supplierId: remSupplierId,
+                    source: "whatsapp",
+                    documentType: "remision",
+                    skipStockEntry: false,
+                    pdfBase64: base64Image,
+                    fileMimeType: mimeType,
+                }).returning();
+
+                // Create items (sem precos)
+                const allProducts = await farmStorage.getAllProducts();
+                let itemsCount = 0;
+                const remItems = parsed.items || [];
+
+                for (const item of remItems) {
+                    const q = parseFloat(item.quantity) || 1;
+
+                    let matchedProduct = allProducts.find((p: any) =>
+                        p.name.toUpperCase().includes(item.productName.toUpperCase().substring(0, 10)) ||
+                        item.productName.toUpperCase().includes(p.name.toUpperCase().substring(0, 10))
+                    );
+
+                    if (!matchedProduct) {
+                        try {
+                            matchedProduct = await farmStorage.createProduct({
+                                name: item.productName,
+                                unit: item.unit || "UN",
+                                category: null,
+                                dosePerHa: null,
+                                activeIngredient: null,
+                                status: "pending_review",
+                                isDraft: true
+                            });
+                            allProducts.push(matchedProduct);
+                        } catch (err) {
+                            console.error(`[WEBHOOK_REMISION] Failed to auto-create product: ${item.productName}`, err);
+                        }
+                    }
+
+                    await db.insert(farmInvoiceItems).values({
+                        invoiceId: newRemision.id,
+                        productId: matchedProduct?.id || null,
+                        productName: item.productName || "Produto Desconhecido",
+                        quantity: String(q),
+                        unit: item.unit || "UN",
+                        unitPrice: "0",
+                        totalPrice: "0"
+                    });
+                    itemsCount++;
+                }
+
+                // Build WhatsApp response
+                const remItemsList = remItems.map((it: any, idx: number) =>
+                    `  ${idx + 1}. ${it.productName} — ${it.quantity} ${it.unit || 'UN'}`
+                ).join('\n');
+
+                const remDateStr = remIssueDate ? remIssueDate.toLocaleDateString('pt-BR') : '—';
+
+                let msg = `📦 *Remissao recebida!*\n\n`;
+                msg += `📋 *N°:* ${newRemision.invoiceNumber || 'S/N'}\n`;
+                msg += `🏢 *Empresa:* ${parsed.supplier || 'N/A'}\n`;
+                msg += `📅 *Data:* ${remDateStr}\n`;
+                if (itemsCount > 0) {
+                    msg += `\n📦 *Produtos (${itemsCount}):*\n${remItemsList}\n`;
+                }
+                msg += `\n✅ Remissao salva no sistema! Aprove no painel para dar entrada no estoque.\n`;
+                msg += `_Quando a fatura chegar, o sistema vai conciliar automaticamente._`;
+
+                return res.json({ message: msg });
             }
             else {
                 // ===== UNKNOWN — Ask user what type it is =====

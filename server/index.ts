@@ -370,6 +370,9 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS warehouse_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS skip_stock_entry BOOLEAN DEFAULT false`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS file_mime_type TEXT`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT 'factura'`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS linked_remision_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS linked_invoice_id VARCHAR`);
     await db.execute(sql`ALTER TABLE farm_romaneios ADD COLUMN IF NOT EXISTS pdf_base64 TEXT`);
     await db.execute(sql`ALTER TABLE farm_romaneios ADD COLUMN IF NOT EXISTS file_mime_type TEXT`);
     await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS equipment_id VARCHAR`);

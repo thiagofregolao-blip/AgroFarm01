@@ -1132,6 +1132,9 @@ export const farmInvoices = pgTable("farm_invoices", {
   sourceEmailFrom: text("source_email_from"), // Remetente do email
   pdfBase64: text("pdf_base64"), // Arquivo original em base64 (PDF ou imagem)
   fileMimeType: text("file_mime_type"), // MIME type do arquivo original (application/pdf, image/jpeg, etc.)
+  documentType: text("document_type").notNull().default("factura"), // "factura" | "remision"
+  linkedRemisionId: varchar("linked_remision_id"), // ID da remissao conciliada (quando fatura concilia com remissao)
+  linkedInvoiceId: varchar("linked_invoice_id"), // ID da fatura conciliada (quando remissao e conciliada)
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

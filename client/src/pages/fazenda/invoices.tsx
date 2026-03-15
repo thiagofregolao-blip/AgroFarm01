@@ -77,8 +77,8 @@ export default function FarmInvoices() {
     });
 
     const { data: invoices = [], isLoading } = useQuery({
-        queryKey: ["/api/farm/invoices"],
-        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/invoices"); return r.json(); },
+        queryKey: ["/api/farm/invoices", "factura"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/invoices?documentType=factura"); return r.json(); },
         enabled: !!user,
     });
 
@@ -125,8 +125,8 @@ export default function FarmInvoices() {
     });
 
     const { data: remissions = [], isLoading: isLoadingRemissions } = useQuery<any[]>({
-        queryKey: ["/api/farm/remissions"],
-        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/remissions"); return r.json(); },
+        queryKey: ["/api/farm/invoices", "remision"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/invoices?documentType=remision"); return r.json(); },
         enabled: !!user,
     });
 
@@ -1285,30 +1285,57 @@ export default function FarmInvoices() {
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
                                                     <th className="text-center p-3 font-semibold text-emerald-800">Status</th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Produtos</th>
+                                                    <th className="text-right p-3 font-semibold text-emerald-800">Acoes</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {(remissions as any[]).map((rem: any) => (
-                                                    <tr key={rem.id} className="border-t border-gray-100">
+                                                    <tr key={rem.id} className="border-t border-gray-100 hover:bg-emerald-50/50">
                                                         <td className="p-3 font-medium">{rem.supplier || "--"}</td>
-                                                        <td className="p-3 font-mono text-sm">{rem.remissionNumber || rem.id}</td>
+                                                        <td className="p-3 font-mono text-sm">{rem.invoiceNumber || rem.id.slice(0, 8)}</td>
                                                         <td className="p-3 text-gray-600">
                                                             {rem.issueDate ? new Date(rem.issueDate).toLocaleDateString("pt-BR") : "--"}
                                                         </td>
                                                         <td className="text-center p-3">
                                                             <Badge className={
                                                                 rem.status === "conciliada"
-                                                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                                                                    : "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"
+                                                                    ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                                                                    : rem.status === "confirmed"
+                                                                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                                                                        : "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"
                                                             }>
-                                                                {rem.status === "conciliada" ? "Conciliada" : "Pendente"}
+                                                                {rem.status === "conciliada" ? "Conciliada" : rem.status === "confirmed" ? "Confirmada" : "Pendente"}
                                                             </Badge>
+                                                            {rem.source === "whatsapp" && (
+                                                                <Badge className="ml-1 bg-green-100 text-green-700 hover:bg-green-100 text-xs">WhatsApp</Badge>
+                                                            )}
                                                         </td>
-                                                        <td className="p-3 text-gray-600 text-xs">
-                                                            {rem.items && rem.items.length > 0
-                                                                ? rem.items.map((it: any) => `${it.productName} (${it.quantity})`).join(", ")
-                                                                : "--"
-                                                            }
+                                                        <td className="p-3 text-gray-600 text-xs max-w-xs truncate">
+                                                            --
+                                                        </td>
+                                                        <td className="p-3 text-right">
+                                                            {rem.status === "pending" && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                                                    onClick={() => {
+                                                                        setSelectedInvoice(rem.id);
+                                                                    }}
+                                                                >
+                                                                    Aprovar
+                                                                </Button>
+                                                            )}
+                                                            {rem.hasFile && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="ml-1"
+                                                                    onClick={() => window.open(`/api/farm/invoices/${rem.id}/file`, "_blank")}
+                                                                >
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))}

@@ -17,8 +17,13 @@ export function registerFarmInvoiceRoutes(app: Express) {
     app.get("/api/farm/invoices", requireFarmer, async (req, res) => {
         try {
             const invoices = await farmStorage.getInvoices((req.user as any).id);
+            // Filter by documentType if specified (faturas vs remissoes)
+            const docTypeFilter = req.query.documentType as string | undefined;
+            const filtered = docTypeFilter
+                ? invoices.filter((inv: any) => (inv.documentType || "factura") === docTypeFilter)
+                : invoices;
             // Strip pdfBase64 from list response (can be megabytes), add hasFile flag
-            const light = invoices.map((inv: any) => {
+            const light = filtered.map((inv: any) => {
                 const { pdfBase64, rawPdfData, ...rest } = inv;
                 return { ...rest, hasFile: !!pdfBase64 };
             });
@@ -211,6 +216,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 source: "manual",
                 pdfBase64: fileBase64,
                 fileMimeType: mimeType,
+                documentType: isRemision ? "remision" : "factura",
             });
 
             // Create invoice items (try to match with catalog products, auto-create if not found)
@@ -250,9 +256,9 @@ export function registerFarmInvoiceRoutes(app: Express) {
                     productName: item.productName,
                     unit: item.unit,
                     quantity: String(item.quantity),
-                    unitPrice: String(item.unitPrice),
-                    discount: String(item.discount),
-                    totalPrice: String(item.totalPrice),
+                    unitPrice: isRemision ? "0" : String(item.unitPrice),
+                    discount: isRemision ? "0" : String(item.discount),
+                    totalPrice: isRemision ? "0" : String(item.totalPrice),
                     batch: item.batch || null,
                     expiryDate: item.expiryDate || null,
                 });
@@ -299,56 +305,198 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
             await farmStorage.confirmInvoice(req.params.id, farmerId);
 
-            // Auto-create accounts payable entry linked to this invoice
-            try {
-                const { farmAccountsPayable } = await import("../shared/schema");
-                const { eq, and } = await import("drizzle-orm");
-                const { db } = await import("./db");
+            // Auto-create accounts payable entry (only for faturas, NOT remissoes)
+            const isRemisionDoc = (invoice as any).documentType === "remision";
+            if (!isRemisionDoc) {
+                try {
+                    const { farmAccountsPayable } = await import("../shared/schema");
+                    const { eq, and } = await import("drizzle-orm");
+                    const { db } = await import("./db");
 
-                // Check if an AP entry already exists for this invoice
-                const existing = await db.select().from(farmAccountsPayable).where(
-                    and(eq(farmAccountsPayable.invoiceId, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
-                );
+                    const existing = await db.select().from(farmAccountsPayable).where(
+                        and(eq(farmAccountsPayable.invoiceId, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+                    );
 
-                if (existing.length === 0 && invoice.totalAmount) {
-                    const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
-                    // Use invoice's actual dueDate if available, otherwise fallback to issueDate + 30
-                    let dueDate: Date;
-                    if (invoice.dueDate) {
-                        dueDate = new Date(invoice.dueDate);
-                    } else {
-                        dueDate = new Date(issueDate);
-                        dueDate.setDate(dueDate.getDate() + 30);
+                    if (existing.length === 0 && invoice.totalAmount) {
+                        const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
+                        let dueDate: Date;
+                        if (invoice.dueDate) {
+                            dueDate = new Date(invoice.dueDate);
+                        } else {
+                            dueDate = new Date(issueDate);
+                            dueDate.setDate(dueDate.getDate() + 30);
+                        }
+
+                        await db.insert(farmAccountsPayable).values({
+                            farmerId,
+                            invoiceId: req.params.id,
+                            supplier: invoice.supplier || "Fornecedor",
+                            description: `Fatura #${invoice.invoiceNumber || req.params.id.slice(0, 8)}`,
+                            totalAmount: String(invoice.totalAmount),
+                            currency: invoice.currency || "USD",
+                            dueDate,
+                            status: "aberto",
+                        });
+                        console.log(`[ACCOUNTS_PAYABLE] Auto-created AP entry for invoice ${req.params.id}`);
                     }
-
-                    await db.insert(farmAccountsPayable).values({
-                        farmerId,
-                        invoiceId: req.params.id,
-                        supplier: invoice.supplier || "Fornecedor",
-                        description: `Fatura #${invoice.invoiceNumber || req.params.id.slice(0, 8)}`,
-                        totalAmount: String(invoice.totalAmount),
-                        currency: invoice.currency || "USD",
-                        dueDate,
-                        status: "aberto",
-                    });
-                    console.log(`[ACCOUNTS_PAYABLE] Auto-created AP entry for invoice ${req.params.id}`);
+                } catch (apErr) {
+                    console.error("[ACCOUNTS_PAYABLE_AUTO_CREATE]", apErr);
                 }
-            } catch (apErr) {
-                console.error("[ACCOUNTS_PAYABLE_AUTO_CREATE]", apErr);
-                // Don't fail the confirm if AP creation fails
+            } else {
+                console.log(`[REMISION_CONFIRM] Remissao confirmada - estoque atualizado com custo zero, sem conta a pagar`);
             }
 
             // Check if this invoice should skip stock entry
             const updatedInvoice = await farmStorage.getInvoiceById(req.params.id);
             const skipped = updatedInvoice?.skipStockEntry;
             res.json({
-                message: skipped
-                    ? "Fatura confirmada. Estoque NÃO atualizado (apenas financeiro)."
-                    : "Fatura confirmada. Estoque atualizado."
+                message: isRemisionDoc
+                    ? "Remissao confirmada. Produtos entraram no estoque (custo pendente). Quando a fatura chegar, o sistema concilia automaticamente."
+                    : skipped
+                        ? "Fatura confirmada. Estoque NAO atualizado (apenas financeiro)."
+                        : "Fatura confirmada. Estoque atualizado."
             });
         } catch (error) {
             console.error("[FARM_INVOICE_CONFIRM]", error);
             res.status(500).json({ error: "Failed to confirm invoice" });
+        }
+    });
+
+    // Find matching remissions for a given invoice (for conciliation)
+    app.get("/api/farm/invoices/:id/match-remissions", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            const invoice = await farmStorage.getInvoiceById(req.params.id);
+            if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+            // Get invoice items
+            const invoiceItems = await farmStorage.getInvoiceItems(invoice.id);
+
+            // Get all confirmed remissions from the same supplier
+            const allInvoices = await farmStorage.getInvoices(farmerId);
+            const remissions = allInvoices.filter((inv: any) =>
+                (inv.documentType || "factura") === "remision" &&
+                inv.status === "confirmed" &&
+                !inv.linkedInvoiceId && // Not already conciliated
+                inv.supplier && invoice.supplier &&
+                inv.supplier.toLowerCase().includes(invoice.supplier.toLowerCase().substring(0, 10))
+            );
+
+            // For each remission, get its items and calculate match score
+            const matches = [];
+            for (const rem of remissions) {
+                const remItems = await farmStorage.getInvoiceItems(rem.id);
+                let matchedProducts = 0;
+                let totalProducts = remItems.length;
+
+                for (const remItem of remItems) {
+                    const found = invoiceItems.find(invItem =>
+                        invItem.productName.toUpperCase().includes(remItem.productName.toUpperCase().substring(0, 10)) ||
+                        remItem.productName.toUpperCase().includes(invItem.productName.toUpperCase().substring(0, 10))
+                    );
+                    if (found) matchedProducts++;
+                }
+
+                const score = totalProducts > 0 ? Math.round((matchedProducts / totalProducts) * 100) : 0;
+                if (score >= 50) { // At least 50% match
+                    matches.push({
+                        remission: { ...rem, hasFile: !!(rem as any).pdfBase64 },
+                        items: remItems,
+                        matchScore: score,
+                        matchedProducts,
+                        totalProducts,
+                    });
+                }
+            }
+
+            res.json(matches.sort((a, b) => b.matchScore - a.matchScore));
+        } catch (error) {
+            console.error("[MATCH_REMISSIONS]", error);
+            res.status(500).json({ error: "Failed to match remissions" });
+        }
+    });
+
+    // Conciliate: link invoice to remission and update prices
+    app.post("/api/farm/invoices/:id/conciliate", requireFarmer, async (req, res) => {
+        try {
+            const { remisionId } = req.body;
+            if (!remisionId) return res.status(400).json({ error: "remisionId is required" });
+
+            const farmerId = (req.user as any).id;
+            const invoice = await farmStorage.getInvoiceById(req.params.id);
+            const remision = await farmStorage.getInvoiceById(remisionId);
+            if (!invoice || !remision) return res.status(404).json({ error: "Invoice or remission not found" });
+
+            const invoiceItems = await farmStorage.getInvoiceItems(invoice.id);
+            const remisionItems = await farmStorage.getInvoiceItems(remisionId);
+
+            // Update remission items with prices from invoice
+            let updatedCount = 0;
+            for (const remItem of remisionItems) {
+                const matchingInvItem = invoiceItems.find(invItem =>
+                    invItem.productName.toUpperCase().includes(remItem.productName.toUpperCase().substring(0, 10)) ||
+                    remItem.productName.toUpperCase().includes(invItem.productName.toUpperCase().substring(0, 10))
+                );
+
+                if (matchingInvItem) {
+                    await db.execute(sql`
+                        UPDATE farm_invoice_items
+                        SET unit_price = ${matchingInvItem.unitPrice},
+                            total_price = ${matchingInvItem.totalPrice}
+                        WHERE id = ${remItem.id}
+                    `);
+                    updatedCount++;
+
+                    // Update stock cost if product was already in stock
+                    if (remItem.productId) {
+                        try {
+                            const unitCost = parseFloat(matchingInvItem.unitPrice as string) || 0;
+                            if (unitCost > 0) {
+                                await db.execute(sql`
+                                    UPDATE farm_stock
+                                    SET unit_cost = ${unitCost}
+                                    WHERE farmer_id = ${farmerId}
+                                    AND product_id = ${remItem.productId}
+                                    AND (unit_cost IS NULL OR unit_cost = 0)
+                                `);
+
+                                // Update stock movements cost
+                                await db.execute(sql`
+                                    UPDATE farm_stock_movements
+                                    SET unit_cost = ${unitCost}
+                                    WHERE farmer_id = ${farmerId}
+                                    AND product_id = ${remItem.productId}
+                                    AND (unit_cost IS NULL OR unit_cost = 0)
+                                `);
+
+                                console.log(`[CONCILIATE] Updated cost for product ${remItem.productName}: $${unitCost}`);
+                            }
+                        } catch (costErr) {
+                            console.error(`[CONCILIATE_COST]`, costErr);
+                        }
+                    }
+                }
+            }
+
+            // Link invoice ↔ remission
+            await db.execute(sql`
+                UPDATE farm_invoices
+                SET linked_remision_id = ${remisionId}
+                WHERE id = ${invoice.id}
+            `);
+            await db.execute(sql`
+                UPDATE farm_invoices
+                SET linked_invoice_id = ${invoice.id}, status = 'conciliada'
+                WHERE id = ${remisionId}
+            `);
+
+            res.json({
+                message: `Conciliacao realizada! ${updatedCount} produtos atualizados com precos da fatura.`,
+                updatedCount,
+            });
+        } catch (error) {
+            console.error("[CONCILIATE]", error);
+            res.status(500).json({ error: "Failed to conciliate" });
         }
     });
 
