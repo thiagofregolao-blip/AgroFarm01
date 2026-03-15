@@ -38,25 +38,23 @@ export function registerSojaCotacaoRoutes(app: Express) {
             const yearsToFetch: number[] = [];
 
             for (const y of years) {
-                const monthStart = new Date(y, month - 1, 1);
-                const monthEnd = new Date(y, month, 0, 23, 59, 59);
+                const monthStartStr = `${y}-${String(month).padStart(2, "0")}-01`;
+                const lastDay = new Date(y, month, 0).getDate();
+                const monthEndStr = `${y}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")} 23:59:59`;
 
-                const cached = await db.select({
-                    tradeDate: soybeanPriceCache.tradeDate,
-                    priceBushel: soybeanPriceCache.priceUsdBushel,
-                    priceSaca: soybeanPriceCache.priceUsdSaca,
-                }).from(soybeanPriceCache)
-                    .where(and(
-                        gte(soybeanPriceCache.tradeDate, monthStart),
-                        lte(soybeanPriceCache.tradeDate, monthEnd),
-                    ))
-                    .orderBy(soybeanPriceCache.tradeDate);
+                const cached = await db.execute(sql`
+                    SELECT trade_date, price_usd_bushel, price_usd_saca
+                    FROM soybean_price_cache
+                    WHERE trade_date >= ${monthStartStr}::timestamp AND trade_date <= ${monthEndStr}::timestamp
+                    ORDER BY trade_date
+                `) as any;
 
-                if (cached.length > 0) {
-                    allData[y] = cached.map(c => ({
-                        day: new Date(c.tradeDate).getDate(),
-                        priceBushel: parseFloat(c.priceBushel),
-                        priceSaca: parseFloat(c.priceSaca),
+                const rows = (cached as any).rows || cached;
+                if (rows.length > 0) {
+                    allData[y] = rows.map((c: any) => ({
+                        day: new Date(c.trade_date).getDate(),
+                        priceBushel: parseFloat(c.price_usd_bushel),
+                        priceSaca: parseFloat(c.price_usd_saca),
                     }));
                 } else {
                     // Current year/month: always refetch if incomplete
@@ -71,9 +69,10 @@ export function registerSojaCotacaoRoutes(app: Express) {
                     if (data.length > 0) {
                         // Cache in DB
                         for (const d of data) {
+                            const dateStr = d.date.toISOString();
                             await db.execute(sql`
                                 INSERT INTO soybean_price_cache (id, trade_date, price_usd_bushel, price_usd_saca, source, fetched_at)
-                                VALUES (gen_random_uuid(), ${d.date}, ${d.priceBushel.toFixed(4)}, ${d.priceSaca.toFixed(4)}, 'yahoo_finance', now())
+                                VALUES (gen_random_uuid(), ${dateStr}::timestamp, ${d.priceBushel.toFixed(4)}, ${d.priceSaca.toFixed(4)}, 'yahoo_finance', now())
                                 ON CONFLICT DO NOTHING
                             `);
                         }
@@ -129,19 +128,21 @@ export function registerSojaCotacaoRoutes(app: Express) {
             const y = parseInt(year) || new Date().getFullYear();
 
             // Delete cached data for this month/year
-            const monthStart = new Date(y, m - 1, 1);
-            const monthEnd = new Date(y, m, 0, 23, 59, 59);
+            const monthStartStr = `${y}-${String(m).padStart(2, "0")}-01`;
+            const lastDay = new Date(y, m, 0).getDate();
+            const monthEndStr = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")} 23:59:59`;
             await db.execute(sql`
                 DELETE FROM soybean_price_cache
-                WHERE trade_date >= ${monthStart} AND trade_date <= ${monthEnd}
+                WHERE trade_date >= ${monthStartStr}::timestamp AND trade_date <= ${monthEndStr}::timestamp
             `);
 
             // Refetch
             const data = await fetchSoybeanPricesForMonth(y, m);
             for (const d of data) {
+                const dateStr = d.date.toISOString();
                 await db.execute(sql`
                     INSERT INTO soybean_price_cache (id, trade_date, price_usd_bushel, price_usd_saca, source, fetched_at)
-                    VALUES (gen_random_uuid(), ${d.date}, ${d.priceBushel.toFixed(4)}, ${d.priceSaca.toFixed(4)}, 'yahoo_finance', now())
+                    VALUES (gen_random_uuid(), ${dateStr}::timestamp, ${d.priceBushel.toFixed(4)}, ${d.priceSaca.toFixed(4)}, 'yahoo_finance', now())
                     ON CONFLICT DO NOTHING
                 `);
             }
