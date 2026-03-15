@@ -634,8 +634,8 @@ export async function parseRomaneioImage(buffer: Buffer, mimeType: string): Prom
     ESTRUTURA JSON DESEJADA:
     {
       "ticketNumber": "string (número do romaneio/ticket/nota)",
-      "buyer": "string (empresa compradora: C.Vale, Agridesa, ADM, Cargill, etc.)",
-      "clientName": "string (nome do entregador/produtor/entidade)",
+      "buyer": "string (nome da EMPRESA/SILO que EMITIU o romaneio — geralmente no topo/cabecalho do documento. Ex: C.Vale, Unigranos, Agridesa, ADM, Cargill, Bunge. NUNCA usar o nome da pessoa fisica/produtor aqui)",
+      "clientName": "string (nome do PRODUTOR/ENTREGADOR/pessoa fisica que entregou os graos — geralmente em 'Nombre o Razon Social', 'Destinatario', 'Cliente')",
       "documentNumber": "string (RUC/CNPJ/CPF do comprador ou emissor)",
       "crop": "string (cultura: soja, milho, trigo, etc. Normalizar sempre para português)",
       "deliveryDate": "YYYY-MM-DD (data de emissão ou entrega)",
@@ -676,6 +676,7 @@ export async function parseRomaneioImage(buffer: Buffer, mimeType: string): Prom
     6. ATENÇÃO: em formatos paraguaios, o ponto é separador de milhar (43.320 = 43320).
     7. O crop/cultura pode estar como: SOJA, S1 SOJA COMERCIAL, MAIZ, TRIGO, etc. Normalize para: soja, milho, trigo.
     8. Se o documento mostrar desconto percentual E em KG, preferir o valor em KG.
+    9. CRITICO — buyer vs clientName: O "buyer" é a EMPRESA/SILO que emitiu o romaneio (logo, cabecalho, nome da empresa no topo). O "clientName" é o PRODUTOR/pessoa que entregou os graos (campo "Destinatario", "Nombre", "Razon Social"). Exemplo: se o documento diz "Unigranos S.A." no topo e "VALMOR MARCHIORD" no campo Destinatario, entao buyer="Unigranos S.A." e clientName="VALMOR MARCHIORD".
     `;
 
     try {

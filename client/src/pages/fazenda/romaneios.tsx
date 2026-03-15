@@ -278,92 +278,85 @@ export default function FarmRomaneios() {
                     </div>
                 )}
 
-                {/* ====== Desktop: Table (65%) + Silo Viz (35%) side by side ====== */}
-                <div className="flex flex-col lg:flex-row gap-4">
-                    {/* Romaneio Table — left */}
-                    <div className="w-full lg:w-[65%]">
-                        {isLoading ? (
-                            <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
-                        ) : confirmedRomaneios.length === 0 ? (
-                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
-                                <Scale className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">Nenhum romaneio registrado</p>
-                            </CardContent></Card>
-                        ) : (
-                            <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm min-w-[640px]">
-                                        <thead className="bg-emerald-50">
-                                            <tr>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Data</th>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Comprador</th>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Cultura</th>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Talhão</th>
-                                                <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Peso Líq.</th>
-                                                <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Peso Final</th>
-                                                <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Valor</th>
-                                                <th className="text-center p-3 font-semibold text-emerald-800 whitespace-nowrap">Origem</th>
-                                                <th className="p-3"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {confirmedRomaneios.map((r: any) => (
-                                                <tr key={r.id} className="border-t border-gray-100">
-                                                    <td className="p-3 whitespace-nowrap">{new Date(r.deliveryDate).toLocaleDateString("pt-BR")}</td>
-                                                    <td className="p-3 font-medium whitespace-nowrap">{r.buyer}</td>
-                                                    <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700 whitespace-nowrap">{r.crop}</span></td>
-                                                    <td className="p-3 whitespace-nowrap">{r.plotName || "—"}</td>
-                                                    <td className="text-right p-3 font-mono whitespace-nowrap">{parseFloat(r.netWeight).toLocaleString()} kg</td>
-                                                    <td className="text-right p-3 font-mono font-semibold whitespace-nowrap">{parseFloat(r.finalWeight).toLocaleString()} kg</td>
-                                                    <td className="text-right p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
-                                                        {r.totalValue ? `$ ${parseFloat(r.totalValue).toFixed(2)}` : "—"}
-                                                    </td>
-                                                    <td className="p-3 text-center">
-                                                        <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 ${
-                                                            r.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
-                                                            r.source === "import" ? "border-blue-400 text-blue-700 bg-blue-50" :
-                                                            "border-gray-300 text-gray-600 bg-gray-50"
-                                                        }`}>
-                                                            {r.source === "whatsapp" ? "WhatsApp" :
-                                                             r.source === "import" ? "Import" : "Manual"}
-                                                        </Badge>
-                                                    </td>
-                                                    <td className="p-3">
-                                                        <div className="flex items-center gap-1">
-                                                            {r.hasFile && (
-                                                                <Button variant="ghost" size="sm" className="text-blue-500 h-7 text-xs"
-                                                                    onClick={() => window.open(`/api/farm/romaneios/${r.id}/file`, '_blank')}>
-                                                                    <Eye className="h-3.5 w-3.5 mr-1" />Ver
-                                                                </Button>
-                                                            )}
-                                                            <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
-                                                                onClick={() => { if (confirm("Remover este romaneio?")) del.mutate(r.id); }}>
-                                                                Excluir
-                                                            </Button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                {/* ====== Silo Visualization ====== */}
+                {siloData && siloData.silos && siloData.silos.length > 0 && (
+                    <SiloVisualization
+                        silos={siloData.silos}
+                        totalHarvest={siloData.totalHarvest}
+                        totalValue={siloData.totalValue}
+                        totalInputSpent={siloData.totalInputSpent}
+                        romaneios={confirmedRomaneios}
+                    />
+                )}
 
-                    {/* Silo Visualization — right */}
-                    <div className="w-full lg:w-[35%]">
-                        {siloData && siloData.silos && siloData.silos.length > 0 && (
-                            <SiloVisualization
-                                silos={siloData.silos}
-                                totalHarvest={siloData.totalHarvest}
-                                totalValue={siloData.totalValue}
-                                totalInputSpent={siloData.totalInputSpent}
-                                romaneios={confirmedRomaneios}
-                            />
-                        )}
+                {/* ====== Romaneio Table ====== */}
+                {isLoading ? (
+                    <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
+                ) : confirmedRomaneios.length === 0 ? (
+                    <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                        <Scale className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500">Nenhum romaneio registrado</p>
+                    </CardContent></Card>
+                ) : (
+                    <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[640px]">
+                                <thead className="bg-emerald-50">
+                                    <tr>
+                                        <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Data</th>
+                                        <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Comprador</th>
+                                        <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Cultura</th>
+                                        <th className="text-left p-3 font-semibold text-emerald-800 whitespace-nowrap">Talhao</th>
+                                        <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Peso Liq.</th>
+                                        <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Peso Final</th>
+                                        <th className="text-right p-3 font-semibold text-emerald-800 whitespace-nowrap">Valor</th>
+                                        <th className="text-center p-3 font-semibold text-emerald-800 whitespace-nowrap">Origem</th>
+                                        <th className="p-3"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {confirmedRomaneios.map((r: any) => (
+                                        <tr key={r.id} className="border-t border-gray-100">
+                                            <td className="p-3 whitespace-nowrap">{new Date(r.deliveryDate).toLocaleDateString("pt-BR")}</td>
+                                            <td className="p-3 font-medium whitespace-nowrap">{r.buyer}</td>
+                                            <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700 whitespace-nowrap">{r.crop}</span></td>
+                                            <td className="p-3 whitespace-nowrap">{r.plotName || "—"}</td>
+                                            <td className="text-right p-3 font-mono whitespace-nowrap">{parseFloat(r.netWeight).toLocaleString()} kg</td>
+                                            <td className="text-right p-3 font-mono font-semibold whitespace-nowrap">{parseFloat(r.finalWeight).toLocaleString()} kg</td>
+                                            <td className="text-right p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                                                {r.totalValue ? `$ ${parseFloat(r.totalValue).toFixed(2)}` : "—"}
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 ${
+                                                    r.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
+                                                    r.source === "import" ? "border-blue-400 text-blue-700 bg-blue-50" :
+                                                    "border-gray-300 text-gray-600 bg-gray-50"
+                                                }`}>
+                                                    {r.source === "whatsapp" ? "WhatsApp" :
+                                                     r.source === "import" ? "Import" : "Manual"}
+                                                </Badge>
+                                            </td>
+                                            <td className="p-3">
+                                                <div className="flex items-center gap-1">
+                                                    {r.hasFile && (
+                                                        <Button variant="ghost" size="sm" className="text-blue-500 h-7 text-xs"
+                                                            onClick={() => window.open(`/api/farm/romaneios/${r.id}/file`, '_blank')}>
+                                                            <Eye className="h-3.5 w-3.5 mr-1" />Ver
+                                                        </Button>
+                                                    )}
+                                                    <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
+                                                        onClick={() => { if (confirm("Remover este romaneio?")) del.mutate(r.id); }}>
+                                                        Excluir
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </FarmLayout>
     );
