@@ -803,6 +803,26 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                 if (itemsCount > 0) {
                     msg += `\n📦 *Itens (${itemsCount}):*\n${itemsList}\n`;
                 }
+
+                // Auto-detect matching remissions
+                try {
+                    const allFarmInvoices = await farmStorage.getInvoices(farmer.id);
+                    const remissions = allFarmInvoices.filter((inv: any) =>
+                        (inv.documentType || "factura") === "remision" &&
+                        (inv.status === "confirmed" || inv.status === "pending") &&
+                        !inv.linkedInvoiceId &&
+                        inv.supplier && parsed.supplier &&
+                        inv.supplier.toLowerCase().includes(parsed.supplier.toLowerCase().substring(0, 10))
+                    );
+                    if (remissions.length > 0) {
+                        msg += `\n⚠️ *ATENCAO: ${remissions.length} remissao(oes) encontrada(s) deste fornecedor!*\n`;
+                        msg += `_Acesse o painel para conciliar a fatura com a remissao._\n`;
+                        console.log(`[WHATSAPP_AUTO_MATCH] Invoice ${newInvoice.id} matched ${remissions.length} remission(s)`);
+                    }
+                } catch (matchErr) {
+                    console.error("[WHATSAPP_AUTO_MATCH]", matchErr);
+                }
+
                 msg += `\n_Aguardando sua revisão no painel AgroFarm._`;
 
                 return res.json({ message: msg });

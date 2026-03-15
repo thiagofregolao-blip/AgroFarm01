@@ -7,8 +7,58 @@ import { requireFarmer, requireAdminManuals, upload, parseLocalDate } from "./fa
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
-import { farmProductsCatalog, farmStockMovements, farmInvoiceItems } from "@shared/schema";
+import { farmProductsCatalog, farmStockMovements, farmInvoiceItems, farmInvoices } from "@shared/schema";
 import { parseFarmInvoicePDF, parseFarmInvoiceImage } from "./parse-farm-invoice";
+import { eq } from "drizzle-orm";
+
+// Helper: find matching remissions for a given invoice
+async function findMatchingRemissions(farmerId: string, invoiceSupplier: string | null, invoiceItemNames: string[]) {
+    try {
+        const allInvoices = await farmStorage.getInvoices(farmerId);
+        const remissions = allInvoices.filter((inv: any) =>
+            (inv.documentType || "factura") === "remision" &&
+            (inv.status === "confirmed" || inv.status === "pending") &&
+            !inv.linkedInvoiceId &&
+            inv.supplier && invoiceSupplier &&
+            inv.supplier.toLowerCase().includes(invoiceSupplier.toLowerCase().substring(0, 10))
+        );
+
+        const matches = [];
+        for (const rem of remissions) {
+            const remItems = await farmStorage.getInvoiceItems(rem.id);
+            let matchedProducts = 0;
+            const totalProducts = remItems.length;
+
+            for (const remItem of remItems) {
+                const found = invoiceItemNames.find(name =>
+                    name.toUpperCase().includes(remItem.productName.toUpperCase().substring(0, 10)) ||
+                    remItem.productName.toUpperCase().includes(name.toUpperCase().substring(0, 10))
+                );
+                if (found) matchedProducts++;
+            }
+
+            const score = totalProducts > 0 ? Math.round((matchedProducts / totalProducts) * 100) : 0;
+            if (score >= 40) {
+                const { pdfBase64, rawPdfData, ...remRest } = rem as any;
+                matches.push({
+                    remissionId: rem.id,
+                    remissionNumber: rem.invoiceNumber,
+                    supplier: rem.supplier,
+                    status: rem.status,
+                    matchScore: score,
+                    matchedProducts,
+                    totalProducts,
+                    items: remItems,
+                });
+            }
+        }
+
+        return matches.sort((a, b) => b.matchScore - a.matchScore);
+    } catch (err) {
+        console.error("[AUTO_MATCH_REMISSIONS]", err);
+        return [];
+    }
+}
 
 export function registerFarmInvoiceRoutes(app: Express) {
 
@@ -82,7 +132,34 @@ export function registerFarmInvoiceRoutes(app: Express) {
             if (!invoice) return res.status(404).json({ error: "Invoice not found" });
             const items = await farmStorage.getInvoiceItems(req.params.id);
             const { pdfBase64, rawPdfData, ...rest } = invoice as any;
-            res.json({ ...rest, hasFile: !!pdfBase64, items });
+            const farmerId = (req.user as any).id;
+
+            // For faturas: check if there are matching remissions
+            let matchingRemissions: any[] = [];
+            if ((invoice as any).documentType !== "remision" && !(invoice as any).linkedRemisionId) {
+                const itemNames = items.map(i => i.productName);
+                matchingRemissions = await findMatchingRemissions(farmerId, invoice.supplier, itemNames);
+            }
+
+            // For remissions with linkedInvoiceId: get linked invoice info
+            let linkedInvoice = null;
+            if ((invoice as any).linkedInvoiceId) {
+                const linked = await farmStorage.getInvoiceById((invoice as any).linkedInvoiceId);
+                if (linked) {
+                    linkedInvoice = { id: linked.id, invoiceNumber: linked.invoiceNumber, supplier: linked.supplier, totalAmount: linked.totalAmount };
+                }
+            }
+
+            // For faturas with linkedRemisionId: get linked remission info
+            let linkedRemission = null;
+            if ((invoice as any).linkedRemisionId) {
+                const linked = await farmStorage.getInvoiceById((invoice as any).linkedRemisionId);
+                if (linked) {
+                    linkedRemission = { id: linked.id, invoiceNumber: linked.invoiceNumber, supplier: linked.supplier, status: linked.status };
+                }
+            }
+
+            res.json({ ...rest, hasFile: !!pdfBase64, items, matchingRemissions, linkedInvoice, linkedRemission });
         } catch (error) {
             console.error("[FARM_INVOICE_GET]", error);
             res.status(500).json({ error: "Failed to get invoice" });
@@ -199,7 +276,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             }
 
             // Create invoice record — store full file as base64
-            const skipStockEntry = req.body?.skipStockEntry === "true" || isRemision;
+            const skipStockEntry = req.body?.skipStockEntry === "true";
             const fileBase64 = req.file.buffer.toString("base64");
             const invoice = await farmStorage.createInvoice({
                 farmerId,
@@ -270,16 +347,29 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
             // Return parsed data for review
             const items = await farmStorage.getInvoiceItems(invoice.id);
-            const docLabel = isRemision ? "Remissao" : "Fatura";
+
+            // Auto-detect matching remissions for faturas
+            let matchingRemissions: any[] = [];
+            if (!isRemision) {
+                const itemNames = parsed.items.map((i: any) => i.productName);
+                matchingRemissions = await findMatchingRemissions(farmerId, parsed.supplier, itemNames);
+                if (matchingRemissions.length > 0) {
+                    console.log(`[AUTO_MATCH] Invoice ${invoice.id} matched ${matchingRemissions.length} remission(s): ${matchingRemissions.map(m => m.remissionId).join(", ")}`);
+                }
+            }
+
             res.status(201).json({
                 invoice,
                 items,
                 parsedItemCount: parsed.items.length,
                 documentType: parsed.documentType || "unknown",
                 isRemision,
+                matchingRemissions,
                 message: isRemision
                     ? `Remissao ${parsed.invoiceNumber} importada com ${parsed.items.length} produtos (sem valores, apenas entrada de mercadoria).`
-                    : `Fatura ${parsed.invoiceNumber} importada com ${parsed.items.length} itens.`,
+                    : matchingRemissions.length > 0
+                        ? `Fatura ${parsed.invoiceNumber} importada com ${parsed.items.length} itens. ATENCAO: ${matchingRemissions.length} remissao(oes) encontrada(s) do mesmo fornecedor!`
+                        : `Fatura ${parsed.invoiceNumber} importada com ${parsed.items.length} itens.`,
             });
         } catch (error) {
             console.error("[FARM_INVOICE_IMPORT]", error);

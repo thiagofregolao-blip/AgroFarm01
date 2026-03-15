@@ -180,6 +180,18 @@ export default function FarmInvoices() {
         onError: () => toast({ title: "Erro ao excluir fatura", variant: "destructive" }),
     });
 
+    const conciliateMutation = useMutation({
+        mutationFn: ({ invoiceId, remisionId }: { invoiceId: string; remisionId: string }) =>
+            apiRequest("POST", `/api/farm/invoices/${invoiceId}/conciliate`, { remisionId }),
+        onSuccess: async (res) => {
+            const data = await res.json();
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
+            toast({ title: data.message || "Conciliacao realizada com sucesso!" });
+        },
+        onError: (err: any) => toast({ title: `Erro na conciliacao: ${err?.message || "Falha"}`, variant: "destructive" }),
+    });
+
     const { data: cashAccounts = [] } = useQuery({
         queryKey: ["/api/farm/cash-accounts"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/cash-accounts"); return r.json(); },
@@ -347,22 +359,6 @@ export default function FarmInvoices() {
         }
     };
 
-    const checkRemissionMatch = async (supplier: string, items: any[]) => {
-        try {
-            const res = await apiRequest("POST", "/api/farm/remissions/check-match", {
-                supplier,
-                items: items.map((it: any) => ({ productName: it.productName, quantity: it.quantity })),
-            });
-            const data = await res.json();
-            if (data.matched) {
-                setRemissionMatch(data);
-                setMatchedRemissionId(data.remissionId);
-            }
-        } catch {
-            // Match check is best-effort
-        }
-    };
-
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -426,32 +422,20 @@ export default function FarmInvoices() {
                 await autoRegisterSupplier(data.supplier, data.ruc);
             }
 
-            // #24 Check remission match for regular invoices
-            if (data.invoice?.items && data.invoice.supplier) {
-                await checkRemissionMatch(data.invoice.supplier, data.invoice.items);
-            }
-
-            // If a remission match was found, reconcile
-            if (matchedRemissionId && data.invoice?.id) {
-                try {
-                    const reconcileItems = (data.invoice.items || []).map((it: any) => ({
-                        productId: it.productId,
-                        unitPrice: it.unitPrice,
-                    }));
-                    await apiRequest("POST", `/api/farm/remissions/${matchedRemissionId}/reconcile`, {
-                        invoiceId: data.invoice.id,
-                        items: reconcileItems,
-                    });
-                    queryClient.invalidateQueries({ queryKey: ["/api/farm/remissions"] });
-                } catch {
-                    // Reconciliation is best-effort
-                }
-            }
-
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
             setSelectedInvoice(data.invoice.id);
             setImportDialogOpen(false);
-            toast({ title: skipStockEntry ? `${data.message} (sem entrada no estoque)` : `${data.message}` });
+
+            // Show import success + remission match notification
+            if (data.matchingRemissions && data.matchingRemissions.length > 0) {
+                toast({
+                    title: "Fatura importada - Remissao encontrada!",
+                    description: `${data.matchingRemissions.length} remissao(oes) do mesmo fornecedor. Abra o card da fatura para conciliar.`,
+                    duration: 10000,
+                });
+            } else {
+                toast({ title: skipStockEntry ? `${data.message} (sem entrada no estoque)` : `${data.message}` });
+            }
         } catch (err) {
             toast({ title: "Erro ao importar fatura", variant: "destructive" });
         } finally {
@@ -886,6 +870,52 @@ export default function FarmInvoices() {
                                     )}
                                 </CardHeader>
                                 <CardContent>
+                                    {/* Banner: matching remissions found */}
+                                    {invoiceDetail.matchingRemissions && invoiceDetail.matchingRemissions.length > 0 && !invoiceDetail.linkedRemisionId && (
+                                        <div className="mb-4 p-3 rounded-lg border-2 border-amber-400 bg-amber-50">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                                <span className="font-bold text-amber-800">
+                                                    {invoiceDetail.matchingRemissions.length} Remissao(oes) encontrada(s) deste fornecedor!
+                                                </span>
+                                            </div>
+                                            {invoiceDetail.matchingRemissions.map((match: any) => (
+                                                <div key={match.remissionId} className="flex items-center justify-between p-2 rounded bg-white border border-amber-200 mb-1">
+                                                    <div className="text-sm">
+                                                        <span className="font-medium">Remissao #{match.remissionNumber || match.remissionId.slice(0, 8)}</span>
+                                                        <span className="text-gray-500 ml-2">({match.matchScore}% compativel - {match.matchedProducts}/{match.totalProducts} produtos)</span>
+                                                        <Badge className="ml-2 bg-purple-100 text-purple-700 text-xs">{match.status === "confirmed" ? "Confirmada" : "Pendente"}</Badge>
+                                                    </div>
+                                                    <Button
+                                                        size="sm"
+                                                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                                                        onClick={() => conciliateMutation.mutate({ invoiceId: selectedInvoice!, remisionId: match.remissionId })}
+                                                        disabled={conciliateMutation.isPending}
+                                                    >
+                                                        {conciliateMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Package className="mr-1 h-3 w-3" />}
+                                                        Conciliar
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                            <p className="text-xs text-amber-700 mt-1">
+                                                Ao conciliar, os precos da fatura serao aplicados aos produtos da remissao e o custo do estoque sera atualizado.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Banner: already conciliated */}
+                                    {invoiceDetail.linkedRemission && (
+                                        <div className="mb-4 p-3 rounded-lg border border-blue-300 bg-blue-50">
+                                            <div className="flex items-center gap-2">
+                                                <Package className="h-4 w-4 text-blue-600" />
+                                                <span className="text-sm font-medium text-blue-800">
+                                                    Fatura conciliada com Remissao #{invoiceDetail.linkedRemission.invoiceNumber || invoiceDetail.linkedRemission.id.slice(0, 8)}
+                                                </span>
+                                                <Badge className="bg-blue-100 text-blue-700 text-xs">Conciliada</Badge>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {invoiceDetail.items && invoiceDetail.items.length > 0 ? (
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-sm">
@@ -1210,6 +1240,9 @@ export default function FarmInvoices() {
                                                             <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0 h-5">
                                                                 {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
                                                             </Badge>
+                                                            {inv.linkedRemisionId && (
+                                                                <Badge className="ml-1 bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0 h-4">Conciliada</Badge>
+                                                            )}
                                                         </td>
                                                         <td className="p-2.5 text-center">
                                                             <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 ${
@@ -1293,6 +1326,34 @@ export default function FarmInvoices() {
                                     </p>
                                 </CardHeader>
                                 <CardContent>
+                                    {/* Banner: linked invoice (conciliated) */}
+                                    {invoiceDetail.linkedInvoice && (
+                                        <div className="mb-4 p-3 rounded-lg border border-blue-300 bg-blue-50">
+                                            <div className="flex items-center gap-2">
+                                                <Package className="h-4 w-4 text-blue-600" />
+                                                <span className="text-sm font-medium text-blue-800">
+                                                    Conciliada com Fatura #{invoiceDetail.linkedInvoice.invoiceNumber || invoiceDetail.linkedInvoice.id.slice(0, 8)}
+                                                </span>
+                                                <span className="text-sm text-gray-600">
+                                                    - Valor: ${parseFloat(invoiceDetail.linkedInvoice.totalAmount || 0).toFixed(2)}
+                                                </span>
+                                                <Badge className="bg-blue-100 text-blue-700 text-xs">Precos atualizados</Badge>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Banner: matching remissions (for pending remissions) */}
+                                    {invoiceDetail.matchingRemissions && invoiceDetail.matchingRemissions.length > 0 && (
+                                        <div className="mb-4 p-3 rounded-lg border border-amber-300 bg-amber-50">
+                                            <div className="flex items-center gap-2">
+                                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                                <span className="text-sm font-medium text-amber-800">
+                                                    Existem faturas que podem ser vinculadas a esta remissao. Veja na aba Faturas.
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <table className="w-full text-sm">
                                         <thead className="bg-purple-50">
                                             <tr>
