@@ -192,23 +192,43 @@ export class FarmStorage {
     // ==================== Stock ====================
     async getStock(farmerId: string, excludeCommercial = false): Promise<any[]> {
         await dbReady;
-        const rows = await db.execute(sql`
-            SELECT s.id, s.farmer_id AS "farmerId", s.product_id AS "productId",
-                   s.quantity, s.average_cost AS "averageCost", s.updated_at AS "updatedAt",
-                   s.property_id AS "propertyId", s.deposit_id AS "depositId",
-                   p.name AS "productName", p.unit AS "productUnit", p.category AS "productCategory",
-                   p.image_url AS "productImageUrl", p.dose_per_ha AS "productDosePerHa",
-                   fp.name AS "propertyName",
-                   d.deposit_type AS "depositType", d.name AS "depositName"
-            FROM farm_stock s
-            INNER JOIN farm_products_catalog p ON s.product_id = p.id
-            LEFT JOIN farm_properties fp ON s.property_id = fp.id
-            LEFT JOIN farm_deposits d ON d.id = s.deposit_id
-            WHERE s.farmer_id = ${farmerId}
-              ${excludeCommercial ? sql`AND (d.deposit_type IS NULL OR d.deposit_type != 'comercial')` : sql``}
-            ORDER BY p.name
-        `);
-        return (rows as any).rows ?? rows;
+        try {
+            // Try query with deposit columns (requires deposit_id column + farm_deposits table)
+            const rows = await db.execute(sql`
+                SELECT s.id, s.farmer_id AS "farmerId", s.product_id AS "productId",
+                       s.quantity, s.average_cost AS "averageCost", s.updated_at AS "updatedAt",
+                       s.property_id AS "propertyId", s.deposit_id AS "depositId",
+                       p.name AS "productName", p.unit AS "productUnit", p.category AS "productCategory",
+                       p.image_url AS "productImageUrl", p.dose_per_ha AS "productDosePerHa",
+                       fp.name AS "propertyName",
+                       d.deposit_type AS "depositType", d.name AS "depositName"
+                FROM farm_stock s
+                INNER JOIN farm_products_catalog p ON s.product_id = p.id
+                LEFT JOIN farm_properties fp ON s.property_id = fp.id
+                LEFT JOIN farm_deposits d ON d.id = s.deposit_id
+                WHERE s.farmer_id = ${farmerId}
+                  ${excludeCommercial ? sql`AND (d.deposit_type IS NULL OR d.deposit_type != 'comercial')` : sql``}
+                ORDER BY p.name
+            `);
+            return (rows as any).rows ?? rows;
+        } catch (err) {
+            // Fallback: original query without deposit columns (column/table may not exist yet)
+            console.warn("[getStock] Fallback to original query:", (err as any)?.message);
+            const rows = await db.execute(sql`
+                SELECT s.id, s.farmer_id AS "farmerId", s.product_id AS "productId",
+                       s.quantity, s.average_cost AS "averageCost", s.updated_at AS "updatedAt",
+                       s.property_id AS "propertyId",
+                       p.name AS "productName", p.unit AS "productUnit", p.category AS "productCategory",
+                       p.image_url AS "productImageUrl", p.dose_per_ha AS "productDosePerHa",
+                       fp.name AS "propertyName"
+                FROM farm_stock s
+                INNER JOIN farm_products_catalog p ON s.product_id = p.id
+                LEFT JOIN farm_properties fp ON s.property_id = fp.id
+                WHERE s.farmer_id = ${farmerId}
+                ORDER BY p.name
+            `);
+            return (rows as any).rows ?? rows;
+        }
     }
 
     async updateStockManual(id: string, farmerId: string, data: { quantity: number; averageCost: number; reason: string }): Promise<FarmStock> {
