@@ -509,6 +509,9 @@ app.use((req, res, next) => {
         total_price numeric(15,2) NOT NULL
       )
     `);
+    // Grain tracking columns for receivable items
+    await db.execute(sql`ALTER TABLE farm_receivable_items ADD COLUMN IF NOT EXISTS grain_crop text`);
+    await db.execute(sql`ALTER TABLE farm_receivable_items ADD COLUMN IF NOT EXISTS grain_season_id varchar`);
 
     // Tabela de configuracao do timbrado
     await db.execute(sql`

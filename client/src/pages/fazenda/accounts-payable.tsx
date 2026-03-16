@@ -7,6 +7,7 @@ import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -597,7 +598,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                     </div>
                                     <div>
                                         <Label className="text-xs text-gray-500">Valor *</Label>
-                                        <Input type="number" step="0.01" value={row.amount} onChange={e => updateRow(idx, "amount", e.target.value)} placeholder="0.00" />
+                                        <CurrencyInput value={row.amount} onValueChange={v => updateRow(idx, "amount", v)} />
                                     </div>
                                     <div className="flex gap-2 items-end">
                                         <div className="flex-1">
@@ -745,7 +746,7 @@ function EditAPForm({ item, seasons, onSave, saving }: any) {
         <div className="space-y-4">
             <div><Label>Fornecedor *</Label><Input value={supplier} onChange={e => setSupplier(e.target.value)} /></div>
             <div><Label>Descricao</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
-            <div><Label>Valor Total ($) *</Label><Input type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} /></div>
+            <div><Label>Valor Total ($) *</Label><CurrencyInput value={totalAmount} onValueChange={setTotalAmount} /></div>
             <div><Label>Vencimento *</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
             {(seasons || []).length > 0 && (
                 <div>

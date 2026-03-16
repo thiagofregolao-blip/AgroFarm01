@@ -6,6 +6,7 @@ import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -710,7 +711,7 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
             <div className="border-t pt-4">
                 <h3 className="font-semibold text-emerald-800 mb-3">💰 Valor (opcional)</h3>
                 <div className="grid grid-cols-2 gap-4">
-                    <div><Label>Preço por Tonelada ($)</Label><Input type="number" step="0.01" value={pricePerTon} onChange={e => setPricePerTon(e.target.value)} /></div>
+                    <div><Label>Preço por Tonelada ($)</Label><CurrencyInput value={pricePerTon} onValueChange={setPricePerTon} /></div>
                     {totalValue > 0 && <div className="flex items-end"><p className="text-lg font-bold text-emerald-700">Total: $ {totalValue.toFixed(2)}</p></div>}
                 </div>
             </div>

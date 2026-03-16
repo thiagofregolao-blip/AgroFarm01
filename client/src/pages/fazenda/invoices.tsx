@@ -7,6 +7,7 @@ import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -640,7 +641,7 @@ export default function FarmInvoices() {
                             <div className="grid grid-cols-5 gap-3">
                                 <div>
                                     <Label className="text-xs text-gray-500">Valor *</Label>
-                                    <Input type="number" step="0.01" placeholder="0.00" value={expAmount} onChange={e => setExpAmount(e.target.value)} />
+                                    <CurrencyInput value={expAmount} onValueChange={setExpAmount} />
                                 </div>
                                 <div>
                                     <Label className="text-xs text-gray-500">Data</Label>
@@ -831,8 +832,8 @@ export default function FarmInvoices() {
                                             </div>
                                             <div>
                                                 <Label className="text-xs text-gray-500">Valor Total ($)</Label>
-                                                <Input type="number" step="0.01" className="h-8 text-sm" value={editInvData.totalAmount}
-                                                    onChange={e => setEditInvData({ ...editInvData, totalAmount: e.target.value })} />
+                                                <CurrencyInput className="h-8 text-sm" value={editInvData.totalAmount}
+                                                    onValueChange={v => setEditInvData({ ...editInvData, totalAmount: v })} />
                                             </div>
                                             <div>
                                                 <Label className="text-xs text-gray-500">Moeda</Label>
@@ -963,12 +964,12 @@ export default function FarmInvoices() {
                                                                         onChange={e => setEditItemData({ ...editItemData, quantity: e.target.value })} />
                                                                 </td>
                                                                 <td className="p-2">
-                                                                    <Input type="number" step="0.01" className="h-7 text-xs w-24 text-right" value={editItemData.unitPrice}
-                                                                        onChange={e => setEditItemData({ ...editItemData, unitPrice: e.target.value })} />
+                                                                    <CurrencyInput className="h-7 text-xs w-24 text-right" value={editItemData.unitPrice}
+                                                                        onValueChange={v => setEditItemData({ ...editItemData, unitPrice: v })} prefix="" />
                                                                 </td>
                                                                 <td className="p-2">
-                                                                    <Input type="number" step="0.01" className="h-7 text-xs w-24 text-right" value={editItemData.totalPrice}
-                                                                        onChange={e => setEditItemData({ ...editItemData, totalPrice: e.target.value })} />
+                                                                    <CurrencyInput className="h-7 text-xs w-24 text-right" value={editItemData.totalPrice}
+                                                                        onValueChange={v => setEditItemData({ ...editItemData, totalPrice: v })} prefix="" />
                                                                 </td>
                                                                 <td className="p-2 text-center">
                                                                     <div className="flex items-center justify-center gap-1">
@@ -1869,8 +1870,8 @@ export default function FarmInvoices() {
                                     </div>
                                     <div>
                                         <Label className="text-xs text-gray-500">Valor ($)</Label>
-                                        <Input type="number" step="0.01" className="h-8 text-sm" value={editExpData.amount}
-                                            onChange={e => setEditExpData({ ...editExpData, amount: e.target.value })} />
+                                        <CurrencyInput className="h-8 text-sm" value={editExpData.amount}
+                                            onValueChange={v => setEditExpData({ ...editExpData, amount: v })} />
                                     </div>
                                     <div>
                                         <Label className="text-xs text-gray-500">Data</Label>
@@ -1940,12 +1941,12 @@ export default function FarmInvoices() {
                                                                     onChange={e => setEditExpItemData({ ...editExpItemData, unit: e.target.value })} />
                                                             </td>
                                                             <td className="p-2">
-                                                                <Input type="number" step="0.01" className="h-7 text-xs w-24 text-right" value={editExpItemData.unitPrice}
-                                                                    onChange={e => setEditExpItemData({ ...editExpItemData, unitPrice: e.target.value })} />
+                                                                <CurrencyInput className="h-7 text-xs w-24 text-right" value={editExpItemData.unitPrice}
+                                                                    onValueChange={v => setEditExpItemData({ ...editExpItemData, unitPrice: v })} prefix="" />
                                                             </td>
                                                             <td className="p-2">
-                                                                <Input type="number" step="0.01" className="h-7 text-xs w-24 text-right" value={editExpItemData.totalPrice}
-                                                                    onChange={e => setEditExpItemData({ ...editExpItemData, totalPrice: e.target.value })} />
+                                                                <CurrencyInput className="h-7 text-xs w-24 text-right" value={editExpItemData.totalPrice}
+                                                                    onValueChange={v => setEditExpItemData({ ...editExpItemData, totalPrice: v })} prefix="" />
                                                             </td>
                                                             <td className="p-2 text-center">
                                                                 <div className="flex items-center justify-center gap-1">

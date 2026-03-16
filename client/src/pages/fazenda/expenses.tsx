@@ -6,6 +6,7 @@ import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -430,7 +431,7 @@ function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, o
             <div className="grid grid-cols-2 gap-3">
                 <div>
                     <Label>Valor ({currencySymbol}) *</Label>
-                    <Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required />
+                    <CurrencyInput value={amount} onValueChange={setAmount} />
                 </div>
                 <div><Label>Data</Label><Input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)} /></div>
             </div>

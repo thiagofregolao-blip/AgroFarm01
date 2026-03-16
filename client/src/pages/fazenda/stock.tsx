@@ -5,6 +5,7 @@ import FarmLayout from "@/components/fazenda/layout";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload } from "lucide-react";
@@ -816,8 +817,8 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                                 <Input type="number" step="0.01" min="0" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Ex: 50" disabled={saveStock.isPending} />
                             </div>
                             <div>
-                                <Label>Custo Unitário (R$) *</Label>
-                                <Input type="number" step="0.01" min="0" value={unitCost} onChange={e => setUnitCost(e.target.value)} placeholder="Ex: 15.50" disabled={saveStock.isPending} />
+                                <Label>Custo Unitário ($) *</Label>
+                                <CurrencyInput value={unitCost} onValueChange={setUnitCost} disabled={saveStock.isPending} />
                             </div>
                         </div>
                     </div>
@@ -1024,7 +1025,7 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
                         </div>
                         <div>
                             <Label>Custo Medio ($)</Label>
-                            <Input type="number" step="0.01" value={averageCost} onChange={e => setAverageCost(e.target.value)} disabled={updateStock.isPending} />
+                            <CurrencyInput value={averageCost} onValueChange={setAverageCost} disabled={updateStock.isPending} />
                         </div>
                     </div>
 

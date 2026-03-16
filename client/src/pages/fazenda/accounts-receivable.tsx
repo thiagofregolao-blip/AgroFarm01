@@ -7,6 +7,7 @@ import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -196,7 +197,7 @@ export default function AccountsReceivable() {
             toast({ title: "Conta(s) a receber registrada(s)" });
             setOpenCreate(false);
             // Auto-print: open print for first created AR
-            const createdId = result?.id || result?.ids?.[0];
+            const createdId = Array.isArray(result) ? result[0]?.id : result?.id;
             if (createdId) {
                 setTimeout(() => setPrintingId(createdId), 300);
             }
@@ -646,6 +647,8 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                 unitPrice: it.unitPrice,
                 ivaRate: it.ivaRate,
                 totalPrice: ((parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0)).toFixed(2),
+                grainCrop: (it as any).grainCrop || null,
+                grainSeasonId: (it as any).grainSeasonId || null,
             })),
         });
     }
@@ -737,11 +740,11 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="text-left p-2 font-medium text-gray-600">Produto</th>
-                                    <th className="text-center p-2 font-medium text-gray-600 w-16">Qtd</th>
+                                    <th className="text-center p-2 font-medium text-gray-600 w-28">Qtd</th>
                                     <th className="text-center p-2 font-medium text-gray-600 w-14">Un</th>
-                                    <th className="text-center p-2 font-medium text-gray-600 w-24">Preco Un.</th>
+                                    <th className="text-center p-2 font-medium text-gray-600 w-32">Preco Un.</th>
                                     <th className="text-center p-2 font-medium text-gray-600 w-20">IVA</th>
-                                    <th className="text-right p-2 font-medium text-gray-600 w-24">Total</th>
+                                    <th className="text-right p-2 font-medium text-gray-600 w-28">Total</th>
                                     <th className="p-2 w-8"></th>
                                 </tr>
                             </thead>
@@ -758,8 +761,8 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                                             </td>
                                             <td className="p-1.5 text-center text-gray-500">{it.unit}</td>
                                             <td className="p-1.5">
-                                                <Input type="number" step="0.01" min="0" className="h-8 text-xs text-center"
-                                                    value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                                                <CurrencyInput value={it.unitPrice} onValueChange={v => updateItem(idx, "unitPrice", v)}
+                                                    className="h-8 text-xs text-right" prefix="" />
                                             </td>
                                             <td className="p-1.5">
                                                 <Select value={it.ivaRate} onValueChange={v => updateItem(idx, "ivaRate", v)}>
@@ -895,7 +898,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                                                             className={`flex items-center justify-between w-full p-3 rounded-lg border text-left transition-colors ${alreadyAdded ? "bg-amber-50 border-amber-300" : "border-gray-200 hover:bg-gray-50"}`}
                                                             onClick={() => {
                                                                 if (!alreadyAdded) {
-                                                                    const newItem = { productId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "exenta" };
+                                                                    const newItem = { productId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "exenta", grainCrop: g.crop, grainSeasonId: g.seasonId || null };
                                                                     if (items.length === 1 && !items[0].productName) {
                                                                         setItems([newItem]);
                                                                     } else {
@@ -1242,7 +1245,7 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
                                     </div>
                                     <div>
                                         <Label className="text-xs text-gray-500">Valor *</Label>
-                                        <Input type="number" step="0.01" value={row.amount} onChange={e => updateRow(idx, "amount", e.target.value)} placeholder="0.00" />
+                                        <CurrencyInput value={row.amount} onValueChange={v => updateRow(idx, "amount", v)} />
                                     </div>
                                     <div className="flex gap-2 items-end">
                                         <div className="flex-1">

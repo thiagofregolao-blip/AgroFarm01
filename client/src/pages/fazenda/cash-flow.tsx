@@ -7,6 +7,7 @@ import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -803,7 +804,7 @@ function CreateAccountDialog({ onSuccess }: { onSuccess: () => void }) {
                         <div><Label>Tipo *</Label><Select value={accountType} onValueChange={setAccountType}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{ACCOUNT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent></Select></div>
                         <div><Label>Moeda *</Label><Select value={currency} onValueChange={setCurrency}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="USD">Dólar (USD $)</SelectItem><SelectItem value="PYG">Guaraní (PYG Gs.)</SelectItem></SelectContent></Select></div>
                     </div>
-                    <div><Label>Saldo Inicial</Label><Input type="number" step="0.01" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} placeholder="0.00" /></div>
+                    <div><Label>Saldo Inicial</Label><CurrencyInput value={initialBalance} onValueChange={setInitialBalance} /></div>
                     <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => save.mutate()} disabled={save.isPending || !name || !accountType}>
                         {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Conta"}
                     </Button>
@@ -935,7 +936,7 @@ function TransferenciasTab({ transactions, accounts, onRefresh }: { transactions
                     <div className="space-y-4 py-2">
                         <div><Label>Descricao</Label><Input value={editDescription} onChange={e => setEditDescription(e.target.value)} /></div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div><Label>Valor</Label><Input type="number" step="0.01" value={editAmount} onChange={e => setEditAmount(e.target.value)} /></div>
+                            <div><Label>Valor</Label><CurrencyInput value={editAmount} onValueChange={setEditAmount} /></div>
                             <div><Label>Data</Label><Input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} /></div>
                         </div>
                         <Button className="w-full bg-blue-600 hover:bg-blue-700"
@@ -981,7 +982,7 @@ function CreateTransactionDialog({ accounts, onSuccess }: { accounts: any[]; onS
                     </div>
                     <div><Label>Conta *</Label><Select value={accountId} onValueChange={setAccountId}><SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger><SelectContent>{accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} ({formatCurrency(parseFloat(a.currentBalance), a.currency)})</SelectItem>)}</SelectContent></Select></div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div><Label>Valor *</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></div>
+                        <div><Label>Valor *</Label><CurrencyInput value={amount} onValueChange={setAmount} /></div>
                         <div><Label>Data</Label><Input type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} /></div>
                     </div>
                     <div><Label>Categoria *</Label><Select value={category} onValueChange={setCategory}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent></Select></div>
@@ -1063,7 +1064,7 @@ function TransferDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: (
                     </div>
                     <div>
                         <Label>Valor *{sourceAccount ? ` (${sourceAccount.currency})` : ""}</Label>
-                        <Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" />
+                        <CurrencyInput value={amount} onValueChange={setAmount} />
                     </div>
                     {showExchangeRate && (
                         <div>
@@ -1294,7 +1295,7 @@ function CreateChequeDialog({ accounts, onSuccess }: { accounts: any[]; onSucces
                     </div>
                     <div><Label>Titular *</Label><Input value={holder} onChange={e => setHolder(e.target.value)} placeholder="Nome do titular" /></div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div><Label>Valor *</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" /></div>
+                        <div><Label>Valor *</Label><CurrencyInput value={amount} onValueChange={setAmount} /></div>
                         <div><Label>Moeda</Label>
                             <Select value={currency} onValueChange={setCurrency}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>

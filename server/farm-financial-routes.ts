@@ -333,6 +333,8 @@ export function registerFarmFinancialRoutes(app: Express) {
                             unitPrice: String(item.unitPrice),
                             ivaRate: item.ivaRate || "10",
                             totalPrice: String(item.totalPrice),
+                            grainCrop: item.grainCrop || null,
+                            grainSeasonId: item.grainSeasonId || null,
                         }))
                     );
                 }
@@ -367,6 +369,8 @@ export function registerFarmFinancialRoutes(app: Express) {
                             unitPrice: String(item.unitPrice),
                             ivaRate: item.ivaRate || "10",
                             totalPrice: String(item.totalPrice),
+                            grainCrop: item.grainCrop || null,
+                            grainSeasonId: item.grainSeasonId || null,
                         }))
                     );
                 }
@@ -904,16 +908,23 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { sql } = await import("drizzle-orm");
             const farmerId = (req.user as any).id;
 
-            // Aggregate grain stock directly from confirmed romaneios (source of truth)
-            // This ensures data is always accurate even if farm_grain_stock table is out of sync
+            // Aggregate grain stock from confirmed romaneios minus sold quantities
             const rows = await db.execute(sql`
                 SELECT
                     r.crop,
                     r.season_id AS "seasonId",
-                    SUM(CAST(r.final_weight AS numeric)) AS "quantity",
+                    SUM(CAST(r.final_weight AS numeric)) AS "totalWeight",
                     COUNT(*) AS "deliveries",
                     MAX(r.delivery_date) AS "lastDelivery",
-                    s.name AS "seasonName"
+                    s.name AS "seasonName",
+                    COALESCE((
+                        SELECT SUM(CAST(ri.quantity AS numeric))
+                        FROM farm_receivable_items ri
+                        JOIN farm_accounts_receivable ar2 ON ar2.id = ri.receivable_id
+                        WHERE ar2.farmer_id = ${farmerId}
+                          AND ri.grain_crop = r.crop
+                          AND (ri.grain_season_id = r.season_id OR (ri.grain_season_id IS NULL AND r.season_id IS NULL))
+                    ), 0) AS "soldWeight"
                 FROM farm_romaneios r
                 LEFT JOIN farm_seasons s ON s.id = r.season_id
                 WHERE r.farmer_id = ${farmerId}
@@ -927,7 +938,9 @@ export function registerFarmFinancialRoutes(app: Express) {
                 crop: r.crop,
                 seasonId: r.seasonId,
                 seasonName: r.seasonName,
-                quantity: r.quantity,
+                quantity: String(Math.max(0, parseFloat(r.totalWeight) - parseFloat(r.soldWeight))),
+                totalWeight: r.totalWeight,
+                soldWeight: r.soldWeight,
                 deliveries: parseInt(r.deliveries),
                 lastDelivery: r.lastDelivery,
             }));

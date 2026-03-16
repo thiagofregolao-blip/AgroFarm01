@@ -292,20 +292,27 @@ export function registerFarmStockRoutes(app: Express) {
         try {
             const farmerId = (req.user as any).id;
             const depositType = req.query.depositType as string || null;
-            let query = `
-                SELECT s.*, p.name as product_name, p.category, p.unit, d.name as deposit_name, d.deposit_type
-                FROM farm_stock s
-                JOIN farm_products_catalog p ON p.id = s.product_id
-                LEFT JOIN farm_deposits d ON d.id = s.property_id
-                WHERE s.farmer_id = $1 AND CAST(s.quantity AS numeric) > 0
-            `;
-            const params: any[] = [farmerId];
+            let rows;
             if (depositType) {
-                query += ` AND d.deposit_type = $2`;
-                params.push(depositType);
+                rows = await db.execute(sql`
+                    SELECT s.*, p.name as product_name, p.category, p.unit, d.name as deposit_name, d.deposit_type
+                    FROM farm_stock s
+                    JOIN farm_products_catalog p ON p.id = s.product_id
+                    LEFT JOIN farm_deposits d ON d.id = s.property_id
+                    WHERE s.farmer_id = ${farmerId} AND CAST(s.quantity AS numeric) > 0
+                      AND d.deposit_type = ${depositType}
+                    ORDER BY p.name
+                `);
+            } else {
+                rows = await db.execute(sql`
+                    SELECT s.*, p.name as product_name, p.category, p.unit, d.name as deposit_name, d.deposit_type
+                    FROM farm_stock s
+                    JOIN farm_products_catalog p ON p.id = s.product_id
+                    LEFT JOIN farm_deposits d ON d.id = s.property_id
+                    WHERE s.farmer_id = ${farmerId} AND CAST(s.quantity AS numeric) > 0
+                    ORDER BY p.name
+                `);
             }
-            query += ` ORDER BY p.name`;
-            const rows = await db.execute(sql.raw(query));
             res.json((rows as any).rows ?? rows);
         } catch (error) {
             console.error("[STOCK_BY_DEPOSIT]", error);
