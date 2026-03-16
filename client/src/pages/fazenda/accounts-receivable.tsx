@@ -506,6 +506,16 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, invoiceCon
     const isEditMode = !!initialData;
 
     const [autoNumberLoading, setAutoNumberLoading] = useState(false);
+    const [productPickerOpen, setProductPickerOpen] = useState(false);
+    const [productPickerTab, setProductPickerTab] = useState("insumos");
+    const [pickerSearch, setPickerSearch] = useState("");
+
+    // Fetch deposits for grain silos
+    const { data: deposits = [] } = useQuery({
+        queryKey: ["/api/farm/deposits"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/deposits"); return r.json(); },
+    });
+    const [selectedSiloId, setSelectedSiloId] = useState("__all__");
 
     // Filter suppliers by search
     const filteredSuppliers = suppliers.filter(s =>
@@ -713,107 +723,222 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, invoiceCon
             {/* Secao 3: Itens */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between border-b pb-1">
-                    <h3 className="text-sm font-semibold text-emerald-800">Itens</h3>
-                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700" onClick={addItem}>
+                    <h3 className="text-sm font-semibold text-emerald-800">Itens ({items.filter(it => it.productName).length})</h3>
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700"
+                        onClick={() => { setPickerSearch(""); setProductPickerOpen(true); }}>
                         <PlusCircle className="mr-1 h-3 w-3" /> Adicionar Item
                     </Button>
                 </div>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-xs">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="text-left p-2 font-medium text-gray-600">Produto</th>
-                                <th className="text-center p-2 font-medium text-gray-600 w-16">Qtd</th>
-                                <th className="text-center p-2 font-medium text-gray-600 w-14">Un</th>
-                                <th className="text-center p-2 font-medium text-gray-600 w-24">Preco Un.</th>
-                                <th className="text-center p-2 font-medium text-gray-600 w-20">IVA</th>
-                                <th className="text-right p-2 font-medium text-gray-600 w-24">Total</th>
-                                <th className="p-2 w-8"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {items.map((it, idx) => {
-                                const total = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
-                                return (
-                                    <tr key={idx} className="border-t border-gray-100">
-                                        <td className="p-1.5">
-                                            <Select value={it.productId} onValueChange={v => selectProduct(idx, v)}>
-                                                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                                <SelectContent>
-                                                    {hasStockProducts ? (
-                                                        <>
-                                                            {stockInsumos.length > 0 && (
-                                                                <>
-                                                                    <div className="px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-50">INSUMOS (Comercial)</div>
-                                                                    {stockInsumos.map((s: any) => (
-                                                                        <SelectItem key={`ins-${s.id}`} value={String(s.product_id || s.productId)}>
-                                                                            {s.product_name || s.productName} ({parseFloat(s.quantity).toFixed(1)} {s.unit})
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </>
-                                                            )}
-                                                            {stockGraos.length > 0 && (
-                                                                <>
-                                                                    <div className="px-2 py-1 text-[10px] font-bold text-amber-700 bg-amber-50">GRAOS</div>
-                                                                    {stockGraos.map((s: any) => (
-                                                                        <SelectItem key={`grao-${s.id}`} value={String(s.product_id || s.productId)}>
-                                                                            {s.product_name || s.productName} ({parseFloat(s.quantity).toFixed(1)} {s.unit})
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </>
-                                                            )}
-                                                            {stockInsumos.length === 0 && stockGraos.length === 0 && (
-                                                                <>
-                                                                    <div className="px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-50">ESTOQUE</div>
-                                                                    {(stockByDeposit || []).map((s: any) => (
-                                                                        <SelectItem key={`stk-${s.id}`} value={String(s.product_id || s.productId)}>
-                                                                            {s.product_name || s.productName} ({parseFloat(s.quantity).toFixed(1)} {s.unit})
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        products.map((p: any) => (
-                                                            <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                                                        ))
-                                                    )}
-                                                </SelectContent>
-                                            </Select>
-                                        </td>
-                                        <td className="p-1.5">
-                                            <Input type="number" step="0.01" min="0" className="h-8 text-xs text-center"
-                                                value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
-                                        </td>
-                                        <td className="p-1.5 text-center text-gray-500">{it.unit}</td>
-                                        <td className="p-1.5">
-                                            <Input type="number" step="0.01" min="0" className="h-8 text-xs text-center"
-                                                value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
-                                        </td>
-                                        <td className="p-1.5">
-                                            <Select value={it.ivaRate} onValueChange={v => updateItem(idx, "ivaRate", v)}>
-                                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="exenta">Exenta</SelectItem>
-                                                    <SelectItem value="5">5%</SelectItem>
-                                                    <SelectItem value="10">10%</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </td>
-                                        <td className="p-1.5 text-right font-mono font-semibold">{formatCurrency(total)}</td>
-                                        <td className="p-1.5">
-                                            {items.length > 1 && (
+
+                {/* Items already added */}
+                {items.filter(it => it.productName).length > 0 && (
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="text-left p-2 font-medium text-gray-600">Produto</th>
+                                    <th className="text-center p-2 font-medium text-gray-600 w-16">Qtd</th>
+                                    <th className="text-center p-2 font-medium text-gray-600 w-14">Un</th>
+                                    <th className="text-center p-2 font-medium text-gray-600 w-24">Preco Un.</th>
+                                    <th className="text-center p-2 font-medium text-gray-600 w-20">IVA</th>
+                                    <th className="text-right p-2 font-medium text-gray-600 w-24">Total</th>
+                                    <th className="p-2 w-8"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((it, idx) => {
+                                    if (!it.productName) return null;
+                                    const total = (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
+                                    return (
+                                        <tr key={idx} className="border-t border-gray-100">
+                                            <td className="p-1.5 font-medium text-gray-800">{it.productName}</td>
+                                            <td className="p-1.5">
+                                                <Input type="number" step="0.01" min="0" className="h-8 text-xs text-center"
+                                                    value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
+                                            </td>
+                                            <td className="p-1.5 text-center text-gray-500">{it.unit}</td>
+                                            <td className="p-1.5">
+                                                <Input type="number" step="0.01" min="0" className="h-8 text-xs text-center"
+                                                    value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                                            </td>
+                                            <td className="p-1.5">
+                                                <Select value={it.ivaRate} onValueChange={v => updateItem(idx, "ivaRate", v)}>
+                                                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="exenta">Exenta</SelectItem>
+                                                        <SelectItem value="5">5%</SelectItem>
+                                                        <SelectItem value="10">10%</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </td>
+                                            <td className="p-1.5 text-right font-mono font-semibold">{formatCurrency(total)}</td>
+                                            <td className="p-1.5">
                                                 <button type="button" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600">
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                 </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {items.filter(it => it.productName).length === 0 && (
+                    <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                        <p className="text-gray-400 text-sm">Nenhum item adicionado</p>
+                        <Button type="button" variant="outline" size="sm" className="mt-2 text-xs border-emerald-200 text-emerald-700"
+                            onClick={() => { setPickerSearch(""); setProductPickerOpen(true); }}>
+                            <PlusCircle className="mr-1 h-3 w-3" /> Selecionar Produtos
+                        </Button>
+                    </div>
+                )}
+
+                {/* ── Product Picker Dialog ── */}
+                <Dialog open={productPickerOpen} onOpenChange={setProductPickerOpen}>
+                    <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0">
+                        <DialogHeader className="px-5 pt-4 pb-2 border-b">
+                            <DialogTitle>Selecionar Produto do Estoque</DialogTitle>
+                        </DialogHeader>
+                        <div className="px-5 py-3">
+                            <Tabs value={productPickerTab} onValueChange={setProductPickerTab}>
+                                <TabsList className="bg-gray-100">
+                                    <TabsTrigger value="insumos">Insumos (Comercial)</TabsTrigger>
+                                    <TabsTrigger value="graos">Graos (Silos)</TabsTrigger>
+                                </TabsList>
+
+                                {/* Search */}
+                                <div className="relative mt-3 mb-2">
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                                    <Input placeholder="Buscar produto..." value={pickerSearch}
+                                        onChange={e => setPickerSearch(e.target.value)} className="pl-9 text-sm" />
+                                </div>
+
+                                {/* Insumos Tab */}
+                                <TabsContent value="insumos" className="mt-0 max-h-[45vh] overflow-y-auto">
+                                    {(() => {
+                                        const insumosFiltered = stockInsumos.filter((s: any) =>
+                                            !pickerSearch || (s.product_name || s.productName || "").toLowerCase().includes(pickerSearch.toLowerCase())
+                                        );
+                                        if (insumosFiltered.length === 0) return (
+                                            <div className="py-8 text-center text-gray-400 text-sm">
+                                                {stockInsumos.length === 0
+                                                    ? "Nenhum produto no deposito comercial. Crie um deposito comercial e adicione produtos."
+                                                    : "Nenhum produto encontrado"}
+                                            </div>
+                                        );
+                                        return (
+                                            <div className="grid grid-cols-1 gap-1">
+                                                {insumosFiltered.map((s: any) => {
+                                                    const pid = String(s.product_id || s.productId);
+                                                    const pName = s.product_name || s.productName;
+                                                    const alreadyAdded = items.some(it => it.productId === pid);
+                                                    return (
+                                                        <button key={s.id} type="button"
+                                                            className={`flex items-center justify-between w-full p-3 rounded-lg border text-left transition-colors ${alreadyAdded ? "bg-emerald-50 border-emerald-300" : "border-gray-200 hover:bg-gray-50"}`}
+                                                            onClick={() => {
+                                                                if (!alreadyAdded) {
+                                                                    const newItem = { productId: pid, productName: pName, unit: s.unit || "UN", quantity: "1", unitPrice: "", ivaRate: "10" };
+                                                                    // Replace empty first item or add new
+                                                                    if (items.length === 1 && !items[0].productName) {
+                                                                        setItems([newItem]);
+                                                                    } else {
+                                                                        setItems([...items, newItem]);
+                                                                    }
+                                                                } else {
+                                                                    setItems(items.filter(it => it.productId !== pid));
+                                                                }
+                                                            }}>
+                                                            <div>
+                                                                <p className="font-medium text-sm text-gray-800">{pName}</p>
+                                                                <p className="text-xs text-gray-500">{s.category} - {s.deposit_name || s.depositName || "Deposito"}</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-sm font-mono font-semibold">{parseFloat(s.quantity).toFixed(1)} {s.unit}</p>
+                                                                {alreadyAdded && <p className="text-[10px] text-emerald-600 font-medium">Adicionado</p>}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+                                </TabsContent>
+
+                                {/* Graos Tab */}
+                                <TabsContent value="graos" className="mt-0 max-h-[45vh] overflow-y-auto">
+                                    {/* Silo filter */}
+                                    <div className="mb-2">
+                                        <Select value={selectedSiloId} onValueChange={setSelectedSiloId}>
+                                            <SelectTrigger className="text-sm h-9"><SelectValue placeholder="Todos os silos" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="__all__">Todos os silos</SelectItem>
+                                                {(deposits as any[]).filter((d: any) => d.depositType !== "comercial" && d.deposit_type !== "comercial").map((d: any) => (
+                                                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {(() => {
+                                        const allGraos = (stockByDeposit || []).filter((s: any) => {
+                                            const depType = s.deposit_type || s.depositType;
+                                            const cat = s.category || "";
+                                            const isGrao = cat === "Semente" || cat === "Grao" || cat === "Graos" || depType === "fazenda" || !depType;
+                                            const isNotComercial = depType !== "comercial";
+                                            const matchesSilo = selectedSiloId === "__all__" || s.deposit_id === selectedSiloId || s.depositId === selectedSiloId;
+                                            const matchesSearch = !pickerSearch || (s.product_name || s.productName || "").toLowerCase().includes(pickerSearch.toLowerCase());
+                                            return isGrao && isNotComercial && matchesSilo && matchesSearch;
+                                        });
+                                        if (allGraos.length === 0) return (
+                                            <div className="py-8 text-center text-gray-400 text-sm">Nenhum grao encontrado no estoque</div>
+                                        );
+                                        return (
+                                            <div className="grid grid-cols-1 gap-1">
+                                                {allGraos.map((s: any) => {
+                                                    const pid = String(s.product_id || s.productId);
+                                                    const pName = s.product_name || s.productName;
+                                                    const alreadyAdded = items.some(it => it.productId === pid);
+                                                    return (
+                                                        <button key={s.id} type="button"
+                                                            className={`flex items-center justify-between w-full p-3 rounded-lg border text-left transition-colors ${alreadyAdded ? "bg-amber-50 border-amber-300" : "border-gray-200 hover:bg-gray-50"}`}
+                                                            onClick={() => {
+                                                                if (!alreadyAdded) {
+                                                                    const newItem = { productId: pid, productName: pName, unit: s.unit || "KG", quantity: "1", unitPrice: "", ivaRate: "exenta" };
+                                                                    if (items.length === 1 && !items[0].productName) {
+                                                                        setItems([newItem]);
+                                                                    } else {
+                                                                        setItems([...items, newItem]);
+                                                                    }
+                                                                } else {
+                                                                    setItems(items.filter(it => it.productId !== pid));
+                                                                }
+                                                            }}>
+                                                            <div>
+                                                                <p className="font-medium text-sm text-gray-800">{pName}</p>
+                                                                <p className="text-xs text-gray-500">{s.deposit_name || s.depositName || "Silo"}</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-sm font-mono font-semibold">{parseFloat(s.quantity).toFixed(1)} {s.unit}</p>
+                                                                {alreadyAdded && <p className="text-[10px] text-amber-600 font-medium">Adicionado</p>}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
+                                </TabsContent>
+                            </Tabs>
+                        </div>
+                        <div className="px-5 py-3 border-t bg-gray-50 flex items-center justify-between">
+                            <span className="text-xs text-gray-500">{items.filter(it => it.productName).length} produto(s) selecionado(s)</span>
+                            <Button type="button" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setProductPickerOpen(false)}>
+                                Confirmar Selecao
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
 
             {/* Secao 4: Totais IVA */}

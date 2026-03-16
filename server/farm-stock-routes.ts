@@ -221,9 +221,26 @@ export function registerFarmStockRoutes(app: Express) {
             const farmerId = (req.user as any).id;
             const { name, depositType, location } = req.body;
             if (!name) return res.status(400).json({ error: "Nome e obrigatorio" });
-            const [dep] = await db.insert(farmDeposits).values({
-                farmerId, name, depositType: depositType || "fazenda", location: location || null,
-            }).returning();
+
+            // Ensure table exists (idempotent)
+            await db.execute(sql`
+                CREATE TABLE IF NOT EXISTS farm_deposits (
+                    id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+                    farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    name text NOT NULL,
+                    deposit_type text NOT NULL DEFAULT 'fazenda',
+                    location text,
+                    is_active boolean NOT NULL DEFAULT true,
+                    created_at timestamp NOT NULL DEFAULT now()
+                )
+            `);
+
+            const rows = await db.execute(sql`
+                INSERT INTO farm_deposits (farmer_id, name, deposit_type, location)
+                VALUES (${farmerId}, ${name}, ${depositType || "fazenda"}, ${location || null})
+                RETURNING *
+            `);
+            const dep = ((rows as any).rows ?? rows)[0];
             res.status(201).json(dep);
         } catch (error) {
             console.error("[DEPOSITS_POST]", error);
