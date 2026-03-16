@@ -324,7 +324,52 @@ export function registerFarmStockRoutes(app: Express) {
             const XLSX = await import("xlsx");
             const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const data = XLSX.utils.sheet_to_json(sheet) as any[];
+
+            // Parse as array of arrays to find the real header row
+            const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+            // Find header row: row containing "Produto" or "produto"
+            let headerIdx = 0;
+            for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+                const rowStr = (rawRows[i] || []).map(String).join("|").toLowerCase();
+                if (rowStr.includes("produto") && (rowStr.includes("qtd") || rowStr.includes("quantidade") || rowStr.includes("estoque"))) {
+                    headerIdx = i;
+                    break;
+                }
+            }
+            const headers = (rawRows[headerIdx] || []).map((h: any) => String(h || "").trim());
+            console.log(`[EXCEL_IMPORT] Found headers at row ${headerIdx}: ${headers.join(" | ")}`);
+
+            // Build data rows as objects using detected headers
+            const data: any[] = [];
+            for (let i = headerIdx + 1; i < rawRows.length; i++) {
+                const row = rawRows[i];
+                if (!row || row.length === 0) continue;
+                const obj: any = {};
+                headers.forEach((h: string, idx: number) => {
+                    if (h && row[idx] !== undefined && row[idx] !== null) obj[h] = row[idx];
+                });
+                if (Object.keys(obj).length > 1) data.push(obj); // skip rows with only 1 field (section headers)
+            }
+            console.log(`[EXCEL_IMPORT] ${data.length} data rows found after header row ${headerIdx}`);
+
+            // Helper: clean numeric value (remove $, R$, spaces; handle comma as decimal)
+            const parseNum = (val: any): number => {
+                if (val === undefined || val === null) return 0;
+                if (typeof val === "number") return val;
+                const s = String(val).replace(/[R$\s]/g, "").trim();
+                // If has both dot and comma: "1.234,56" → 1234.56
+                if (s.includes(".") && s.includes(",")) return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+                // If only comma: "85,00" → 85.00
+                if (s.includes(",") && !s.includes(".")) return parseFloat(s.replace(",", ".")) || 0;
+                return parseFloat(s) || 0;
+            };
+
+            // Helper: normalize unit values
+            const normalizeUnit = (u: string): string => {
+                const map: Record<string, string> = { litro: "LT", litros: "LT", lt: "LT", l: "LT", kg: "KG", kilos: "KG", kilo: "KG", un: "UN", unidade: "UN", unidades: "UN" };
+                return map[u.toLowerCase().trim()] || u.toUpperCase().trim() || "UN";
+            };
 
             let imported = 0;
             for (const row of data) {
@@ -333,7 +378,6 @@ export function registerFarmStockRoutes(app: Express) {
                     for (const k of keys) {
                         if (row[k] !== undefined) return row[k];
                     }
-                    // Fallback: partial match on column headers
                     for (const colName of Object.keys(row)) {
                         const lower = colName.toLowerCase().trim();
                         for (const k of keys) {
@@ -343,10 +387,11 @@ export function registerFarmStockRoutes(app: Express) {
                     return undefined;
                 };
                 const name = String(getCol(row, "Produto", "produto", "Nome", "nome", "Name", "name") || "").trim();
-                const qty = parseFloat(getCol(row, "Quantidade", "quantidade", "Qty", "qty", "Qtd", "qtd", "Qtd. Estoque", "Estoque") || 0);
-                const cost = parseFloat(getCol(row, "Custo", "custo", "Cost", "cost", "Preco", "preco", "Preço", "Preço Unit", "Precio", "precio", "Unit. (USD)", "Preco Unit") || 0);
+                const qty = parseNum(getCol(row, "Quantidade", "quantidade", "Qty", "qty", "Qtd", "qtd", "Qtd. Estoque", "Estoque"));
+                const cost = parseNum(getCol(row, "Custo", "custo", "Cost", "cost", "Preco", "preco", "Preço", "Preço Unit", "Precio", "precio", "Unit. (USD)", "Preco Unit"));
                 const cat = String(getCol(row, "Categoria", "categoria", "Category") || "Outros");
-                const unitVal = String(getCol(row, "Unidade", "unidade", "Unit", "Unid", "Unid.") || "UN");
+                const rawUnit = String(getCol(row, "Unidade", "unidade", "Unit", "Unid", "Unid.") || "UN");
+                const unitVal = normalizeUnit(rawUnit);
                 const activeIngredient = String(getCol(row, "Princípio Ativo", "Principio Ativo", "principio_ativo", "Active Ingredient") || "");
 
                 if (!name || qty <= 0) continue;
