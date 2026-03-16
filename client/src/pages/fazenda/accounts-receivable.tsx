@@ -101,6 +101,11 @@ export default function AccountsReceivable() {
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/stock/by-deposit"); return r.json(); },
         enabled: !!user,
     });
+    const { data: grainStock = [] } = useQuery({
+        queryKey: ["/api/farm/grain-stock"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/grain-stock"); return r.json(); },
+        enabled: !!user,
+    });
     const { data: invoiceConfig } = useQuery({
         queryKey: ["/api/farm/invoice-config"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/invoice-config"); return r.json(); },
@@ -413,6 +418,7 @@ export default function AccountsReceivable() {
                                 seasons={seasons as any[]}
                                 products={products as any[]}
                                 stockByDeposit={stockByDeposit as any[]}
+                                grainStock={grainStock as any[]}
                                 invoiceConfig={invoiceConfig}
                                 onSave={(data: any) => save.mutate(data)}
                                 saving={save.isPending}
@@ -434,6 +440,7 @@ export default function AccountsReceivable() {
                                     seasons={seasons as any[]}
                                     products={products as any[]}
                                     stockByDeposit={stockByDeposit as any[]}
+                                    grainStock={grainStock as any[]}
                                     invoiceConfig={invoiceConfig}
                                     initialData={editingDetail || editingItem}
                                     onSave={(data: any) => editMutation.mutate({ id: editingItem.id, data })}
@@ -466,8 +473,8 @@ export default function AccountsReceivable() {
 }
 
 // ─── Create AR Form (complete with items, IVA, parcelas) ──────────────────────
-function CreateARForm({ suppliers, seasons, products, stockByDeposit, invoiceConfig, onSave, saving, initialData }: {
-    suppliers: any[]; seasons: any[]; products: any[]; stockByDeposit?: any[]; invoiceConfig: any; onSave: (data: any) => void; saving: boolean;
+function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock, invoiceConfig, onSave, saving, initialData }: {
+    suppliers: any[]; seasons: any[]; products: any[]; stockByDeposit?: any[]; grainStock?: any[]; invoiceConfig: any; onSave: (data: any) => void; saving: boolean;
     initialData?: any;
 }) {
     const ed = initialData;
@@ -509,13 +516,6 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, invoiceCon
     const [productPickerOpen, setProductPickerOpen] = useState(false);
     const [productPickerTab, setProductPickerTab] = useState("insumos");
     const [pickerSearch, setPickerSearch] = useState("");
-
-    // Fetch deposits for grain silos
-    const { data: deposits = [] } = useQuery({
-        queryKey: ["/api/farm/deposits"],
-        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/deposits"); return r.json(); },
-    });
-    const [selectedSiloId, setSelectedSiloId] = useState("__all__");
 
     // Filter suppliers by search
     const filteredSuppliers = suppliers.filter(s =>
@@ -866,60 +866,52 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, invoiceCon
                                     })()}
                                 </TabsContent>
 
-                                {/* Graos Tab */}
+                                {/* Graos Tab — data from farm_grain_stock (romaneios) */}
                                 <TabsContent value="graos" className="mt-0 max-h-[45vh] overflow-y-auto">
-                                    {/* Silo filter */}
-                                    <div className="mb-2">
-                                        <Select value={selectedSiloId} onValueChange={setSelectedSiloId}>
-                                            <SelectTrigger className="text-sm h-9"><SelectValue placeholder="Todos os silos" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="__all__">Todos os silos</SelectItem>
-                                                {(deposits as any[]).filter((d: any) => d.depositType !== "comercial" && d.deposit_type !== "comercial").map((d: any) => (
-                                                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
                                     {(() => {
-                                        const allGraos = (stockByDeposit || []).filter((s: any) => {
-                                            const depType = s.deposit_type || s.depositType;
-                                            const cat = s.category || "";
-                                            const isGrao = cat === "Semente" || cat === "Grao" || cat === "Graos" || depType === "fazenda" || !depType;
-                                            const isNotComercial = depType !== "comercial";
-                                            const matchesSilo = selectedSiloId === "__all__" || s.deposit_id === selectedSiloId || s.depositId === selectedSiloId;
-                                            const matchesSearch = !pickerSearch || (s.product_name || s.productName || "").toLowerCase().includes(pickerSearch.toLowerCase());
-                                            return isGrao && isNotComercial && matchesSilo && matchesSearch;
+                                        const allGraos = (grainStock || []).filter((g: any) => {
+                                            const qty = parseFloat(g.quantity || 0);
+                                            if (qty <= 0) return false;
+                                            const cropName = (g.crop || "").toLowerCase();
+                                            return !pickerSearch || cropName.includes(pickerSearch.toLowerCase());
                                         });
                                         if (allGraos.length === 0) return (
-                                            <div className="py-8 text-center text-gray-400 text-sm">Nenhum grao encontrado no estoque</div>
+                                            <div className="py-8 text-center text-gray-400 text-sm">
+                                                {(grainStock || []).length === 0
+                                                    ? "Nenhum grao no estoque. Os graos entram automaticamente ao confirmar romaneios."
+                                                    : "Nenhum grao encontrado"}
+                                            </div>
                                         );
                                         return (
                                             <div className="grid grid-cols-1 gap-1">
-                                                {allGraos.map((s: any) => {
-                                                    const pid = String(s.product_id || s.productId);
-                                                    const pName = s.product_name || s.productName;
-                                                    const alreadyAdded = items.some(it => it.productId === pid);
+                                                {allGraos.map((g: any) => {
+                                                    const cropName = (g.crop || "").charAt(0).toUpperCase() + (g.crop || "").slice(1);
+                                                    const qtyKg = parseFloat(g.quantity || 0);
+                                                    const qtyTon = (qtyKg / 1000).toFixed(2);
+                                                    const gid = g.id || g.crop;
+                                                    const alreadyAdded = items.some(it => it.productId === gid);
                                                     return (
-                                                        <button key={s.id} type="button"
+                                                        <button key={gid} type="button"
                                                             className={`flex items-center justify-between w-full p-3 rounded-lg border text-left transition-colors ${alreadyAdded ? "bg-amber-50 border-amber-300" : "border-gray-200 hover:bg-gray-50"}`}
                                                             onClick={() => {
                                                                 if (!alreadyAdded) {
-                                                                    const newItem = { productId: pid, productName: pName, unit: s.unit || "KG", quantity: "1", unitPrice: "", ivaRate: "exenta" };
+                                                                    const newItem = { productId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "exenta" };
                                                                     if (items.length === 1 && !items[0].productName) {
                                                                         setItems([newItem]);
                                                                     } else {
                                                                         setItems([...items, newItem]);
                                                                     }
                                                                 } else {
-                                                                    setItems(items.filter(it => it.productId !== pid));
+                                                                    setItems(items.filter(it => it.productId !== gid));
                                                                 }
                                                             }}>
                                                             <div>
-                                                                <p className="font-medium text-sm text-gray-800">{pName}</p>
-                                                                <p className="text-xs text-gray-500">{s.deposit_name || s.depositName || "Silo"}</p>
+                                                                <p className="font-medium text-sm text-gray-800">{cropName}</p>
+                                                                <p className="text-xs text-gray-500">Estoque de graos (romaneios)</p>
                                                             </div>
                                                             <div className="text-right">
-                                                                <p className="text-sm font-mono font-semibold">{parseFloat(s.quantity).toFixed(1)} {s.unit}</p>
+                                                                <p className="text-sm font-mono font-semibold">{qtyTon} ton</p>
+                                                                <p className="text-[10px] text-gray-400">{qtyKg.toLocaleString()} kg</p>
                                                                 {alreadyAdded && <p className="text-[10px] text-amber-600 font-medium">Adicionado</p>}
                                                             </div>
                                                         </button>
