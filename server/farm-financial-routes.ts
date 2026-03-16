@@ -900,15 +900,38 @@ export function registerFarmFinancialRoutes(app: Express) {
 
     app.get("/api/farm/grain-stock", requireFarmer, async (req, res) => {
         try {
-            const { farmGrainStock } = await import("../shared/schema");
-            const { eq, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
+            const { sql } = await import("drizzle-orm");
             const farmerId = (req.user as any).id;
 
-            const stock = await db.select().from(farmGrainStock)
-                .where(eq(farmGrainStock.farmerId, farmerId))
-                .orderBy(desc(farmGrainStock.updatedAt));
-            res.json(stock);
+            // Aggregate grain stock directly from confirmed romaneios (source of truth)
+            // This ensures data is always accurate even if farm_grain_stock table is out of sync
+            const rows = await db.execute(sql`
+                SELECT
+                    r.crop,
+                    r.season_id AS "seasonId",
+                    SUM(CAST(r.final_weight AS numeric)) AS "quantity",
+                    COUNT(*) AS "deliveries",
+                    MAX(r.delivery_date) AS "lastDelivery",
+                    s.name AS "seasonName"
+                FROM farm_romaneios r
+                LEFT JOIN farm_seasons s ON s.id = r.season_id
+                WHERE r.farmer_id = ${farmerId}
+                  AND r.status = 'confirmed'
+                  AND CAST(r.final_weight AS numeric) > 0
+                GROUP BY r.crop, r.season_id, s.name
+                ORDER BY MAX(r.delivery_date) DESC
+            `);
+            const result = ((rows as any).rows ?? rows).map((r: any) => ({
+                id: `${r.crop}-${r.seasonId || 'none'}`,
+                crop: r.crop,
+                seasonId: r.seasonId,
+                seasonName: r.seasonName,
+                quantity: r.quantity,
+                deliveries: parseInt(r.deliveries),
+                lastDelivery: r.lastDelivery,
+            }));
+            res.json(result);
         } catch (error) {
             console.error("[GRAIN_STOCK_GET]", error);
             res.status(500).json({ error: "Failed to get grain stock" });
