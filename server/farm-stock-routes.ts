@@ -51,10 +51,10 @@ export function registerFarmStockRoutes(app: Express) {
                 await farmStorage.updateProduct(updatedStock.productId, updateData);
             }
 
-            // Update deposit_id if provided
+            // Update property_id (deposit) if provided
             if (updatedStock && depositId !== undefined) {
                 const depVal = (depositId && depositId !== "__none__") ? depositId : null;
-                await db.execute(sql`UPDATE farm_stock SET deposit_id = ${depVal} WHERE id = ${req.params.id}`);
+                await db.execute(sql`UPDATE farm_stock SET property_id = ${depVal} WHERE id = ${req.params.id}`);
             }
 
             res.json(updatedStock);
@@ -296,7 +296,7 @@ export function registerFarmStockRoutes(app: Express) {
                 SELECT s.*, p.name as product_name, p.category, p.unit, d.name as deposit_name, d.deposit_type
                 FROM farm_stock s
                 JOIN farm_products_catalog p ON p.id = s.product_id
-                LEFT JOIN farm_deposits d ON d.id = s.deposit_id
+                LEFT JOIN farm_deposits d ON d.id = s.property_id
                 WHERE s.farmer_id = $1 AND CAST(s.quantity AS numeric) > 0
             `;
             const params: any[] = [farmerId];

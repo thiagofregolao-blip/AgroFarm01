@@ -193,11 +193,11 @@ export class FarmStorage {
     async getStock(farmerId: string, excludeCommercial = false): Promise<any[]> {
         await dbReady;
         try {
-            // Try query with deposit columns (requires deposit_id column + farm_deposits table)
+            // Try query with deposit columns (JOIN deposits via property_id)
             const rows = await db.execute(sql`
                 SELECT s.id, s.farmer_id AS "farmerId", s.product_id AS "productId",
                        s.quantity, s.average_cost AS "averageCost", s.updated_at AS "updatedAt",
-                       s.property_id AS "propertyId", s.deposit_id AS "depositId",
+                       s.property_id AS "propertyId", s.property_id AS "depositId",
                        p.name AS "productName", p.unit AS "productUnit", p.category AS "productCategory",
                        p.image_url AS "productImageUrl", p.dose_per_ha AS "productDosePerHa",
                        fp.name AS "propertyName",
@@ -205,7 +205,7 @@ export class FarmStorage {
                 FROM farm_stock s
                 INNER JOIN farm_products_catalog p ON s.product_id = p.id
                 LEFT JOIN farm_properties fp ON s.property_id = fp.id
-                LEFT JOIN farm_deposits d ON d.id = s.deposit_id
+                LEFT JOIN farm_deposits d ON d.id = s.property_id
                 WHERE s.farmer_id = ${farmerId}
                   ${excludeCommercial ? sql`AND (d.deposit_type IS NULL OR d.deposit_type != 'comercial')` : sql``}
                 ORDER BY p.name
@@ -267,79 +267,44 @@ export class FarmStorage {
         });
     }
 
-    async upsertStock(farmerId: string, productId: string, quantityChange: number, unitCost: number, depositOrPropertyId?: string | null): Promise<any> {
+    async upsertStock(farmerId: string, productId: string, quantityChange: number, unitCost: number, propertyId?: string | null): Promise<any> {
         await dbReady;
 
-        const depId = depositOrPropertyId || null;
-        const coalesced = depId || '__none__';
+        // property_id stores the deposit/property ID (column always exists)
+        const propId = propertyId || null;
+        const coalesced = propId || '__none__';
 
-        // Try with deposit_id first (new column), fallback to property_id (legacy)
-        let existing: any = null;
-        try {
-            const existingRows = await db.execute(sql`
-                SELECT * FROM farm_stock
-                WHERE farmer_id = ${farmerId} AND product_id = ${productId}
-                  AND COALESCE(deposit_id, COALESCE(property_id, '__none__')) = ${coalesced}
-                LIMIT 1
-            `);
-            existing = ((existingRows as any).rows ?? existingRows)[0];
-        } catch {
-            // deposit_id column may not exist yet, fallback
-            const existingRows = await db.execute(sql`
-                SELECT * FROM farm_stock
-                WHERE farmer_id = ${farmerId} AND product_id = ${productId}
-                  AND COALESCE(property_id, '__none__') = ${coalesced}
-                LIMIT 1
-            `);
-            existing = ((existingRows as any).rows ?? existingRows)[0];
-        }
+        const existingRows = await db.execute(sql`
+            SELECT * FROM farm_stock
+            WHERE farmer_id = ${farmerId} AND product_id = ${productId}
+              AND COALESCE(property_id, '__none__') = ${coalesced}
+            LIMIT 1
+        `);
+        const existing = ((existingRows as any).rows ?? existingRows)[0];
 
         if (existing) {
             const oldQty = parseFloat(existing.quantity);
             const oldCost = parseFloat(existing.average_cost);
             const newQty = oldQty + quantityChange;
 
-            // Weighted average cost (only update on entry)
             let newAvgCost = oldCost;
             if (quantityChange > 0 && unitCost > 0) {
                 newAvgCost = ((oldQty * oldCost) + (quantityChange * unitCost)) / newQty;
             }
 
-            // Also set deposit_id if not already set
-            try {
-                const updatedRows = await db.execute(sql`
-                    UPDATE farm_stock SET quantity = ${String(newQty)}, average_cost = ${String(newAvgCost)},
-                        deposit_id = COALESCE(${depId}, deposit_id), updated_at = now()
-                    WHERE id = ${existing.id}
-                    RETURNING *
-                `);
-                return ((updatedRows as any).rows ?? updatedRows)[0];
-            } catch {
-                const updatedRows = await db.execute(sql`
-                    UPDATE farm_stock SET quantity = ${String(newQty)}, average_cost = ${String(newAvgCost)}, updated_at = now()
-                    WHERE id = ${existing.id}
-                    RETURNING *
-                `);
-                return ((updatedRows as any).rows ?? updatedRows)[0];
-            }
+            const updatedRows = await db.execute(sql`
+                UPDATE farm_stock SET quantity = ${String(newQty)}, average_cost = ${String(newAvgCost)}, updated_at = now()
+                WHERE id = ${existing.id}
+                RETURNING *
+            `);
+            return ((updatedRows as any).rows ?? updatedRows)[0];
         } else {
-            // Insert new stock row with deposit_id
-            try {
-                const createdRows = await db.execute(sql`
-                    INSERT INTO farm_stock (farmer_id, product_id, quantity, average_cost, property_id, deposit_id)
-                    VALUES (${farmerId}, ${productId}, ${String(quantityChange)}, ${String(unitCost)}, ${depId}, ${depId})
-                    RETURNING *
-                `);
-                return ((createdRows as any).rows ?? createdRows)[0];
-            } catch {
-                // deposit_id column may not exist
-                const createdRows = await db.execute(sql`
-                    INSERT INTO farm_stock (farmer_id, product_id, quantity, average_cost, property_id)
-                    VALUES (${farmerId}, ${productId}, ${String(quantityChange)}, ${String(unitCost)}, ${depId})
-                    RETURNING *
-                `);
-                return ((createdRows as any).rows ?? createdRows)[0];
-            }
+            const createdRows = await db.execute(sql`
+                INSERT INTO farm_stock (farmer_id, product_id, quantity, average_cost, property_id)
+                VALUES (${farmerId}, ${productId}, ${String(quantityChange)}, ${String(unitCost)}, ${propId})
+                RETURNING *
+            `);
+            return ((createdRows as any).rows ?? createdRows)[0];
         }
     }
 
