@@ -118,7 +118,8 @@ export function registerFarmPdvRoutes(app: Express) {
             await farmStorage.updatePdvHeartbeat(terminal.id);
 
             // Get all data the PDV needs — products are derived from farmer's stock only
-            const stock = await farmStorage.getStock(terminal.farmerId);
+            // Exclude commercial deposit stock (comercial) — PDV only shows farm stock
+            const stock = await farmStorage.getStock(terminal.farmerId, true);
             const products = stock.map(s => ({
                 id: s.productId,
                 name: s.productName,
@@ -185,7 +186,8 @@ export function registerFarmPdvRoutes(app: Express) {
 
             await farmStorage.updatePdvHeartbeat(terminal.id);
 
-            const stock = await farmStorage.getStock(terminal.farmerId);
+            // Exclude commercial deposit stock — PDV only uses farm stock
+            const stock = await farmStorage.getStock(terminal.farmerId, true);
             const products = stock.map(s => ({
                 id: s.productId,
                 name: s.productName,
@@ -325,7 +327,8 @@ export function registerFarmPdvRoutes(app: Express) {
         try {
             const farmerId = (req.session as any).pdvFarmerId;
             const terminalId = (req.session as any).pdvTerminalId;
-            const stock = await farmStorage.getStock(farmerId);
+            // Exclude commercial deposit stock — PDV only uses farm stock
+            const stock = await farmStorage.getStock(farmerId, true);
 
             // Fetch the current terminal to know its type (e.g. diesel)
             const { farmPdvTerminals } = await import("../shared/schema");
