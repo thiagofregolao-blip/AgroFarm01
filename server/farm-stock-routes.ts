@@ -2,8 +2,8 @@ import { Express, Request, Response } from "express";
 import { requireFarmer, upload } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
-import { sql } from "drizzle-orm";
-import { farmProductsCatalog, farmStockMovements } from "@shared/schema";
+import { sql, eq, and } from "drizzle-orm";
+import { farmProductsCatalog, farmStockMovements, farmDeposits } from "@shared/schema";
 
 export function registerFarmStockRoutes(app: Express) {
 
@@ -82,7 +82,7 @@ export function registerFarmStockRoutes(app: Express) {
     app.post("/api/farm/stock", requireFarmer, async (req, res) => {
         try {
             const farmerId = (req.user as any).id;
-            const { name, activeIngredient, category, unit, quantity, unitCost } = req.body;
+            const { name, activeIngredient, category, unit, quantity, unitCost, depositId } = req.body;
 
             if (!name || isNaN(parseFloat(quantity)) || isNaN(parseFloat(unitCost))) {
                 return res.status(400).json({ error: "Dados inválidos para entrada de estoque." });
@@ -114,8 +114,9 @@ export function registerFarmStockRoutes(app: Express) {
             // 3. Upsert into farmer's physical stock
             const parsedQty = parseFloat(quantity);
             const parsedCost = parseFloat(unitCost);
+            const depId = depositId || null;
 
-            const updatedStock = await farmStorage.upsertStock(farmerId, productId, parsedQty, parsedCost);
+            const updatedStock = await farmStorage.upsertStock(farmerId, productId, parsedQty, parsedCost, depId);
 
             // 4. Register movement
             await db.insert(farmStockMovements).values({
@@ -125,7 +126,7 @@ export function registerFarmStockRoutes(app: Express) {
                 quantity: String(parsedQty),
                 unitCost: String(parsedCost),
                 referenceType: 'manual_entry',
-                notes: 'Entrada manual avulsa',
+                notes: `Entrada manual avulsa${depId ? ' (deposito: ' + depId + ')' : ''}`,
                 date: new Date()
             });
 
@@ -200,6 +201,146 @@ export function registerFarmStockRoutes(app: Express) {
         } catch (e: any) {
             console.error("[STOCK_TRANSFER]", e);
             res.status(500).json({ error: e.message });
+        }
+    });
+
+    // ─── Depositos CRUD ──────────────────────────────────────────────────────
+    app.get("/api/farm/deposits", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            const rows = await db.select().from(farmDeposits).where(eq(farmDeposits.farmerId, farmerId));
+            res.json(rows);
+        } catch (error) {
+            console.error("[DEPOSITS_GET]", error);
+            res.status(500).json({ error: "Failed to get deposits" });
+        }
+    });
+
+    app.post("/api/farm/deposits", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            const { name, depositType, location } = req.body;
+            if (!name) return res.status(400).json({ error: "Nome e obrigatorio" });
+            const [dep] = await db.insert(farmDeposits).values({
+                farmerId, name, depositType: depositType || "fazenda", location: location || null,
+            }).returning();
+            res.status(201).json(dep);
+        } catch (error) {
+            console.error("[DEPOSITS_POST]", error);
+            res.status(500).json({ error: "Failed to create deposit" });
+        }
+    });
+
+    app.put("/api/farm/deposits/:id", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            const { name, depositType, location, isActive } = req.body;
+            const [updated] = await db.execute(sql`
+                UPDATE farm_deposits SET
+                    name = COALESCE(${name}, name),
+                    deposit_type = COALESCE(${depositType}, deposit_type),
+                    location = COALESCE(${location}, location),
+                    is_active = COALESCE(${isActive}, is_active)
+                WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
+                RETURNING *
+            `);
+            res.json(updated);
+        } catch (error) {
+            console.error("[DEPOSITS_PUT]", error);
+            res.status(500).json({ error: "Failed to update deposit" });
+        }
+    });
+
+    app.delete("/api/farm/deposits/:id", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            await db.delete(farmDeposits).where(
+                and(eq(farmDeposits.id, req.params.id), eq(farmDeposits.farmerId, farmerId))
+            );
+            res.sendStatus(204);
+        } catch (error) {
+            console.error("[DEPOSITS_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete deposit" });
+        }
+    });
+
+    // ─── Stock by deposit (for AR product selection) ─────────────────────────
+    app.get("/api/farm/stock/by-deposit", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            const depositType = req.query.depositType as string || null;
+            let query = `
+                SELECT s.*, p.name as product_name, p.category, p.unit, d.name as deposit_name, d.deposit_type
+                FROM farm_stock s
+                JOIN farm_products_catalog p ON p.id = s.product_id
+                LEFT JOIN farm_deposits d ON d.id = s.deposit_id
+                WHERE s.farmer_id = $1 AND CAST(s.quantity AS numeric) > 0
+            `;
+            const params: any[] = [farmerId];
+            if (depositType) {
+                query += ` AND d.deposit_type = $2`;
+                params.push(depositType);
+            }
+            query += ` ORDER BY p.name`;
+            const rows = await db.execute(sql.raw(query));
+            res.json((rows as any).rows ?? rows);
+        } catch (error) {
+            console.error("[STOCK_BY_DEPOSIT]", error);
+            res.status(500).json({ error: "Failed to get stock by deposit" });
+        }
+    });
+
+    // ─── Import stock via Excel ──────────────────────────────────────────────
+    app.post("/api/farm/stock/import-excel", requireFarmer, upload.single("file"), async (req, res) => {
+        try {
+            const farmerId = (req.user as any).id;
+            const depositId = req.body.depositId || null;
+            if (!req.file) return res.status(400).json({ error: "Arquivo e obrigatorio" });
+
+            // Dynamic import xlsx
+            const XLSX = await import("xlsx");
+            const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(sheet) as any[];
+
+            let imported = 0;
+            for (const row of data) {
+                const name = String(row["Produto"] || row["produto"] || row["Nome"] || row["nome"] || row["Name"] || row["name"] || "").trim();
+                const qty = parseFloat(row["Quantidade"] || row["quantidade"] || row["Qty"] || row["qty"] || 0);
+                const cost = parseFloat(row["Custo"] || row["custo"] || row["Cost"] || row["cost"] || row["Preco"] || row["preco"] || 0);
+                const cat = String(row["Categoria"] || row["categoria"] || row["Category"] || "Outros");
+                const unitVal = String(row["Unidade"] || row["unidade"] || row["Unit"] || "UN");
+
+                if (!name || qty <= 0) continue;
+
+                // Find or create product
+                const existing = await db.select().from(farmProductsCatalog)
+                    .where(sql`LOWER(${farmProductsCatalog.name}) = LOWER(${name})`)
+                    .limit(1);
+
+                let productId: string;
+                if (existing.length > 0) {
+                    productId = existing[0].id;
+                } else {
+                    const [newProd] = await db.insert(farmProductsCatalog).values({
+                        name: name.toUpperCase(), category: cat, unit: unitVal, status: "pending_review", isDraft: true,
+                    }).returning();
+                    productId = newProd.id;
+                }
+
+                await farmStorage.upsertStock(farmerId, productId, qty, cost, depositId);
+                await db.insert(farmStockMovements).values({
+                    farmerId, productId, type: "entry", quantity: String(qty),
+                    unitCost: String(cost), referenceType: "excel_import",
+                    notes: "Importacao via planilha Excel", date: new Date(),
+                });
+                imported++;
+            }
+
+            res.json({ ok: true, imported, total: data.length });
+        } catch (error) {
+            console.error("[STOCK_IMPORT_EXCEL]", error);
+            res.status(500).json({ error: "Falha ao importar planilha" });
         }
     });
 }

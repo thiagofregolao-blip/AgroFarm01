@@ -44,8 +44,25 @@ export default function AccountsReceivable() {
     const { user } = useAuth();
     const [openCreate, setOpenCreate] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
+    const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [printingId, setPrintingId] = useState<string | null>(null);
     const [timbradoConfigOpen, setTimbradoConfigOpen] = useState(false);
+
+    // Fetch detail with items when editing
+    const { data: editingDetail } = useQuery({
+        queryKey: ["/api/farm/accounts-receivable", editingItemId],
+        queryFn: async () => {
+            const r = await apiRequest("GET", `/api/farm/accounts-receivable/${editingItemId}`);
+            return r.json();
+        },
+        enabled: !!editingItemId,
+    });
+
+    // Open edit with detail loaded
+    function openEdit(item: any) {
+        setEditingItemId(item.id);
+        setEditingItem(item);
+    }
 
     // Filters
     const [filterStatus, setFilterStatus] = useState("todos");
@@ -77,6 +94,11 @@ export default function AccountsReceivable() {
     const { data: products = [] } = useQuery({
         queryKey: ["/api/farm/products"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/products"); return r.json(); },
+        enabled: !!user,
+    });
+    const { data: stockByDeposit = [] } = useQuery({
+        queryKey: ["/api/farm/stock/by-deposit"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/stock/by-deposit"); return r.json(); },
         enabled: !!user,
     });
     const { data: invoiceConfig } = useQuery({
@@ -154,7 +176,7 @@ export default function AccountsReceivable() {
 
     const editMutation = useMutation({
         mutationFn: async ({ id, data }: { id: string; data: any }) => apiRequest("PUT", `/api/farm/accounts-receivable/${id}`, data),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-receivable"] }); toast({ title: "Atualizado" }); setEditingItem(null); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-receivable"] }); toast({ title: "Atualizado" }); setEditingItem(null); setEditingItemId(null); },
         onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
     });
 
@@ -337,7 +359,7 @@ export default function AccountsReceivable() {
                                                     <td className="p-3 flex gap-1 justify-end">
                                                         {item.status !== "recebido" && (
                                                             <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-                                                                onClick={() => setEditingItem(item)}>
+                                                                onClick={() => openEdit(item)}>
                                                                 <Pencil className="h-3 w-3 mr-1" />Editar
                                                             </Button>
                                                         )}
@@ -390,6 +412,7 @@ export default function AccountsReceivable() {
                                 suppliers={suppliers as any[]}
                                 seasons={seasons as any[]}
                                 products={products as any[]}
+                                stockByDeposit={stockByDeposit as any[]}
                                 invoiceConfig={invoiceConfig}
                                 onSave={(data: any) => save.mutate(data)}
                                 saving={save.isPending}
@@ -398,13 +421,26 @@ export default function AccountsReceivable() {
                     </DialogContent>
                 </Dialog>
 
-                {/* Edit Dialog */}
-                <Dialog open={!!editingItem} onOpenChange={(o) => !o && setEditingItem(null)}>
-                    <DialogContent className="max-w-md">
-                        <DialogHeader><DialogTitle>Editar Conta a Receber</DialogTitle></DialogHeader>
-                        {editingItem && <EditARForm item={editingItem} suppliers={suppliers as any[]} seasons={seasons as any[]}
-                            onSave={(data: any) => editMutation.mutate({ id: editingItem.id, data })}
-                            saving={editMutation.isPending} />}
+                {/* Edit Dialog — reuses CreateARForm pre-populated */}
+                <Dialog open={!!editingItem} onOpenChange={(o) => { if (!o) { setEditingItem(null); setEditingItemId(null); } }}>
+                    <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+                        <DialogHeader className="px-6 pt-5 pb-3 border-b">
+                            <DialogTitle>Editar Conta a Receber</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-y-auto px-6 py-4">
+                            {editingItem && (
+                                <CreateARForm
+                                    suppliers={suppliers as any[]}
+                                    seasons={seasons as any[]}
+                                    products={products as any[]}
+                                    stockByDeposit={stockByDeposit as any[]}
+                                    invoiceConfig={invoiceConfig}
+                                    initialData={editingDetail || editingItem}
+                                    onSave={(data: any) => editMutation.mutate({ id: editingItem.id, data })}
+                                    saving={editMutation.isPending}
+                                />
+                            )}
+                        </div>
                     </DialogContent>
                 </Dialog>
 
@@ -430,26 +466,44 @@ export default function AccountsReceivable() {
 }
 
 // ─── Create AR Form (complete with items, IVA, parcelas) ──────────────────────
-function CreateARForm({ suppliers, seasons, products, invoiceConfig, onSave, saving }: {
-    suppliers: any[]; seasons: any[]; products: any[]; invoiceConfig: any; onSave: (data: any) => void; saving: boolean;
+function CreateARForm({ suppliers, seasons, products, stockByDeposit, invoiceConfig, onSave, saving, initialData }: {
+    suppliers: any[]; seasons: any[]; products: any[]; stockByDeposit?: any[]; invoiceConfig: any; onSave: (data: any) => void; saving: boolean;
+    initialData?: any;
 }) {
-    const [buyer, setBuyer] = useState("");
+    const ed = initialData;
+    const [buyer, setBuyer] = useState(ed?.buyer || "");
     const [buyerSearch, setBuyerSearch] = useState("");
-    const [supplierId, setSupplierId] = useState("");
-    const [customerRuc, setCustomerRuc] = useState("");
-    const [customerAddress, setCustomerAddress] = useState("");
-    const [invoiceNumber, setInvoiceNumber] = useState("");
-    const [emissionDate, setEmissionDate] = useState(new Date().toISOString().split("T")[0]);
-    const [paymentCondition, setPaymentCondition] = useState("contado");
-    const [seasonId, setSeasonId] = useState("__none__");
-    const [totalInstallments, setTotalInstallments] = useState(1);
+    const [supplierId, setSupplierId] = useState(ed?.supplier_id || ed?.supplierId ? String(ed.supplier_id || ed.supplierId) : "");
+    const [customerRuc, setCustomerRuc] = useState(ed?.customerRuc || ed?.customer_ruc || "");
+    const [customerAddress, setCustomerAddress] = useState(ed?.customerAddress || ed?.customer_address || "");
+    const [invoiceNumber, setInvoiceNumber] = useState(ed?.invoiceNumber || ed?.invoice_number || "");
+    const [emissionDate, setEmissionDate] = useState(
+        ed?.createdAt ? new Date(ed.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+    );
+    const [paymentCondition, setPaymentCondition] = useState(ed?.paymentCondition || ed?.payment_condition || "contado");
+    const [seasonId, setSeasonId] = useState(String(ed?.seasonId || ed?.season_id || "__none__"));
+    const [totalInstallments, setTotalInstallments] = useState(ed?.totalInstallments || ed?.total_installments || 1);
     const [customDueDate, setCustomDueDate] = useState(false);
-    const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
-    const [observation, setObservation] = useState("");
+    const [dueDate, setDueDate] = useState(
+        ed?.dueDate ? new Date(ed.dueDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+    );
+    const [observation, setObservation] = useState(ed?.observation || "");
     const [items, setItems] = useState<{
         productId: string; productName: string; unit: string;
         quantity: string; unitPrice: string; ivaRate: string;
-    }[]>([{ productId: "", productName: "", unit: "UN", quantity: "1", unitPrice: "", ivaRate: "10" }]);
+    }[]>(
+        ed?.items?.length > 0
+            ? ed.items.map((it: any) => ({
+                productId: it.productId || it.product_id || "",
+                productName: it.productName || it.product_name || "",
+                unit: it.unit || "UN",
+                quantity: String(it.quantity || "1"),
+                unitPrice: String(it.unitPrice || it.unit_price || ""),
+                ivaRate: it.ivaRate || it.iva_rate || "10",
+            }))
+            : [{ productId: "", productName: "", unit: "UN", quantity: "1", unitPrice: ed ? String(ed.totalAmount || "") : "", ivaRate: "10" }]
+    );
+    const isEditMode = !!initialData;
 
     const [autoNumberLoading, setAutoNumberLoading] = useState(false);
 
@@ -469,9 +523,23 @@ function CreateARForm({ suppliers, seasons, products, invoiceConfig, onSave, sav
         }
     }
 
+    // Stock items separated by type for product selection
+    const stockInsumos = (stockByDeposit || []).filter((s: any) =>
+        s.deposit_type === "comercial" || s.depositType === "comercial"
+    );
+    const stockGraos = (stockByDeposit || []).filter((s: any) =>
+        s.category === "Semente" || s.category === "Grao" || s.category === "Graos"
+    );
+    // Use stock products when available, fallback to global catalog
+    const hasStockProducts = (stockByDeposit || []).length > 0;
+
     // When product selected, fill name + unit
     function selectProduct(idx: number, productId: string) {
-        const p = products.find((p: any) => String(p.id) === productId);
+        // Try stock first, then global catalog
+        const stockItem = (stockByDeposit || []).find((s: any) => String(s.product_id || s.productId) === productId);
+        const p = stockItem
+            ? { id: stockItem.product_id || stockItem.productId, name: stockItem.product_name || stockItem.productName, unit: stockItem.unit }
+            : products.find((p: any) => String(p.id) === productId);
         const next = [...items];
         next[idx] = {
             ...next[idx],
@@ -672,9 +740,44 @@ function CreateARForm({ suppliers, seasons, products, invoiceConfig, onSave, sav
                                             <Select value={it.productId} onValueChange={v => selectProduct(idx, v)}>
                                                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                                 <SelectContent>
-                                                    {products.map((p: any) => (
-                                                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                                                    ))}
+                                                    {hasStockProducts ? (
+                                                        <>
+                                                            {stockInsumos.length > 0 && (
+                                                                <>
+                                                                    <div className="px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-50">INSUMOS (Comercial)</div>
+                                                                    {stockInsumos.map((s: any) => (
+                                                                        <SelectItem key={`ins-${s.id}`} value={String(s.product_id || s.productId)}>
+                                                                            {s.product_name || s.productName} ({parseFloat(s.quantity).toFixed(1)} {s.unit})
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </>
+                                                            )}
+                                                            {stockGraos.length > 0 && (
+                                                                <>
+                                                                    <div className="px-2 py-1 text-[10px] font-bold text-amber-700 bg-amber-50">GRAOS</div>
+                                                                    {stockGraos.map((s: any) => (
+                                                                        <SelectItem key={`grao-${s.id}`} value={String(s.product_id || s.productId)}>
+                                                                            {s.product_name || s.productName} ({parseFloat(s.quantity).toFixed(1)} {s.unit})
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </>
+                                                            )}
+                                                            {stockInsumos.length === 0 && stockGraos.length === 0 && (
+                                                                <>
+                                                                    <div className="px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-50">ESTOQUE</div>
+                                                                    {(stockByDeposit || []).map((s: any) => (
+                                                                        <SelectItem key={`stk-${s.id}`} value={String(s.product_id || s.productId)}>
+                                                                            {s.product_name || s.productName} ({parseFloat(s.quantity).toFixed(1)} {s.unit})
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        products.map((p: any) => (
+                                                            <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                                                        ))
+                                                    )}
                                                 </SelectContent>
                                             </Select>
                                         </td>
@@ -780,65 +883,12 @@ function CreateARForm({ suppliers, seasons, products, invoiceConfig, onSave, sav
             <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-base py-5"
                 disabled={saving || !buyer || totalGeral <= 0 || !dueDate}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
-                Registrar e Imprimir
+                {isEditMode ? "Salvar Alteracoes" : "Registrar e Imprimir"}
             </Button>
         </form>
     );
 }
 
-// ─── Edit AR Form ──────────────────────────────────────────────────────────
-function EditARForm({ item, suppliers, seasons, onSave, saving }: any) {
-    const [buyer, setBuyer] = useState(item.buyer || "");
-    const [description, setDescription] = useState(item.description || "");
-    const [totalAmount, setTotalAmount] = useState(String(item.totalAmount || ""));
-    const [dueDate, setDueDate] = useState(item.dueDate ? new Date(item.dueDate).toISOString().split("T")[0] : "");
-    const [supplierId, setSupplierId] = useState(item.supplier_id || item.supplierId ? String(item.supplier_id || item.supplierId) : "__none__");
-    const [seasonId, setSeasonId] = useState(String(item.seasonId || item.season_id || "__none__"));
-
-    return (
-        <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-                <div><Label>Comprador *</Label><Input value={buyer} onChange={e => setBuyer(e.target.value)} required /></div>
-                <div>
-                    <Label>Fornecedor / Cliente</Label>
-                    <Select value={supplierId} onValueChange={setSupplierId}>
-                        <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__none__">Nenhum</SelectItem>
-                            {suppliers.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-            <div><Label>Descricao</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
-            <div className="grid grid-cols-2 gap-4">
-                <div><Label>Valor ($) *</Label><Input type="number" step="0.01" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} required /></div>
-                <div><Label>Vencimento *</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} required /></div>
-            </div>
-            {(seasons || []).length > 0 && (
-                <div>
-                    <Label>Safra (opcional)</Label>
-                    <Select value={seasonId} onValueChange={setSeasonId}>
-                        <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__none__">Nenhuma</SelectItem>
-                            {seasons.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-            )}
-            <Button type="button" className="w-full bg-blue-600 hover:bg-blue-700"
-                disabled={saving || !buyer || !totalAmount || !dueDate}
-                onClick={() => onSave({
-                    buyer, description, totalAmount, dueDate,
-                    supplier_id: supplierId === "__none__" ? null : supplierId,
-                    seasonId: seasonId === "__none__" ? null : seasonId,
-                })}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Alteracoes"}
-            </Button>
-        </div>
-    );
-}
 
 // ─── Recebimento Tab (mirror AP Pagamento Tab) ────────────────────────────────
 function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
@@ -1254,7 +1304,10 @@ function InvoicePrintOverlay({ receivableId, onClose }: { receivableId: string; 
             {/* Print-only content: positioned data for pre-printed form */}
             <style>{`
                 @media print {
-                    body > *:not(.print-invoice-overlay) { display: none !important; }
+                    body * { visibility: hidden !important; }
+                    .print-invoice-overlay, .print-invoice-overlay * {
+                        visibility: visible !important;
+                    }
                     .print-invoice-overlay {
                         display: block !important;
                         position: fixed;
@@ -1266,6 +1319,7 @@ function InvoicePrintOverlay({ receivableId, onClose }: { receivableId: string; 
                         font-family: 'Courier New', monospace;
                         font-size: 10pt;
                         color: #000;
+                        z-index: 99999;
                     }
                     @page {
                         size: letter;

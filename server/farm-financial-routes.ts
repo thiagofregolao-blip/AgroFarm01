@@ -451,14 +451,35 @@ export function registerFarmFinancialRoutes(app: Express) {
 
     app.put("/api/farm/accounts-receivable/:id", requireFarmer, async (req, res) => {
         try {
-            const { farmAccountsReceivable } = await import("../shared/schema");
-            const { eq, and } = await import("drizzle-orm");
+            const { sql } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
+            const { buyer, description, totalAmount, dueDate, supplier_id, seasonId, invoiceNumber,
+                paymentCondition, customerRuc, customerAddress, subtotalExenta, subtotalGravada5,
+                subtotalGravada10, iva5, iva10, observation } = req.body;
 
-            const [updated] = await db.update(farmAccountsReceivable).set(req.body).where(
-                and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
-            ).returning();
+            const rows = await db.execute(sql`
+                UPDATE farm_accounts_receivable SET
+                    buyer = COALESCE(${buyer ?? null}, buyer),
+                    description = COALESCE(${description ?? null}, description),
+                    total_amount = COALESCE(${totalAmount ?? null}, total_amount),
+                    due_date = COALESCE(${dueDate ? new Date(dueDate) : null}, due_date),
+                    supplier_id = COALESCE(${supplier_id ?? null}, supplier_id),
+                    season_id = COALESCE(${seasonId ?? null}, season_id),
+                    invoice_number = COALESCE(${invoiceNumber ?? null}, invoice_number),
+                    payment_condition = COALESCE(${paymentCondition ?? null}, payment_condition),
+                    customer_ruc = COALESCE(${customerRuc ?? null}, customer_ruc),
+                    customer_address = COALESCE(${customerAddress ?? null}, customer_address),
+                    subtotal_exenta = COALESCE(${subtotalExenta ?? null}, subtotal_exenta),
+                    subtotal_gravada_5 = COALESCE(${subtotalGravada5 ?? null}, subtotal_gravada_5),
+                    subtotal_gravada_10 = COALESCE(${subtotalGravada10 ?? null}, subtotal_gravada_10),
+                    iva_5 = COALESCE(${iva5 ?? null}, iva_5),
+                    iva_10 = COALESCE(${iva10 ?? null}, iva_10),
+                    observation = COALESCE(${observation ?? null}, observation)
+                WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
+                RETURNING *
+            `);
+            const updated = ((rows as any).rows ?? rows)[0];
             res.json(updated);
         } catch (error) {
             console.error("[ACCOUNTS_RECEIVABLE_UPDATE]", error);

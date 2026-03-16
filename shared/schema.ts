@@ -1083,6 +1083,7 @@ export const farmStock = pgTable("farm_stock", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
+  depositId: varchar("deposit_id"), // FK -> farm_deposits (null = deposito padrao/fazenda)
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull().default("0"),
   averageCost: decimal("average_cost", { precision: 15, scale: 4 }).notNull().default("0"), // Custo médio ponderado
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
@@ -2035,6 +2036,17 @@ export const soybeanPriceCache = pgTable("soybean_price_cache", {
   priceUsdSaca: decimal("price_usd_saca", { precision: 15, scale: 4 }).notNull(),
   source: text("source").default("yahoo_finance"),
   fetchedAt: timestamp("fetched_at").notNull().default(sql`now()`),
+});
+
+// Depositos da fazenda (armazens, galpoes, deposito comercial)
+export const farmDeposits = pgTable("farm_deposits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  depositType: text("deposit_type").notNull().default("fazenda"), // "fazenda" | "comercial"
+  location: text("location"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
 // ---- Types for new tables ----

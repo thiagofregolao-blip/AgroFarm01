@@ -533,6 +533,26 @@ app.use((req, res, next) => {
     log(`⚠️  Migration AR parcelas/invoice_config: ${migErr.message}`);
   }
 
+  // ─── Migration: farm_deposits + deposit_id in farm_stock ───
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_deposits (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name text NOT NULL,
+        deposit_type text NOT NULL DEFAULT 'fazenda',
+        location text,
+        is_active boolean NOT NULL DEFAULT true,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS deposit_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS deposit_id varchar`);
+    log("✅ Migration: farm_deposits + deposit_id ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_deposits: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes

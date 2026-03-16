@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload } from "lucide-react";
 import { useState, useRef } from "react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -172,7 +172,7 @@ export default function FarmStock() {
                         </p>
                     </div>
                     <div className="flex gap-2 flex-wrap">
-                        <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/properties"] })} />
+                        <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/deposits"] })} />
                         <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
                     </div>
                 </div>
@@ -602,6 +602,7 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const excelInputRef = useRef<HTMLInputElement>(null);
 
     const [name, setName] = useState("");
     const [category, setCategory] = useState("");
@@ -610,6 +611,12 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
     const [quantity, setQuantity] = useState("");
     const [unitCost, setUnitCost] = useState("");
     const [previewUrl, setPreviewUrl] = useState("");
+    const [depositId, setDepositId] = useState("__none__");
+
+    const { data: deposits = [] } = useQuery({
+        queryKey: ["/api/farm/deposits"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/deposits"); return r.json(); },
+    });
 
     const extractPhoto = useMutation({
         mutationFn: async (file: File) => {
@@ -637,6 +644,28 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
         }
     });
 
+    const importExcel = useMutation({
+        mutationFn: async (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            if (depositId !== "__none__") formData.append("depositId", depositId);
+            const res = await fetch("/api/farm/stock/import-excel", {
+                method: "POST",
+                body: formData,
+            });
+            if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Falha na importacao"); }
+            return res.json();
+        },
+        onSuccess: (data: any) => {
+            toast({ title: "Importacao concluida", description: `${data.imported} de ${data.total} produtos importados.` });
+            setOpen(false);
+            onSuccess();
+        },
+        onError: (e: any) => {
+            toast({ title: "Erro na importacao", description: e.message, variant: "destructive" });
+        },
+    });
+
     const saveStock = useMutation({
         mutationFn: async () => {
             return apiRequest("POST", "/api/farm/stock", {
@@ -645,7 +674,8 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                 unit,
                 activeIngredient,
                 quantity: parseFloat(quantity),
-                unitCost: parseFloat(unitCost)
+                unitCost: parseFloat(unitCost),
+                depositId: depositId === "__none__" ? null : depositId,
             });
         },
         onSuccess: () => {
@@ -674,6 +704,7 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
         setQuantity("");
         setUnitCost("");
         setPreviewUrl("");
+        setDepositId("__none__");
     };
 
     return (
@@ -692,9 +723,25 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                 </DialogHeader>
 
                 <div className="space-y-4 py-2">
-                    {/* Botão de Câmera e IA */}
+                    {/* Deposito */}
+                    <div>
+                        <Label>Deposito</Label>
+                        <Select value={depositId} onValueChange={setDepositId}>
+                            <SelectTrigger><SelectValue placeholder="Selecione o deposito..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">Sem deposito</SelectItem>
+                                {(deposits as any[]).map((d: any) => (
+                                    <SelectItem key={d.id} value={d.id}>
+                                        {d.name} {d.depositType === "comercial" ? "(Comercial)" : "(Fazenda)"}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Botao de Camera e IA */}
                     <div className="flex flex-col gap-2">
-                        <Label>1. Tire uma foto do rótulo/embalagem</Label>
+                        <Label>1. Tire uma foto do rotulo/embalagem</Label>
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -711,7 +758,7 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                             disabled={extractPhoto.isPending}
                         >
                             {extractPhoto.isPending ? (
-                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analisando Rótulo...</>
+                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analisando Rotulo...</>
                             ) : previewUrl ? (
                                 <div className="flex items-center absolute inset-0 rounded-md overflow-hidden opacity-30">
                                     <img src={previewUrl} className="w-full h-full object-cover" />
@@ -722,7 +769,36 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                                 {previewUrl ? "Trocar Foto" : "Tirar Foto (IA)"}
                             </span>
                         </Button>
-                        <p className="text-xs text-muted-foreground">A inteligência artificial preencherá os dados automaticamente.</p>
+                        <p className="text-xs text-muted-foreground">A inteligencia artificial preenchera os dados automaticamente.</p>
+                    </div>
+
+                    {/* Importar via Excel */}
+                    <div className="flex flex-col gap-2">
+                        <input
+                            type="file"
+                            ref={excelInputRef}
+                            className="hidden"
+                            accept=".xlsx,.xls,.csv"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) importExcel.mutate(file);
+                                e.target.value = "";
+                            }}
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full h-[48px] border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            onClick={() => excelInputRef.current?.click()}
+                            disabled={importExcel.isPending}
+                        >
+                            {importExcel.isPending ? (
+                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Importando...</>
+                            ) : (
+                                <><Upload className="mr-2 h-4 w-4" /> Importar via Planilha Excel</>
+                            )}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">Colunas aceitas: Produto, Quantidade, Custo, Categoria, Unidade</p>
                     </div>
 
                     <hr className="my-2 border-emerald-100" />
@@ -791,15 +867,23 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
 function NewDepositDialog({ onSuccess }: { onSuccess: () => void }) {
     const [open, setOpen] = useState(false);
     const [depositName, setDepositName] = useState("");
+    const [depositType, setDepositType] = useState("fazenda");
+    const [location, setLocation] = useState("");
     const { toast } = useToast();
 
     const createDeposit = useMutation({
         mutationFn: async () => {
-            return apiRequest("POST", "/api/farm/properties", { name: depositName });
+            return apiRequest("POST", "/api/farm/deposits", {
+                name: depositName,
+                depositType,
+                location: location || null,
+            });
         },
         onSuccess: () => {
             toast({ title: "Deposito criado", description: `"${depositName}" foi adicionado.` });
             setDepositName("");
+            setDepositType("fazenda");
+            setLocation("");
             setOpen(false);
             onSuccess();
         },
@@ -809,7 +893,7 @@ function NewDepositDialog({ onSuccess }: { onSuccess: () => void }) {
     });
 
     return (
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setDepositName(""); }}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setDepositName(""); setDepositType("fazenda"); setLocation(""); } }}>
             <DialogTrigger asChild>
                 <Button variant="outline" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50">
                     <Building2 className="mr-2 h-4 w-4" /> Novo Deposito
@@ -823,6 +907,23 @@ function NewDepositDialog({ onSuccess }: { onSuccess: () => void }) {
                     <div>
                         <Label>Nome do Deposito *</Label>
                         <Input value={depositName} onChange={e => setDepositName(e.target.value)} placeholder="Ex: Armazem Central, Silo 1..." disabled={createDeposit.isPending} />
+                    </div>
+                    <div>
+                        <Label>Tipo de Deposito *</Label>
+                        <Select value={depositType} onValueChange={setDepositType}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="fazenda">Fazenda (uso proprio)</SelectItem>
+                                <SelectItem value="comercial">Comercial (revenda)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            {depositType === "comercial" ? "Produtos deste deposito aparecerao nas vendas (Contas a Receber)" : "Produtos para uso interno da fazenda"}
+                        </p>
+                    </div>
+                    <div>
+                        <Label>Localizacao <span className="text-gray-400 font-normal">(Opcional)</span></Label>
+                        <Input value={location} onChange={e => setLocation(e.target.value)} placeholder="Ex: Sede, Lote 5..." disabled={createDeposit.isPending} />
                     </div>
                     <Button
                         className="w-full bg-emerald-600 hover:bg-emerald-700"
