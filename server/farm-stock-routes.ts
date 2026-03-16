@@ -322,11 +322,26 @@ export function registerFarmStockRoutes(app: Express) {
 
             let imported = 0;
             for (const row of data) {
-                const name = String(row["Produto"] || row["produto"] || row["Nome"] || row["nome"] || row["Name"] || row["name"] || "").trim();
-                const qty = parseFloat(row["Quantidade"] || row["quantidade"] || row["Qty"] || row["qty"] || 0);
-                const cost = parseFloat(row["Custo"] || row["custo"] || row["Cost"] || row["cost"] || row["Preco"] || row["preco"] || 0);
-                const cat = String(row["Categoria"] || row["categoria"] || row["Category"] || "Outros");
-                const unitVal = String(row["Unidade"] || row["unidade"] || row["Unit"] || "UN");
+                // Match column names flexibly (exact match or partial/case-insensitive)
+                const getCol = (row: any, ...keys: string[]) => {
+                    for (const k of keys) {
+                        if (row[k] !== undefined) return row[k];
+                    }
+                    // Fallback: partial match on column headers
+                    for (const colName of Object.keys(row)) {
+                        const lower = colName.toLowerCase().trim();
+                        for (const k of keys) {
+                            if (lower.includes(k.toLowerCase())) return row[colName];
+                        }
+                    }
+                    return undefined;
+                };
+                const name = String(getCol(row, "Produto", "produto", "Nome", "nome", "Name", "name") || "").trim();
+                const qty = parseFloat(getCol(row, "Quantidade", "quantidade", "Qty", "qty", "Qtd", "qtd", "Qtd. Estoque", "Estoque") || 0);
+                const cost = parseFloat(getCol(row, "Custo", "custo", "Cost", "cost", "Preco", "preco", "Preço", "Preço Unit", "Precio", "precio", "Unit. (USD)", "Preco Unit") || 0);
+                const cat = String(getCol(row, "Categoria", "categoria", "Category") || "Outros");
+                const unitVal = String(getCol(row, "Unidade", "unidade", "Unit", "Unid", "Unid.") || "UN");
+                const activeIngredient = String(getCol(row, "Princípio Ativo", "Principio Ativo", "principio_ativo", "Active Ingredient") || "");
 
                 if (!name || qty <= 0) continue;
 
@@ -340,7 +355,12 @@ export function registerFarmStockRoutes(app: Express) {
                     productId = existing[0].id;
                 } else {
                     const [newProd] = await db.insert(farmProductsCatalog).values({
-                        name: name.toUpperCase(), category: cat, unit: unitVal, status: "pending_review", isDraft: true,
+                        name: name.toUpperCase(),
+                        activeIngredient: activeIngredient || null,
+                        category: cat,
+                        unit: unitVal,
+                        status: "pending_review",
+                        isDraft: true,
                     }).returning();
                     productId = newProd.id;
                 }

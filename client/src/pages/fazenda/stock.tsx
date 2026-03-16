@@ -41,6 +41,12 @@ export default function FarmStock() {
         enabled: !!user,
     });
 
+    const { data: depositsMain = [] } = useQuery({
+        queryKey: ["/api/farm/deposits"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/deposits"); return r.json(); },
+        enabled: !!user,
+    });
+
     // Extrato filters
     const [extratoProduct, setExtratoProduct] = useState("");
     const [extratoType, setExtratoType] = useState("");
@@ -149,10 +155,10 @@ export default function FarmStock() {
         (s.productCategory || "").toLowerCase().includes(search.toLowerCase())
     );
 
-    // Group stock by property for warehouse view
+    // Group stock by deposit/property for warehouse view
     const stockByProperty: Record<string, any[]> = {};
     filtered.forEach((s: any) => {
-        const prop = s.propertyName || "Sem deposito";
+        const prop = s.depositName || s.propertyName || "Sem deposito";
         if (!stockByProperty[prop]) stockByProperty[prop] = [];
         stockByProperty[prop].push(s);
     });
@@ -248,66 +254,101 @@ export default function FarmStock() {
                         )}
                     </TabsContent>
 
-                    {/* Deposits tab - stock grouped by property/warehouse */}
+                    {/* Deposits tab - stock grouped by deposit */}
                     <TabsContent value="deposits" className="mt-4">
                         <div className="mb-4 flex items-center justify-between">
-                            <p className="text-sm text-gray-500">{properties.length} depósito(s) cadastrado(s)</p>
+                            <p className="text-sm text-gray-500">{(depositsMain as any[]).length + (properties as any[]).length} deposito(s) cadastrado(s)</p>
                         </div>
-                        {Object.keys(stockByProperty).length === 0 ? (
-                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
-                                <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">Nenhum depósito com estoque</p>
-                            </CardContent></Card>
-                        ) : (
-                            <div className="space-y-4">
-                                {Object.entries(stockByProperty).map(([propName, items]) => {
-                                    const propTotal = items.reduce((s: number, i: any) => s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0);
-                                    return (
-                                        <Card key={propName} className="border-emerald-100">
-                                            <CardHeader className="pb-2">
-                                                <CardTitle className="text-lg flex items-center gap-2">
-                                                    <Building2 className="h-5 w-5 text-emerald-600" />
-                                                    {propName}
-                                                    <span className="ml-auto text-sm font-normal text-gray-500">{items.length} itens — {formatCurrency(propTotal)}</span>
-                                                </CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="pt-0">
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-sm">
-                                                        <thead className="bg-emerald-50">
-                                                            <tr>
-                                                                <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Produto</th>
-                                                                <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Categoria</th>
-                                                                <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Qtd</th>
-                                                                <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Custo Medio</th>
-                                                                <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Valor</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {items.map((s: any) => {
-                                                                const q = parseFloat(s.quantity);
-                                                                const c = parseFloat(s.averageCost);
-                                                                return (
-                                                                    <tr key={s.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
-                                                                        <td className="p-2 font-medium">{s.productName}</td>
-                                                                        <td className="p-2">
-                                                                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">{s.productCategory || "--"}</span>
-                                                                        </td>
-                                                                        <td className="text-right p-2 font-mono">{q.toFixed(2)} {s.productUnit}</td>
-                                                                        <td className="text-right p-2 font-mono">{formatCurrency(c)}</td>
-                                                                        <td className="text-right p-2 font-mono font-semibold">{formatCurrency(q * c)}</td>
+                        {(() => {
+                            // Build list: all deposits (even empty) + "Sem deposito" group
+                            const allDepositNames = new Set<string>();
+                            (depositsMain as any[]).forEach((d: any) => allDepositNames.add(d.name));
+                            (properties as any[]).forEach((p: any) => allDepositNames.add(p.name));
+                            // Add any from stock grouping not yet listed
+                            Object.keys(stockByProperty).forEach(k => allDepositNames.add(k));
+
+                            const depositEntries = Array.from(allDepositNames).map(name => {
+                                const items = stockByProperty[name] || [];
+                                const dep = (depositsMain as any[]).find((d: any) => d.name === name);
+                                const depType = dep?.depositType || dep?.deposit_type || null;
+                                return { name, items, depType };
+                            });
+                            // Sort: deposits with products first, then empty, "Sem deposito" last
+                            depositEntries.sort((a, b) => {
+                                if (a.name === "Sem deposito") return 1;
+                                if (b.name === "Sem deposito") return -1;
+                                return b.items.length - a.items.length;
+                            });
+
+                            if (depositEntries.length === 0) return (
+                                <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                                    <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                                    <p className="text-gray-500">Nenhum deposito cadastrado</p>
+                                </CardContent></Card>
+                            );
+
+                            return (
+                                <div className="space-y-4">
+                                    {depositEntries.map(({ name: depName, items: depItems, depType }) => {
+                                        const depTotal = depItems.reduce((s: number, i: any) => s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0);
+                                        return (
+                                            <Card key={depName} className="border-emerald-100">
+                                                <CardHeader className="pb-2">
+                                                    <CardTitle className="text-lg flex items-center gap-2">
+                                                        <Building2 className="h-5 w-5 text-emerald-600" />
+                                                        {depName}
+                                                        {depType && (
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${depType === "comercial" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                                {depType === "comercial" ? "Comercial" : "Fazenda"}
+                                                            </span>
+                                                        )}
+                                                        <span className="ml-auto text-sm font-normal text-gray-500">
+                                                            {depItems.length > 0 ? `${depItems.length} itens — ${formatCurrency(depTotal)}` : "Vazio"}
+                                                        </span>
+                                                    </CardTitle>
+                                                </CardHeader>
+                                                <CardContent className="pt-0">
+                                                    {depItems.length === 0 ? (
+                                                        <p className="text-sm text-gray-400 py-3 text-center">Nenhum produto neste deposito. Use "Adicionar Produto" para dar entrada.</p>
+                                                    ) : (
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-sm">
+                                                                <thead className="bg-emerald-50">
+                                                                    <tr>
+                                                                        <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Produto</th>
+                                                                        <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Categoria</th>
+                                                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Qtd</th>
+                                                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Custo Medio</th>
+                                                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Valor</th>
                                                                     </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    );
-                                })}
-                            </div>
-                        )}
+                                                                </thead>
+                                                                <tbody>
+                                                                    {depItems.map((s: any) => {
+                                                                        const q = parseFloat(s.quantity);
+                                                                        const c = parseFloat(s.averageCost);
+                                                                        return (
+                                                                            <tr key={s.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
+                                                                                <td className="p-2 font-medium">{s.productName}</td>
+                                                                                <td className="p-2">
+                                                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">{s.productCategory || "--"}</span>
+                                                                                </td>
+                                                                                <td className="text-right p-2 font-mono">{q.toFixed(2)} {s.productUnit}</td>
+                                                                                <td className="text-right p-2 font-mono">{formatCurrency(c)}</td>
+                                                                                <td className="text-right p-2 font-mono font-semibold">{formatCurrency(q * c)}</td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
                     </TabsContent>
 
                     <TabsContent value="movements" className="mt-4">
