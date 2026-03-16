@@ -230,7 +230,8 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
 
             // ===== ROMANEIO: Awaiting plot selection =====
             if (ctx.step === "awaiting_romaneio_plot") {
-                const { farmPlots, farmRomaneios } = await import("../shared/schema");
+                const { farmPlots, farmRomaneios, farmSeasons, farmAccountsReceivable, farmGrainStock } = await import("../shared/schema");
+                const { and: andOp, desc: descOp } = await import("drizzle-orm");
                 const plots = await db.select({ id: farmPlots.id, name: farmPlots.name })
                     .from(farmPlots)
                     .where(sql`${farmPlots.propertyId} IN (
@@ -250,12 +251,68 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
                     return res.json({ handled: true, reply: `Não entendi. Responda com o número do talhão:\n${pList}` });
                 }
 
-                // Update romaneio with plot and confirm
+                // Auto-select current active season
+                let seasonId: string | null = null;
+                try {
+                    const seasons = await db.select({ id: farmSeasons.id })
+                        .from(farmSeasons)
+                        .where(andOp(eq(farmSeasons.farmerId, farmer.id), eq(farmSeasons.isActive, true)))
+                        .orderBy(descOp(farmSeasons.createdAt))
+                        .limit(1);
+                    if (seasons.length > 0) seasonId = seasons[0].id;
+                } catch (_) { /* seasons table may not exist */ }
+
+                // Update romaneio with plot, season, and confirm
                 if (data.romaneioId) {
-                    await db.update(farmRomaneios).set({
+                    const updateFields: any = {
                         plotId: selectedPlot.id,
                         status: "confirmed",
-                    }).where(eq(farmRomaneios.id, data.romaneioId));
+                    };
+                    if (seasonId) updateFields.seasonId = seasonId;
+
+                    const [confirmed] = await db.update(farmRomaneios).set(updateFields)
+                        .where(eq(farmRomaneios.id, data.romaneioId))
+                        .returning();
+
+                    // AUTO: Create Conta a Receber (same logic as /confirm endpoint)
+                    if (confirmed && confirmed.totalValue && parseFloat(confirmed.totalValue) > 0) {
+                        try {
+                            const dueDate = new Date(confirmed.deliveryDate);
+                            dueDate.setDate(dueDate.getDate() + 30);
+                            await db.insert(farmAccountsReceivable).values({
+                                farmerId: farmer.id,
+                                romaneioId: confirmed.id,
+                                buyer: confirmed.buyer,
+                                description: `${confirmed.crop} - Ticket ${confirmed.ticketNumber || 'S/N'} - ${(parseFloat(confirmed.finalWeight) / 1000).toFixed(2)} ton`,
+                                totalAmount: confirmed.totalValue,
+                                currency: confirmed.currency,
+                                dueDate: dueDate.toISOString(),
+                                status: "pendente",
+                            });
+                        } catch (arErr) { console.error("[WHATSAPP_CONFIRM→AR]", arErr); }
+                    }
+
+                    // AUTO: Grain stock entry (same logic as /confirm endpoint)
+                    if (confirmed && confirmed.crop && confirmed.finalWeight) {
+                        try {
+                            const cropNorm = confirmed.crop.toLowerCase().trim();
+                            const qty = parseFloat(confirmed.finalWeight);
+                            const existing = await db.select().from(farmGrainStock).where(
+                                andOp(eq(farmGrainStock.farmerId, farmer.id), eq(farmGrainStock.crop, cropNorm), eq(farmGrainStock.seasonId, seasonId || ''))
+                            );
+                            if (existing.length > 0) {
+                                await db.update(farmGrainStock)
+                                    .set({ quantity: sql`CAST(${farmGrainStock.quantity} AS NUMERIC) + ${qty}`, updatedAt: new Date() })
+                                    .where(eq(farmGrainStock.id, existing[0].id));
+                            } else {
+                                await db.insert(farmGrainStock).values({
+                                    farmerId: farmer.id, crop: cropNorm, seasonId: seasonId || null,
+                                    quantity: String(qty),
+                                });
+                            }
+                            console.log(`[WHATSAPP_CONFIRM→GRAIN_STOCK] +${qty}kg ${cropNorm}`);
+                        } catch (gsErr) { console.error("[WHATSAPP_CONFIRM→GRAIN_STOCK]", gsErr); }
+                    }
                 }
                 await db.delete(farmWhatsappPendingContext).where(eq(farmWhatsappPendingContext.id, ctx.id));
                 return res.json({ handled: true, reply: `✅ Romaneio confirmado no talhão *${selectedPlot.name}*! 🌾\n\nJá está disponível no painel da AgroFarm.` });
@@ -843,6 +900,23 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                 const impurityDisc = impurityVal != null && impurityVal > 1 ? netW * ((impurityVal - 1) / 100) : 0;
                 const finalW = rd.finalWeight ? parseFloat(rd.finalWeight) : Math.max(0, netW - moistureDisc - impurityDisc);
 
+                // DEDUPLICATION: check if romaneio with same ticket_number already exists for this farmer
+                const ticketNum = rd.ticketNumber || null;
+                if (ticketNum) {
+                    const { eq, and } = await import("drizzle-orm");
+                    const existingRom = await db.select({ id: farmRomaneios.id, status: farmRomaneios.status })
+                        .from(farmRomaneios)
+                        .where(and(
+                            eq(farmRomaneios.farmerId, farmer.id),
+                            eq(farmRomaneios.ticketNumber, ticketNum)
+                        ))
+                        .limit(1);
+                    if (existingRom.length > 0) {
+                        console.log(`[ROMANEIO_DEDUP] Ticket #${ticketNum} already exists for farmer ${farmer.id}, skipping`);
+                        return res.json({ message: `Romaneio #${ticketNum} ja foi registrado anteriormente. Verifique no painel da AgroFarm.` });
+                    }
+                }
+
                 const [romaneio] = await db.insert(farmRomaneios).values({
                     farmerId: farmer.id,
                     buyer: rd.buyer || parsed.supplier || "Desconhecido",
@@ -860,7 +934,7 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                     totalValue: rd.totalValue != null ? String(rd.totalValue) : null,
                     currency: rd.currency || "USD",
                     truckPlate: rd.truckPlate || null,
-                    ticketNumber: rd.ticketNumber || null,
+                    ticketNumber: ticketNum,
                     driver: rd.driver || null,
                     discounts: rd.discounts || null,
                     source: "whatsapp",
