@@ -30,7 +30,7 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.put("/api/farm/stock/:id", requireFarmer, async (req, res) => {
         try {
-            const { quantity, averageCost, reason, productName, productCategory, productUnit } = req.body;
+            const { quantity, averageCost, reason, productName, productCategory, productUnit, depositId } = req.body;
             if (quantity === undefined || averageCost === undefined || !reason) {
                 return res.status(400).json({ error: "Quantity, averageCost, and reason are required" });
             }
@@ -49,6 +49,12 @@ export function registerFarmStockRoutes(app: Express) {
                 if (productUnit) updateData.unit = productUnit;
 
                 await farmStorage.updateProduct(updatedStock.productId, updateData);
+            }
+
+            // Update deposit_id if provided
+            if (updatedStock && depositId !== undefined) {
+                const depVal = (depositId && depositId !== "__none__") ? depositId : null;
+                await db.execute(sql`UPDATE farm_stock SET deposit_id = ${depVal} WHERE id = ${req.params.id}`);
             }
 
             res.json(updatedStock);

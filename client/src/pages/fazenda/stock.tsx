@@ -84,6 +84,16 @@ export default function FarmStock() {
         }
     });
 
+    const deleteDepositMutation = useMutation({
+        mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/farm/deposits/${id}`); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/deposits"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
+            toast({ title: "Deposito removido" });
+        },
+        onError: (err: any) => { toast({ title: "Erro", description: err.message, variant: "destructive" }); },
+    });
+
     // Transfer state
     const [transferProductId, setTransferProductId] = useState("");
     const [transferFromWarehouse, setTransferFromWarehouse] = useState("");
@@ -254,101 +264,22 @@ export default function FarmStock() {
                         )}
                     </TabsContent>
 
-                    {/* Deposits tab - stock grouped by deposit */}
+                    {/* Deposits tab - horizontal tabs per deposit */}
                     <TabsContent value="deposits" className="mt-4">
-                        <div className="mb-4 flex items-center justify-between">
-                            <p className="text-sm text-gray-500">{(depositsMain as any[]).length + (properties as any[]).length} deposito(s) cadastrado(s)</p>
-                        </div>
-                        {(() => {
-                            // Build list: all deposits (even empty) + "Sem deposito" group
-                            const allDepositNames = new Set<string>();
-                            (depositsMain as any[]).forEach((d: any) => allDepositNames.add(d.name));
-                            (properties as any[]).forEach((p: any) => allDepositNames.add(p.name));
-                            // Add any from stock grouping not yet listed
-                            Object.keys(stockByProperty).forEach(k => allDepositNames.add(k));
-
-                            const depositEntries = Array.from(allDepositNames).map(name => {
-                                const items = stockByProperty[name] || [];
-                                const dep = (depositsMain as any[]).find((d: any) => d.name === name);
-                                const depType = dep?.depositType || dep?.deposit_type || null;
-                                return { name, items, depType };
-                            });
-                            // Sort: deposits with products first, then empty, "Sem deposito" last
-                            depositEntries.sort((a, b) => {
-                                if (a.name === "Sem deposito") return 1;
-                                if (b.name === "Sem deposito") return -1;
-                                return b.items.length - a.items.length;
-                            });
-
-                            if (depositEntries.length === 0) return (
-                                <Card className="border-emerald-100"><CardContent className="py-12 text-center">
-                                    <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                    <p className="text-gray-500">Nenhum deposito cadastrado</p>
-                                </CardContent></Card>
-                            );
-
-                            return (
-                                <div className="space-y-4">
-                                    {depositEntries.map(({ name: depName, items: depItems, depType }) => {
-                                        const depTotal = depItems.reduce((s: number, i: any) => s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0);
-                                        return (
-                                            <Card key={depName} className="border-emerald-100">
-                                                <CardHeader className="pb-2">
-                                                    <CardTitle className="text-lg flex items-center gap-2">
-                                                        <Building2 className="h-5 w-5 text-emerald-600" />
-                                                        {depName}
-                                                        {depType && (
-                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${depType === "comercial" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
-                                                                {depType === "comercial" ? "Comercial" : "Fazenda"}
-                                                            </span>
-                                                        )}
-                                                        <span className="ml-auto text-sm font-normal text-gray-500">
-                                                            {depItems.length > 0 ? `${depItems.length} itens — ${formatCurrency(depTotal)}` : "Vazio"}
-                                                        </span>
-                                                    </CardTitle>
-                                                </CardHeader>
-                                                <CardContent className="pt-0">
-                                                    {depItems.length === 0 ? (
-                                                        <p className="text-sm text-gray-400 py-3 text-center">Nenhum produto neste deposito. Use "Adicionar Produto" para dar entrada.</p>
-                                                    ) : (
-                                                        <div className="overflow-x-auto">
-                                                            <table className="w-full text-sm">
-                                                                <thead className="bg-emerald-50">
-                                                                    <tr>
-                                                                        <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Produto</th>
-                                                                        <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Categoria</th>
-                                                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Qtd</th>
-                                                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Custo Medio</th>
-                                                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Valor</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {depItems.map((s: any) => {
-                                                                        const q = parseFloat(s.quantity);
-                                                                        const c = parseFloat(s.averageCost);
-                                                                        return (
-                                                                            <tr key={s.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
-                                                                                <td className="p-2 font-medium">{s.productName}</td>
-                                                                                <td className="p-2">
-                                                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">{s.productCategory || "--"}</span>
-                                                                                </td>
-                                                                                <td className="text-right p-2 font-mono">{q.toFixed(2)} {s.productUnit}</td>
-                                                                                <td className="text-right p-2 font-mono">{formatCurrency(c)}</td>
-                                                                                <td className="text-right p-2 font-mono font-semibold">{formatCurrency(q * c)}</td>
-                                                                            </tr>
-                                                                        );
-                                                                    })}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    )}
-                                                </CardContent>
-                                            </Card>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })()}
+                        <DepositTabsView
+                            depositsMain={depositsMain as any[]}
+                            properties={properties as any[]}
+                            stockByProperty={stockByProperty}
+                            onDeleteDeposit={(depId: string, depName: string, hasItems: boolean) => {
+                                if (hasItems) {
+                                    if (!confirm(`O deposito "${depName}" tem produtos vinculados. Os produtos ficarao "Sem deposito". Tem certeza que deseja remover?`)) return;
+                                } else {
+                                    if (!confirm(`Tem certeza que deseja remover o deposito "${depName}"?`)) return;
+                                }
+                                deleteDepositMutation.mutate(depId);
+                            }}
+                            deletingDeposit={deleteDepositMutation.isPending}
+                        />
                     </TabsContent>
 
                     <TabsContent value="movements" className="mt-4">
@@ -984,12 +915,17 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
 
-    // Default values fetched from current stockItem
+    const { data: deposits = [] } = useQuery({
+        queryKey: ["/api/farm/deposits"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/deposits"); return r.json(); },
+    });
+
     const [productName, setProductName] = useState(stockItem.productName || "");
     const [productCategory, setProductCategory] = useState(stockItem.productCategory || "");
     const [productUnit, setProductUnit] = useState(stockItem.productUnit || "");
     const [quantity, setQuantity] = useState(stockItem.quantity.toString());
     const [averageCost, setAverageCost] = useState(stockItem.averageCost.toString());
+    const [depositId, setDepositId] = useState(stockItem.depositId || "__none__");
     const [reason, setReason] = useState("");
 
     const updateStock = useMutation({
@@ -1001,6 +937,7 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
                 productName,
                 productCategory,
                 productUnit,
+                depositId: depositId === "__none__" ? null : depositId,
             });
         },
         onSuccess: () => {
@@ -1019,6 +956,7 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
         setProductUnit(stockItem.productUnit || "");
         setQuantity(stockItem.quantity.toString());
         setAverageCost(stockItem.averageCost.toString());
+        setDepositId(stockItem.depositId || "__none__");
         setReason("");
     };
 
@@ -1038,24 +976,16 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
-                    {/* Product info fields */}
                     <div>
                         <Label>Nome do Produto</Label>
-                        <Input
-                            value={productName}
-                            onChange={e => setProductName(e.target.value)}
-                            placeholder="Nome do produto"
-                            disabled={updateStock.isPending}
-                        />
+                        <Input value={productName} onChange={e => setProductName(e.target.value)} placeholder="Nome do produto" disabled={updateStock.isPending} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <Label>Categoria</Label>
                             <Select value={productCategory} onValueChange={setProductCategory}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecione..." />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                 <SelectContent>
                                     {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                                 </SelectContent>
@@ -1064,9 +994,7 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
                         <div>
                             <Label>Unidade</Label>
                             <Select value={productUnit} onValueChange={setProductUnit}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecione..." />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                 <SelectContent>
                                     {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                                 </SelectContent>
@@ -1074,39 +1002,35 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
                         </div>
                     </div>
 
+                    <div>
+                        <Label>Deposito</Label>
+                        <Select value={depositId} onValueChange={setDepositId}>
+                            <SelectTrigger><SelectValue placeholder="Selecione o deposito..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">Sem deposito</SelectItem>
+                                {(deposits as any[]).map((d: any) => (
+                                    <SelectItem key={d.id} value={d.id}>{d.name} {d.depositType === "comercial" || d.deposit_type === "comercial" ? "(Comercial)" : "(Fazenda)"}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <hr className="border-gray-200" />
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <Label>Quantidade Hoje</Label>
-                            <Input
-                                type="number"
-                                step="0.01"
-                                value={quantity}
-                                onChange={e => setQuantity(e.target.value)}
-                                disabled={updateStock.isPending}
-                            />
+                            <Input type="number" step="0.01" value={quantity} onChange={e => setQuantity(e.target.value)} disabled={updateStock.isPending} />
                         </div>
                         <div>
-                            <Label>Custo Médio (R$)</Label>
-                            <Input
-                                type="number"
-                                step="0.01"
-                                value={averageCost}
-                                onChange={e => setAverageCost(e.target.value)}
-                                disabled={updateStock.isPending}
-                            />
+                            <Label>Custo Medio ($)</Label>
+                            <Input type="number" step="0.01" value={averageCost} onChange={e => setAverageCost(e.target.value)} disabled={updateStock.isPending} />
                         </div>
                     </div>
 
                     <div>
-                        <Label>Motivo da Correção *</Label>
-                        <Input
-                            placeholder="Ex: Quebra, erro de recontagem..."
-                            value={reason}
-                            onChange={e => setReason(e.target.value)}
-                            disabled={updateStock.isPending}
-                        />
+                        <Label>Motivo da Correcao *</Label>
+                        <Input placeholder="Ex: Quebra, erro de recontagem..." value={reason} onChange={e => setReason(e.target.value)} disabled={updateStock.isPending} />
                     </div>
 
                     <Button
@@ -1115,10 +1039,135 @@ function EditStockDialog({ stockItem, onSuccess }: { stockItem: any; onSuccess: 
                         disabled={updateStock.isPending || !quantity || !averageCost || !reason.trim()}
                     >
                         {updateStock.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                        Aplicar Correção
+                        Aplicar Correcao
                     </Button>
                 </div>
             </DialogContent>
         </Dialog>
+    );
+}
+
+// ─── Deposit Tabs View (horizontal tabs instead of stacked cards) ────────────
+function DepositTabsView({ depositsMain, properties, stockByProperty, onDeleteDeposit, deletingDeposit }: {
+    depositsMain: any[]; properties: any[]; stockByProperty: Record<string, any[]>;
+    onDeleteDeposit: (id: string, name: string, hasItems: boolean) => void; deletingDeposit: boolean;
+}) {
+    // Build deposit entries
+    const allDepositNames = new Set<string>();
+    depositsMain.forEach((d: any) => allDepositNames.add(d.name));
+    properties.forEach((p: any) => allDepositNames.add(p.name));
+    Object.keys(stockByProperty).forEach(k => allDepositNames.add(k));
+
+    const depositEntries = Array.from(allDepositNames).map(name => {
+        const items = stockByProperty[name] || [];
+        const dep = depositsMain.find((d: any) => d.name === name);
+        const depType = dep?.depositType || dep?.deposit_type || null;
+        const depId = dep?.id || null;
+        return { name, items, depType, depId };
+    });
+    depositEntries.sort((a, b) => {
+        if (a.name === "Sem deposito") return 1;
+        if (b.name === "Sem deposito") return -1;
+        return b.items.length - a.items.length;
+    });
+
+    const [activeDeposit, setActiveDeposit] = useState(depositEntries[0]?.name || "");
+
+    if (depositEntries.length === 0) return (
+        <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+            <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">Nenhum deposito cadastrado</p>
+        </CardContent></Card>
+    );
+
+    const active = depositEntries.find(d => d.name === activeDeposit) || depositEntries[0];
+
+    return (
+        <div>
+            {/* Horizontal tab buttons */}
+            <div className="flex gap-2 overflow-x-auto pb-2 border-b border-gray-200">
+                {depositEntries.map(({ name: depName, items: depItems, depType }) => (
+                    <button key={depName} type="button"
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                            activeDeposit === depName
+                                ? "bg-white border border-b-white border-gray-200 -mb-px text-emerald-700"
+                                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                        }`}
+                        onClick={() => setActiveDeposit(depName)}>
+                        <Building2 className="h-4 w-4" />
+                        {depName}
+                        {depType && (
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${depType === "comercial" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                {depType === "comercial" ? "COM" : "FAZ"}
+                            </span>
+                        )}
+                        <span className="text-[10px] text-gray-400 ml-1">({depItems.length})</span>
+                    </button>
+                ))}
+            </div>
+
+            {/* Active deposit content */}
+            <Card className="border-emerald-100 border-t-0 rounded-t-none">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <Building2 className="h-5 w-5 text-emerald-600" />
+                        {active.name}
+                        {active.depType && (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${active.depType === "comercial" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                {active.depType === "comercial" ? "Comercial" : "Fazenda"}
+                            </span>
+                        )}
+                        <span className="ml-auto text-sm font-normal text-gray-500">
+                            {active.items.length > 0
+                                ? `${active.items.length} itens — ${formatCurrency(active.items.reduce((s: number, i: any) => s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0))}`
+                                : "Vazio"}
+                        </span>
+                        {active.depId && active.name !== "Sem deposito" && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => onDeleteDeposit(active.depId, active.name, active.items.length > 0)}
+                                disabled={deletingDeposit}>
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                    {active.items.length === 0 ? (
+                        <p className="text-sm text-gray-400 py-6 text-center">Nenhum produto neste deposito. Use "Adicionar Produto" para dar entrada.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-emerald-50">
+                                    <tr>
+                                        <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Produto</th>
+                                        <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Categoria</th>
+                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Qtd</th>
+                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Custo Medio</th>
+                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {active.items.map((s: any) => {
+                                        const q = parseFloat(s.quantity);
+                                        const c = parseFloat(s.averageCost);
+                                        return (
+                                            <tr key={s.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
+                                                <td className="p-2 font-medium">{s.productName}</td>
+                                                <td className="p-2">
+                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">{s.productCategory || "--"}</span>
+                                                </td>
+                                                <td className="text-right p-2 font-mono">{q.toFixed(2)} {s.productUnit}</td>
+                                                <td className="text-right p-2 font-mono">{formatCurrency(c)}</td>
+                                                <td className="text-right p-2 font-mono font-semibold">{formatCurrency(q * c)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
     );
 }
