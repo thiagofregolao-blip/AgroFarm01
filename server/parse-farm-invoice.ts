@@ -58,6 +58,7 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
     let clientName = '';
     let clientDocument = '';
     let clientSectionReached = false;
+    let lastLineBeforeRuc = ''; // tracks the line just above RUC — typically the supplier name
     let issueDate: Date | null = null;
     let dueDate: Date | null = null;
     let currency = 'USD';
@@ -86,16 +87,6 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
             }
         }
 
-        // Supplier name (usually first significant line or near "COMERCIO")
-        if (!supplier && (line.includes('C.VALE') || line.includes('COMERCIO AL POR MAYOR'))) {
-            // Try to get the company name from the line above or the line itself
-            if (line.includes('C.VALE')) {
-                supplier = 'C.VALE SA';
-            } else {
-                supplier = line.trim();
-            }
-        }
-
         // Client section begins at "Nombre o Razón Social:" — supplier RUC must be extracted BEFORE this
         if (!clientSectionReached && line.match(/Nombre\s*o\s*Raz[oó]n\s*Social:/i)) {
             clientSectionReached = true;
@@ -107,6 +98,24 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
             const rucMatch = line.match(/R\.?U\.?C\.?(?:N[°º])?:?\s*([\d\-]+)/i);
             if (rucMatch) {
                 supplierRuc = rucMatch[1].trim();
+                // Use the line just before the RUC line as the supplier name (the logo/header area)
+                if (!supplier && lastLineBeforeRuc && lastLineBeforeRuc.length > 3) {
+                    supplier = lastLineBeforeRuc;
+                }
+            }
+        }
+
+        // Track last non-trivial line before RUC (for supplier name extraction)
+        if (!clientSectionReached && !supplierRuc && line.length > 3 && !line.match(/^[\d\s\-\/]+$/)) {
+            lastLineBeforeRuc = line.trim();
+        }
+
+        // Supplier name: known hardcoded patterns as fallback
+        if (!supplier && (line.includes('C.VALE') || line.includes('COMERCIO AL POR MAYOR'))) {
+            if (line.includes('C.VALE')) {
+                supplier = 'C.VALE SA';
+            } else {
+                supplier = line.trim();
             }
         }
 
@@ -311,6 +320,19 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
     if (totalAmount === 0 && items.length > 0) {
         totalAmount = items.reduce((sum, item) => sum + item.totalPrice, 0);
         console.log(`[FARM_INVOICE_PARSER] Total calculated from items sum: ${totalAmount}`);
+    }
+
+    // Final supplier fallback: use first substantial line from the document header
+    if (!supplier) {
+        const headerLine = lines.find((l: string) =>
+            l.length > 4 &&
+            !l.match(/^[\d\s\-\/\.]+$/) &&          // not pure numbers/punctuation
+            !l.match(/^N[°º]:/i) &&                  // not invoice number line
+            !l.match(/R\.?U\.?C/i) &&                // not RUC line
+            !l.match(/Nombre|Raz[oó]n|Social/i) &&  // not buyer section
+            !l.match(/Fecha|Vencimiento/i)           // not date line
+        );
+        if (headerLine) supplier = headerLine.trim();
     }
 
     return {

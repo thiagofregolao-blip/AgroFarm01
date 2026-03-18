@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Scale, Loader2, Wheat, TrendingUp, Truck, Upload, Camera, Check, X, Clock, MessageSquare, FileImage, MapPin, Calculator, ShieldAlert, Award, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SiloVisualization from "@/components/fazenda/silo-visualization";
+import { onEnterNext } from "@/lib/enter-navigation";
 export default function FarmRomaneios() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
@@ -471,6 +472,39 @@ function PendingRomaneioCard({ romaneio, plots, seasons, globalSilos, onConfirm,
     const [plotId, setPlotId] = useState(romaneio.plotId || "");
     const [seasonId, setSeasonId] = useState(romaneio.seasonId || "");
     const [globalSiloId, setGlobalSiloId] = useState(romaneio.globalSiloId || "");
+    const [seloIntacta, setSeloIntacta] = useState(false);
+    const [confirmStep, setConfirmStep] = useState(false);
+
+    const isSoja = (romaneio.crop || "").toLowerCase() === "soja";
+    const canApprove = plotId && (!isSoja || seloIntacta);
+
+    if (confirmStep) {
+        return (
+            <div className="bg-white rounded-lg border border-emerald-300 p-4 shadow-sm space-y-3">
+                <p className="text-sm font-semibold text-emerald-800">Confirmar aprovação do romaneio?</p>
+                <div className="text-sm text-gray-600 space-y-1">
+                    <p><strong>Ticket:</strong> #{romaneio.ticketNumber || "S/N"} — {romaneio.buyer}</p>
+                    <p><strong>Cultura:</strong> {romaneio.crop} — <strong>Peso Final:</strong> {parseFloat(romaneio.finalWeight).toLocaleString()} kg</p>
+                    <p><strong>Talhão:</strong> {plots.find((p: any) => p.id === plotId)?.name || plotId}</p>
+                </div>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                    Isso registrará o romaneio e atualizará o estoque de graos.
+                </p>
+                <div className="flex gap-2">
+                    <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1"
+                        disabled={saving}
+                        onClick={() => onConfirm({ plotId, seasonId: seasonId || null, globalSiloId: globalSiloId === "none" ? null : globalSiloId || null })}
+                    >
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        Confirmar
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setConfirmStep(false)}>Voltar</Button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white rounded-lg border border-amber-200 p-4 shadow-sm">
@@ -549,16 +583,30 @@ function PendingRomaneioCard({ romaneio, plots, seasons, globalSilos, onConfirm,
                             </SelectContent>
                         </Select>
                     </div>
+
+                    {isSoja && (
+                        <label className="flex items-center gap-2 text-xs mt-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={seloIntacta}
+                                onChange={e => setSeloIntacta(e.target.checked)}
+                                className="h-4 w-4 accent-emerald-600"
+                            />
+                            <span className={seloIntacta ? "text-emerald-700 font-medium" : "text-amber-700 font-medium"}>
+                                Selo da amostra intacto *
+                            </span>
+                        </label>
+                    )}
                 </div>
 
                 <div className="flex flex-col gap-2">
                     <Button
                         size="sm"
                         className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1"
-                        disabled={!plotId || saving}
-                        onClick={() => onConfirm({ plotId, seasonId: seasonId || null, globalSiloId: globalSiloId === "none" ? null : globalSiloId || null })}
+                        disabled={!canApprove || saving}
+                        onClick={() => setConfirmStep(true)}
                     >
-                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        <Check className="h-3.5 w-3.5" />
                         Aprovar
                     </Button>
                     <Button
@@ -583,6 +631,7 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
     const [plotId, setPlotId] = useState("");
     const [propertyId, setPropertyId] = useState("");
     const [seasonId, setSeasonId] = useState("");
+    const [seloIntacta, setSeloIntacta] = useState(false);
     const [globalSiloId, setGlobalSiloId] = useState(d.globalSiloId || "");
     const [deliveryDate, setDeliveryDate] = useState(
         d.deliveryDate ? new Date(d.deliveryDate).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10)
@@ -602,9 +651,13 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
     const impurityDisc = (parseFloat(impurities) || 0) > 1 ? netWeight * ((parseFloat(impurities) - 1) / 100) : 0;
     const finalWeight = d.finalWeight ? Number(d.finalWeight) : Math.max(0, netWeight - moistureDisc - impurityDisc);
     const totalValue = (finalWeight / 1000) * (parseFloat(pricePerTon) || 0);
+    const isSoja = crop.toLowerCase() === "soja";
+    const canSubmit = !!buyer && !!crop && !!grossWeight && !!tare && finalWeight > 0 && (!isSoja || seloIntacta);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSoja && !seloIntacta) return;
+        if (finalWeight <= 0) return;
         onSave({
             buyer, crop, plotId: plotId || null, propertyId: propertyId || null, seasonId: seasonId || null,
             globalSiloId: globalSiloId === "none" ? null : globalSiloId || null,
@@ -625,7 +678,7 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" onKeyDown={onEnterNext as any}>
             {initialData && (
                 <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-700 flex items-center gap-2 border border-blue-200">
                     <Camera className="h-4 w-4" />
@@ -723,9 +776,30 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
             </div>
             <div><Label>Observações</Label><Input value={notes} onChange={e => setNotes(e.target.value)} /></div>
 
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={saving || !buyer || !crop || !grossWeight || !tare}>
+            {isSoja && (
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${seloIntacta ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+                    <input
+                        type="checkbox"
+                        id="seloIntacta"
+                        checked={seloIntacta}
+                        onChange={e => setSeloIntacta(e.target.checked)}
+                        className="h-4 w-4 accent-emerald-600 cursor-pointer"
+                    />
+                    <label htmlFor="seloIntacta" className={`text-sm font-medium cursor-pointer ${seloIntacta ? "text-emerald-800" : "text-amber-800"}`}>
+                        Confirmo que o selo da amostra de soja está intacto *
+                    </label>
+                </div>
+            )}
+
+            {isSoja && finalWeight <= 0 && !!grossWeight && !!tare && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                    Peso final calculado é zero ou negativo. Verifique Peso Bruto e Tara.
+                </p>
+            )}
+
+            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={saving || !canSubmit}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {initialData ? "✅ Confirmar Romaneio Importado" : "Registrar Romaneio"}
+                {initialData ? "Confirmar Romaneio Importado" : "Registrar Romaneio"}
             </Button>
         </form>
     );

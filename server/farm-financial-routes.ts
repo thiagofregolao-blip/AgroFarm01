@@ -1,6 +1,38 @@
 import type { Express } from "express";
 import { requireFarmer, parseLocalDate } from "./farm-middleware";
 
+// Feature #24b: Deduct quantity from farm_grain_stock for grain AR items
+async function deductGrainStock(db: any, farmerId: string, items: any[]) {
+    const { sql } = await import("drizzle-orm");
+    const grainItems = items.filter((it: any) => it.grainCrop);
+    for (const item of grainItems) {
+        const qtyKg = item.unit === "TON"
+            ? (parseFloat(item.quantity) || 0) * 1000
+            : (parseFloat(item.quantity) || 0);
+        if (qtyKg <= 0) continue;
+        try {
+            if (item.grainSeasonId) {
+                await db.execute(sql`
+                    UPDATE farm_grain_stock
+                    SET quantity = GREATEST(0, quantity - ${qtyKg})
+                    WHERE farmer_id = ${farmerId} AND crop = ${item.grainCrop} AND season_id = ${item.grainSeasonId}
+                `);
+            } else {
+                await db.execute(sql`
+                    UPDATE farm_grain_stock
+                    SET quantity = GREATEST(0, quantity - ${qtyKg})
+                    WHERE farmer_id = ${farmerId} AND crop = ${item.grainCrop}
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                `);
+            }
+            console.log(`[GRAIN_STOCK] Deducted ${qtyKg}kg of ${item.grainCrop} for farmer ${farmerId}`);
+        } catch (err) {
+            console.error("[GRAIN_STOCK_DEDUCT]", err);
+        }
+    }
+}
+
 export function registerFarmFinancialRoutes(app: Express) {
 
     // ============================================================================
@@ -377,6 +409,9 @@ export function registerFarmFinancialRoutes(app: Express) {
                         }))
                     );
                 }
+
+                // Feature #24b: Auto-deduct grain stock (farm_grain_stock) for grain sale items
+                await deductGrainStock(db, farmerId, items);
                 return res.json(ar);
             }
 
@@ -414,6 +449,8 @@ export function registerFarmFinancialRoutes(app: Express) {
                     );
                 }
             }
+            // Feature #24b: deduct grain stock on first installment items
+            await deductGrainStock(db, farmerId, items);
             res.json(created);
         } catch (error) {
             console.error("[ACCOUNTS_RECEIVABLE_CREATE]", error);

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency } from "@/lib/format-currency";
+import { onEnterNext } from "@/lib/enter-navigation";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +67,7 @@ export default function AccountsReceivable() {
     }
 
     // Filters
+    const [pageSize, setPageSize] = useState(15);
     const [filterStatus, setFilterStatus] = useState("todos");
     const [filterFrom, setFilterFrom] = useState("");
     const [filterTo, setFilterTo] = useState("");
@@ -363,7 +365,7 @@ export default function AccountsReceivable() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filtered.map((item: any) => {
+                                        {filtered.slice(0, pageSize).map((item: any) => {
                                             const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
                                             const today = new Date(); today.setHours(0, 0, 0, 0);
                                             const isOverdue = (item.status === "pendente" || item.status === "parcial") && due < today;
@@ -406,6 +408,20 @@ export default function AccountsReceivable() {
                                         })}
                                     </tbody>
                                 </table>
+                                {filtered.length > pageSize && (
+                                    <div className="flex items-center justify-center gap-3 p-3 border-t border-gray-100">
+                                        <span className="text-xs text-gray-400">Mostrando {pageSize} de {filtered.length}</span>
+                                        <Select value={String(pageSize)} onValueChange={v => setPageSize(parseInt(v))}>
+                                            <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="15">15</SelectItem>
+                                                <SelectItem value="30">30</SelectItem>
+                                                <SelectItem value="50">50</SelectItem>
+                                                <SelectItem value="100">100</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </TabsContent>
@@ -674,7 +690,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5" onKeyDown={onEnterNext as any}>
             {/* Secao 1: Dados da Fatura */}
             <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-emerald-800 border-b pb-1">Dados da Fatura</h3>
