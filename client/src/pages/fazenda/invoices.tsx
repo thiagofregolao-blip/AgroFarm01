@@ -11,7 +11,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText, Search, Warehouse, Plus, DollarSign, Wheat } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText, Search, Warehouse, Plus, DollarSign, Wheat, RefreshCw } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -1167,7 +1167,12 @@ export default function FarmInvoices() {
                         {/* Invoices list */}
                         <Card className="border-emerald-100">
                             <CardHeader>
-                                <CardTitle className="text-emerald-800">Faturas Importadas</CardTitle>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-emerald-800">Faturas Importadas</CardTitle>
+                                    <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700" onClick={() => queryClient.invalidateQueries()}>
+                                        <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+                                    </Button>
+                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                                     <div className="relative">
                                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />

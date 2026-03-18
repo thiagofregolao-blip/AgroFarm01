@@ -297,7 +297,21 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { farmAccountsReceivable, farmReceivableItems } = await import("../shared/schema");
             const { db } = await import("./db");
+            const { sql } = await import("drizzle-orm");
             const farmerId = (req.user as any).id;
+
+            // Check invoice number uniqueness (skip if no invoice number)
+            if (req.body.invoiceNumber) {
+                const existing = await db.execute(sql`
+                    SELECT id FROM farm_accounts_receivable
+                    WHERE farmer_id = ${farmerId} AND invoice_number = ${req.body.invoiceNumber}
+                    AND status != 'anulado'
+                    LIMIT 1
+                `);
+                if (((existing as any).rows ?? existing).length > 0) {
+                    return res.status(409).json({ error: `Numero de fatura ${req.body.invoiceNumber} ja existe em Contas a Receber` });
+                }
+            }
 
             const totalInstallments = parseInt(req.body.totalInstallments) || 1;
             const firstDueDate = parseLocalDate(req.body.dueDate) || new Date();
@@ -475,6 +489,25 @@ export function registerFarmFinancialRoutes(app: Express) {
         } catch (error) {
             console.error("[ACCOUNTS_RECEIVABLE_DELETE]", error);
             res.status(500).json({ error: "Failed to delete account receivable" });
+        }
+    });
+
+    // Annulment: mark as "anulado" instead of deleting (preserves audit trail)
+    app.post("/api/farm/accounts-receivable/:id/anular", requireFarmer, async (req, res) => {
+        try {
+            const { db } = await import("./db");
+            const { sql } = await import("drizzle-orm");
+            const farmerId = (req.user as any).id;
+            const reason = req.body.reason || "Anulado pelo usuario";
+            await db.execute(sql`
+                UPDATE farm_accounts_receivable
+                SET status = 'anulado', observation = ${reason}
+                WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
+            `);
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[AR_ANULAR]", error);
+            res.status(500).json({ error: "Failed to annul account receivable" });
         }
     });
 

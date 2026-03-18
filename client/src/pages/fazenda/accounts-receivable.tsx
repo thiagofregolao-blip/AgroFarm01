@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
     Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare,
-    PlusCircle, Trash2, Pencil, History, Search, CreditCard, Plus, Printer, Settings
+    PlusCircle, Trash2, Pencil, History, Search, CreditCard, Plus, Printer, Settings, RefreshCw
 } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
@@ -121,7 +121,9 @@ export default function AccountsReceivable() {
         return (item.status === "pendente" || item.status === "parcial") && due < today;
     }
 
-    const filtered = (items as any[]).filter((i: any) => {
+    const activeItems = (items as any[]).filter((i: any) => i.status !== "anulado");
+
+    const filtered = activeItems.filter((i: any) => {
         const overdue = isItemOverdue(i);
         const statusCheck =
             filterStatus === "todos" ? true :
@@ -136,9 +138,9 @@ export default function AccountsReceivable() {
         return statusCheck && dateCheck && supplierCheck && seasonCheck;
     });
 
-    const totalPendente = (items as any[]).filter((i: any) => i.status === "pendente" || i.status === "parcial")
+    const totalPendente = activeItems.filter((i: any) => i.status === "pendente" || i.status === "parcial")
         .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0);
-    const totalVencido = (items as any[]).filter((i: any) => isItemOverdue(i))
+    const totalVencido = activeItems.filter((i: any) => isItemOverdue(i))
         .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0);
 
     const receive = useMutation({
@@ -182,9 +184,10 @@ export default function AccountsReceivable() {
         },
     });
 
-    const del = useMutation({
-        mutationFn: async (id: string) => apiRequest("DELETE", `/api/farm/accounts-receivable/${id}`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-receivable"] }); toast({ title: "Removido" }); },
+    const anular = useMutation({
+        mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+            apiRequest("POST", `/api/farm/accounts-receivable/${id}/anular`, { reason }),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-receivable"] }); toast({ title: "Conta a receber anulada" }); },
     });
 
     const editMutation = useMutation({
@@ -237,6 +240,9 @@ export default function AccountsReceivable() {
                         </p>
                     </div>
                     <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700" onClick={() => queryClient.invalidateQueries()}>
+                            <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+                        </Button>
                         <Button variant="outline" size="sm" className="border-gray-200 text-gray-600" onClick={() => setTimbradoConfigOpen(true)}>
                             <Settings className="mr-1 h-4 w-4" /> Timbrado
                         </Button>
@@ -254,8 +260,8 @@ export default function AccountsReceivable() {
                     {[
                         { label: "Total Pendente", value: totalPendente, color: "text-blue-700" },
                         { label: "Vencidos", value: totalVencido, color: "text-red-600" },
-                        { label: "Total de Titulos", value: (items as any[]).length, color: "text-gray-700", isCurrency: false },
-                        { label: "Recebidos", value: (items as any[]).filter((i: any) => i.status === "recebido").length, color: "text-green-700", isCurrency: false },
+                        { label: "Total de Titulos", value: activeItems.length, color: "text-gray-700", isCurrency: false },
+                        { label: "Recebidos", value: activeItems.filter((i: any) => i.status === "recebido").length, color: "text-green-700", isCurrency: false },
                     ].map((c, idx) => (
                         <Card key={idx} className="border-emerald-100"><CardContent className="p-4">
                             <p className="text-xs text-gray-500">{c.label}</p>
@@ -328,7 +334,7 @@ export default function AccountsReceivable() {
                                     <Button variant="ghost" size="sm" className="text-gray-500" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); setFilterSupplier("todos"); setFilterSeason("todos"); }}>
                                         Limpar
                                     </Button>
-                                    <span className="text-xs text-gray-400 ml-auto self-center">{filtered.length} de {(items as any[]).length} registros</span>
+                                    <span className="text-xs text-gray-400 ml-auto self-center">{filtered.length} de {activeItems.length} registros</span>
                                 </div>
                             </CardContent>
                         </Card>
@@ -384,11 +390,16 @@ export default function AccountsReceivable() {
                                                                 <Printer className="h-3 w-3" />
                                                             </Button>
                                                         )}
-                                                        <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
-                                                            onClick={() => { if (confirm(`Remover conta a receber "${item.buyer}" - ${formatCurrency(item.totalAmount)}?`)) del.mutate(item.id); }}
-                                                            aria-label="Remover">
-                                                            <Trash2 className="h-3 w-3" />
-                                                        </Button>
+                                                        {item.status !== "recebido" && (
+                                                            <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
+                                                                onClick={() => {
+                                                                    const reason = prompt(`Motivo da anulacao de "${item.buyer}" - ${formatCurrency(item.totalAmount)}:`);
+                                                                    if (reason !== null) anular.mutate({ id: item.id, reason: reason || "Anulado pelo usuario" });
+                                                                }}
+                                                                aria-label="Anular">
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </Button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             );
@@ -402,7 +413,7 @@ export default function AccountsReceivable() {
                     {/* ── RECEBIMENTO TAB ──────────────────────────────────── */}
                     <TabsContent value="recebimento" className="space-y-4 mt-4">
                         <RecebimentoTab
-                            items={items as any[]}
+                            items={activeItems}
                             accounts={accounts as any[]}
                             seasons={seasons as any[]}
                             onReceive={(id, data) => receive.mutate({ id, data })}

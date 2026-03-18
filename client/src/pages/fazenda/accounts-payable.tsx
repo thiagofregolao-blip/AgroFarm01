@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil, History, Search, CreditCard } from "lucide-react";
+import { Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil, History, Search, CreditCard, RefreshCw } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
 function exportToCSV(data: any[], filename: string) {
@@ -171,6 +171,9 @@ export default function AccountsPayable() {
                         </p>
                     </div>
                     <div className="flex gap-2 flex-wrap">
+                        <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700" onClick={() => queryClient.invalidateQueries()}>
+                            <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+                        </Button>
                         <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportToCSV(filtered, "contas-a-pagar.csv")}>
                             <Download className="mr-2 h-4 w-4" /> Exportar CSV
                         </Button>
@@ -696,6 +699,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
 // ─── Historico Tab ────────────────────────────────────────────────────────────
 function HistoricoTab({ items }: { items: any[] }) {
     const [searchTerm, setSearchTerm] = useState("");
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
     const paidItems = items
         .filter((i: any) => i.status === "pago")
@@ -704,6 +708,28 @@ function HistoricoTab({ items }: { items: any[] }) {
     const filteredPaid = paidItems.filter((i: any) =>
         !searchTerm || i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) || i.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Group by date + supplier (same-batch payments)
+    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string }[] = [];
+    const groupMap = new Map<string, typeof groups[0]>();
+    for (const item of filteredPaid) {
+        const dateStr = new Date(item.paidDate || item.updatedAt || item.dueDate).toLocaleDateString("pt-BR");
+        const key = `${dateStr}|${item.supplier}`;
+        if (!groupMap.has(key)) {
+            const g = { key, date: dateStr, supplier: item.supplier, items: [], total: 0, currency: item.currency || "USD" };
+            groupMap.set(key, g);
+            groups.push(g);
+        }
+        const g = groupMap.get(key)!;
+        g.items.push(item);
+        g.total += parseFloat(item.paidAmount || item.totalAmount || 0);
+    }
+
+    const toggleGroup = (key: string) => setExpandedGroups(prev => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+    });
 
     return (
         <div className="space-y-4">
@@ -719,40 +745,53 @@ function HistoricoTab({ items }: { items: any[] }) {
                                 className="pl-9"
                             />
                         </div>
-                        <span className="text-xs text-gray-400">{filteredPaid.length} pagamento(s)</span>
+                        <span className="text-xs text-gray-400">{groups.length} grupo(s) / {filteredPaid.length} pagamento(s)</span>
                     </div>
                 </CardContent>
             </Card>
 
-            {filteredPaid.length === 0 ? (
+            {groups.length === 0 ? (
                 <Card className="border-emerald-100"><CardContent className="py-12 text-center">
                     <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">Nenhum pagamento registrado</p>
                 </CardContent></Card>
             ) : (
-                <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-emerald-50">
-                            <tr>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Data Pgto</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
-                                <th className="text-right p-3 font-semibold text-emerald-800">Valor Pago</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredPaid.map((item: any) => (
-                                <tr key={item.id} className="border-t border-gray-100">
-                                    <td className="p-3 text-gray-700">{new Date(item.paidDate || item.updatedAt || item.dueDate).toLocaleDateString("pt-BR")}</td>
-                                    <td className="p-3 font-medium">{item.supplier}</td>
-                                    <td className="p-3 text-gray-600 max-w-[250px] truncate">{item.description || "--"}</td>
-                                    <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
-                                    <td className="text-right p-3 font-mono font-semibold text-green-600">{formatCurrency(item.totalAmount, item.currency || "USD")}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="space-y-2">
+                    {groups.map(group => (
+                        <Card key={group.key} className="border-emerald-100 overflow-hidden">
+                            <div
+                                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                onClick={() => toggleGroup(group.key)}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
+                                    <div>
+                                        <p className="font-semibold text-gray-800">{group.supplier}</p>
+                                        <p className="text-xs text-gray-500">{group.date} · {group.items.length} titulo(s)</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="font-mono font-bold text-green-600 text-sm">{formatCurrency(group.total, group.currency)}</span>
+                                    <span className="text-xs text-gray-400">{expandedGroups.has(group.key) ? "▲" : "▼"}</span>
+                                </div>
+                            </div>
+                            {expandedGroups.has(group.key) && (
+                                <div className="border-t border-gray-100">
+                                    <table className="w-full text-sm">
+                                        <tbody>
+                                            {group.items.map((item: any) => (
+                                                <tr key={item.id} className="border-t border-gray-50">
+                                                    <td className="px-4 py-2 text-gray-600 max-w-[250px] truncate">{item.description || "--"}</td>
+                                                    <td className="px-4 py-2 text-gray-500">{item.installmentNumber}/{item.totalInstallments}</td>
+                                                    <td className="text-right px-4 py-2 font-mono text-green-600">{formatCurrency(item.paidAmount || item.totalAmount, item.currency || "USD")}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </Card>
+                    ))}
                 </div>
             )}
         </div>
