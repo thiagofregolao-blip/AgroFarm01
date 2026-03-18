@@ -237,7 +237,12 @@ export default function FarmStock() {
                                             const cost = parseFloat(s.averageCost);
                                             return (
                                                 <tr key={s.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
-                                                    <td className="p-3 font-medium">{s.productName}</td>
+                                                    <td className="p-3">
+                                                        <span className="font-medium">{s.productName}</span>
+                                                        {s.activeIngredient && (
+                                                            <p className="text-xs text-gray-500 mt-0.5">{s.activeIngredient}</p>
+                                                        )}
+                                                    </td>
                                                     <td className="p-3">
                                                         <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
                                                             {s.productCategory || "—"}

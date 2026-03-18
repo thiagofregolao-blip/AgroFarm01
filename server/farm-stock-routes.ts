@@ -444,6 +444,8 @@ export function registerFarmStockRoutes(app: Express) {
                 const name = String(getCol(row, "Produto", "produto", "Nome", "nome", "Name", "name", "Nombre Comercial", "Nombre", "nombre") || "").trim();
                 // Quantity (PT + ES)
                 const rawQty = parseNum(getCol(row, "Quantidade", "quantidade", "Qty", "qty", "Qtd", "qtd", "Qtd. Estoque", "Estoque", "Cantidad", "cantidad", "Cant"));
+                // Total column — has the real total quantity (Cant × Embalagem already computed)
+                const totalCol = parseNum(getCol(row, "Total", "total"));
                 // Unit cost (PT + ES)
                 const cost = parseNum(getCol(row, "Custo", "custo", "Cost", "cost", "Preco", "preco", "Preço", "Preço Unit", "Precio", "precio", "Unit. (USD)", "Preco Unit"));
                 // Category (PT + ES) — "Clasificación de Agroquímicos"
@@ -460,20 +462,21 @@ export function registerFarmStockRoutes(app: Express) {
                 // Package size from column (Embalage/Embalagem)
                 const rawPackageSize = parseNum(getCol(row, "Embalage", "embalage", "Embalagem", "embalagem", "Embalaje", "embalaje"));
 
-                if (!name || rawQty <= 0) continue;
+                if (!name || (rawQty <= 0 && totalCol <= 0)) continue;
 
                 // Detect package size: from column or from product name pattern "x 5 Lt"
                 const packageSizeFromName = detectPackageSize(name);
                 const packageSize = rawPackageSize > 0 ? rawPackageSize : packageSizeFromName;
 
-                // Calculate real quantity: if we have package size AND the qty looks like unit count, multiply
-                // Example: name="Cripton Supra x 5 Lt", qty=2, packageSize=5 → realQty=10
-                // But if packageSize comes from column and matches the unit (e.g. embalage=5, qty=10LT), qty is already real
-                let realQty = rawQty;
-                if (packageSizeFromName && packageSizeFromName > 0) {
-                    // Package size detected in name — qty is count of packages
-                    realQty = rawQty * packageSizeFromName;
-                    console.log(`[EXCEL_IMPORT] Package detected in name: "${name}" qty=${rawQty} × pkg=${packageSizeFromName} = ${realQty}`);
+                // Use Total column if available (it already has the correct total quantity)
+                // Otherwise fall back to rawQty (no multiplication — Total is the source of truth)
+                let realQty: number;
+                if (totalCol > 0) {
+                    realQty = totalCol;
+                    console.log(`[EXCEL_IMPORT] Using Total column: "${name}" total=${totalCol}`);
+                } else {
+                    realQty = rawQty;
+                    console.log(`[EXCEL_IMPORT] No Total column, using raw qty: "${name}" qty=${rawQty}`);
                 }
 
                 // Find or create product
@@ -515,7 +518,7 @@ export function registerFarmStockRoutes(app: Express) {
                     lote: lote,
                     expiryDate: expiryDate,
                     packageSize: packageSize ? String(packageSize) : null,
-                    notes: `Importacao via planilha Excel${packageSizeFromName ? ` (${rawQty} embalagens x ${packageSizeFromName})` : ''}`,
+                    notes: `Importacao via planilha Excel${totalCol > 0 ? ` (Total: ${totalCol})` : ''}`,
                 });
                 imported++;
             }

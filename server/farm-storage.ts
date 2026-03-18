@@ -201,6 +201,7 @@ export class FarmStorage {
                        s.lote, s.expiry_date AS "expiryDate", s.package_size AS "packageSize",
                        p.name AS "productName", p.unit AS "productUnit", p.category AS "productCategory",
                        p.image_url AS "productImageUrl", p.dose_per_ha AS "productDosePerHa",
+                       p.active_ingredient AS "activeIngredient",
                        fp.name AS "propertyName",
                        d.deposit_type AS "depositType", d.name AS "depositName"
                 FROM farm_stock s
@@ -221,6 +222,7 @@ export class FarmStorage {
                        s.property_id AS "propertyId",
                        p.name AS "productName", p.unit AS "productUnit", p.category AS "productCategory",
                        p.image_url AS "productImageUrl", p.dose_per_ha AS "productDosePerHa",
+                       p.active_ingredient AS "activeIngredient",
                        fp.name AS "propertyName"
                 FROM farm_stock s
                 INNER JOIN farm_products_catalog p ON s.product_id = p.id
