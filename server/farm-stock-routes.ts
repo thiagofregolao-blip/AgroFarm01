@@ -59,8 +59,8 @@ export function registerFarmStockRoutes(app: Express) {
 
             res.json(updatedStock);
         } catch (error) {
-            console.error("[FARM_STOCK_UPDATE]", error);
-            res.status(500).json({ error: "Failed to update stock" });
+            console.error("[FARM_STOCK_UPDATE] ERROR:", (error as any)?.message || error);
+            res.status(500).json({ error: `Failed to update stock: ${(error as any)?.message || 'unknown'}` });
         }
     });
 
