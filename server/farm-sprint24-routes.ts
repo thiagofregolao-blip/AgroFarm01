@@ -44,12 +44,28 @@ export function registerFarmSprint24Routes(app: Express) {
     app.put("/api/farm/suppliers/:id", requireFarmer, async (req: Request, res: Response) => {
         try {
             const { name, ruc, phone, email, address, notes, personType, entityType } = req.body;
+            // Get old name before updating (for cascade)
+            const oldRows = await db.execute(sql`
+                SELECT name FROM farm_suppliers WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
+            `);
+            const oldName = ((oldRows as any).rows ?? oldRows)[0]?.name;
             await db.execute(sql`
                 UPDATE farm_suppliers SET name=${name}, ruc=${ruc ?? null}, phone=${phone ?? null},
                 email=${email ?? null}, address=${address ?? null}, notes=${notes ?? null},
                 person_type=${personType ?? null}, entity_type=${entityType ?? null}
                 WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
             `);
+            // Cascade name change to accounts payable supplier field
+            if (name && oldName && name !== oldName) {
+                await db.execute(sql`
+                    UPDATE farm_accounts_payable SET supplier=${name}
+                    WHERE farmer_id=${req.user!.id} AND supplier=${oldName}
+                `);
+                await db.execute(sql`
+                    UPDATE farm_invoices SET supplier=${name}
+                    WHERE farmer_id=${req.user!.id} AND supplier=${oldName}
+                `);
+            }
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
     });

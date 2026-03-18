@@ -50,6 +50,7 @@ export default function FarmInvoices() {
     const [confirmSkipStock, setConfirmSkipStock] = useState(false);
     const [confirmWarehouseId, setConfirmWarehouseId] = useState<string>("");
     const [confirmSeasonId, setConfirmSeasonId] = useState<string>("");
+    const [confirmFrotaAmount, setConfirmFrotaAmount] = useState<string>("");
 
     // Nova Despesa dialog state
     const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
@@ -153,11 +154,12 @@ export default function FarmInvoices() {
     };
 
     const confirmMutation = useMutation({
-        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string }) =>
+        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, frotaAmount }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; frotaAmount?: string }) =>
             apiRequest("POST", `/api/farm/invoices/${id}/confirm`, {
                 ...(skipStockEntry ? { skipStockEntry: true } : {}),
                 ...(warehouseId ? { warehouseId } : {}),
                 ...(seasonId ? { seasonId } : {}),
+                ...(frotaAmount && parseFloat(frotaAmount) > 0 ? { frotaAmount } : {}),
             }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
@@ -822,8 +824,17 @@ export default function FarmInvoices() {
                                             </div>
                                             <div>
                                                 <Label className="text-xs text-gray-500">Fornecedor</Label>
-                                                <Input className="h-8 text-sm" value={editInvData.supplier}
-                                                    onChange={e => setEditInvData({ ...editInvData, supplier: e.target.value })} />
+                                                <Select value={editInvData.supplier || ""} onValueChange={(v) => setEditInvData({ ...editInvData, supplier: v })}>
+                                                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {(suppliers as any[]).map((s: any) => (
+                                                            <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                                                        ))}
+                                                        {editInvData.supplier && !(suppliers as any[]).find((s: any) => s.name === editInvData.supplier) && (
+                                                            <SelectItem value={editInvData.supplier}>{editInvData.supplier}</SelectItem>
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                             <div>
                                                 <Label className="text-xs text-gray-500">Data</Label>
@@ -1117,6 +1128,20 @@ export default function FarmInvoices() {
                                                 </Select>
                                             </div>
 
+                                            {/* Despesa de Frota */}
+                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                    Despesa de Frota (opcional)
+                                                </Label>
+                                                <CurrencyInput
+                                                    value={confirmFrotaAmount}
+                                                    onValueChange={setConfirmFrotaAmount}
+                                                    className="mt-1"
+                                                    placeholder="0,00"
+                                                />
+                                                <p className="text-xs text-gray-400 mt-1">Frete e transporte relacionado a esta fatura</p>
+                                            </div>
+
                                             <div className="flex justify-end">
                                                 <Button
                                                     className="bg-emerald-600 hover:bg-emerald-700"
@@ -1125,6 +1150,7 @@ export default function FarmInvoices() {
                                                         skipStockEntry: confirmSkipStock || undefined,
                                                         warehouseId: !confirmSkipStock && confirmWarehouseId ? confirmWarehouseId : undefined,
                                                         seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
+                                                        frotaAmount: confirmFrotaAmount || undefined,
                                                     })}
                                                     disabled={confirmMutation.isPending}
                                                 >

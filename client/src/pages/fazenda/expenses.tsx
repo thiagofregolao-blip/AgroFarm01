@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -396,9 +397,9 @@ function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, o
                             <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
                         ))}
                         <div className="border-t border-gray-100 mt-1 pt-1">
-                            <a href="/fazenda/fornecedores" className="block px-2 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer font-medium">
+                            <Link href="/fazenda/fornecedores" className="block px-2 py-1.5 text-xs text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer font-medium">
                                 + Cadastrar novo fornecedor
-                            </a>
+                            </Link>
                         </div>
                     </SelectContent>
                 </Select>

@@ -84,13 +84,20 @@ export default function AccountsPayable() {
         enabled: !!user,
     });
 
+    // Compare date-only (strip time) to avoid timezone false-overdue
+    function isItemOverdue(item: any) {
+        if (item.status === "pago") return false;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
+        return (item.status === "aberto" || item.status === "parcial") && due < today;
+    }
+
     // ─── Filtered list ─────────────────────────────────────────────────────
     const filtered = (items as any[]).filter((i: any) => {
-        const today = new Date();
-        const isOverdue = (i.status === "aberto" || i.status === "parcial") && new Date(i.dueDate) < today;
+        const overdue = isItemOverdue(i);
         const statusCheck =
             filterStatus === "todos" ? true :
-            filterStatus === "vencido" ? isOverdue :
+            filterStatus === "vencido" ? overdue :
             i.status === filterStatus;
         const dateCheck =
             (!filterFrom || new Date(i.dueDate) >= new Date(filterFrom)) &&
@@ -102,7 +109,7 @@ export default function AccountsPayable() {
 
     const totalAberto = (items as any[]).filter((i: any) => i.status === "aberto" || i.status === "parcial")
         .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0);
-    const totalVencido = (items as any[]).filter((i: any) => (i.status === "aberto" || i.status === "parcial") && new Date(i.dueDate) < new Date())
+    const totalVencido = (items as any[]).filter((i: any) => isItemOverdue(i))
         .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0);
 
     const pay = useMutation({
@@ -125,6 +132,7 @@ export default function AccountsPayable() {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
             toast({ title: "Pagamento registrado no Fluxo de Caixa!" });
         },
     });
@@ -188,10 +196,10 @@ export default function AccountsPayable() {
 
                 {/* Tabs: Contas / Pagamento / Historico */}
                 <Tabs defaultValue="contas">
-                    <TabsList className="bg-emerald-50 text-emerald-800">
-                        <TabsTrigger value="contas">Contas</TabsTrigger>
-                        <TabsTrigger value="pagamento">Pagamento</TabsTrigger>
-                        <TabsTrigger value="historico">Historico</TabsTrigger>
+                    <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
+                        <TabsTrigger value="contas" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Contas</TabsTrigger>
+                        <TabsTrigger value="pagamento" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Pagamento</TabsTrigger>
+                        <TabsTrigger value="historico" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Historico</TabsTrigger>
                     </TabsList>
 
                     {/* ── CONTAS TAB ─────────────────────────────────────────── */}
@@ -277,7 +285,9 @@ export default function AccountsPayable() {
                                     </thead>
                                     <tbody>
                                         {filtered.map((item: any) => {
-                                            const isOverdue = (item.status === "aberto" || item.status === "parcial") && new Date(item.dueDate) < new Date();
+                                            const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
+                                            const today = new Date(); today.setHours(0, 0, 0, 0);
+                                            const isOverdue = (item.status === "aberto" || item.status === "parcial") && due < today;
                                             return (
                                                 <tr key={item.id} className={`border-t border-gray-100 ${isOverdue ? "bg-red-50" : ""}`}>
                                                     <td className="p-3 font-medium">{item.supplier}</td>
@@ -289,16 +299,18 @@ export default function AccountsPayable() {
                                                     <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.paidAmount || 0, item.currency || "USD")}</td>
                                                     <td className="p-3 flex gap-1">
                                                         {item.status !== "pago" && (
-                                                            <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-                                                                onClick={() => setEditingItem(item)}>
-                                                                <Pencil className="h-3 w-3 mr-1" />Editar
-                                                            </Button>
+                                                            <>
+                                                                <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
+                                                                    onClick={() => setEditingItem(item)}>
+                                                                    <Pencil className="h-3 w-3 mr-1" />Editar
+                                                                </Button>
+                                                                <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
+                                                                    onClick={() => { if (confirm(`Remover conta "${item.supplier}" - ${formatCurrency(item.totalAmount, item.currency || "USD")}?`)) del.mutate(item.id); }}
+                                                                    aria-label="Remover">
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </Button>
+                                                            </>
                                                         )}
-                                                        <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
-                                                            onClick={() => { if (confirm(`Remover conta "${item.supplier}" - ${formatCurrency(item.totalAmount, item.currency || "USD")}?`)) del.mutate(item.id); }}
-                                                            aria-label="Remover">
-                                                            <Trash2 className="h-3 w-3" />
-                                                        </Button>
                                                     </td>
                                                 </tr>
                                             );
@@ -410,16 +422,28 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
 
     async function handleConfirmPayment() {
         if (checkedIds.size === 0 || !allRowsValid) return;
+
+        // Total the user actually wants to pay across all selected items
+        const totalToPay = totalAllocated;
+        // Sum of remaining balances of all selected items
+        const totalRemaining = checkedItems.reduce((s: number, i: any) =>
+            s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0);
+
         for (const item of checkedItems) {
-            const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
+            const itemRemaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
+            // Proportional share of totalToPay for this item, capped at item's remaining balance
+            const proportion = totalRemaining > 0 ? itemRemaining / totalRemaining : 0;
+            const itemPayAmount = Math.min(itemRemaining, totalToPay * proportion);
+
             const payload: any = {
                 accountId: paymentRows[0].accountId,
-                amount: remaining.toFixed(2),
+                amount: itemPayAmount.toFixed(2),
                 paymentMethod: paymentRows[0].paymentMethod,
                 supplier: item.supplier,
+                // For multi-account split, distribute each item's share proportionally across accounts
                 accountRows: paymentRows.length > 1 ? paymentRows.map(r => ({
                     accountId: r.accountId,
-                    amount: (remaining * (parseFloat(r.amount) / totalAllocated)).toFixed(2),
+                    amount: (itemPayAmount * (parseFloat(r.amount) / totalToPay)).toFixed(2),
                 })) : undefined,
             };
             if (hasChequeMethod && chequeBanco && chequeNumero) {
@@ -431,7 +455,12 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
         setPayModalOpen(false);
     }
 
-    const isOverdue = (item: any) => (item.status === "aberto" || item.status === "parcial") && new Date(item.dueDate) < new Date();
+    const isOverdue = (item: any) => {
+        if (item.status === "pago") return false;
+        const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        return (item.status === "aberto" || item.status === "parcial") && due < today;
+    };
 
     return (
         <>
@@ -550,7 +579,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
 
             {/* Payment Modal */}
             <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
-                <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0">
+                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
                     <DialogHeader className="px-6 pt-5 pb-3 border-b">
                         <DialogTitle>Realizar Pagamento</DialogTitle>
                     </DialogHeader>

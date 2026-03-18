@@ -114,12 +114,18 @@ export default function AccountsReceivable() {
     });
 
     // Filtered list (mirror AP logic)
+    function isItemOverdue(item: any) {
+        if (item.status === "recebido") return false;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
+        return (item.status === "pendente" || item.status === "parcial") && due < today;
+    }
+
     const filtered = (items as any[]).filter((i: any) => {
-        const today = new Date();
-        const isOverdue = (i.status === "pendente" || i.status === "parcial") && new Date(i.dueDate) < today;
+        const overdue = isItemOverdue(i);
         const statusCheck =
             filterStatus === "todos" ? true :
-            filterStatus === "vencido" ? isOverdue :
+            filterStatus === "vencido" ? overdue :
             i.status === filterStatus;
         const dateCheck =
             (!filterFrom || new Date(i.dueDate) >= new Date(filterFrom)) &&
@@ -132,7 +138,7 @@ export default function AccountsReceivable() {
 
     const totalPendente = (items as any[]).filter((i: any) => i.status === "pendente" || i.status === "parcial")
         .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0);
-    const totalVencido = (items as any[]).filter((i: any) => (i.status === "pendente" || i.status === "parcial") && new Date(i.dueDate) < new Date())
+    const totalVencido = (items as any[]).filter((i: any) => isItemOverdue(i))
         .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0);
 
     const receive = useMutation({
@@ -171,6 +177,7 @@ export default function AccountsReceivable() {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-receivable"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
             toast({ title: `Recebimento registrado! Recibo #${receipt?.receipt_number || receipt?.receiptNumber || ""}` });
         },
     });
@@ -261,10 +268,10 @@ export default function AccountsReceivable() {
 
                 {/* Tabs: Contas / Recebimento / Historico */}
                 <Tabs defaultValue="contas">
-                    <TabsList className="bg-emerald-50 text-emerald-800">
-                        <TabsTrigger value="contas">Contas</TabsTrigger>
-                        <TabsTrigger value="recebimento">Recebimento</TabsTrigger>
-                        <TabsTrigger value="historico">Historico</TabsTrigger>
+                    <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
+                        <TabsTrigger value="contas" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Contas</TabsTrigger>
+                        <TabsTrigger value="recebimento" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Recebimento</TabsTrigger>
+                        <TabsTrigger value="historico" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Historico</TabsTrigger>
                     </TabsList>
 
                     {/* ── CONTAS TAB ─────────────────────────────────────────── */}
@@ -351,7 +358,9 @@ export default function AccountsReceivable() {
                                     </thead>
                                     <tbody>
                                         {filtered.map((item: any) => {
-                                            const isOverdue = (item.status === "pendente" || item.status === "parcial") && new Date(item.dueDate) < new Date();
+                                            const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
+                                            const today = new Date(); today.setHours(0, 0, 0, 0);
+                                            const isOverdue = (item.status === "pendente" || item.status === "parcial") && due < today;
                                             return (
                                                 <tr key={item.id} className={`border-t border-gray-100 ${isOverdue ? "bg-red-50" : ""}`}>
                                                     <td className="p-3 font-medium">{item.buyer}</td>
@@ -898,7 +907,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                                                             className={`flex items-center justify-between w-full p-3 rounded-lg border text-left transition-colors ${alreadyAdded ? "bg-amber-50 border-amber-300" : "border-gray-200 hover:bg-gray-50"}`}
                                                             onClick={() => {
                                                                 if (!alreadyAdded) {
-                                                                    const newItem = { productId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "exenta", grainCrop: g.crop, grainSeasonId: g.seasonId || null };
+                                                                    const newItem = { productId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "5", grainCrop: g.crop, grainSeasonId: g.seasonId || null };
                                                                     if (items.length === 1 && !items[0].productName) {
                                                                         setItems([newItem]);
                                                                     } else {
@@ -1075,13 +1084,25 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
             valor: totalChecked.toFixed(2), currency: "USD",
             emissao: new Date().toISOString().split("T")[0], vencimento: "",
         }] : [];
+
+        // Total the user actually wants to receive across all selected items
+        const totalToReceive = totalAllocated;
+        // Sum of remaining balances of all selected items
+        const totalRemaining = checkedItems.reduce((s: number, i: any) =>
+            s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0);
+
         for (const item of checkedItems) {
-            const remaining = parseFloat(item.totalAmount) - parseFloat(item.receivedAmount || 0);
+            const itemRemaining = parseFloat(item.totalAmount) - parseFloat(item.receivedAmount || 0);
+            // Proportional share of totalToReceive for this item, capped at item's remaining balance
+            const proportion = totalRemaining > 0 ? itemRemaining / totalRemaining : 0;
+            const itemReceiveAmount = Math.min(itemRemaining, totalToReceive * proportion);
+
             onReceive(item.id, {
                 paymentRows: paymentRows.map(r => ({
                     ...r,
-                    amount: paymentRows.length === 1 ? remaining.toFixed(2) :
-                        (remaining * (parseFloat(r.amount) / totalAllocated)).toFixed(2),
+                    amount: paymentRows.length === 1
+                        ? itemReceiveAmount.toFixed(2)
+                        : (itemReceiveAmount * (parseFloat(r.amount) / totalToReceive)).toFixed(2),
                 })),
                 cheques,
                 buyerName: item.buyer,
@@ -1091,7 +1112,12 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
         setPayModalOpen(false);
     }
 
-    const isOverdue = (item: any) => (item.status === "pendente" || item.status === "parcial") && new Date(item.dueDate) < new Date();
+    const isOverdue = (item: any) => {
+        if (item.status === "recebido") return false;
+        const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        return (item.status === "pendente" || item.status === "parcial") && due < today;
+    };
 
     return (
         <>

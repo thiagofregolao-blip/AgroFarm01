@@ -298,6 +298,47 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 documentType: isRemision ? "remision" : "factura",
             });
 
+            // Auto-create or link supplier in farm_suppliers
+            try {
+                const supplierName = parsed.supplier || "";
+                const supplierRuc = (parsed as any).supplierRuc || "";
+                if (supplierName) {
+                    const namePrefix = supplierName.substring(0, 15);
+                    const existing = await db.execute(sql`
+                        SELECT id FROM farm_suppliers
+                        WHERE farmer_id = ${farmerId}
+                          AND is_active = true
+                          AND (
+                            name ILIKE ${'%' + namePrefix + '%'}
+                            ${supplierRuc ? sql`OR ruc = ${supplierRuc}` : sql``}
+                          )
+                        LIMIT 1
+                    `);
+                    let supplierId: string | null = null;
+                    if (existing.rows.length > 0) {
+                        supplierId = (existing.rows[0] as any).id;
+                        console.log(`[INVOICE_IMPORT] Linked existing supplier id=${supplierId} for "${supplierName}"`);
+                    } else {
+                        const created = await db.execute(sql`
+                            INSERT INTO farm_suppliers (farmer_id, name, ruc, person_type, entity_type)
+                            VALUES (${farmerId}, ${supplierName}, ${supplierRuc || null}, 'provedor', 'juridica')
+                            RETURNING id
+                        `);
+                        supplierId = (created.rows[0] as any).id;
+                        console.log(`[INVOICE_IMPORT] Auto-created supplier id=${supplierId} for "${supplierName}"`);
+                    }
+                    if (supplierId) {
+                        await db.execute(sql`
+                            UPDATE farm_invoices
+                            SET supplier_id = ${supplierId}, ruc = ${supplierRuc || null}
+                            WHERE id = ${invoice.id}
+                        `);
+                    }
+                }
+            } catch (supErr) {
+                console.error("[INVOICE_IMPORT] Supplier auto-link error:", supErr);
+            }
+
             // Create invoice items (try to match with catalog products, auto-create if not found)
             const allProducts = await farmStorage.getAllProducts();
             const invoiceItems = [];
@@ -436,6 +477,23 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 }
             } else {
                 console.log(`[REMISION_CONFIRM] Remissao confirmada - estoque atualizado com custo zero, sem conta a pagar`);
+            }
+
+            // Create fleet expense if frotaAmount provided
+            const frotaAmount = parseFloat(req.body.frotaAmount);
+            if (frotaAmount > 0) {
+                try {
+                    await db.execute(sql`
+                        INSERT INTO farm_expenses (farmer_id, category, amount, currency, description, expense_date, invoice_id)
+                        VALUES (${farmerId}, 'frota', ${String(frotaAmount)}, ${invoice.currency || 'USD'},
+                            ${'Frete/Frota — Fatura #' + (invoice.invoiceNumber || req.params.id.slice(0, 8))},
+                            ${new Date()},
+                            ${req.params.id})
+                    `);
+                    console.log(`[INVOICE_CONFIRM] Created frota expense: ${frotaAmount} for invoice ${req.params.id}`);
+                } catch (frotaErr) {
+                    console.error("[INVOICE_CONFIRM_FROTA]", frotaErr);
+                }
             }
 
             // Check if this invoice should skip stock entry

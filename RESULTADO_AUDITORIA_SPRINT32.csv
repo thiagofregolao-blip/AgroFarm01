@@ -1,0 +1,36 @@
+Item,Descricao,Teste,Status,O que a IA testou,Bug encontrado
+1,Menu Desktop Horizontal,I1,PASSOU,Verificou menu horizontal com icones acima do texto e submenus por hover. Despesas removido do grupo Financeiro.,
+2,Tipo Pessoa/Entidade Fornecedor,"A1, A2",PASSOU,"Criou 2 fornecedores: Provedor/P.Fisica com badges OK, Cliente/P.Juridica com RUC e badges OK. Campo se chama Natureza (nao Entidade).",
+3,Validacao RUC Duplicado,A3,PARCIAL,Tentou criar fornecedor com RUC duplicado. Sistema bloqueou mas NAO exibiu mensagem de erro ao usuario.,MEDIA: Sem feedback visual de RUC duplicado
+4,Codeudor/Pagare (Garantias),H1,NAO ENCONTRADO,Procurou no menu e em URLs diretas. Modulo nao existe no sistema.,
+5,Importacao Fatura WhatsApp,B1,NAO TESTAVEL,Sem integracao WhatsApp e sem faturas importadas no ambiente.,
+6,Deletar Fatura (limpeza FK),B2,NAO TESTAVEL,Sem faturas no sistema para testar delecao.,
+7,Modal Nova Despesa (completo),"C1-C6",PASSOU (5/6),"C1: Lancou $5.000 A Vista diesel - toast OK - AP Pago - extrato -$5.000 - saldo $7.500->$2.500. C2: $12.000 A Prazo 3 parcelas - 3x $4.000 em AP. C3: Nao testavel (sem fatura). C4: Modal busca fornecedor com filtro e badges OK. C5: Layout horizontal com botoes no rodape OK. C6: Tabela com todas as colunas OK.",
+8,Aprovar Fatura Somente Valor,B3,NAO TESTAVEL,Sem faturas pendentes para testar skip stock.,
+9,Aprovar Fatura com Deposito,B4,NAO TESTAVEL,Sem faturas pendentes para testar deposito destino.,
+10,Remocao Botao Nova Conta,D8,PASSOU,Verificou que NAO existe botao Nova Conta na tela de Contas a Pagar.,
+11,Exportar CSV,I2,PARCIAL,Botao Exportar CSV esta presente e ativado. Nao verificou o download do arquivo.,
+12,Vinculacao Safra a Fatura,B6,NAO TESTAVEL,Sem faturas para verificar vinculacao automatica de safra.,
+13,Filtros Busca Faturas,B7,PARCIAL,Campos de filtro existem (fornecedor e numero e data). Digitou teste no filtro. Sem faturas para confirmar funcionamento real.,
+14,Transferencia entre Depositos,G1,FALHOU,"Transferiu 10 LT de CENTURION para Armazem Norte. Historico registrou Saida+Entrada mas saldos dos depositos NAO atualizaram.",ALTA: Saldos depositos nao atualizam apos transferencia
+15,Bot Precos Produtos Manuais,B8,NAO TESTAVEL,Bot WhatsApp indisponivel e sem acesso direto a API.,
+16,Integracao Fornecedores c/ Financeiro,"A1, C1, C4",PASSOU,Modal busca fornecedor lista cadastrados com badges. Fornecedor selecionado aparece no AP e historico.,
+17,Edicao Fatura Apos Aprovacao,B5,NAO TESTAVEL,Sem faturas aprovadas para testar edicao.,
+18,Campo Fornecedor/Cliente em AR,E1,PASSOU,Verificou que o campo Fornecedor/Cliente esta presente na criacao de contas a receber.,
+19,Edicao Contas a Receber,E2,FALHOU,Clicou Editar em conta a receber - pagina crashou (tela branca).,ALTA: Select.Item com value vazio no Radix UI causa crash
+20,Aba Recebimento em AR,E3,PASSOU,"Aba Recebimento funciona: selecao por cliente e lista pendentes com checkboxes e barra resumo e confirmacao.",
+21,Remocao Botao Novo Lancamento,F1,PASSOU,Verificou que NAO existe botao Novo Lancamento no Fluxo de Caixa.,
+22,Filtros Contas a Pagar,D1,PASSOU,"Filtro Status Aberto mostrou 0 de 2. Limpou e voltou 2 de 2. Filtros fornecedor e vencimento presentes.",
+23,Edicao Contas a Pagar,D2,FALHOU,"Clicou Editar e alterou fornecedor e clicou Salvar Alteracoes multiplas vezes - botao nao respondeu.",ALTA: Botao Salvar Alteracoes nao funciona
+24,Integracao AR c/ Fluxo de Caixa,E3,PASSOU,Verificado via aba Recebimento que integra com fluxo de caixa.,
+25,Aba Historico em AP,D7,PASSOU,Tabela com colunas Data Pgto/Fornecedor/Descricao/Parcela/Valor Pago. Mostrou 2 pagamentos.,
+26,Aba Pagamento Novo Formato,"D3-D6",PASSOU,"D3: Sem dropdown fornecedor e tabela pendentes com checkboxes. D4: Marcou 2 contas ($8.000) e pagou - saldos atualizaram. D6: Checkbox cabecalho seleciona/deseleciona todos.",
+27,Cards Expansiveis Fluxo Caixa,F2,PASSOU,Clicou card Entradas - expandiu mostrando ultimas 5 transacoes com detalhes.,
+28,Transferencia entre Contas,"F4, F5",PASSOU/FALHOU,"F4 OK: Transferiu $1.000 Atlas->Itau. Saldos exatos. F5 FALHOU: Edicao de data nao persistiu.",MEDIA: Edicao de data em transferencia nao salva
+29,Emissao de Fatura,H2,NAO ENCONTRADO,Procurou no menu e URLs diretas. Modulo nao encontrado no sistema.,
+30,Produtividade por Talhao,H3,PASSOU,"Pagina carregou. Filtro Safra com Soja e filtro Talhao e cards resumo (Producao Total e Media e Custo Total).",
+31,Simbolo Moeda Despesa Vinculada,B9,NAO TESTAVEL,Sem faturas importadas com moeda detectada.,
+32,Suporte Multiplas Moedas,B9,NAO TESTAVEL,Sem faturas com moedas diferentes para testar.,
+,,,,TESTES DE INTEGRIDADE,
+J1,Ciclo A Prazo Completo,J1,PASSOU,"Lancou $6.000 em 2 parcelas. AP 2x$3.000. Pagou 1/2. AP 1/2=Pago e 2/2=Aberto. Fluxo -$3.000. Banco Itau -$4.500->-$7.500.",
+J2,Ciclo A Vista Completo,J2,PASSOU,"Lancou $2.500 A Vista. AP=Pago $2.500. Fluxo -$2.500. Banco Itau -$7.500->-$10.000.",

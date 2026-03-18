@@ -105,9 +105,10 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { farmAccountsPayable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
+            const { sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = (req.user as any).id;
-            const { accountId, amount, paymentMethod } = req.body;
+            const { accountId, amount, paymentMethod, accountRows } = req.body;
 
             // Get the account payable
             const [ap] = await db.select().from(farmAccountsPayable).where(
@@ -119,25 +120,49 @@ export function registerFarmFinancialRoutes(app: Express) {
             const previousPaid = parseFloat(ap.paidAmount || "0");
             const newPaidTotal = previousPaid + payAmount;
             const totalDue = parseFloat(ap.totalAmount);
+            const txDesc = `Pgto: ${ap.supplier} - ${ap.description || ''}`.trim();
 
-            // Create cash flow transaction (SAIDA)
-            const [tx] = await db.insert(farmCashTransactions).values({
-                farmerId,
-                accountId,
-                type: "saida",
-                amount: String(payAmount),
-                currency: ap.currency,
-                category: "pagamento_titulo",
-                description: `Pgto: ${ap.supplier} - ${ap.description || ''}`.trim(),
-                paymentMethod: paymentMethod || "transferencia",
-                referenceType: "pagamento_conta",
-            }).returning();
+            let firstTxId: string | null = null;
 
-            // Update account balance
-            const { sql: sqlFn } = await import("drizzle-orm");
-            await db.update(farmCashAccounts)
-                .set({ currentBalance: sqlFn`current_balance - ${payAmount}` })
-                .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
+            if (accountRows && Array.isArray(accountRows) && accountRows.length > 1) {
+                // Multi-account payment: create one transaction per account row (Bug #21 fix)
+                for (const row of accountRows) {
+                    const rowAmount = parseFloat(row.amount);
+                    if (!rowAmount || !row.accountId) continue;
+                    const [rowTx] = await db.insert(farmCashTransactions).values({
+                        farmerId,
+                        accountId: row.accountId,
+                        type: "saida",
+                        amount: String(rowAmount),
+                        currency: ap.currency,
+                        category: "pagamento_titulo",
+                        description: txDesc,
+                        paymentMethod: paymentMethod || "transferencia",
+                        referenceType: "pagamento_conta",
+                    }).returning();
+                    if (!firstTxId) firstTxId = rowTx.id;
+                    await db.update(farmCashAccounts)
+                        .set({ currentBalance: sqlFn`current_balance - ${rowAmount}` })
+                        .where(and(eq(farmCashAccounts.id, row.accountId), eq(farmCashAccounts.farmerId, farmerId)));
+                }
+            } else {
+                // Single-account payment
+                const [tx] = await db.insert(farmCashTransactions).values({
+                    farmerId,
+                    accountId,
+                    type: "saida",
+                    amount: String(payAmount),
+                    currency: ap.currency,
+                    category: "pagamento_titulo",
+                    description: txDesc,
+                    paymentMethod: paymentMethod || "transferencia",
+                    referenceType: "pagamento_conta",
+                }).returning();
+                firstTxId = tx.id;
+                await db.update(farmCashAccounts)
+                    .set({ currentBalance: sqlFn`current_balance - ${payAmount}` })
+                    .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
+            }
 
             // Update account payable status
             const newStatus = newPaidTotal >= totalDue ? "pago" : "parcial";
@@ -145,10 +170,10 @@ export function registerFarmFinancialRoutes(app: Express) {
                 paidAmount: String(newPaidTotal),
                 paidDate: new Date(),
                 status: newStatus,
-                cashTransactionId: tx.id,
+                cashTransactionId: firstTxId,
             }).where(eq(farmAccountsPayable.id, req.params.id));
 
-            res.json({ success: true, status: newStatus, transaction: tx });
+            res.json({ success: true, status: newStatus });
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_PAY]", error);
             res.status(500).json({ error: "Failed to pay account" });

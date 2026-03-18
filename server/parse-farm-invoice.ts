@@ -29,6 +29,7 @@ export interface ParsedInvoiceItem {
 export interface ParsedInvoice {
     invoiceNumber: string;
     supplier: string;
+    supplierRuc: string; // RUC do fornecedor/emissor da fatura
     clientName: string;
     clientDocument: string;
     issueDate: Date | null;
@@ -53,8 +54,10 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
 
     let invoiceNumber = '';
     let supplier = '';
+    let supplierRuc = '';
     let clientName = '';
     let clientDocument = '';
+    let clientSectionReached = false;
     let issueDate: Date | null = null;
     let dueDate: Date | null = null;
     let currency = 'USD';
@@ -90,6 +93,20 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
                 supplier = 'C.VALE SA';
             } else {
                 supplier = line.trim();
+            }
+        }
+
+        // Client section begins at "Nombre o Razón Social:" — supplier RUC must be extracted BEFORE this
+        if (!clientSectionReached && line.match(/Nombre\s*o\s*Raz[oó]n\s*Social:/i)) {
+            clientSectionReached = true;
+        }
+
+        // Supplier RUC: appears in the header BEFORE the buyer section
+        // Formats: "R.U.C.: 80097770-8", "RUC: 80097770-8", "R.U.C.N°: 80097770-8"
+        if (!supplierRuc && !clientSectionReached) {
+            const rucMatch = line.match(/R\.?U\.?C\.?(?:N[°º])?:?\s*([\d\-]+)/i);
+            if (rucMatch) {
+                supplierRuc = rucMatch[1].trim();
             }
         }
 
@@ -299,6 +316,7 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
     return {
         invoiceNumber,
         supplier,
+        supplierRuc,
         clientName,
         clientDocument,
         issueDate,
@@ -466,6 +484,7 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
       "documentType": "factura" | "remision" | "unknown",
       "invoiceNumber": "string (número da nota)",
       "supplier": "string (nome do fornecedor/empresa emissora do documento)",
+      "supplierRuc": "string (RUC/CNPJ do FORNECEDOR/EMISSOR do documento, não do cliente)",
       "clientName": "string (nome do cliente/comprador)",
       "clientDocument": "string (CPF/CNPJ/RUC do cliente)",
       "issueDate": "YYYY-MM-DD (data de emissão)",
@@ -553,6 +572,7 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
         return {
             invoiceNumber: parsed.invoiceNumber || "",
             supplier: parsed.supplier || "Fornecedor Desconhecido",
+            supplierRuc: parsed.supplierRuc || "",
             clientName: parsed.clientName || "",
             clientDocument: parsed.clientDocument || "",
             issueDate: safeDateParse(parsed.issueDate) || new Date(),

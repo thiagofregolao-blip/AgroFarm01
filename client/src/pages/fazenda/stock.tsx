@@ -1053,10 +1053,9 @@ function DepositTabsView({ depositsMain, properties, stockByProperty, onDeleteDe
     depositsMain: any[]; properties: any[]; stockByProperty: Record<string, any[]>;
     onDeleteDeposit: (id: string, name: string, hasItems: boolean) => void; deletingDeposit: boolean;
 }) {
-    // Build deposit entries
+    // Build deposit entries — only from real farmDeposits, not from properties
     const allDepositNames = new Set<string>();
     depositsMain.forEach((d: any) => allDepositNames.add(d.name));
-    properties.forEach((p: any) => allDepositNames.add(p.name));
     Object.keys(stockByProperty).forEach(k => allDepositNames.add(k));
 
     const depositEntries = Array.from(allDepositNames).map(name => {
