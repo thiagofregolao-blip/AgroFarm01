@@ -149,7 +149,6 @@ export function registerFarmStockRoutes(app: Express) {
                 expiryDate: parsedExpiry,
                 packageSize: parsedPkg ? String(parsedPkg) : null,
                 notes: `Entrada manual avulsa${depId ? ' (deposito: ' + depId + ')' : ''}`,
-                date: new Date()
             });
 
             res.status(201).json(updatedStock);
@@ -517,7 +516,6 @@ export function registerFarmStockRoutes(app: Express) {
                     expiryDate: expiryDate,
                     packageSize: packageSize ? String(packageSize) : null,
                     notes: `Importacao via planilha Excel${packageSizeFromName ? ` (${rawQty} embalagens x ${packageSizeFromName})` : ''}`,
-                    date: new Date(),
                 });
                 imported++;
             }
