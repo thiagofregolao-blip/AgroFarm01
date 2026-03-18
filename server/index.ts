@@ -551,16 +551,22 @@ app.use((req, res, next) => {
     `);
     await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS deposit_id varchar`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS deposit_id varchar`);
-    // Lote, vencimento e embalagem
+    log("✅ Migration: farm_deposits + deposit_id ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_deposits: ${migErr.message}`);
+  }
+
+  // Lote, vencimento e embalagem (bloco separado para garantir execução)
+  try {
     await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS lote text`);
     await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS expiry_date timestamp`);
     await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS package_size decimal(15,4)`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS lote text`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS expiry_date timestamp`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS package_size decimal(15,4)`);
-    log("✅ Migration: farm_deposits + deposit_id + lote/expiry/package ensured");
+    log("✅ Migration: lote/expiry_date/package_size columns ensured");
   } catch (migErr: any) {
-    log(`⚠️  Migration farm_deposits: ${migErr.message}`);
+    log(`⚠️  Migration lote/expiry/package: ${migErr.message}`);
   }
 
   const server = await registerRoutes(app);
