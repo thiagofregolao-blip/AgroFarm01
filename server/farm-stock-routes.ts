@@ -487,6 +487,10 @@ export function registerFarmStockRoutes(app: Express) {
                 let productId: string;
                 if (existing.length > 0) {
                     productId = existing[0].id;
+                    // Update active_ingredient if provided and not yet set
+                    if (activeIngredient && !existing[0].activeIngredient) {
+                        await db.execute(sql`UPDATE farm_products_catalog SET active_ingredient = ${activeIngredient} WHERE id = ${productId}`);
+                    }
                 } else {
                     const [newProd] = await db.insert(farmProductsCatalog).values({
                         name: name.toUpperCase(),
