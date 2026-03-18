@@ -198,6 +198,7 @@ export class FarmStorage {
                 SELECT s.id, s.farmer_id AS "farmerId", s.product_id AS "productId",
                        s.quantity, s.average_cost AS "averageCost", s.updated_at AS "updatedAt",
                        s.property_id AS "propertyId", s.property_id AS "depositId",
+                       s.lote, s.expiry_date AS "expiryDate", s.package_size AS "packageSize",
                        p.name AS "productName", p.unit AS "productUnit", p.category AS "productCategory",
                        p.image_url AS "productImageUrl", p.dose_per_ha AS "productDosePerHa",
                        fp.name AS "propertyName",

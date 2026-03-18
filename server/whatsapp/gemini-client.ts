@@ -704,6 +704,8 @@ export async function parseProductPhoto(imageBuffer: Buffer, mimeType: string): 
   activeIngredient: string | null;
   category: string | null;
   unit: string | null;
+  lote: string | null;
+  expiryDate: string | null;
 }> {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -711,20 +713,24 @@ export async function parseProductPhoto(imageBuffer: Buffer, mimeType: string): 
 
     const base64Image = imageBuffer.toString("base64");
 
-    const prompt = `Você é um agrônomo especialista em produtos químicos agrícolas. 
+    const prompt = `Você é um agrônomo especialista em produtos químicos agrícolas.
 Analise a imagem deste rótulo/embalagem de defensivo ou insumo agrícola.
 Extraia os seguintes dados do produto:
 1. "name": O nome comercial principal (ex: SPHERE MAX, ROUNDUP, PREMIO). Apenas o nome.
 2. "activeIngredient": O princípio ativo (se visível).
 3. "category": Classifique estritamente como uma destas opções: "Herbicida", "Fungicida", "Inseticida", "Fertilizante", "Semente", "Adjuvante", "Outro".
 4. "unit": O tipo de unidade da embalagem estritamente como: "LT" (se for líquido/litros), "KG" (se for sólido/quilos), "UNI" (se for unidade/caixa) ou "SC" (se for saco).
+5. "lote": O número do lote (batch) se visível no rótulo (ex: "PLN4I002", "LA40200"). Se não encontrar, retorne null.
+6. "expiryDate": A data de vencimento/validade do produto no formato "YYYY-MM-DD" (ex: "2027-01-08"). Se não encontrar, retorne null.
 
 Retorne APENAS UM JSON VÁLIDO no formato exato baixo, sem comentários adicionais:
 {
   "name": "NOME DO PRODUTO",
   "activeIngredient": "Princípio Ativo",
   "category": "Fungicida",
-  "unit": "LT"
+  "unit": "LT",
+  "lote": "PLN4I002",
+  "expiryDate": "2027-01-08"
 }`;
 
     const response = await fetch(
@@ -769,7 +775,9 @@ Retorne APENAS UM JSON VÁLIDO no formato exato baixo, sem comentários adiciona
         name: parsed.name || "Produto Desconhecido",
         activeIngredient: parsed.activeIngredient || null,
         category: parsed.category || "Outro",
-        unit: parsed.unit || "LT"
+        unit: parsed.unit || "LT",
+        lote: parsed.lote || null,
+        expiryDate: parsed.expiryDate || null,
       };
     } catch (e) {
       console.error("[Gemini] Invalid JSON:", cleanJson);

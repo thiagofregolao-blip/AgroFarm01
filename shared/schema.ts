@@ -1086,6 +1086,9 @@ export const farmStock = pgTable("farm_stock", {
   depositId: varchar("deposit_id"), // FK -> farm_deposits (null = deposito padrao/fazenda)
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull().default("0"),
   averageCost: decimal("average_cost", { precision: 15, scale: 4 }).notNull().default("0"), // Custo médio ponderado
+  lote: text("lote"), // Número do lote (último lote recebido)
+  expiryDate: timestamp("expiry_date"), // Data de vencimento do produto
+  packageSize: decimal("package_size", { precision: 15, scale: 4 }), // Tamanho da embalagem (ex: 5 para "5 Lt")
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 }, (table) => ({
   uniqueStock: unique().on(table.farmerId, table.productId),
@@ -1166,6 +1169,9 @@ export const farmStockMovements = pgTable("farm_stock_movements", {
   unitCost: decimal("unit_cost", { precision: 15, scale: 4 }),
   referenceType: text("reference_type"), // "invoice" ou "pdv"
   referenceId: varchar("reference_id"), // ID da fatura ou da aplicação
+  lote: text("lote"), // Número do lote
+  expiryDate: timestamp("expiry_date"), // Data de vencimento do produto
+  packageSize: decimal("package_size", { precision: 15, scale: 4 }), // Tamanho da embalagem
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });

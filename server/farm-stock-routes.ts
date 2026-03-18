@@ -88,7 +88,7 @@ export function registerFarmStockRoutes(app: Express) {
     app.post("/api/farm/stock", requireFarmer, async (req, res) => {
         try {
             const farmerId = (req.user as any).id;
-            const { name, activeIngredient, category, unit, quantity, unitCost, depositId } = req.body;
+            const { name, activeIngredient, category, unit, quantity, unitCost, depositId, lote, expiryDate, packageSize } = req.body;
 
             if (!name || isNaN(parseFloat(quantity)) || isNaN(parseFloat(unitCost))) {
                 return res.status(400).json({ error: "Dados inválidos para entrada de estoque." });
@@ -124,7 +124,20 @@ export function registerFarmStockRoutes(app: Express) {
 
             const updatedStock = await farmStorage.upsertStock(farmerId, productId, parsedQty, parsedCost, depId);
 
-            // 4. Register movement
+            // 4. Update lote, expiry_date, package_size on farm_stock
+            const parsedExpiry = expiryDate ? new Date(expiryDate) : null;
+            const parsedPkg = packageSize ? parseFloat(packageSize) : null;
+            if (lote || parsedExpiry || parsedPkg) {
+                await db.execute(sql`
+                    UPDATE farm_stock SET
+                        lote = COALESCE(${lote || null}, lote),
+                        expiry_date = COALESCE(${parsedExpiry ? parsedExpiry.toISOString() : null}, expiry_date),
+                        package_size = COALESCE(${parsedPkg ? String(parsedPkg) : null}, package_size)
+                    WHERE farmer_id = ${farmerId} AND product_id = ${productId}
+                `);
+            }
+
+            // 5. Register movement
             await db.insert(farmStockMovements).values({
                 farmerId,
                 productId,
@@ -132,6 +145,9 @@ export function registerFarmStockRoutes(app: Express) {
                 quantity: String(parsedQty),
                 unitCost: String(parsedCost),
                 referenceType: 'manual_entry',
+                lote: lote || null,
+                expiryDate: parsedExpiry,
+                packageSize: parsedPkg ? String(parsedPkg) : null,
                 notes: `Entrada manual avulsa${depId ? ' (deposito: ' + depId + ')' : ''}`,
                 date: new Date()
             });
@@ -335,11 +351,13 @@ export function registerFarmStockRoutes(app: Express) {
             // Parse as array of arrays to find the real header row
             const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
 
-            // Find header row: row containing "Produto" or "produto"
+            // Find header row: row containing product-like + quantity-like columns (PT or ES)
             let headerIdx = 0;
             for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
                 const rowStr = (rawRows[i] || []).map(String).join("|").toLowerCase();
-                if (rowStr.includes("produto") && (rowStr.includes("qtd") || rowStr.includes("quantidade") || rowStr.includes("estoque"))) {
+                const hasProduct = rowStr.includes("produto") || rowStr.includes("nombre") || rowStr.includes("nome");
+                const hasQty = rowStr.includes("qtd") || rowStr.includes("quantidade") || rowStr.includes("estoque") || rowStr.includes("cantidad");
+                if (hasProduct && hasQty) {
                     headerIdx = i;
                     break;
                 }
@@ -378,6 +396,35 @@ export function registerFarmStockRoutes(app: Express) {
                 return map[u.toLowerCase().trim()] || u.toUpperCase().trim() || "UN";
             };
 
+            // Helper: parse date from various formats (dd/mm/yyyy, yyyy-mm-dd, Excel serial)
+            const parseDate = (val: any): Date | null => {
+                if (!val) return null;
+                if (val instanceof Date) return val;
+                if (typeof val === "number") {
+                    // Excel serial date
+                    const epoch = new Date(1899, 11, 30);
+                    epoch.setDate(epoch.getDate() + val);
+                    return epoch;
+                }
+                const s = String(val).trim();
+                // dd/mm/yyyy
+                const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                if (dmy) return new Date(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1]));
+                // yyyy-mm-dd
+                const ymd = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+                if (ymd) return new Date(parseInt(ymd[1]), parseInt(ymd[2]) - 1, parseInt(ymd[3]));
+                const attempt = new Date(s);
+                return isNaN(attempt.getTime()) ? null : attempt;
+            };
+
+            // Helper: detect package size from product name (e.g. "Cripton Supra x 5 Lt." → 5)
+            const detectPackageSize = (name: string): number | null => {
+                // Match patterns like "x 5 Lt", "x5Lt", "5 LT", "20LTS", "10KG"
+                const match = name.match(/[x×]\s*(\d+(?:[.,]\d+)?)\s*(lt|lts|l|kg|ml)/i);
+                if (match) return parseFloat(match[1].replace(",", "."));
+                return null;
+            };
+
             let imported = 0;
             for (const row of data) {
                 // Match column names flexibly (exact match or partial/case-insensitive)
@@ -393,15 +440,42 @@ export function registerFarmStockRoutes(app: Express) {
                     }
                     return undefined;
                 };
-                const name = String(getCol(row, "Produto", "produto", "Nome", "nome", "Name", "name") || "").trim();
-                const qty = parseNum(getCol(row, "Quantidade", "quantidade", "Qty", "qty", "Qtd", "qtd", "Qtd. Estoque", "Estoque"));
-                const cost = parseNum(getCol(row, "Custo", "custo", "Cost", "cost", "Preco", "preco", "Preço", "Preço Unit", "Precio", "precio", "Unit. (USD)", "Preco Unit"));
-                const cat = String(getCol(row, "Categoria", "categoria", "Category") || "Outros");
-                const rawUnit = String(getCol(row, "Unidade", "unidade", "Unit", "Unid", "Unid.") || "UN");
-                const unitVal = normalizeUnit(rawUnit);
-                const activeIngredient = String(getCol(row, "Princípio Ativo", "Principio Ativo", "principio_ativo", "Active Ingredient") || "");
 
-                if (!name || qty <= 0) continue;
+                // Product name (PT + ES)
+                const name = String(getCol(row, "Produto", "produto", "Nome", "nome", "Name", "name", "Nombre Comercial", "Nombre", "nombre") || "").trim();
+                // Quantity (PT + ES)
+                const rawQty = parseNum(getCol(row, "Quantidade", "quantidade", "Qty", "qty", "Qtd", "qtd", "Qtd. Estoque", "Estoque", "Cantidad", "cantidad", "Cant"));
+                // Unit cost (PT + ES)
+                const cost = parseNum(getCol(row, "Custo", "custo", "Cost", "cost", "Preco", "preco", "Preço", "Preço Unit", "Precio", "precio", "Unit. (USD)", "Preco Unit"));
+                // Category (PT + ES) — "Clasificación de Agroquímicos"
+                const cat = String(getCol(row, "Categoria", "categoria", "Category", "Clasificación", "clasificacion", "Clasificacion") || "Outros");
+                // Unit (PT + ES)
+                const rawUnit = String(getCol(row, "Unidade", "unidade", "Unit", "Unid", "Unid.", "Unidad", "unidad") || "UN");
+                const unitVal = normalizeUnit(rawUnit);
+                // Active Ingredient (PT + ES)
+                const activeIngredient = String(getCol(row, "Princípio Ativo", "Principio Ativo", "principio_ativo", "Active Ingredient", "Principio Activo", "principio activo") || "");
+                // Lote / Batch
+                const lote = String(getCol(row, "Lote", "lote", "Batch", "batch") || "").trim() || null;
+                // Expiry date / Vencimiento
+                const expiryDate = parseDate(getCol(row, "Vencimiento", "vencimiento", "Validade", "validade", "Expiry", "expiry", "Vencimento", "vencimento"));
+                // Package size from column (Embalage/Embalagem)
+                const rawPackageSize = parseNum(getCol(row, "Embalage", "embalage", "Embalagem", "embalagem", "Embalaje", "embalaje"));
+
+                if (!name || rawQty <= 0) continue;
+
+                // Detect package size: from column or from product name pattern "x 5 Lt"
+                const packageSizeFromName = detectPackageSize(name);
+                const packageSize = rawPackageSize > 0 ? rawPackageSize : packageSizeFromName;
+
+                // Calculate real quantity: if we have package size AND the qty looks like unit count, multiply
+                // Example: name="Cripton Supra x 5 Lt", qty=2, packageSize=5 → realQty=10
+                // But if packageSize comes from column and matches the unit (e.g. embalage=5, qty=10LT), qty is already real
+                let realQty = rawQty;
+                if (packageSizeFromName && packageSizeFromName > 0) {
+                    // Package size detected in name — qty is count of packages
+                    realQty = rawQty * packageSizeFromName;
+                    console.log(`[EXCEL_IMPORT] Package detected in name: "${name}" qty=${rawQty} × pkg=${packageSizeFromName} = ${realQty}`);
+                }
 
                 // Find or create product
                 const existing = await db.select().from(farmProductsCatalog)
@@ -423,11 +497,27 @@ export function registerFarmStockRoutes(app: Express) {
                     productId = newProd.id;
                 }
 
-                await farmStorage.upsertStock(farmerId, productId, qty, cost, depositId);
+                await farmStorage.upsertStock(farmerId, productId, realQty, cost, depositId);
+
+                // Update lote, expiry_date, package_size on farm_stock
+                if (lote || expiryDate || packageSize) {
+                    await db.execute(sql`
+                        UPDATE farm_stock SET
+                            lote = COALESCE(${lote}, lote),
+                            expiry_date = COALESCE(${expiryDate ? expiryDate.toISOString() : null}, expiry_date),
+                            package_size = COALESCE(${packageSize ? String(packageSize) : null}, package_size)
+                        WHERE farmer_id = ${farmerId} AND product_id = ${productId}
+                    `);
+                }
+
                 await db.insert(farmStockMovements).values({
-                    farmerId, productId, type: "entry", quantity: String(qty),
+                    farmerId, productId, type: "entry", quantity: String(realQty),
                     unitCost: String(cost), referenceType: "excel_import",
-                    notes: "Importacao via planilha Excel", date: new Date(),
+                    lote: lote,
+                    expiryDate: expiryDate,
+                    packageSize: packageSize ? String(packageSize) : null,
+                    notes: `Importacao via planilha Excel${packageSizeFromName ? ` (${rawQty} embalagens x ${packageSizeFromName})` : ''}`,
+                    date: new Date(),
                 });
                 imported++;
             }

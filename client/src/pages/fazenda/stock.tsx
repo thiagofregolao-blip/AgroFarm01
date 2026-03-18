@@ -223,6 +223,8 @@ export default function FarmStock() {
                                         <tr>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Produto</th>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
+                                            <th className="text-left p-3 font-semibold text-emerald-800">Lote</th>
+                                            <th className="text-left p-3 font-semibold text-emerald-800">Validade</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Quantidade</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Custo Médio</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Valor Total</th>
@@ -240,6 +242,10 @@ export default function FarmStock() {
                                                         <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
                                                             {s.productCategory || "—"}
                                                         </span>
+                                                    </td>
+                                                    <td className="p-3 text-sm text-gray-600">{s.lote || "—"}</td>
+                                                    <td className="p-3 text-sm text-gray-600">
+                                                        {s.expiryDate ? new Date(s.expiryDate).toLocaleDateString("pt-BR") : "—"}
                                                     </td>
                                                     <td className="text-right p-3 font-mono">
                                                         <span className={qty <= 0 ? "text-red-600 font-bold" : ""}>
@@ -583,6 +589,8 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
     const [activeIngredient, setActiveIngredient] = useState("");
     const [quantity, setQuantity] = useState("");
     const [unitCost, setUnitCost] = useState("");
+    const [lote, setLote] = useState("");
+    const [expiryDate, setExpiryDate] = useState("");
     const [previewUrl, setPreviewUrl] = useState("");
     const [depositId, setDepositId] = useState("__none__");
 
@@ -610,6 +618,8 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
             setCategory(data.category || "");
             setUnit(data.unit || "LT");
             setActiveIngredient(data.activeIngredient || "");
+            if (data.lote) setLote(data.lote);
+            if (data.expiryDate) setExpiryDate(data.expiryDate);
             toast({ title: "Dados extraídos com sucesso!", description: "Revise e insira as quantidades." });
         },
         onError: (e) => {
@@ -649,6 +659,8 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                 quantity: parseFloat(quantity),
                 unitCost: parseFloat(unitCost),
                 depositId: depositId === "__none__" ? null : depositId,
+                lote: lote || null,
+                expiryDate: expiryDate || null,
             });
         },
         onSuccess: () => {
@@ -676,6 +688,8 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
         setActiveIngredient("");
         setQuantity("");
         setUnitCost("");
+        setLote("");
+        setExpiryDate("");
         setPreviewUrl("");
         setDepositId("__none__");
     };
@@ -771,7 +785,7 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                                 <><Upload className="mr-2 h-4 w-4" /> Importar via Planilha Excel</>
                             )}
                         </Button>
-                        <p className="text-xs text-muted-foreground">Colunas aceitas: Produto, Quantidade, Custo, Categoria, Unidade</p>
+                        <p className="text-xs text-muted-foreground">Colunas aceitas: Produto/Nombre, Cantidad/Qtd, Precio/Custo, Categoria, Unidade, Lote, Vencimiento/Validade, Embalagem</p>
                     </div>
 
                     <hr className="my-2 border-emerald-100" />
@@ -819,6 +833,17 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                             <div>
                                 <Label>Custo Unitário ($) *</Label>
                                 <CurrencyInput value={unitCost} onValueChange={setUnitCost} disabled={saveStock.isPending} />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label>Lote <span className="text-gray-400 font-normal">(Opcional)</span></Label>
+                                <Input value={lote} onChange={e => setLote(e.target.value)} placeholder="Ex: PLN4I002" disabled={saveStock.isPending} />
+                            </div>
+                            <div>
+                                <Label>Validade <span className="text-gray-400 font-normal">(Opcional)</span></Label>
+                                <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} disabled={saveStock.isPending} />
                             </div>
                         </div>
                     </div>

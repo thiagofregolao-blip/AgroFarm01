@@ -551,7 +551,14 @@ app.use((req, res, next) => {
     `);
     await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS deposit_id varchar`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS deposit_id varchar`);
-    log("✅ Migration: farm_deposits + deposit_id ensured");
+    // Lote, vencimento e embalagem
+    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS lote text`);
+    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS expiry_date timestamp`);
+    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS package_size decimal(15,4)`);
+    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS lote text`);
+    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS expiry_date timestamp`);
+    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS package_size decimal(15,4)`);
+    log("✅ Migration: farm_deposits + deposit_id + lote/expiry/package ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration farm_deposits: ${migErr.message}`);
   }
