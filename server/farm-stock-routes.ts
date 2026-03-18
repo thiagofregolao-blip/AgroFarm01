@@ -534,4 +534,50 @@ export function registerFarmStockRoutes(app: Express) {
             res.status(500).json({ error: `Falha ao importar planilha: ${error?.message || 'Erro desconhecido'}` });
         }
     });
+
+    // Update ONLY active_ingredient from spreadsheet — does NOT touch stock quantities
+    router.post("/api/farm/stock/update-ingredients", upload.single("file"), async (req, res) => {
+        try {
+            if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
+
+            const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const data: any[] = XLSX.utils.sheet_to_json(sheet);
+
+            const getCol = (row: any, ...keys: string[]) => {
+                for (const k of keys) {
+                    if (row[k] !== undefined) return row[k];
+                }
+                for (const colName of Object.keys(row)) {
+                    const lower = colName.toLowerCase().trim();
+                    for (const k of keys) {
+                        if (lower.includes(k.toLowerCase())) return row[colName];
+                    }
+                }
+                return undefined;
+            };
+
+            let updated = 0;
+            for (const row of data) {
+                const name = String(getCol(row, "Produto", "produto", "Nome", "nome", "Name", "name", "Nombre Comercial", "Nombre", "nombre") || "").trim();
+                const activeIngredient = String(getCol(row, "Princípio Ativo", "Principio Ativo", "principio_ativo", "Active Ingredient", "Principio Activo", "principio activo") || "").trim();
+
+                if (!name || !activeIngredient) continue;
+
+                const result = await db.execute(sql`
+                    UPDATE farm_products_catalog
+                    SET active_ingredient = ${activeIngredient}
+                    WHERE LOWER(name) = LOWER(${name})
+                      AND (active_ingredient IS NULL OR active_ingredient = '')
+                `);
+                const count = (result as any).rowCount ?? (result as any).count ?? 0;
+                if (count > 0) updated++;
+            }
+
+            res.json({ ok: true, updated, total: data.length });
+        } catch (error: any) {
+            console.error("[UPDATE_INGREDIENTS] ERROR:", error?.message || error);
+            res.status(500).json({ error: `Falha ao atualizar ingredientes: ${error?.message || 'Erro desconhecido'}` });
+        }
+    });
 }

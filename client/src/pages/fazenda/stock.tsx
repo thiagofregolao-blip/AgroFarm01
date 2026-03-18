@@ -654,6 +654,27 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
         },
     });
 
+    const ingredientInputRef = useRef<HTMLInputElement>(null);
+    const updateIngredients = useMutation({
+        mutationFn: async (file: File) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch("/api/farm/stock/update-ingredients", {
+                method: "POST",
+                body: formData,
+            });
+            if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Falha ao atualizar"); }
+            return res.json();
+        },
+        onSuccess: (data: any) => {
+            toast({ title: "Ingredientes atualizados", description: `${data.updated} produtos atualizados de ${data.total} linhas.` });
+            onSuccess();
+        },
+        onError: (e: any) => {
+            toast({ title: "Erro ao atualizar ingredientes", description: e.message, variant: "destructive" });
+        },
+    });
+
     const saveStock = useMutation({
         mutationFn: async () => {
             return apiRequest("POST", "/api/farm/stock", {
@@ -791,6 +812,35 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                             )}
                         </Button>
                         <p className="text-xs text-muted-foreground">Colunas aceitas: Produto/Nombre, Cantidad/Qtd, Precio/Custo, Categoria, Unidade, Lote, Vencimiento/Validade, Embalagem</p>
+                    </div>
+
+                    {/* Atualizar só Princípio Ativo via planilha */}
+                    <div className="flex flex-col gap-1">
+                        <input
+                            type="file"
+                            ref={ingredientInputRef}
+                            className="hidden"
+                            accept=".xlsx,.xls,.csv"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) updateIngredients.mutate(file);
+                                e.target.value = "";
+                            }}
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full h-[44px] border-dashed border-blue-300 text-blue-700 hover:bg-blue-50"
+                            onClick={() => ingredientInputRef.current?.click()}
+                            disabled={updateIngredients.isPending}
+                        >
+                            {updateIngredients.isPending ? (
+                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Atualizando...</>
+                            ) : (
+                                <><Upload className="mr-2 h-4 w-4" /> Atualizar Princípio Ativo via Planilha</>
+                            )}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">Envia a mesma planilha para preencher o princípio ativo nos produtos existentes, sem alterar estoque.</p>
                     </div>
 
                     <hr className="my-2 border-emerald-100" />
