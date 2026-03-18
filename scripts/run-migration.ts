@@ -384,6 +384,16 @@ const runMigration = async () => {
             console.log('✅ Migração commercial_module concluída!');
         }
 
+        // Migration 34: Add lote, expiry_date, package_size to stock tables
+        const stockLotePath = path.join(process.cwd(), 'migration_add_stock_lote.sql');
+        if (fs.existsSync(stockLotePath)) {
+            const stockLoteSql = fs.readFileSync(stockLotePath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', stockLotePath);
+            console.log('🚀 Executando SQL (stock_lote)...');
+            await sql.unsafe(stockLoteSql);
+            console.log('✅ Migração stock_lote concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {
