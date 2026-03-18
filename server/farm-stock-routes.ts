@@ -536,7 +536,7 @@ export function registerFarmStockRoutes(app: Express) {
     });
 
     // Update ONLY active_ingredient from spreadsheet — does NOT touch stock quantities
-    router.post("/api/farm/stock/update-ingredients", upload.single("file"), async (req, res) => {
+    app.post("/api/farm/stock/update-ingredients", requireFarmer, upload.single("file"), async (req, res) => {
         try {
             if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
 
