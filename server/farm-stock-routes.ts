@@ -521,9 +521,10 @@ export function registerFarmStockRoutes(app: Express) {
             }
 
             res.json({ ok: true, imported, total: data.length });
-        } catch (error) {
-            console.error("[STOCK_IMPORT_EXCEL]", error);
-            res.status(500).json({ error: "Falha ao importar planilha" });
+        } catch (error: any) {
+            console.error("[STOCK_IMPORT_EXCEL] ERROR:", error?.message || error);
+            console.error("[STOCK_IMPORT_EXCEL] STACK:", error?.stack);
+            res.status(500).json({ error: `Falha ao importar planilha: ${error?.message || 'Erro desconhecido'}` });
         }
     });
 }
