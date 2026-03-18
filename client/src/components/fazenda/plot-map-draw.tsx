@@ -3,8 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
-import JSZip from "jszip";
-import shp from "shpjs";
+import { parseMapFile } from "@/lib/map-file-parser";
 
 // Fix Leaflet default marker icon (broken in bundlers)
 import iconUrl from "leaflet/dist/images/marker-icon.png";
@@ -29,149 +28,6 @@ function calculateAreaHa(coords: LatLng[]): number {
     return Math.round((areaSqMeters / 10000) * 100) / 100;
 }
 
-/** Parse KML XML string and extract first polygon coordinates */
-function parseKmlCoordinates(kmlText: string): LatLng[] {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(kmlText, "text/xml");
-
-    // Find all <coordinates> elements inside Polygon or LinearRing
-    const coordElements = doc.getElementsByTagName("coordinates");
-    if (coordElements.length === 0) return [];
-
-    // Use the first coordinates block found (typically the outer boundary)
-    for (let i = 0; i < coordElements.length; i++) {
-        const text = (coordElements[i].textContent || "").trim();
-        if (!text) continue;
-
-        const coords: LatLng[] = [];
-        // KML format: "lng,lat,alt lng,lat,alt ..." separated by whitespace
-        const points = text.split(/\s+/).filter(Boolean);
-        for (const point of points) {
-            const parts = point.split(",");
-            if (parts.length >= 2) {
-                const lng = parseFloat(parts[0]);
-                const lat = parseFloat(parts[1]);
-                if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                    coords.push({ lat, lng });
-                }
-            }
-        }
-        // Remove last point if it's the same as the first (KML polygons close the ring)
-        if (coords.length > 3) {
-            const first = coords[0];
-            const last = coords[coords.length - 1];
-            if (Math.abs(first.lat - last.lat) < 0.000001 && Math.abs(first.lng - last.lng) < 0.000001) {
-                coords.pop();
-            }
-        }
-        if (coords.length >= 3) return coords;
-    }
-    return [];
-}
-
-/** Parse ISOXML — look for polygon coordinates in <Pln>/<LSG>/<PNT> elements */
-function parseIsoxmlCoordinates(xmlText: string): LatLng[] {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, "text/xml");
-    const coords: LatLng[] = [];
-
-    // ISOXML uses PNT elements with A (lat) and B (lng) attributes
-    const pntElements = doc.getElementsByTagName("PNT");
-    for (let i = 0; i < pntElements.length; i++) {
-        const lat = parseFloat(pntElements[i].getAttribute("C") || pntElements[i].getAttribute("A") || "");
-        const lng = parseFloat(pntElements[i].getAttribute("D") || pntElements[i].getAttribute("B") || "");
-        if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-            coords.push({ lat, lng });
-        }
-    }
-
-    // Also try GuidancePattern / Partfield boundaries
-    if (coords.length === 0) {
-        const plnElements = doc.getElementsByTagName("PLN");
-        for (let i = 0; i < plnElements.length; i++) {
-            const lsgList = plnElements[i].getElementsByTagName("LSG");
-            for (let j = 0; j < lsgList.length; j++) {
-                const pnts = lsgList[j].getElementsByTagName("PNT");
-                for (let k = 0; k < pnts.length; k++) {
-                    const lat = parseFloat(pnts[k].getAttribute("C") || pnts[k].getAttribute("A") || "");
-                    const lng = parseFloat(pnts[k].getAttribute("D") || pnts[k].getAttribute("B") || "");
-                    if (!isNaN(lat) && !isNaN(lng)) coords.push({ lat, lng });
-                }
-            }
-        }
-    }
-
-    // Remove closing point if duplicated
-    if (coords.length > 3) {
-        const first = coords[0], last = coords[coords.length - 1];
-        if (Math.abs(first.lat - last.lat) < 0.000001 && Math.abs(first.lng - last.lng) < 0.000001) {
-            coords.pop();
-        }
-    }
-    return coords;
-}
-
-/** Extract coordinates from a GeoJSON FeatureCollection (from Shapefile) */
-function parseGeoJsonCoordinates(geojson: any): LatLng[] {
-    const features = geojson.features || (Array.isArray(geojson) ? geojson.flatMap((g: any) => g.features || []) : []);
-    for (const feature of features) {
-        const geom = feature.geometry;
-        if (!geom) continue;
-
-        let ring: number[][] | undefined;
-        if (geom.type === "Polygon") {
-            ring = geom.coordinates[0]; // outer ring
-        } else if (geom.type === "MultiPolygon") {
-            ring = geom.coordinates[0]?.[0]; // first polygon, outer ring
-        }
-
-        if (ring && ring.length >= 3) {
-            const coords = ring.map(([lng, lat]: number[]) => ({ lat, lng }));
-            // Remove closing point
-            const first = coords[0], last = coords[coords.length - 1];
-            if (coords.length > 3 && Math.abs(first.lat - last.lat) < 0.000001 && Math.abs(first.lng - last.lng) < 0.000001) {
-                coords.pop();
-            }
-            if (coords.length >= 3) return coords;
-        }
-    }
-    return [];
-}
-
-/** Read a KML, KMZ, Shapefile (.zip), or ISOXML file and return polygon coordinates */
-async function readMapFile(file: File): Promise<LatLng[]> {
-    const ext = file.name.toLowerCase().split(".").pop();
-
-    if (ext === "kmz") {
-        const zip = await JSZip.loadAsync(file);
-        const kmlFile = Object.keys(zip.files).find(name => name.toLowerCase().endsWith(".kml"));
-        if (!kmlFile) throw new Error("Nenhum arquivo .kml encontrado dentro do KMZ");
-        const kmlText = await zip.files[kmlFile].async("text");
-        return parseKmlCoordinates(kmlText);
-    } else if (ext === "kml") {
-        const kmlText = await file.text();
-        return parseKmlCoordinates(kmlText);
-    } else if (ext === "zip") {
-        // Shapefile ZIP → parse with shpjs → GeoJSON
-        const buffer = await file.arrayBuffer();
-        const geojson = await shp(buffer);
-        return parseGeoJsonCoordinates(geojson);
-    } else if (ext === "xml") {
-        // ISOXML
-        const xmlText = await file.text();
-        const coords = parseIsoxmlCoordinates(xmlText);
-        if (coords.length === 0) {
-            // Maybe it's a KML saved as .xml
-            const kmlCoords = parseKmlCoordinates(xmlText);
-            if (kmlCoords.length >= 3) return kmlCoords;
-        }
-        return coords;
-    } else if (ext === "shp") {
-        throw new Error("Envie o Shapefile compactado em .zip (com .shp, .shx e .dbf juntos)");
-    } else {
-        throw new Error(`Formato não suportado: .${ext}. Use KML, KMZ, Shapefile (.zip) ou ISOXML (.xml)`);
-    }
-}
 
 export default function PlotMapDraw({ initialCoordinates, onAreaCalculated, onCoordinatesChange }: PlotMapDrawProps) {
     const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -240,7 +96,8 @@ export default function PlotMapDraw({ initialCoordinates, onAreaCalculated, onCo
         if (!mapRef.current || !drawnItemsRef.current) return;
         setImportLoading(true);
         try {
-            const coords = await readMapFile(file);
+            const polygons = await parseMapFile(file);
+            const coords = polygons[0]?.coordinates || [];
             if (coords.length < 3) {
                 alert("Nenhum polígono válido encontrado no arquivo. Verifique se o arquivo KML/KMZ contém áreas delimitadas.");
                 return;

@@ -1,7 +1,8 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import { parseMapFile } from "@/lib/map-file-parser";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +11,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit2, Trash2, MapPin, Ruler, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Edit2, Trash2, MapPin, Ruler, Loader2, ChevronDown, ChevronRight, Upload } from "lucide-react";
 
 const PlotMapDraw = lazy(() => import("@/components/fazenda/plot-map-draw"));
 import PlotThumbnail from "@/components/fazenda/plot-thumbnail";
+
+/** Calculate area in hectares from lat/lng coordinates (Shoelace formula on sphere) */
+function calculateAreaFromCoords(coords: { lat: number; lng: number }[]): number {
+    if (coords.length < 3) return 0;
+    // Approximate geodesic area using the Shoelace formula projected
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    let area = 0;
+    for (let i = 0; i < coords.length; i++) {
+        const j = (i + 1) % coords.length;
+        area += toRad(coords[j].lng - coords[i].lng) * (2 + Math.sin(toRad(coords[i].lat)) + Math.sin(toRad(coords[j].lat)));
+    }
+    area = Math.abs((area * 6378137 * 6378137) / 2);
+    return Math.round((area / 10000) * 100) / 100; // m² → ha
+}
 
 export default function FarmProperties() {
     const [, setLocation] = useLocation();
@@ -129,6 +144,40 @@ export default function FarmProperties() {
 function PropertyCard({ property, expanded, onToggle, onEdit, onAddPlot, onEditPlot }: any) {
     const queryClient = useQueryClient();
     const { toast } = useToast();
+    const mapFileInputRef = useRef<HTMLInputElement>(null);
+    const [importing, setImporting] = useState(false);
+
+    const handleImportMaps = async (file: File) => {
+        setImporting(true);
+        try {
+            const polygons = await parseMapFile(file);
+            if (polygons.length === 0) {
+                toast({ title: "Nenhum polígono encontrado", description: "O arquivo não contém áreas delimitadas válidas.", variant: "destructive" });
+                return;
+            }
+
+            let created = 0;
+            for (const polygon of polygons) {
+                // Calculate area using geodesic formula (same as Leaflet)
+                const areaHa = calculateAreaFromCoords(polygon.coordinates);
+                await apiRequest("POST", `/api/farm/properties/${property.id}/plots`, {
+                    name: polygon.name,
+                    areaHa: String(areaHa),
+                    crop: "",
+                    coordinates: polygon.coordinates,
+                });
+                created++;
+            }
+
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/properties", property.id, "plots"] });
+            toast({ title: "Mapas importados!", description: `${created} talhões criados a partir do arquivo.` });
+        } catch (err: any) {
+            console.error("Map import error:", err);
+            toast({ title: "Erro na importação", description: err.message || "Formato inválido", variant: "destructive" });
+        } finally {
+            setImporting(false);
+        }
+    };
 
     const { data: plots = [] } = useQuery({
         queryKey: ["/api/farm/properties", property.id, "plots"],
@@ -175,6 +224,21 @@ function PropertyCard({ property, expanded, onToggle, onEdit, onAddPlot, onEditP
                             {totalArea.toFixed(2)} ha
                         </p>
                         <div style={{ flex: 1, height: 1, background: "#d1d5db" }} />
+                        <input
+                            type="file"
+                            ref={mapFileInputRef}
+                            className="hidden"
+                            accept=".kml,.kmz,.zip,.xml,.shp"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleImportMaps(file);
+                                e.target.value = "";
+                            }}
+                        />
+                        <Button size="sm" variant="outline" onClick={() => mapFileInputRef.current?.click()} disabled={importing}>
+                            {importing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
+                            {importing ? "Importando..." : "Importar Mapas"}
+                        </Button>
                         <Button size="sm" variant="outline" onClick={onAddPlot}>
                             <Plus className="mr-1 h-3 w-3" /> Talhão
                         </Button>
