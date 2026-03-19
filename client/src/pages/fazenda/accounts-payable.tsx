@@ -555,12 +555,14 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                 <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
                                 <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
                                 <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
+                                <th className="text-right p-3 font-semibold text-emerald-800">Pago</th>
                                 <th className="text-right p-3 font-semibold text-emerald-800">Saldo</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredPending.map((item: any) => {
-                                const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
+                                const paid = parseFloat(item.paidAmount || 0);
+                                const remaining = parseFloat(item.totalAmount) - paid;
                                 const overdue = isOverdue(item);
                                 return (
                                     <tr
@@ -581,6 +583,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                                 : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><Clock className="h-3 w-3" /> {item.status === "parcial" ? "Parcial" : "Aberto"}</span>
                                             }
                                         </td>
+                                        <td className="text-right p-3 font-mono text-green-600">{paid > 0 ? formatCurrency(paid, item.currency || "USD") : <span className="text-gray-300">—</span>}</td>
                                         <td className="text-right p-3 font-mono font-semibold text-red-600">{formatCurrency(remaining, item.currency || "USD")}</td>
                                     </tr>
                                 );

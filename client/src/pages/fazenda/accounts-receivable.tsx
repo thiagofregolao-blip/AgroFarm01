@@ -203,6 +203,9 @@ export default function AccountsReceivable() {
             const r = await apiRequest("POST", "/api/farm/accounts-receivable", data);
             return r.json();
         },
+        onError: (err: Error) => {
+            toast({ title: err.message || "Erro ao registrar conta a receber", variant: "destructive" });
+        },
         onSuccess: (result: any) => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-receivable"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoice-config"] });
@@ -1211,12 +1214,14 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
                                 <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
                                 <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
                                 <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
+                                <th className="text-right p-3 font-semibold text-emerald-800">Recebido</th>
                                 <th className="text-right p-3 font-semibold text-emerald-800">Saldo</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredPending.map((item: any) => {
-                                const remaining = parseFloat(item.totalAmount) - parseFloat(item.receivedAmount || 0);
+                                const received = parseFloat(item.receivedAmount || 0);
+                                const remaining = parseFloat(item.totalAmount) - received;
                                 const overdue = isOverdue(item);
                                 return (
                                     <tr key={item.id}
@@ -1235,6 +1240,7 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
                                                 : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><Clock className="h-3 w-3" /> {item.status === "parcial" ? "Parcial" : "Pendente"}</span>
                                             }
                                         </td>
+                                        <td className="text-right p-3 font-mono text-green-600">{received > 0 ? formatCurrency(received) : <span className="text-gray-300">—</span>}</td>
                                         <td className="text-right p-3 font-mono font-semibold text-blue-600">{formatCurrency(remaining)}</td>
                                     </tr>
                                 );
@@ -1359,12 +1365,19 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
 function HistoricoTab({ items }: { items: any[] }) {
     const [searchTerm, setSearchTerm] = useState("");
 
-    const receivedItems = items
-        .filter((i: any) => i.status === "recebido")
-        .sort((a: any, b: any) => new Date(b.updatedAt || b.dueDate).getTime() - new Date(a.updatedAt || a.dueDate).getTime());
+    const { data: transactions = [], isLoading } = useQuery({
+        queryKey: ["/api/farm/cash-transactions", "recebimento_venda"],
+        queryFn: async () => {
+            const r = await apiRequest("GET", "/api/farm/cash-transactions?category=recebimento_venda");
+            return r.json();
+        },
+    });
 
-    const filteredReceived = receivedItems.filter((i: any) =>
-        !searchTerm || i.buyer?.toLowerCase().includes(searchTerm.toLowerCase()) || i.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    const sorted = (transactions as any[])
+        .sort((a: any, b: any) => new Date(b.transactionDate || b.createdAt).getTime() - new Date(a.transactionDate || a.createdAt).getTime());
+
+    const filtered = sorted.filter((t: any) =>
+        !searchTerm || t.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -1377,12 +1390,14 @@ function HistoricoTab({ items }: { items: any[] }) {
                             <Input placeholder="Buscar no historico..." value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
                         </div>
-                        <span className="text-xs text-gray-400">{filteredReceived.length} recebimento(s)</span>
+                        <span className="text-xs text-gray-400">{filtered.length} recebimento(s)</span>
                     </div>
                 </CardContent>
             </Card>
 
-            {filteredReceived.length === 0 ? (
+            {isLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+            ) : filtered.length === 0 ? (
                 <Card className="border-emerald-100"><CardContent className="py-12 text-center">
                     <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">Nenhum recebimento registrado</p>
@@ -1392,21 +1407,21 @@ function HistoricoTab({ items }: { items: any[] }) {
                     <table className="w-full text-sm">
                         <thead className="bg-emerald-50">
                             <tr>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Data Recebimento</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Comprador</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
                                 <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Forma Pgto</th>
                                 <th className="text-right p-3 font-semibold text-emerald-800">Valor Recebido</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredReceived.map((item: any) => (
-                                <tr key={item.id} className="border-t border-gray-100">
-                                    <td className="p-3 text-gray-700">{(item.updatedAt || item.dueDate) ? new Date(item.updatedAt || item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
-                                    <td className="p-3 font-medium">{item.buyer}</td>
-                                    <td className="p-3 text-gray-600 max-w-[250px] truncate">{item.description || "--"}</td>
-                                    <td className="p-3">{item.installmentNumber || 1}/{item.totalInstallments || 1}</td>
-                                    <td className="text-right p-3 font-mono font-semibold text-green-600">{formatCurrency(item.totalAmount)}</td>
+                            {filtered.map((t: any) => (
+                                <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50">
+                                    <td className="p-3 text-gray-700 whitespace-nowrap">
+                                        {t.transactionDate ? new Date(t.transactionDate).toLocaleDateString("pt-BR") : "—"}
+                                    </td>
+                                    <td className="p-3 text-gray-600 max-w-[350px] truncate">{t.description || "--"}</td>
+                                    <td className="p-3 text-gray-500 capitalize">{t.paymentMethod || "—"}</td>
+                                    <td className="text-right p-3 font-mono font-semibold text-green-600">{formatCurrency(t.amount)}</td>
                                 </tr>
                             ))}
                         </tbody>
