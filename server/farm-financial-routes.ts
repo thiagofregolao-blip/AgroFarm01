@@ -6,7 +6,8 @@ async function deductGrainStock(db: any, farmerId: string, items: any[]) {
     const { sql } = await import("drizzle-orm");
     const grainItems = items.filter((it: any) => it.grainCrop);
     for (const item of grainItems) {
-        const qtyKg = item.unit === "TON"
+        const unitUpper = (item.unit || "").toUpperCase();
+        const qtyKg = unitUpper === "TON"
             ? (parseFloat(item.quantity) || 0) * 1000
             : (parseFloat(item.quantity) || 0);
         if (qtyKg <= 0) continue;
@@ -14,16 +15,20 @@ async function deductGrainStock(db: any, farmerId: string, items: any[]) {
             if (item.grainSeasonId) {
                 await db.execute(sql`
                     UPDATE farm_grain_stock
-                    SET quantity = GREATEST(0, quantity - ${qtyKg})
+                    SET quantity = GREATEST(0, quantity - ${qtyKg}), updated_at = now()
                     WHERE farmer_id = ${farmerId} AND crop = ${item.grainCrop} AND season_id = ${item.grainSeasonId}
                 `);
             } else {
+                // PostgreSQL nao suporta ORDER BY LIMIT em UPDATE — usar subquery
                 await db.execute(sql`
                     UPDATE farm_grain_stock
-                    SET quantity = GREATEST(0, quantity - ${qtyKg})
-                    WHERE farmer_id = ${farmerId} AND crop = ${item.grainCrop}
-                    ORDER BY updated_at DESC
-                    LIMIT 1
+                    SET quantity = GREATEST(0, quantity - ${qtyKg}), updated_at = now()
+                    WHERE id = (
+                        SELECT id FROM farm_grain_stock
+                        WHERE farmer_id = ${farmerId} AND crop = ${item.grainCrop}
+                        ORDER BY updated_at DESC
+                        LIMIT 1
+                    )
                 `);
             }
             console.log(`[GRAIN_STOCK] Deducted ${qtyKg}kg of ${item.grainCrop} for farmer ${farmerId}`);
@@ -421,6 +426,10 @@ export function registerFarmFinancialRoutes(app: Express) {
                     totalInstallments: 1,
                 }).returning();
 
+                // Force due_date via raw SQL (Drizzle may skip it if column added via ALTER TABLE)
+                await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${firstDueDate} WHERE id = ${ar.id}`);
+                ar.dueDate = firstDueDate;
+
                 await insertItems(ar.id);
                 await deductGrainStock(db, farmerId, items);
                 return res.json(ar);
@@ -450,6 +459,9 @@ export function registerFarmFinancialRoutes(app: Express) {
                     iva5: instIva5,
                     iva10: instIva10,
                 }).returning();
+                // Force due_date via raw SQL
+                await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${instDue} WHERE id = ${ar.id}`);
+                ar.dueDate = instDue;
                 created.push(ar);
 
                 if (i === 0) await insertItems(ar.id);
@@ -513,21 +525,26 @@ export function registerFarmFinancialRoutes(app: Express) {
 
             // Create cheque record if payment method is cheque
             if (paymentMethod === "cheque" && req.body.chequeData) {
-                const cd = req.body.chequeData;
-                const { sql: sqlFn2 } = await import("drizzle-orm");
-                await db.execute(sqlFn2`
-                    INSERT INTO farm_cheques
-                        (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
-                         issue_date, due_date, status, related_receivable_id, cash_transaction_id)
-                    VALUES
-                        (${farmerId}, ${accountId || null}, ${'recebido'},
-                         ${String(cd.chequeNumber || cd.numero || '')},
-                         ${String(cd.bank || cd.banco || '')},
-                         ${String(cd.holder || cd.titular || ar.buyer)},
-                         ${String(receiveAmount)}, ${ar.currency},
-                         ${new Date()}, ${cd.dueDate ? new Date(cd.dueDate) : null},
-                         ${'emitido'}, ${req.params.id}, ${tx.id})
-                `);
+                try {
+                    const cd = req.body.chequeData;
+                    const { sql: sqlFn2 } = await import("drizzle-orm");
+                    await db.execute(sqlFn2`
+                        INSERT INTO farm_cheques
+                            (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
+                             issue_date, due_date, status, related_receivable_id, cash_transaction_id)
+                        VALUES
+                            (${farmerId}, ${accountId || null}, ${'recebido'},
+                             ${String(cd.chequeNumber || cd.numero || '')},
+                             ${String(cd.bank || cd.banco || '')},
+                             ${String(cd.holder || cd.titular || ar.buyer)},
+                             ${String(receiveAmount)}, ${ar.currency},
+                             ${new Date()}, ${cd.dueDate ? new Date(cd.dueDate) : null},
+                             ${'emitido'}, ${req.params.id}, ${tx.id})
+                    `);
+                } catch (chequeErr) {
+                    console.error("[AR_RECEIVE_CHEQUE_INSERT]", chequeErr);
+                    // Cheque creation failed but payment was already recorded — do not rollback
+                }
             }
 
             res.json({ success: true, status: newStatus, transaction: tx });

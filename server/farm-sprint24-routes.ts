@@ -341,7 +341,7 @@ export function registerFarmSprint24Routes(app: Express) {
             `);
 
             // Create cash transaction
-            const txType = cheque.type === 'emitido' ? 'saida' : 'entrada';
+            const txType = (cheque.type === 'proprio' || cheque.type === 'emitido') ? 'saida' : 'entrada';
             const chequeDesc = 'Cheque #' + String(cheque.cheque_number || '') + ' - ' + String(cheque.bank || '');
             const chequeAmount = String(cheque.amount);
             const chequeCurrency = String(cheque.currency || 'USD');
