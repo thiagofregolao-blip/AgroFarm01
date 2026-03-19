@@ -118,6 +118,7 @@ export default function AccountsReceivable() {
     // Filtered list (mirror AP logic)
     function isItemOverdue(item: any) {
         if (item.status === "recebido") return false;
+        if (!item.dueDate) return false;
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
         return (item.status === "pendente" || item.status === "parcial") && due < today;
@@ -369,9 +370,10 @@ export default function AccountsReceivable() {
                                     </thead>
                                     <tbody>
                                         {filtered.slice(0, pageSize).map((item: any) => {
-                                            const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
                                             const today = new Date(); today.setHours(0, 0, 0, 0);
-                                            const isOverdue = (item.status === "pendente" || item.status === "parcial") && due < today;
+                                            const due = item.dueDate ? new Date(item.dueDate) : null;
+                                            if (due) due.setHours(0, 0, 0, 0);
+                                            const isOverdue = !!due && (item.status === "pendente" || item.status === "parcial") && due < today;
                                             return (
                                                 <tr key={item.id} className={`border-t border-gray-100 ${isOverdue ? "bg-red-50" : ""}`}>
                                                     <td className="p-3 font-medium">{item.buyer}</td>
