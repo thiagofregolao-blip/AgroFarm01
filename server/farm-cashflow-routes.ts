@@ -45,6 +45,22 @@ export function registerFarmCashFlowRoutes(app: Express) {
         }
     });
 
+    app.get("/api/farm/cash-accounts/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmCashAccounts } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+            const [account] = await db.select().from(farmCashAccounts).where(
+                and(eq(farmCashAccounts.id, req.params.id), eq(farmCashAccounts.farmerId, (req.user as any).id))
+            );
+            if (!account) return res.status(404).json({ error: "Account not found" });
+            res.json(account);
+        } catch (error) {
+            console.error("[CASH_ACCOUNT_GET_ONE]", error);
+            res.status(500).json({ error: "Failed to get cash account" });
+        }
+    });
+
     app.put("/api/farm/cash-accounts/:id", requireFarmer, async (req, res) => {
         try {
             const { farmCashAccounts } = await import("../shared/schema");

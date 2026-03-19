@@ -119,11 +119,11 @@ export default function AccountsPayable() {
             const result = await apiRequest("POST", `/api/farm/accounts-payable/${id}/pay`, data);
             if (data.cheque && data.paymentMethod === "cheque") {
                 await apiRequest("POST", "/api/farm/cheques", {
-                    banco: data.cheque.banco,
-                    numero: data.cheque.numero,
-                    tipo: data.cheque.tipo,
-                    valor: data.amount,
-                    fornecedor: data.supplier || "",
+                    bank: data.cheque.banco,
+                    chequeNumber: data.cheque.numero,
+                    type: data.cheque.tipo,
+                    amount: data.amount,
+                    holder: data.supplier || "",
                     accountPayableId: id,
                     accountId: data.accountId || (data.accountRows?.[0]?.accountId),
                 });

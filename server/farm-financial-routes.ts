@@ -205,6 +205,15 @@ export function registerFarmFinancialRoutes(app: Express) {
                 cashTransactionId: firstTxId,
             }).where(eq(farmAccountsPayable.id, req.params.id));
 
+            // Bug #1 fix: sync farmExpenses when payment made via AP
+            if (ap.expenseId) {
+                const { farmExpenses } = await import("../shared/schema");
+                await db.update(farmExpenses).set({
+                    paymentStatus: newStatus === "pago" ? "pago" : "parcial",
+                    paidAmount: String(newPaidTotal),
+                }).where(eq(farmExpenses.id, ap.expenseId));
+            }
+
             res.json({ success: true, status: newStatus });
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_PAY]", error);
@@ -416,12 +425,22 @@ export function registerFarmFinancialRoutes(app: Express) {
             }
 
             // Generate N installments
+            const instSubtotalExenta = (subtotalExenta / totalInstallments).toFixed(2);
+            const instSubtotalGravada5 = (subtotalGravada5 / totalInstallments).toFixed(2);
+            const instSubtotalGravada10 = (subtotalGravada10 / totalInstallments).toFixed(2);
+            const instIva5 = (iva5 / totalInstallments).toFixed(2);
+            const instIva10 = (iva10 / totalInstallments).toFixed(2);
             const created = [];
             for (let i = 0; i < totalInstallments; i++) {
                 const instDue = new Date(firstDueDate);
                 instDue.setMonth(instDue.getMonth() + i);
                 const [ar] = await db.insert(farmAccountsReceivable).values({
                     ...baseData,
+                    subtotalExenta: instSubtotalExenta,
+                    subtotalGravada5: instSubtotalGravada5,
+                    subtotalGravada10: instSubtotalGravada10,
+                    iva5: instIva5,
+                    iva10: instIva10,
                     totalAmount: perInstallmentAmount,
                     dueDate: instDue,
                     installmentNumber: i + 1,
