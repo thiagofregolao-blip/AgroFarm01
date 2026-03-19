@@ -1513,6 +1513,7 @@ export const farmAccountsReceivable = pgTable("farm_accounts_receivable", {
   iva5: decimal("iva_5", { precision: 15, scale: 2 }).default("0"),
   iva10: decimal("iva_10", { precision: 15, scale: 2 }).default("0"),
   observation: text("observation"),
+  supplierId: text("supplier_id"),
 });
 
 export const insertFarmAccountReceivableSchema = createInsertSchema(farmAccountsReceivable).omit({ id: true, createdAt: true });
