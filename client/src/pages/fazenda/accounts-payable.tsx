@@ -304,17 +304,17 @@ export default function AccountsPayable() {
                                                     <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.paidAmount || 0, item.currency || "USD")}</td>
                                                     <td className="p-3 flex gap-1">
                                                         {item.status !== "pago" && (
-                                                            <>
-                                                                <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-                                                                    onClick={() => setEditingItem(item)}>
-                                                                    <Pencil className="h-3 w-3 mr-1" />Editar
-                                                                </Button>
-                                                                <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
-                                                                    onClick={() => { if (confirm(`Remover conta "${item.supplier}" - ${formatCurrency(item.totalAmount, item.currency || "USD")}?`)) del.mutate(item.id); }}
-                                                                    aria-label="Remover">
-                                                                    <Trash2 className="h-3 w-3" />
-                                                                </Button>
-                                                            </>
+                                                            <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
+                                                                onClick={() => setEditingItem(item)}>
+                                                                <Pencil className="h-3 w-3 mr-1" />Editar
+                                                            </Button>
+                                                        )}
+                                                        {item.status !== "pago" && (
+                                                            <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
+                                                                onClick={() => { if (confirm(`Remover conta "${item.supplier}" - ${formatCurrency(item.totalAmount, item.currency || "USD")}?`)) del.mutate(item.id); }}
+                                                                aria-label="Remover">
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </Button>
                                                         )}
                                                     </td>
                                                 </tr>
@@ -322,9 +322,9 @@ export default function AccountsPayable() {
                                         })}
                                     </tbody>
                                 </table>
-                                {filtered.length > pageSize && (
+                                {(items as any[]).length > 15 && (
                                     <div className="flex items-center justify-center gap-3 p-3 border-t border-gray-100">
-                                        <span className="text-xs text-gray-400">Mostrando {pageSize} de {filtered.length}</span>
+                                        <span className="text-xs text-gray-400">Mostrando {Math.min(pageSize, filtered.length)} de {filtered.length}</span>
                                         <Select value={String(pageSize)} onValueChange={v => setPageSize(parseInt(v))}>
                                             <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
                                             <SelectContent>
@@ -645,8 +645,16 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                         </Select>
                                     </div>
                                     <div>
-                                        <Label className="text-xs text-gray-500">Valor *</Label>
-                                        <CurrencyInput value={row.amount} onValueChange={v => updateRow(idx, "amount", v)} />
+                                        <Label className="text-xs text-gray-500">Valor * (parcial ou total)</Label>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            min="0.01"
+                                            placeholder="0.00"
+                                            value={row.amount}
+                                            onChange={e => updateRow(idx, "amount", e.target.value)}
+                                            className="font-mono"
+                                        />
                                     </div>
                                     <div className="flex gap-2 items-end">
                                         <div className="flex-1">
