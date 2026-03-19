@@ -570,6 +570,20 @@ app.use((req, res, next) => {
     log(`⚠️  Migration lote/expiry/package: ${migErr.message}`);
   }
 
+  // ─── Safety migration: ensure all AR columns exist + backfill null due_date ───
+  try {
+    const { db: arDb, dbReady: arReady } = await import("./db");
+    const { sql: arSql } = await import("drizzle-orm");
+    await arReady;
+    await arDb.execute(arSql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS supplier_id text`);
+    await arDb.execute(arSql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS due_date timestamp`);
+    // Backfill existing records that have null due_date (set to created_at as fallback)
+    await arDb.execute(arSql`UPDATE farm_accounts_receivable SET due_date = created_at WHERE due_date IS NULL`);
+    log("✅ Migration: farm_accounts_receivable supplier_id + due_date backfill ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration AR safety: ${migErr.message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes
