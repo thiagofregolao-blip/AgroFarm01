@@ -28,7 +28,7 @@ function exportToCSV(data: any[], filename: string) {
         i.description || "",
         `${i.installmentNumber || 1}/${i.totalInstallments || 1}`,
         i.invoiceNumber || "",
-        new Date(i.dueDate).toLocaleDateString("pt-BR"),
+        i.dueDate ? new Date(i.dueDate).toLocaleDateString("pt-BR") : "",
         i.status,
         formatCurrency(i.totalAmount),
         formatCurrency(i.receivedAmount || 0),
@@ -375,7 +375,7 @@ export default function AccountsReceivable() {
                                                     <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
                                                     <td className="p-3">{item.installmentNumber || 1}/{item.totalInstallments || 1}</td>
                                                     <td className="p-3 text-gray-600 font-mono text-xs">{item.invoiceNumber || "--"}</td>
-                                                    <td className="p-3">{new Date(item.dueDate).toLocaleDateString("pt-BR")}</td>
+                                                    <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
                                                     <td className="p-3">{statusBadge(isOverdue && item.status !== "recebido" ? "vencido" : item.status)}</td>
                                                     <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount)}</td>
                                                     <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.receivedAmount || 0)}</td>
@@ -408,9 +408,9 @@ export default function AccountsReceivable() {
                                         })}
                                     </tbody>
                                 </table>
-                                {filtered.length > pageSize && (
+                                {activeItems.length > 15 && (
                                     <div className="flex items-center justify-center gap-3 p-3 border-t border-gray-100">
-                                        <span className="text-xs text-gray-400">Mostrando {pageSize} de {filtered.length}</span>
+                                        <span className="text-xs text-gray-400">Mostrando {Math.min(pageSize, filtered.length)} de {filtered.length}</span>
                                         <Select value={String(pageSize)} onValueChange={v => setPageSize(parseInt(v))}>
                                             <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
                                             <SelectContent>
@@ -1226,7 +1226,7 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
                                         <td className="p-3 font-medium">{item.buyer}</td>
                                         <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
                                         <td className="p-3">{item.installmentNumber || 1}/{item.totalInstallments || 1}</td>
-                                        <td className="p-3">{new Date(item.dueDate).toLocaleDateString("pt-BR")}</td>
+                                        <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
                                         <td className="p-3">
                                             {overdue
                                                 ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3" /> Vencido</span>
@@ -1400,7 +1400,7 @@ function HistoricoTab({ items }: { items: any[] }) {
                         <tbody>
                             {filteredReceived.map((item: any) => (
                                 <tr key={item.id} className="border-t border-gray-100">
-                                    <td className="p-3 text-gray-700">{new Date(item.updatedAt || item.dueDate).toLocaleDateString("pt-BR")}</td>
+                                    <td className="p-3 text-gray-700">{(item.updatedAt || item.dueDate) ? new Date(item.updatedAt || item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
                                     <td className="p-3 font-medium">{item.buyer}</td>
                                     <td className="p-3 text-gray-600 max-w-[250px] truncate">{item.description || "--"}</td>
                                     <td className="p-3">{item.installmentNumber || 1}/{item.totalInstallments || 1}</td>
