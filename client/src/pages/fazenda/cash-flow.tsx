@@ -1139,8 +1139,18 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
         onError: () => toast({ title: "Erro ao cancelar cheque", variant: "destructive" }),
     });
 
+    const deleteCheque = useMutation({
+        mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/cheques/${id}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cheques"] });
+            toast({ title: "Cheque excluido" });
+        },
+        onError: () => toast({ title: "Erro ao excluir cheque", variant: "destructive" }),
+    });
+
     const [compensateDialogId, setCompensateDialogId] = useState<string | null>(null);
     const [compensateAccountId, setCompensateAccountId] = useState("");
+    const visibleCheques = cheques.filter((ch: any) => ch.status !== "cancelado");
 
     return (
         <div className="space-y-4">
@@ -1151,7 +1161,7 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
 
             {isLoading ? (
                 <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
-            ) : cheques.length === 0 ? (
+            ) : visibleCheques.length === 0 ? (
                 <Card className="border-emerald-100">
                     <CardContent className="py-8 text-center">
                         <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -1177,7 +1187,7 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {cheques.map((ch: any) => {
+                                    {visibleCheques.map((ch: any) => {
                                         const status = CHEQUE_STATUS_COLORS[ch.status] || CHEQUE_STATUS_COLORS.emitido;
                                         return (
                                             <tr key={ch.id} className="border-t border-gray-100 hover:bg-gray-50">
@@ -1195,8 +1205,8 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
                                                 <td className="p-3 text-center">{(ch.issue_date || ch.issueDate) ? new Date(ch.issue_date || ch.issueDate).toLocaleDateString("pt-BR") : "--"}</td>
                                                 <td className="p-3 text-center">{(ch.due_date || ch.dueDate) ? new Date(ch.due_date || ch.dueDate).toLocaleDateString("pt-BR") : "--"}</td>
                                                 <td className="p-3 text-center">
-                                                    {ch.status === "emitido" && (
-                                                        <div className="flex gap-1 justify-center">
+                                                    <div className="flex gap-1 justify-center">
+                                                        {ch.status === "emitido" && (<>
                                                             <Button size="sm" variant="outline" className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50"
                                                                 onClick={() => { setCompensateDialogId(ch.id); setCompensateAccountId(""); }}>
                                                                 Compensar
@@ -1206,8 +1216,15 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
                                                                 disabled={cancel.isPending}>
                                                                 Cancelar
                                                             </Button>
-                                                        </div>
-                                                    )}
+                                                        </>)}
+                                                        {ch.status === "cancelado" && (
+                                                            <Button size="sm" variant="outline" className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                                                                onClick={() => { if (confirm("Excluir permanentemente este cheque?")) deleteCheque.mutate(ch.id); }}
+                                                                disabled={deleteCheque.isPending}>
+                                                                Excluir
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );

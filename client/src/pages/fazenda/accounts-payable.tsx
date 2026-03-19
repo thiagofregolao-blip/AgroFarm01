@@ -117,14 +117,14 @@ export default function AccountsPayable() {
     const pay = useMutation({
         mutationFn: async ({ id, data }: { id: string; data: any }) => {
             const result = await apiRequest("POST", `/api/farm/accounts-payable/${id}/pay`, data);
-            if (data.cheque && data.paymentMethod === "cheque") {
+            if (data.cheque) {
                 await apiRequest("POST", "/api/farm/cheques", {
                     bank: data.cheque.banco,
                     chequeNumber: data.cheque.numero,
                     type: data.cheque.tipo,
                     amount: data.amount,
                     holder: data.supplier || "",
-                    accountPayableId: id,
+                    relatedPayableId: id,
                     accountId: data.accountId || (data.accountRows?.[0]?.accountId),
                 });
             }

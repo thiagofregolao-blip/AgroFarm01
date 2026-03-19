@@ -376,6 +376,15 @@ export function registerFarmSprint24Routes(app: Express) {
         } catch (e: any) { res.status(500).json({ error: e.message }); }
     });
 
+    app.delete("/api/farm/cheques/:id", requireFarmer, async (req: Request, res: Response) => {
+        try {
+            await db.execute(sql`
+                DELETE FROM farm_cheques WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}
+            `);
+            res.status(204).send();
+        } catch (e: any) { res.status(500).json({ error: e.message }); }
+    });
+
     // ── #15: Receipts (Recibos) ──────────────────────────────────────────────
     app.get("/api/farm/receipts", requireFarmer, async (req: Request, res: Response) => {
         try {
