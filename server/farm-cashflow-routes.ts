@@ -249,7 +249,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const byCategory = Object.entries(byCategoryRaw).map(([cat, val]) => ({ category: cat, value: Math.round(val * 100) / 100 }))
                 .sort((a, b) => b.value - a.value);
 
-            const { farmExpenses } = await import("../shared/schema");
+            const { farmExpenses, farmAccountsReceivable } = await import("../shared/schema");
             const { or } = await import("drizzle-orm");
             const unpaidExpenses = await db.select().from(farmExpenses).where(
                 and(
@@ -272,6 +272,27 @@ export function registerFarmCashFlowRoutes(app: Express) {
                 installmentsPaid: e.installmentsPaid,
             }));
 
+            const pendingAR = await db.select().from(farmAccountsReceivable).where(
+                and(
+                    eq(farmAccountsReceivable.farmerId, farmerId),
+                    or(eq(farmAccountsReceivable.status, "pendente"), eq(farmAccountsReceivable.status, "parcial"))
+                )
+            );
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const contasARVencer = pendingAR.map((ar: any) => ({
+                id: ar.id,
+                buyer: ar.buyer,
+                description: ar.description,
+                totalAmount: parseFloat(ar.totalAmount as string) || 0,
+                receivedAmount: parseFloat(ar.receivedAmount as string) || 0,
+                remaining: (parseFloat(ar.totalAmount as string) || 0) - (parseFloat(ar.receivedAmount as string) || 0),
+                dueDate: ar.dueDate,
+                status: ar.status,
+                vencido: ar.dueDate ? new Date(ar.dueDate) < today : false,
+                installmentNumber: ar.installmentNumber,
+                totalInstallments: ar.totalInstallments,
+            }));
+
             res.json({
                 accounts,
                 monthSummary: {
@@ -283,6 +304,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
                 chartData,
                 byCategory,
                 contasAPagar,
+                contasARVencer,
             });
         } catch (error) {
             console.error("[CASH_SUMMARY]", error);

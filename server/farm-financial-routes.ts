@@ -511,6 +511,25 @@ export function registerFarmFinancialRoutes(app: Express) {
                 cashTransactionId: tx.id,
             }).where(eq(farmAccountsReceivable.id, req.params.id));
 
+            // Create cheque record if payment method is cheque
+            if (paymentMethod === "cheque" && req.body.chequeData) {
+                const cd = req.body.chequeData;
+                const { sql: sqlFn2 } = await import("drizzle-orm");
+                await db.execute(sqlFn2`
+                    INSERT INTO farm_cheques
+                        (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
+                         issue_date, due_date, status, related_receivable_id, cash_transaction_id)
+                    VALUES
+                        (${farmerId}, ${accountId || null}, ${'recebido'},
+                         ${String(cd.chequeNumber || cd.numero || '')},
+                         ${String(cd.bank || cd.banco || '')},
+                         ${String(cd.holder || cd.titular || ar.buyer)},
+                         ${String(receiveAmount)}, ${ar.currency},
+                         ${new Date()}, ${cd.dueDate ? new Date(cd.dueDate) : null},
+                         ${'emitido'}, ${req.params.id}, ${tx.id})
+                `);
+            }
+
             res.json({ success: true, status: newStatus, transaction: tx });
         } catch (error) {
             console.error("[ACCOUNTS_RECEIVABLE_RECEIVE]", error);

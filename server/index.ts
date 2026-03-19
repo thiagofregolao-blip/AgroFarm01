@@ -570,6 +570,17 @@ app.use((req, res, next) => {
     log(`⚠️  Migration lote/expiry/package: ${migErr.message}`);
   }
 
+  // ─── Cleanup: remove invalid cheque records (amount=0 or bank='') ───
+  try {
+    const { db: cleanDb, dbReady: cleanReady } = await import("./db");
+    const { sql: cleanSql } = await import("drizzle-orm");
+    await cleanReady;
+    await cleanDb.execute(cleanSql`DELETE FROM farm_cheques WHERE (amount = 0 OR bank = '') AND status = 'emitido'`);
+    log("✅ Cleanup: cheques invalidos removidos");
+  } catch (migErr: any) {
+    log(`⚠️  Cleanup cheques invalidos: ${migErr.message}`);
+  }
+
   // ─── Safety migration: ensure all AR columns exist + backfill null due_date ───
   try {
     const { db: arDb, dbReady: arReady } = await import("./db");
