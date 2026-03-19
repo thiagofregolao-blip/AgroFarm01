@@ -494,6 +494,7 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS iva_5 numeric(15,2) DEFAULT 0`);
     await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS iva_10 numeric(15,2) DEFAULT 0`);
     await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS observation text`);
+    await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS due_date timestamp`);
 
     // Tabela de itens da fatura de venda
     await db.execute(sql`

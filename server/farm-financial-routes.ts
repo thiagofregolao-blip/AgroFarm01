@@ -171,6 +171,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                         description: txDesc,
                         paymentMethod: paymentMethod || "transferencia",
                         referenceType: "pagamento_conta",
+                        transactionDate: new Date(),
                     }).returning();
                     if (!firstTxId) firstTxId = rowTx.id;
                     await db.update(farmCashAccounts)
@@ -189,6 +190,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                     description: txDesc,
                     paymentMethod: paymentMethod || "transferencia",
                     referenceType: "pagamento_conta",
+                    transactionDate: new Date(),
                 }).returning();
                 firstTxId = tx.id;
                 await db.update(farmCashAccounts)
@@ -336,7 +338,7 @@ export function registerFarmFinancialRoutes(app: Express) {
 
     app.post("/api/farm/accounts-receivable", requireFarmer, async (req, res) => {
         try {
-            const { farmAccountsReceivable, farmReceivableItems } = await import("../shared/schema");
+            const { farmReceivableItems } = await import("../shared/schema");
             const { db } = await import("./db");
             const { sql } = await import("drizzle-orm");
             const farmerId = (req.user as any).id;
@@ -371,35 +373,27 @@ export function registerFarmFinancialRoutes(app: Express) {
             const iva5 = subtotalGravada5 / 21;
             const iva10 = subtotalGravada10 / 11;
 
-            const baseData = {
-                farmerId,
-                buyer: req.body.buyer,
-                description: req.body.description || "",
-                currency: req.body.currency || "USD",
-                seasonId: req.body.seasonId || null,
-                invoiceNumber: req.body.invoiceNumber || null,
-                paymentCondition: req.body.paymentCondition || "contado",
-                customerRuc: req.body.customerRuc || null,
-                customerAddress: req.body.customerAddress || null,
-                subtotalExenta: String(subtotalExenta.toFixed(2)),
-                subtotalGravada5: String(subtotalGravada5.toFixed(2)),
-                subtotalGravada10: String(subtotalGravada10.toFixed(2)),
-                iva5: String(iva5.toFixed(2)),
-                iva10: String(iva10.toFixed(2)),
-                observation: req.body.observation || null,
-                supplier_id: req.body.supplier_id || null,
-                romaneioId: req.body.romaneioId || null,
-            };
-
             if (totalInstallments <= 1) {
-                const [ar] = await db.insert(farmAccountsReceivable).values({
-                    ...baseData,
-                    totalAmount: String(totalAmount.toFixed(2)),
-                    dueDate: firstDueDate,
-                    installmentNumber: 1,
-                    totalInstallments: 1,
-                    status: "pendente",
-                }).returning();
+                const arResult = await db.execute(sql`
+                    INSERT INTO farm_accounts_receivable
+                        (farmer_id, romaneio_id, buyer, description, total_amount, currency, due_date,
+                         installment_number, total_installments, status, season_id, invoice_number,
+                         payment_condition, customer_ruc, customer_address, subtotal_exenta,
+                         subtotal_gravada_5, subtotal_gravada_10, iva_5, iva_10, observation, supplier_id)
+                    VALUES
+                        (${farmerId}, ${req.body.romaneioId || null}, ${req.body.buyer},
+                         ${req.body.description || null}, ${totalAmount.toFixed(2)},
+                         ${req.body.currency || 'USD'}, ${firstDueDate},
+                         1, 1, 'pendente',
+                         ${req.body.seasonId || null}, ${req.body.invoiceNumber || null},
+                         ${req.body.paymentCondition || 'contado'}, ${req.body.customerRuc || null},
+                         ${req.body.customerAddress || null}, ${subtotalExenta.toFixed(2)},
+                         ${subtotalGravada5.toFixed(2)}, ${subtotalGravada10.toFixed(2)},
+                         ${iva5.toFixed(2)}, ${iva10.toFixed(2)}, ${req.body.observation || null},
+                         ${req.body.supplier_id || null})
+                    RETURNING *
+                `);
+                const ar = ((arResult as any).rows ?? arResult)[0];
 
                 // Insert items linked to this AR
                 if (items.length > 0) {
@@ -434,20 +428,27 @@ export function registerFarmFinancialRoutes(app: Express) {
             for (let i = 0; i < totalInstallments; i++) {
                 const instDue = new Date(firstDueDate);
                 instDue.setMonth(instDue.getMonth() + i);
-                const [ar] = await db.insert(farmAccountsReceivable).values({
-                    ...baseData,
-                    subtotalExenta: instSubtotalExenta,
-                    subtotalGravada5: instSubtotalGravada5,
-                    subtotalGravada10: instSubtotalGravada10,
-                    iva5: instIva5,
-                    iva10: instIva10,
-                    totalAmount: perInstallmentAmount,
-                    dueDate: instDue,
-                    installmentNumber: i + 1,
-                    totalInstallments,
-                    description: `${baseData.description || baseData.buyer} — Parcela ${i + 1}/${totalInstallments}`,
-                    status: "pendente",
-                }).returning();
+                const instDesc = `${req.body.description || req.body.buyer} — Parcela ${i + 1}/${totalInstallments}`;
+                const instResult = await db.execute(sql`
+                    INSERT INTO farm_accounts_receivable
+                        (farmer_id, romaneio_id, buyer, description, total_amount, currency, due_date,
+                         installment_number, total_installments, status, season_id, invoice_number,
+                         payment_condition, customer_ruc, customer_address, subtotal_exenta,
+                         subtotal_gravada_5, subtotal_gravada_10, iva_5, iva_10, observation, supplier_id)
+                    VALUES
+                        (${farmerId}, ${req.body.romaneioId || null}, ${req.body.buyer},
+                         ${instDesc}, ${perInstallmentAmount},
+                         ${req.body.currency || 'USD'}, ${instDue},
+                         ${i + 1}, ${totalInstallments}, 'pendente',
+                         ${req.body.seasonId || null}, ${req.body.invoiceNumber || null},
+                         ${req.body.paymentCondition || 'contado'}, ${req.body.customerRuc || null},
+                         ${req.body.customerAddress || null}, ${instSubtotalExenta},
+                         ${instSubtotalGravada5}, ${instSubtotalGravada10},
+                         ${instIva5}, ${instIva10}, ${req.body.observation || null},
+                         ${req.body.supplier_id || null})
+                    RETURNING *
+                `);
+                const ar = ((instResult as any).rows ?? instResult)[0];
                 created.push(ar);
 
                 // Items only on first installment
@@ -507,6 +508,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                 description: `Receb: ${ar.buyer} - ${ar.description || ''}`.trim(),
                 paymentMethod: paymentMethod || "transferencia",
                 referenceType: "recebimento_conta",
+                transactionDate: new Date(),
             }).returning();
 
             // Update account balance

@@ -1364,6 +1364,7 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
 // ─── Historico Tab ────────────────────────────────────────────────────────────
 function HistoricoTab({ items }: { items: any[] }) {
     const [searchTerm, setSearchTerm] = useState("");
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
     const { data: transactions = [], isLoading } = useQuery({
         queryKey: ["/api/farm/cash-transactions", "recebimento_venda"],
@@ -1373,12 +1374,43 @@ function HistoricoTab({ items }: { items: any[] }) {
         },
     });
 
+    // Extract buyer name from description: "Receb: NomeBuyer - descricao"
+    function extractBuyer(desc: string): string {
+        if (!desc) return "—";
+        const m = desc.match(/^Receb:\s*(.+?)\s*(?:-|$)/);
+        return m ? m[1].trim() : desc;
+    }
+
     const sorted = (transactions as any[])
-        .sort((a: any, b: any) => new Date(b.transactionDate || b.createdAt).getTime() - new Date(a.transactionDate || a.createdAt).getTime());
+        .sort((a: any, b: any) => new Date(b.transactionDate || b.transaction_date || b.createdAt).getTime() - new Date(a.transactionDate || a.transaction_date || a.createdAt).getTime());
 
     const filtered = sorted.filter((t: any) =>
         !searchTerm || t.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Group by date + buyer
+    const groups: { key: string; date: string; buyer: string; items: any[]; total: number }[] = [];
+    const groupMap = new Map<string, typeof groups[0]>();
+    for (const t of filtered) {
+        const rawDate = t.transactionDate || t.transaction_date || t.createdAt;
+        const dateStr = rawDate ? new Date(rawDate).toLocaleDateString("pt-BR") : "—";
+        const buyer = extractBuyer(t.description || "");
+        const key = `${dateStr}|${buyer}`;
+        if (!groupMap.has(key)) {
+            const g = { key, date: dateStr, buyer, items: [], total: 0 };
+            groupMap.set(key, g);
+            groups.push(g);
+        }
+        const g = groupMap.get(key)!;
+        g.items.push(t);
+        g.total += parseFloat(t.amount || 0);
+    }
+
+    const toggleGroup = (key: string) => setExpandedGroups(prev => {
+        const next = new Set(prev);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+    });
 
     return (
         <div className="space-y-4">
@@ -1390,42 +1422,55 @@ function HistoricoTab({ items }: { items: any[] }) {
                             <Input placeholder="Buscar no historico..." value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
                         </div>
-                        <span className="text-xs text-gray-400">{filtered.length} recebimento(s)</span>
+                        <span className="text-xs text-gray-400">{groups.length} grupo(s) / {filtered.length} recebimento(s)</span>
                     </div>
                 </CardContent>
             </Card>
 
             {isLoading ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
-            ) : filtered.length === 0 ? (
+            ) : groups.length === 0 ? (
                 <Card className="border-emerald-100"><CardContent className="py-12 text-center">
                     <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">Nenhum recebimento registrado</p>
                 </CardContent></Card>
             ) : (
-                <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-emerald-50">
-                            <tr>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Forma Pgto</th>
-                                <th className="text-right p-3 font-semibold text-emerald-800">Valor Recebido</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map((t: any) => (
-                                <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50">
-                                    <td className="p-3 text-gray-700 whitespace-nowrap">
-                                        {t.transactionDate ? new Date(t.transactionDate).toLocaleDateString("pt-BR") : "—"}
-                                    </td>
-                                    <td className="p-3 text-gray-600 max-w-[350px] truncate">{t.description || "--"}</td>
-                                    <td className="p-3 text-gray-500 capitalize">{t.paymentMethod || "—"}</td>
-                                    <td className="text-right p-3 font-mono font-semibold text-green-600">{formatCurrency(t.amount)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="space-y-2">
+                    {groups.map(group => (
+                        <Card key={group.key} className="border-emerald-100 overflow-hidden">
+                            <div
+                                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                onClick={() => toggleGroup(group.key)}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
+                                    <div>
+                                        <p className="font-semibold text-gray-800">{group.buyer}</p>
+                                        <p className="text-xs text-gray-500">{group.date} · {group.items.length} recebimento(s)</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="font-mono font-bold text-green-600 text-sm">{formatCurrency(group.total)}</span>
+                                    <span className="text-xs text-gray-400">{expandedGroups.has(group.key) ? "▲" : "▼"}</span>
+                                </div>
+                            </div>
+                            {expandedGroups.has(group.key) && (
+                                <div className="border-t border-gray-100">
+                                    <table className="w-full text-sm">
+                                        <tbody>
+                                            {group.items.map((t: any) => (
+                                                <tr key={t.id} className="border-t border-gray-50">
+                                                    <td className="px-4 py-2 text-gray-600 max-w-[300px] truncate">{t.description || "--"}</td>
+                                                    <td className="px-4 py-2 text-gray-500 capitalize">{t.paymentMethod || t.payment_method || "—"}</td>
+                                                    <td className="text-right px-4 py-2 font-mono text-green-600">{formatCurrency(parseFloat(t.amount))}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </Card>
+                    ))}
                 </div>
             )}
         </div>
