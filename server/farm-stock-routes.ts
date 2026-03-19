@@ -197,8 +197,12 @@ export function registerFarmStockRoutes(app: Express) {
                 return res.status(400).json({ error: `Estoque insuficiente no deposito origem. Disponivel: ${available}` });
             }
 
-            // 1. Decrease stock in source deposit
-            await farmStorage.upsertStock(farmerId, productId, -qty, 0, fromPropId);
+            // 1. Decrease stock in source deposit — update by exact row ID to avoid re-query mismatch
+            const newSourceQty = parseFloat(sourceStock.quantity) - qty;
+            await db.execute(sql`
+                UPDATE farm_stock SET quantity = ${String(newSourceQty)}, updated_at = now()
+                WHERE id = ${sourceStock.id}
+            `);
 
             // 2. Increase stock in destination deposit (use source avg cost)
             const avgCost = parseFloat(sourceStock.average_cost) || 0;

@@ -69,13 +69,13 @@ export default function FornecedoresPage() {
 
     const openNew = () => {
         setEditing(null);
-        setForm({ name: "", ruc: "", phone: "", email: "", address: "", notes: "", personType: "", entityType: "" });
+        setForm({ name: "", ruc: "", phone: "", email: "", address: "", notes: "", personType: "__none__", entityType: "__none__" });
         setModalOpen(true);
     };
 
     const openEdit = (s: Supplier) => {
         setEditing(s);
-        setForm({ name: s.name, ruc: s.ruc || "", phone: s.phone || "", email: s.email || "", address: s.address || "", notes: s.notes || "", personType: s.person_type || "", entityType: s.entity_type || "" });
+        setForm({ name: s.name, ruc: s.ruc || "", phone: s.phone || "", email: s.email || "", address: s.address || "", notes: s.notes || "", personType: s.person_type || "__none__", entityType: s.entity_type || "__none__" });
         setModalOpen(true);
     };
 
@@ -170,6 +170,7 @@ export default function FornecedoresPage() {
                                 <Select value={form.personType} onValueChange={(v) => setForm({ ...form, personType: v })}>
                                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="__none__">Selecione...</SelectItem>
                                         <SelectItem value="provedor">Provedor</SelectItem>
                                         <SelectItem value="cliente">Cliente</SelectItem>
                                     </SelectContent>
@@ -180,6 +181,7 @@ export default function FornecedoresPage() {
                                 <Select value={form.entityType} onValueChange={(v) => setForm({ ...form, entityType: v })}>
                                     <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="__none__">Selecione...</SelectItem>
                                         <SelectItem value="fisica">Pessoa Fisica</SelectItem>
                                         <SelectItem value="juridica">Pessoa Juridica</SelectItem>
                                     </SelectContent>
@@ -209,9 +211,18 @@ export default function FornecedoresPage() {
                             <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                         </div>
                     </div>
+                    {saveMutation.isError && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                            {(saveMutation.error as Error)?.message || "Erro ao salvar"}
+                        </p>
+                    )}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={() => saveMutation.mutate(form)} disabled={!form.name || saveMutation.isPending}>
+                        <Button onClick={() => saveMutation.mutate({
+                            ...form,
+                            personType: form.personType === "__none__" ? null : form.personType,
+                            entityType: form.entityType === "__none__" ? null : form.entityType,
+                        })} disabled={!form.name || saveMutation.isPending}>
                             {saveMutation.isPending ? "Salvando..." : "Salvar"}
                         </Button>
                     </DialogFooter>

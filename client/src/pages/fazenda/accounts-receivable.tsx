@@ -517,7 +517,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
     const ed = initialData;
     const [buyer, setBuyer] = useState(ed?.buyer || "");
     const [buyerSearch, setBuyerSearch] = useState("");
-    const [supplierId, setSupplierId] = useState(ed?.supplier_id || ed?.supplierId ? String(ed.supplier_id || ed.supplierId) : "");
+    const [supplierId, setSupplierId] = useState(ed?.supplier_id || ed?.supplierId ? String(ed.supplier_id || ed.supplierId) : "__none__");
     const [customerRuc, setCustomerRuc] = useState(ed?.customerRuc || ed?.customer_ruc || "");
     const [customerAddress, setCustomerAddress] = useState(ed?.customerAddress || ed?.customer_address || "");
     const [invoiceNumber, setInvoiceNumber] = useState(ed?.invoiceNumber || ed?.invoice_number || "");
@@ -562,6 +562,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
     // When supplier selected, fill buyer + RUC + address
     function selectSupplier(id: string) {
         setSupplierId(id);
+        if (id === "__none__") { setBuyer(""); setCustomerRuc(""); setCustomerAddress(""); return; }
         const s = suppliers.find((s: any) => String(s.id) === id);
         if (s) {
             setBuyer(s.name || "");
@@ -659,7 +660,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
 
         onSave({
             buyer,
-            supplier_id: supplierId || null,
+            supplier_id: (supplierId && supplierId !== "__none__") ? supplierId : null,
             description: items.map(it => it.productName).filter(Boolean).join(", ") || "Venda",
             totalAmount: totalGeral.toFixed(2),
             dueDate,
@@ -734,6 +735,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                         <Select value={supplierId} onValueChange={selectSupplier}>
                             <SelectTrigger className="text-sm"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="__none__">Selecione...</SelectItem>
                                 <div className="px-2 pb-1">
                                     <Input placeholder="Buscar..." value={buyerSearch} onChange={e => setBuyerSearch(e.target.value)}
                                         className="h-7 text-xs" onClick={e => e.stopPropagation()} />
@@ -743,7 +745,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                                 ))}
                             </SelectContent>
                         </Select>
-                        {!supplierId && (
+                        {supplierId === "__none__" && (
                             <Input value={buyer} onChange={e => setBuyer(e.target.value)} placeholder="Ou digite o nome..."
                                 className="text-sm mt-1" />
                         )}

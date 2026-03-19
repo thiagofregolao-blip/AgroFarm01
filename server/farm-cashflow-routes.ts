@@ -276,28 +276,27 @@ export function registerFarmCashFlowRoutes(app: Express) {
 
     app.put("/api/farm/cash-transactions/:id", requireFarmer, async (req, res) => {
         try {
-            const { farmCashTransactions } = await import("../shared/schema");
             const { db } = await import("./db");
-            const { eq, and } = await import("drizzle-orm");
+            const { sql: sqlRaw } = await import("drizzle-orm");
 
             const farmerId = (req.user as any).id;
             const { description, amount, transactionDate } = req.body;
 
-            const updates: any = {};
-            if (description !== undefined) updates.description = description;
-            if (amount !== undefined) updates.amount = String(parseFloat(amount));
-            if (transactionDate !== undefined) updates.transactionDate = parseLocalDate(transactionDate);
+            const parsedDate = parseLocalDate(transactionDate) || new Date();
+            const parsedAmount = amount ? String(parseFloat(amount)) : null;
 
-            if (Object.keys(updates).length === 0) {
-                return res.status(400).json({ error: "No fields to update" });
-            }
-
-            const [updated] = await db.update(farmCashTransactions).set(updates).where(
-                and(eq(farmCashTransactions.id, req.params.id), eq(farmCashTransactions.farmerId, farmerId))
-            ).returning();
-
-            if (!updated) return res.status(404).json({ error: "Transaction not found" });
-            res.json(updated);
+            const result = await db.execute(sqlRaw`
+                UPDATE farm_cash_transactions
+                SET
+                    description = ${description ?? null},
+                    amount = CASE WHEN ${parsedAmount} IS NOT NULL THEN ${parsedAmount} ELSE amount END,
+                    transaction_date = ${parsedDate}
+                WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
+                RETURNING *
+            `);
+            const rows = (result as any).rows ?? result;
+            if (!rows.length) return res.status(404).json({ error: "Transaction not found" });
+            res.json(rows[0]);
         } catch (error) {
             console.error("[CASH_TRANSACTION_UPDATE]", error);
             res.status(500).json({ error: "Failed to update transaction" });

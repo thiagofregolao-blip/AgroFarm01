@@ -24,7 +24,7 @@ function exportToCSV(data: any[], filename: string) {
         i.supplier,
         i.description || "",
         `${i.installmentNumber}/${i.totalInstallments}`,
-        new Date(i.dueDate).toLocaleDateString("pt-BR"),
+        i.dueDate ? new Date(i.dueDate).toLocaleDateString("pt-BR") : "",
         i.status,
         formatCurrency(i.totalAmount, i.currency || "USD"),
         formatCurrency(i.paidAmount || 0, i.currency || "USD"),
@@ -298,7 +298,7 @@ export default function AccountsPayable() {
                                                     <td className="p-3 font-medium">{item.supplier}</td>
                                                     <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
                                                     <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
-                                                    <td className="p-3">{new Date(item.dueDate).toLocaleDateString("pt-BR")}</td>
+                                                    <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
                                                     <td className="p-3">{statusBadge(isOverdue && item.status !== "pago" ? "vencido" : item.status)}</td>
                                                     <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount, item.currency || "USD")}</td>
                                                     <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.paidAmount || 0, item.currency || "USD")}</td>
@@ -574,7 +574,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                         <td className="p-3 font-medium">{item.supplier}</td>
                                         <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
                                         <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
-                                        <td className="p-3">{new Date(item.dueDate).toLocaleDateString("pt-BR")}</td>
+                                        <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
                                         <td className="p-3">
                                             {overdue
                                                 ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3" /> Vencido</span>
@@ -737,7 +737,7 @@ function HistoricoTab({ items }: { items: any[] }) {
     const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string }[] = [];
     const groupMap = new Map<string, typeof groups[0]>();
     for (const item of filteredPaid) {
-        const dateStr = new Date(item.paidDate || item.updatedAt || item.dueDate).toLocaleDateString("pt-BR");
+        const dateStr = (item.paidDate || item.updatedAt || item.dueDate) ? new Date(item.paidDate || item.updatedAt || item.dueDate).toLocaleDateString("pt-BR") : "—";
         const key = `${dateStr}|${item.supplier}`;
         if (!groupMap.has(key)) {
             const g = { key, date: dateStr, supplier: item.supplier, items: [], total: 0, currency: item.currency || "USD" };
@@ -826,7 +826,7 @@ function EditAPForm({ item, seasons, onSave, saving }: any) {
     const [supplier, setSupplier] = useState(item.supplier || "");
     const [description, setDescription] = useState(item.description || "");
     const [totalAmount, setTotalAmount] = useState(String(item.totalAmount || ""));
-    const [dueDate, setDueDate] = useState(item.dueDate ? new Date(item.dueDate).toISOString().split("T")[0] : "");
+    const [dueDate, setDueDate] = useState(item.dueDate ? new Date(item.dueDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
     const [seasonId, setSeasonId] = useState(String(item.seasonId || item.season_id || "__none__"));
 
     const handleSave = () => {

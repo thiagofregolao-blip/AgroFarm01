@@ -62,7 +62,7 @@ function exportTransactionsCSV(transactions: any[], accounts: any[]) {
         const acc = accounts.find((a: any) => a.id === t.accountId);
         const cat = ALL_CATEGORIES.find(c => c.value === t.category);
         return [
-            new Date(t.transactionDate).toLocaleDateString("pt-BR"),
+            t.transactionDate ? new Date(t.transactionDate).toLocaleDateString("pt-BR") : "—",
             t.type === "entrada" ? "Entrada" : "Saída",
             cat?.label || t.category,
             t.description || "",
@@ -634,7 +634,7 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                                 const isEntrada = t.type === "entrada";
                                 return (
                                     <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50">
-                                        <td className="p-3">{new Date(t.transactionDate).toLocaleDateString("pt-BR")}</td>
+                                        <td className="p-3">{t.transactionDate ? new Date(t.transactionDate).toLocaleDateString("pt-BR") : "—"}</td>
                                         <td className="p-3">
                                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isEntrada ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                                                 {isEntrada ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}{isEntrada ? "Entrada" : "Saída"}
@@ -909,7 +909,7 @@ function TransferenciasTab({ transactions, accounts, onRefresh }: { transactions
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium">{t.description || "Transferencia"}</p>
                                             <p className="text-xs text-gray-500">
-                                                {new Date(t.transactionDate).toLocaleDateString("pt-BR")} - Conta: {acc?.name || "--"}
+                                                {t.transactionDate ? new Date(t.transactionDate).toLocaleDateString("pt-BR") : "—"} - Conta: {acc?.name || "--"}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2">
