@@ -646,7 +646,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                     buyer = COALESCE(${buyer ?? null}, buyer),
                     description = COALESCE(${description ?? null}, description),
                     total_amount = COALESCE(${totalAmount ?? null}, total_amount),
-                    due_date = COALESCE(${dueDate ? new Date(dueDate).toISOString() : null}::timestamp, due_date),
+                    due_date = COALESCE(CAST(${dueDate ? new Date(dueDate).toISOString() : null} AS TIMESTAMP), due_date),
                     supplier_id = COALESCE(${supplier_id ?? null}, supplier_id),
                     season_id = COALESCE(${seasonId ?? null}, season_id),
                     invoice_number = COALESCE(${invoiceNumber ?? null}, invoice_number),
@@ -1087,23 +1087,24 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { sql } = await import("drizzle-orm");
             const farmerId = (req.user as any).id;
 
-            // Return each confirmed romaneio as individual entry so user picks specific delivery
+            // Return grain stock grouped by crop + season + buyer (silo view)
             const rows = await db.execute(sql`
                 SELECT
-                    r.id,
+                    CONCAT(r.crop, '-', COALESCE(CAST(r.season_id AS text), 'none'), '-', COALESCE(r.buyer, 'unknown')) AS id,
                     r.crop,
                     r.season_id AS "seasonId",
                     r.buyer AS "granero",
-                    r.ticket_number AS "ticketNumber",
-                    r.delivery_date AS "deliveryDate",
-                    r.final_weight AS "totalWeight",
-                    s.name AS "seasonName"
+                    s.name AS "seasonName",
+                    COUNT(*) AS deliveries,
+                    SUM(CAST(r.final_weight AS numeric)) AS "totalWeight",
+                    MAX(r.delivery_date) AS "lastDelivery"
                 FROM farm_romaneios r
                 LEFT JOIN farm_seasons s ON s.id = r.season_id
                 WHERE r.farmer_id = ${farmerId}
                   AND r.status = 'confirmed'
                   AND CAST(r.final_weight AS numeric) > 0
-                ORDER BY r.delivery_date DESC
+                GROUP BY r.crop, r.season_id, r.buyer, s.name
+                ORDER BY r.crop, s.name
             `);
             const result = ((rows as any).rows ?? rows).map((r: any) => ({
                 id: r.id,
@@ -1111,13 +1112,11 @@ export function registerFarmFinancialRoutes(app: Express) {
                 seasonId: r.seasonId,
                 seasonName: r.seasonName,
                 granero: r.granero,
-                ticketNumber: r.ticketNumber,
-                deliveryDate: r.deliveryDate,
                 quantity: String(parseFloat(r.totalWeight || 0)),
-                totalWeight: r.totalWeight,
+                totalWeight: String(r.totalWeight),
                 soldWeight: "0",
-                deliveries: 1,
-                lastDelivery: r.deliveryDate,
+                deliveries: Number(r.deliveries),
+                lastDelivery: r.lastDelivery,
             }));
             res.json(result);
         } catch (error) {

@@ -940,20 +940,20 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                                                     const qtyKg = parseFloat(g.quantity || 0);
                                                     const qtyTon = (qtyKg / 1000).toFixed(2);
                                                     const gid = g.id || g.crop;
-                                                    const alreadyAdded = items.some(it => it.productId === gid);
+                                                    const alreadyAdded = items.some(it => (it as any).grainId === gid);
                                                     return (
                                                         <button key={gid} type="button"
                                                             className={`flex items-center justify-between w-full p-3 rounded-lg border text-left transition-colors ${alreadyAdded ? "bg-amber-50 border-amber-300" : "border-gray-200 hover:bg-gray-50"}`}
                                                             onClick={() => {
                                                                 if (!alreadyAdded) {
-                                                                    const newItem = { productId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "5", grainCrop: g.crop, grainSeasonId: g.seasonId || null, grainGranero: g.granero || null };
+                                                                    const newItem = { productId: "", grainId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "5", grainCrop: g.crop, grainSeasonId: g.seasonId || null, grainGranero: g.granero || null };
                                                                     if (items.length === 1 && !items[0].productName) {
                                                                         setItems([newItem]);
                                                                     } else {
                                                                         setItems([...items, newItem]);
                                                                     }
                                                                 } else {
-                                                                    setItems(items.filter(it => it.productId !== gid));
+                                                                    setItems(items.filter(it => (it as any).grainId !== gid));
                                                                 }
                                                             }}>
                                                             <div>
