@@ -114,10 +114,10 @@ app.use((req, res, next) => {
 
   // Inline migration: ensure the `type` column exists on farm_pdv_terminals
   try {
-    const { db, dbReady } = await import("./db");
+    const dbMod = await import("./db");
     const { sql } = await import("drizzle-orm");
-    await dbReady;
-    await db.execute(sql`ALTER TABLE farm_pdv_terminals ADD COLUMN IF NOT EXISTS type text NOT NULL DEFAULT 'estoque'`);
+    await dbMod.dbReady; // MUST access db via module namespace AFTER dbReady — destructuring captures undefined
+    await dbMod.db.execute(sql`ALTER TABLE farm_pdv_terminals ADD COLUMN IF NOT EXISTS type text NOT NULL DEFAULT 'estoque'`);
     log("✅ Migration: farm_pdv_terminals.type column ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration check for type column: ${migErr.message}`);
@@ -539,7 +539,10 @@ app.use((req, res, next) => {
 
   // ─── Migration: farm_deposits + deposit_id in farm_stock ───
   try {
-    await db.execute(sql`
+    const { db: depDb, dbReady: depReady } = await import("./db");
+    const { sql: depSql } = await import("drizzle-orm");
+    await depReady;
+    await depDb.execute(depSql`
       CREATE TABLE IF NOT EXISTS farm_deposits (
         id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
         farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -550,8 +553,8 @@ app.use((req, res, next) => {
         created_at timestamp NOT NULL DEFAULT now()
       )
     `);
-    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS deposit_id varchar`);
-    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS deposit_id varchar`);
+    await depDb.execute(depSql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS deposit_id varchar`);
+    await depDb.execute(depSql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS deposit_id varchar`);
     log("✅ Migration: farm_deposits + deposit_id ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration farm_deposits: ${migErr.message}`);
@@ -559,12 +562,15 @@ app.use((req, res, next) => {
 
   // Lote, vencimento e embalagem (bloco separado para garantir execução)
   try {
-    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS lote text`);
-    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS expiry_date timestamp`);
-    await db.execute(sql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS package_size decimal(15,4)`);
-    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS lote text`);
-    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS expiry_date timestamp`);
-    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS package_size decimal(15,4)`);
+    const { db: loteDb, dbReady: loteReady } = await import("./db");
+    const { sql: loteSql } = await import("drizzle-orm");
+    await loteReady;
+    await loteDb.execute(loteSql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS lote text`);
+    await loteDb.execute(loteSql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS expiry_date timestamp`);
+    await loteDb.execute(loteSql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS package_size decimal(15,4)`);
+    await loteDb.execute(loteSql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS lote text`);
+    await loteDb.execute(loteSql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS expiry_date timestamp`);
+    await loteDb.execute(loteSql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS package_size decimal(15,4)`);
     log("✅ Migration: lote/expiry_date/package_size columns ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration lote/expiry/package: ${migErr.message}`);
@@ -590,7 +596,9 @@ app.use((req, res, next) => {
     await arDb.execute(arSql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS due_date timestamp`);
     // Backfill existing records that have null due_date (set to created_at as fallback)
     await arDb.execute(arSql`UPDATE farm_accounts_receivable SET due_date = created_at WHERE due_date IS NULL`);
-    log("✅ Migration: farm_accounts_receivable supplier_id + due_date backfill ensured");
+    // grain_granero: tracks which silo/buyer the grain came from (for per-silo stock display)
+    await arDb.execute(arSql`ALTER TABLE farm_receivable_items ADD COLUMN IF NOT EXISTS grain_granero text`);
+    log("✅ Migration: farm_accounts_receivable safety + grain_granero ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration AR safety: ${migErr.message}`);
   }

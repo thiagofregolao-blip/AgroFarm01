@@ -661,7 +661,9 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        if (!buyer || totalGeral <= 0 || !dueDate) return;
+        if (!buyer) { toast({ title: "Informe o comprador", variant: "destructive" }); return; }
+        if (!dueDate) { toast({ title: "Informe a data de vencimento", variant: "destructive" }); return; }
+        if (totalGeral <= 0) { toast({ title: "Adicione pelo menos um item com preco", variant: "destructive" }); return; }
 
         onSave({
             buyer,
@@ -691,6 +693,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                 totalPrice: ((parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0)).toFixed(2),
                 grainCrop: (it as any).grainCrop || null,
                 grainSeasonId: (it as any).grainSeasonId || null,
+                grainGranero: (it as any).grainGranero || null,
             })),
         });
     }
@@ -941,7 +944,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                                                             className={`flex items-center justify-between w-full p-3 rounded-lg border text-left transition-colors ${alreadyAdded ? "bg-amber-50 border-amber-300" : "border-gray-200 hover:bg-gray-50"}`}
                                                             onClick={() => {
                                                                 if (!alreadyAdded) {
-                                                                    const newItem = { productId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "5", grainCrop: g.crop, grainSeasonId: g.seasonId || null };
+                                                                    const newItem = { productId: gid, productName: cropName, unit: "TON", quantity: qtyTon, unitPrice: "", ivaRate: "5", grainCrop: g.crop, grainSeasonId: g.seasonId || null, grainGranero: g.granero || null };
                                                                     if (items.length === 1 && !items[0].productName) {
                                                                         setItems([newItem]);
                                                                     } else {
@@ -953,7 +956,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
                                                             }}>
                                                             <div>
                                                                 <p className="font-medium text-sm text-gray-800">{cropName}</p>
-                                                                <p className="text-xs text-gray-500">Estoque de graos (romaneios)</p>
+                                                                <p className="text-xs text-gray-500">{g.granero ? `Granero: ${g.granero}` : "Estoque de graos (romaneios)"}{g.seasonName ? ` — ${g.seasonName}` : ""}</p>
                                                             </div>
                                                             <div className="text-right">
                                                                 <p className="text-sm font-mono font-semibold">{qtyTon} ton</p>

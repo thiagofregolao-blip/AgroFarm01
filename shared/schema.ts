@@ -1533,6 +1533,7 @@ export const farmReceivableItems = pgTable("farm_receivable_items", {
   totalPrice: decimal("total_price", { precision: 15, scale: 2 }).notNull(),
   grainCrop: text("grain_crop"), // if grain sale: crop name (soja, milho, etc.)
   grainSeasonId: varchar("grain_season_id"), // if grain sale: season reference
+  grainGranero: text("grain_granero"), // if grain sale: buyer/silo (granero) name
 });
 
 export type FarmReceivableItem = typeof farmReceivableItems.$inferSelect;

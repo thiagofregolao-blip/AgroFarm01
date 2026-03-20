@@ -1125,6 +1125,7 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cheques"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
             toast({ title: "Cheque compensado!" });
         },
         onError: () => toast({ title: "Erro ao compensar cheque", variant: "destructive" }),

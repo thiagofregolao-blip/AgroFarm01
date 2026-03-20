@@ -447,6 +447,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                         totalPrice: String(item.totalPrice),
                         grainCrop: item.grainCrop || null,
                         grainSeasonId: item.grainSeasonId || null,
+                        grainGranero: item.grainGranero || null,
                     }))
                 );
             };
@@ -1087,10 +1088,12 @@ export function registerFarmFinancialRoutes(app: Express) {
             const farmerId = (req.user as any).id;
 
             // Aggregate grain stock from confirmed romaneios minus sold quantities
+            // Grouped by crop + season + buyer (granero) so each silo appears separately
             const rows = await db.execute(sql`
                 SELECT
                     r.crop,
                     r.season_id AS "seasonId",
+                    r.buyer AS "granero",
                     SUM(CAST(r.final_weight AS numeric)) AS "totalWeight",
                     COUNT(*) AS "deliveries",
                     MAX(r.delivery_date) AS "lastDelivery",
@@ -1105,20 +1108,22 @@ export function registerFarmFinancialRoutes(app: Express) {
                         WHERE ar2.farmer_id = ${farmerId}
                           AND ri.grain_crop = r.crop
                           AND (ri.grain_season_id = r.season_id OR (ri.grain_season_id IS NULL AND r.season_id IS NULL))
+                          AND (ri.grain_granero = r.buyer OR ri.grain_granero IS NULL)
                     ), 0) AS "soldWeight"
                 FROM farm_romaneios r
                 LEFT JOIN farm_seasons s ON s.id = r.season_id
                 WHERE r.farmer_id = ${farmerId}
                   AND r.status = 'confirmed'
                   AND CAST(r.final_weight AS numeric) > 0
-                GROUP BY r.crop, r.season_id, s.name
+                GROUP BY r.crop, r.season_id, r.buyer, s.name
                 ORDER BY MAX(r.delivery_date) DESC
             `);
             const result = ((rows as any).rows ?? rows).map((r: any) => ({
-                id: `${r.crop}-${r.seasonId || 'none'}`,
+                id: `${r.crop}-${r.seasonId || 'none'}-${r.granero || 'none'}`,
                 crop: r.crop,
                 seasonId: r.seasonId,
                 seasonName: r.seasonName,
+                granero: r.granero,
                 quantity: String(Math.max(0, parseFloat(r.totalWeight) - parseFloat(r.soldWeight))),
                 totalWeight: r.totalWeight,
                 soldWeight: r.soldWeight,
