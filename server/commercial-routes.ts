@@ -13,6 +13,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import { hashPassword } from "./auth";
 import { db } from "./db";
+import { logger } from "./lib/logger";
 import {
     companies,
     companyUsers,
@@ -1749,54 +1750,56 @@ ${csvText}`;
             const totalAmountUsd = items.reduce((acc: number, i: any) =>
                 acc + (parseFloat(i.totalPriceUsd ?? 0) || 0), 0);
 
-            const [order] = await db.insert(salesOrders).values({
-                companyId,
-                orderNumber,
-                clientId,
-                consultantId: user.id,
-                priceListId: priceListId || null,
-                paymentType: paymentType || "credito",
-                freightPayer: freightPayer || "cliente",
-                deliveryLocation: deliveryLocation || null,
-                paymentLocation: paymentLocation || null,
-                dueDate: dueDate ? new Date(dueDate) : null,
-                agriculturalYear: agriculturalYear || null,
-                zafra: zafra || null,
-                culture: culture || null,
-                status: "draft",
-                observations: observations || null,
-                totalAmountUsd: String(totalAmountUsd),
-                currency: currency || "USD",
-            }).returning();
+            // Transacao atomica: se insert de itens falhar, o pedido e revertido
+            let order: any;
+            let orderItems: any[];
+            await db.transaction(async (tx: any) => {
+                [order] = await tx.insert(salesOrders).values({
+                    companyId,
+                    orderNumber,
+                    clientId,
+                    consultantId: user.id,
+                    priceListId: priceListId || null,
+                    paymentType: paymentType || "credito",
+                    freightPayer: freightPayer || "cliente",
+                    deliveryLocation: deliveryLocation || null,
+                    paymentLocation: paymentLocation || null,
+                    dueDate: dueDate ? new Date(dueDate) : null,
+                    agriculturalYear: agriculturalYear || null,
+                    zafra: zafra || null,
+                    culture: culture || null,
+                    status: "draft",
+                    observations: observations || null,
+                    totalAmountUsd: String(totalAmountUsd),
+                    currency: currency || "USD",
+                }).returning();
 
-            // Insert items
-            await db.insert(salesOrderItems).values(
-                items.map((i: any) => ({
-                    orderId: order.id,
-                    productId: i.productId || null,
-                    productCode: i.productCode || null,
-                    productName: i.productName,
-                    quantity: String(i.quantity),
-                    unit: i.unit || "UNI",
-                    unitPriceUsd: i.unitPriceUsd !== undefined ? String(i.unitPriceUsd) : null,
-                    totalPriceUsd: i.totalPriceUsd !== undefined ? String(i.totalPriceUsd) : null,
-                    warehouseId: i.warehouseId || null,
-                    notes: i.notes || null,
-                }))
-            );
+                orderItems = await tx.insert(salesOrderItems).values(
+                    items.map((i: any) => ({
+                        orderId: order.id,
+                        productId: i.productId || null,
+                        productCode: i.productCode || null,
+                        productName: i.productName,
+                        quantity: String(i.quantity),
+                        unit: i.unit || "UNI",
+                        unitPriceUsd: i.unitPriceUsd !== undefined ? String(i.unitPriceUsd) : null,
+                        totalPriceUsd: i.totalPriceUsd !== undefined ? String(i.totalPriceUsd) : null,
+                        warehouseId: i.warehouseId || null,
+                        notes: i.notes || null,
+                    }))
+                ).returning();
+            });
 
-            // Reserve stock immediately on order creation
-            console.log(`[Orders] About to reserveStock for order ${order.id} company ${companyId}`);
+            // Reserve stock apos commit da transacao (operacao separada, nao atomica por design)
             try {
                 await reserveStockForOrder(order.id, companyId, user.id);
-                console.log(`[Orders] reserveStock DONE for order ${order.id}`);
             } catch (e) {
-                console.error("[Orders] reserveStock FAILED:", e);
+                logger.error('reserveStockForOrder falhou (nao bloqueante)', { orderId: order.id }, e instanceof Error ? e : new Error(String(e)));
             }
 
-            res.json({ ...order, items });
+            res.json({ ...order, items: orderItems! });
         } catch (e) {
-            console.error("[Orders] create:", e);
+            logger.error('Erro ao criar pedido', { route: 'POST /api/company/orders' }, e instanceof Error ? e : new Error(String(e)));
             res.status(500).json({ error: "Erro interno" });
         }
     });
@@ -2177,44 +2180,46 @@ ${csvText}`;
 
             const { clientId, invoiceNumber, issueDate, dueDate, currency, totalAmountUsd, totalAmountPyg, items } = req.body;
 
-            const [invoice] = await db.insert(salesInvoices).values({
-                companyId,
-                clientId: clientId || null,
-                invoiceNumber: invoiceNumber || null,
-                issueDate: issueDate ? new Date(issueDate) : null,
-                dueDate: dueDate ? new Date(dueDate) : null,
-                currency: currency || "USD",
-                totalAmountUsd: totalAmountUsd ? String(totalAmountUsd) : null,
-                totalAmountPyg: totalAmountPyg ? String(totalAmountPyg) : null,
-                source: "manual",
-                createdBy: user.id,
-            }).returning();
+            // Transacao atomica: invoice + itens sao revertidos juntos em caso de falha
+            let invoice: any;
+            await db.transaction(async (tx: any) => {
+                [invoice] = await tx.insert(salesInvoices).values({
+                    companyId,
+                    clientId: clientId || null,
+                    invoiceNumber: invoiceNumber || null,
+                    issueDate: issueDate ? new Date(issueDate) : null,
+                    dueDate: dueDate ? new Date(dueDate) : null,
+                    currency: currency || "USD",
+                    totalAmountUsd: totalAmountUsd ? String(totalAmountUsd) : null,
+                    totalAmountPyg: totalAmountPyg ? String(totalAmountPyg) : null,
+                    source: "manual",
+                    createdBy: user.id,
+                }).returning();
 
-            if (Array.isArray(items) && items.length > 0) {
-                await db.insert(salesInvoiceItems).values(
-                    items.map((i: any) => ({
-                        invoiceId: invoice.id,
-                        productId: i.productId || null,
-                        productCode: i.productCode || null,
-                        productName: i.productName,
-                        quantity: String(i.quantity),
-                        unit: i.unit || "UNI",
-                        unitPriceUsd: i.unitPriceUsd !== undefined ? String(i.unitPriceUsd) : null,
-                        totalPriceUsd: i.totalPriceUsd !== undefined ? String(i.totalPriceUsd) : null,
-                        warehouseId: i.warehouseId || null,
-                    }))
-                );
-            }
+                if (Array.isArray(items) && items.length > 0) {
+                    await tx.insert(salesInvoiceItems).values(
+                        items.map((i: any) => ({
+                            invoiceId: invoice.id,
+                            productId: i.productId || null,
+                            productCode: i.productCode || null,
+                            productName: i.productName,
+                            quantity: String(i.quantity),
+                            unit: i.unit || "UNI",
+                            unitPriceUsd: i.unitPriceUsd !== undefined ? String(i.unitPriceUsd) : null,
+                            totalPriceUsd: i.totalPriceUsd !== undefined ? String(i.totalPriceUsd) : null,
+                            warehouseId: i.warehouseId || null,
+                        }))
+                    );
+                }
+            });
 
-            // Auto-reconcile
+            // Auto-reconcile e deducao de estoque apos commit
             const { linked } = await autoReconcileInvoice(invoice.id, companyId);
-
-            // Deduct stock
             await deductStockFromInvoice(invoice.id, companyId, user.id);
 
             res.json({ ...invoice, linkedOrders: linked });
         } catch (e) {
-            console.error("[Invoices] create:", e);
+            logger.error('Erro ao criar invoice', { route: 'POST /api/company/invoices' }, e instanceof Error ? e : new Error(String(e)));
             res.status(500).json({ error: "Erro interno" });
         }
     });

@@ -1,4 +1,4 @@
-import express, { type Request, Response, NextFunction } from "express";
+import express from "express";
 // Force restart
 import cors from "cors";
 import helmet from "helmet";
@@ -6,6 +6,8 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import cron from "node-cron";
 import { WeatherStationService } from "./services/weather_station_service";
+import { logger } from "./lib/logger";
+import { errorHandler } from "./lib/error-handler";
 
 const app = express();
 app.disable("x-powered-by");
@@ -695,13 +697,7 @@ app.use((req, res, next) => {
     });
   });
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
+  app.use(errorHandler);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
@@ -725,7 +721,7 @@ app.use((req, res, next) => {
       try {
         await WeatherStationService.pollAllActiveStations();
       } catch (err) {
-        console.error("Error running weather polling cron:", err);
+        logger.error('Cron weather polling failed', {}, err instanceof Error ? err : new Error(String(err)));
       }
     });
 
@@ -744,9 +740,9 @@ app.use((req, res, next) => {
             backup[t] = ((r as any).rows ?? r)[0]?.cnt ?? 0;
           } catch { backup[t] = 'N/A'; }
         }
-        console.log(`[BACKUP] Daily check completed: ${JSON.stringify(backup)}`);
+        logger.info('Cron daily backup check completed', backup);
       } catch (err) {
-        console.error("[BACKUP] Daily backup check failed:", err);
+        logger.error('Cron daily backup check failed', {}, err instanceof Error ? err : new Error(String(err)));
       }
     });
 
@@ -756,7 +752,7 @@ app.use((req, res, next) => {
         const { scheduleDailyBulletin } = await import("./services/bulletin-service");
         scheduleDailyBulletin();
       } catch (e) {
-        console.error("Failed to start bulletin scheduler:", e);
+        logger.error('Failed to start bulletin scheduler', {}, e instanceof Error ? e : new Error(String(e)));
       }
     }
   });
