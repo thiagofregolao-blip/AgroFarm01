@@ -420,6 +420,8 @@ export function registerFarmFinancialRoutes(app: Express) {
                 );
             };
 
+            const firstDueDateISO = firstDueDate.toISOString();
+
             if (totalInstallments <= 1) {
                 const [ar] = await db.insert(farmAccountsReceivable).values({
                     ...baseValues,
@@ -430,12 +432,14 @@ export function registerFarmFinancialRoutes(app: Express) {
                     totalInstallments: 1,
                 }).returning();
 
-                // Force due_date via raw SQL (Drizzle may skip it if column added via ALTER TABLE)
-                await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${firstDueDate} WHERE id = ${ar.id}`);
+                // Force due_date via raw SQL if Drizzle returned null (column added via ALTER TABLE)
+                if (!ar.dueDate) {
+                    await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${firstDueDateISO}::timestamp WHERE id = ${ar.id}`);
+                }
 
                 await insertItems(ar.id);
                 await deductGrainStock(db, farmerId, items);
-                return res.json({ ...ar, dueDate: firstDueDate });
+                return res.json({ ...ar, dueDate: ar.dueDate || firstDueDate });
             }
 
             // Generate N installments
@@ -462,9 +466,11 @@ export function registerFarmFinancialRoutes(app: Express) {
                     iva5: instIva5,
                     iva10: instIva10,
                 }).returning();
-                // Force due_date via raw SQL
-                await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${instDue} WHERE id = ${ar.id}`);
-                created.push({ ...ar, dueDate: instDue });
+                // Force due_date via raw SQL if Drizzle returned null
+                if (!ar.dueDate) {
+                    await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${instDue.toISOString()}::timestamp WHERE id = ${ar.id}`);
+                }
+                created.push({ ...ar, dueDate: ar.dueDate || instDue });
 
                 if (i === 0) await insertItems(ar.id);
             }
