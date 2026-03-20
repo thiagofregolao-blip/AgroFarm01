@@ -221,6 +221,37 @@ export function registerFarmFinancialRoutes(app: Express) {
                 }).where(eq(farmExpenses.id, ap.expenseId));
             }
 
+            // Create cheque record if cheque data was provided (avoids frontend needing a separate call)
+            if (req.body.cheque && (req.body.cheque.bank || req.body.cheque.banco)) {
+                try {
+                    const { sql: sqlCh } = await import("drizzle-orm");
+                    const ch = req.body.cheque;
+                    const chequeAccountId = (accountRows && accountRows.length > 1)
+                        ? (accountRows.find((r: any) => r.paymentMethod === "cheque")?.accountId || null)
+                        : (accountId || null);
+                    const chequeAmountForRow = (accountRows && accountRows.length > 1)
+                        ? (accountRows.find((r: any) => r.paymentMethod === "cheque")?.amount || payAmount)
+                        : payAmount;
+                    const nowCh = new Date().toISOString();
+                    const dueCh = ch.dueDate ? new Date(ch.dueDate).toISOString() : nowCh;
+                    await db.execute(sqlCh`
+                        INSERT INTO farm_cheques
+                            (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
+                             issue_date, due_date, status, related_payable_id, cash_transaction_id)
+                        VALUES
+                            (${farmerId}, ${chequeAccountId}, ${'proprio'},
+                             ${String(ch.chequeNumber || ch.numero || '')},
+                             ${String(ch.bank || ch.banco || '')},
+                             ${String(ch.holder || ch.titular || ap.supplier || '')},
+                             ${String(chequeAmountForRow)}, ${ap.currency || 'USD'},
+                             ${nowCh}::timestamp, ${dueCh}::timestamp,
+                             ${'emitido'}, ${req.params.id}, ${firstTxId})
+                    `);
+                } catch (chErr) {
+                    console.error("[AP_PAY_CHEQUE_INSERT]", chErr);
+                }
+            }
+
             res.json({ success: true, status: newStatus });
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_PAY]", error);
@@ -536,6 +567,8 @@ export function registerFarmFinancialRoutes(app: Express) {
                 try {
                     const cd = req.body.chequeData;
                     const { sql: sqlFn2 } = await import("drizzle-orm");
+                    const nowISO = new Date().toISOString();
+                    const chequeDueISO = cd.dueDate ? new Date(cd.dueDate).toISOString() : nowISO;
                     await db.execute(sqlFn2`
                         INSERT INTO farm_cheques
                             (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
@@ -546,7 +579,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                              ${String(cd.bank || cd.banco || '')},
                              ${String(cd.holder || cd.titular || ar.buyer)},
                              ${String(receiveAmount)}, ${ar.currency},
-                             ${new Date()}, ${cd.dueDate ? new Date(cd.dueDate) : null},
+                             ${nowISO}::timestamp, ${chequeDueISO}::timestamp,
                              ${'emitido'}, ${req.params.id}, ${tx.id})
                     `);
                 } catch (chequeErr) {
