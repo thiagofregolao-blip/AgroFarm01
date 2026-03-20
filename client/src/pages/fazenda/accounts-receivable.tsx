@@ -554,6 +554,21 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
             }))
             : [{ productId: "", productName: "", unit: "UN", quantity: "1", unitPrice: ed ? String(ed.totalAmount || "") : "", ivaRate: "10" }]
     );
+
+    // Re-populate items when editingDetail loads asynchronously (edit mode)
+    useEffect(() => {
+        if (ed?.items?.length > 0) {
+            setItems(ed.items.map((it: any) => ({
+                productId: it.productId || it.product_id || "",
+                productName: it.productName || it.product_name || "",
+                unit: it.unit || "UN",
+                quantity: String(it.quantity || "1"),
+                unitPrice: String(it.unitPrice || it.unit_price || ""),
+                ivaRate: it.ivaRate || it.iva_rate || "10",
+            })));
+        }
+    }, [ed?.id, ed?.items?.length]);
+
     const isEditMode = !!initialData;
 
     const [autoNumberLoading, setAutoNumberLoading] = useState(false);

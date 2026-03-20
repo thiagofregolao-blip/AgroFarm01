@@ -14,8 +14,8 @@ function getCropColor(crop: string) {
     return CROP_COLORS[crop.toLowerCase().trim()] || { fill: "#6b8e23", label: crop, emoji: "🌱" };
 }
 
-interface CropData { crop: string; weight: number; grossWeight: number; value: number; deliveryCount: number; }
-interface SiloData { buyer: string; crops: CropData[]; totalWeight: number; totalGrossWeight: number; totalValue: number; deliveryCount: number; inputSpent: number; invoiceCount: number; percentOfHarvest: number; balance: number; }
+interface CropData { crop: string; weight: number; grossWeight: number; value: number; deliveryCount: number; soldWeight?: number; availableWeight?: number; }
+interface SiloData { buyer: string; crops: CropData[]; totalWeight: number; totalGrossWeight: number; totalValue: number; deliveryCount: number; inputSpent: number; invoiceCount: number; percentOfHarvest: number; balance: number; soldWeight?: number; availableWeight?: number; }
 interface RomaneioItem { id: string; buyer: string; crop: string; deliveryDate: string; finalWeight: string; netWeight: string; totalValue?: string; ticketNumber?: string; plotName?: string; truckPlate?: string; source?: string; }
 
 interface SiloVisualizationProps {
@@ -217,22 +217,31 @@ function drawSilo(
 }
 
 function SiloCard({ silo, totalHarvest, isSelected, onClick }: { silo: SiloData; totalHarvest: number; isSelected: boolean; onClick: () => void }) {
-    const tons = silo.totalWeight / 1000;
+    const availableWeight = silo.availableWeight ?? silo.totalWeight;
+    const soldWeight = silo.soldWeight ?? 0;
+    const tons = availableWeight / 1000;
     const uid = silo.buyer.replace(/[^a-zA-Z0-9]/g, '_');
 
     const sortedCrops = useMemo(() => [...silo.crops].sort((a, b) => b.weight - a.weight), [silo.crops]);
-    const cropSegments = useMemo(() => sortedCrops.map(c => ({
-        ...c, percent: silo.totalWeight > 0 ? (c.weight / silo.totalWeight) * 100 : 0, color: getCropColor(c.crop),
-    })), [sortedCrops, silo.totalWeight]);
+    const cropSegments = useMemo(() => sortedCrops.map(c => {
+        const avail = c.availableWeight ?? c.weight;
+        return {
+            ...c,
+            availableWeight: avail,
+            percent: availableWeight > 0 ? (avail / availableWeight) * 100 : 0,
+            color: getCropColor(c.crop),
+        };
+    }), [sortedCrops, availableWeight]);
 
     const hasInputs = silo.inputSpent > 0;
+    const hasSold = soldWeight > 0;
 
     // Split crops: primary (soja) goes to front silo, others go to back silo
     const primaryCrop = cropSegments[0]; // largest crop = front silo
     const secondaryCrops = cropSegments.slice(1);
     const hasSecondary = secondaryCrops.length > 0;
-    const secondaryWeight = secondaryCrops.reduce((s, c) => s + c.weight, 0);
-    const secondaryFillPct = silo.totalWeight > 0 ? Math.min(90, Math.max(10, (secondaryWeight / silo.totalWeight) * 100 * 1.5)) : 0;
+    const secondaryAvail = secondaryCrops.reduce((s, c) => s + (c.availableWeight ?? c.weight), 0);
+    const secondaryFillPct = availableWeight > 0 ? Math.min(90, Math.max(10, (secondaryAvail / availableWeight) * 100 * 1.5)) : 0;
     const primaryFillPct = Math.min(90, Math.max(10, (primaryCrop?.percent || 50) * 1.5));
 
     // SVG canvas
@@ -283,6 +292,11 @@ function SiloCard({ silo, totalHarvest, isSelected, onClick }: { silo: SiloData;
                 <p className="text-xl font-extrabold text-emerald-700 leading-tight">
                     {tons < 10 ? tons.toFixed(2) : tons.toFixed(1)} <span className="text-xs font-normal text-gray-500">ton</span>
                 </p>
+                {hasSold && (
+                    <p className="text-[10px] text-orange-500 font-medium mt-0.5">
+                        Vendido: {(soldWeight / 1000).toFixed(1)}t • Entregue: {(silo.totalWeight / 1000).toFixed(1)}t
+                    </p>
+                )}
                 <p className="text-[10px] text-gray-500 mt-0.5">{silo.deliveryCount} {silo.deliveryCount === 1 ? "entrega" : "entregas"}</p>
 
                 {/* Crop breakdown */}
@@ -291,7 +305,7 @@ function SiloCard({ silo, totalHarvest, isSelected, onClick }: { silo: SiloData;
                         <div key={seg.crop} className="flex items-center gap-1.5 w-full justify-center">
                             <span className="w-2.5 h-2.5 rounded-full inline-block shadow-sm flex-shrink-0" style={{ backgroundColor: seg.color.fill }} />
                             <span className="text-[11px] font-medium text-gray-700">{seg.color.emoji} {seg.crop}</span>
-                            <span className="text-[10px] text-gray-500">{(seg.weight / 1000).toFixed(1)}t</span>
+                            <span className="text-[10px] text-gray-500">{((seg.availableWeight ?? seg.weight) / 1000).toFixed(1)}t</span>
                             <span className="text-[9px] text-gray-400">({seg.deliveryCount}x)</span>
                         </div>
                     ))}

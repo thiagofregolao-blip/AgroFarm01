@@ -605,6 +605,37 @@ export function registerFarmRomaneioRoutes(app: Express) {
                 .where(and(...conditions))
                 .groupBy(farmRomaneios.buyer, farmRomaneios.crop);
 
+            // 1b. Aggregate grain sold via Contas a Receber (farm_receivable_items com grain_crop)
+            // Deducao ocorre ao criar o AR — precisa refletir no silo independente do status de pagamento
+            const soldAgg = await db.execute(sql`
+                SELECT
+                    ri.grain_crop AS crop,
+                    ri.grain_granero AS granero,
+                    SUM(
+                        CASE WHEN UPPER(ri.unit) = 'TON'
+                            THEN CAST(ri.quantity AS NUMERIC) * 1000
+                            ELSE CAST(ri.quantity AS NUMERIC)
+                        END
+                    ) AS sold_kg
+                FROM farm_receivable_items ri
+                JOIN farm_accounts_receivable ar ON ar.id = ri.receivable_id
+                WHERE ar.farmer_id = ${farmerId}
+                  AND ri.grain_crop IS NOT NULL
+                  AND ar.status NOT IN ('anulado')
+                GROUP BY ri.grain_crop, ri.grain_granero
+            `);
+            // Mapear: { "CROPNORM-BUYERNORM" -> sold_kg }
+            const soldMap: Record<string, number> = {};
+            for (const row of ((soldAgg as any).rows ?? soldAgg)) {
+                const cropKey = (row.crop || "").toLowerCase().trim();
+                const buyerKey = normalizeBuyerKey(row.granero || "");
+                const mapKey = `${cropKey}||${buyerKey}`;
+                soldMap[mapKey] = (soldMap[mapKey] || 0) + parseFloat(row.sold_kg || "0");
+                // Tambem acumular por crop sem granero (fallback)
+                const fallbackKey = `${cropKey}||`;
+                soldMap[fallbackKey] = (soldMap[fallbackKey] || 0) + parseFloat(row.sold_kg || "0");
+            }
+
             // 2. Get total harvest across all buyers
             const totalHarvest = romaneioAgg.reduce((s: number, r: any) => s + parseFloat(r.totalWeight || "0"), 0);
 
@@ -706,7 +737,26 @@ export function registerFarmRomaneioRoutes(app: Express) {
                 }
             }
 
-            // 6. Calculate percentages and sort
+            // 6. Subtrair graos vendidos (AR com grain_crop) de cada silo/crop
+            for (const key of Object.keys(buyerMap)) {
+                const silo = buyerMap[key];
+                let totalSoldForSilo = 0;
+                for (const cropData of silo.crops) {
+                    const cropKey = (cropData.crop || "").toLowerCase().trim();
+                    // Tentar match exato (crop + granero normalizado)
+                    const exactKey = `${cropKey}||${key}`;
+                    // Fallback: crop sem granero (AR sem grain_granero preenchido)
+                    const fallbackKey = `${cropKey}||`;
+                    const soldKg = soldMap[exactKey] ?? soldMap[fallbackKey] ?? 0;
+                    cropData.soldWeight = soldKg;
+                    cropData.availableWeight = Math.max(0, cropData.weight - soldKg);
+                    totalSoldForSilo += soldKg;
+                }
+                silo.soldWeight = totalSoldForSilo;
+                silo.availableWeight = Math.max(0, silo.totalWeight - totalSoldForSilo);
+            }
+
+            // 7. Calculate percentages and sort
             const silos = Object.values(buyerMap).map((silo: any) => ({
                 ...silo,
                 percentOfHarvest: totalHarvest > 0 ? (silo.totalWeight / totalHarvest) * 100 : 0,
