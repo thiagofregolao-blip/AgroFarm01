@@ -362,6 +362,7 @@ export default function AccountsReceivable() {
                                             <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Nro. Fatura</th>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
+                                            <th className="text-left p-3 font-semibold text-emerald-800">Cadastrado</th>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Recebido</th>
@@ -381,6 +382,7 @@ export default function AccountsReceivable() {
                                                     <td className="p-3">{item.installmentNumber || 1}/{item.totalInstallments || 1}</td>
                                                     <td className="p-3 text-gray-600 font-mono text-xs">{item.invoiceNumber || "--"}</td>
                                                     <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
+                                                    <td className="p-3 text-gray-500 text-xs">{item.createdAt ? new Date(item.createdAt).toLocaleDateString("pt-BR") : "—"}</td>
                                                     <td className="p-3">{statusBadge(isOverdue && item.status !== "recebido" ? "vencido" : item.status)}</td>
                                                     <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount)}</td>
                                                     <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.receivedAmount || 0)}</td>

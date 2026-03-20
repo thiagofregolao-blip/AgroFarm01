@@ -282,6 +282,7 @@ export default function AccountsPayable() {
                                             <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
+                                            <th className="text-left p-3 font-semibold text-emerald-800">Cadastrado</th>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Pago</th>
@@ -299,6 +300,7 @@ export default function AccountsPayable() {
                                                     <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
                                                     <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
                                                     <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
+                                                    <td className="p-3 text-gray-500 text-xs">{item.createdAt ? new Date(item.createdAt).toLocaleDateString("pt-BR") : "—"}</td>
                                                     <td className="p-3">{statusBadge(isOverdue && item.status !== "pago" ? "vencido" : item.status)}</td>
                                                     <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount, item.currency || "USD")}</td>
                                                     <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.paidAmount || 0, item.currency || "USD")}</td>
@@ -554,6 +556,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                 <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
                                 <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
                                 <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
+                                <th className="text-left p-3 font-semibold text-emerald-800">Cadastrado</th>
                                 <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
                                 <th className="text-right p-3 font-semibold text-emerald-800">Pago</th>
                                 <th className="text-right p-3 font-semibold text-emerald-800">Saldo</th>
@@ -577,6 +580,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                         <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
                                         <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
                                         <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
+                                        <td className="p-3 text-gray-500 text-xs">{item.createdAt ? new Date(item.createdAt).toLocaleDateString("pt-BR") : "—"}</td>
                                         <td className="p-3">
                                             {overdue
                                                 ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3" /> Vencido</span>

@@ -112,6 +112,17 @@ app.use((req, res, next) => {
   // const { ensureSchema } = await import("./db");
   // await ensureSchema();
 
+  // Inline migration: grain_granero — must run first to unblock AR create
+  try {
+    const dbMod = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbMod.dbReady;
+    await dbMod.db.execute(sql`ALTER TABLE farm_receivable_items ADD COLUMN IF NOT EXISTS grain_granero text`);
+    log("✅ Migration: farm_receivable_items.grain_granero ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration grain_granero: ${migErr.message}`);
+  }
+
   // Inline migration: ensure the `type` column exists on farm_pdv_terminals
   try {
     const dbMod = await import("./db");

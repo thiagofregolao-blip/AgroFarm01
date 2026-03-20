@@ -646,7 +646,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                     buyer = COALESCE(${buyer ?? null}, buyer),
                     description = COALESCE(${description ?? null}, description),
                     total_amount = COALESCE(${totalAmount ?? null}, total_amount),
-                    due_date = COALESCE(${dueDate ? new Date(dueDate) : null}, due_date),
+                    due_date = COALESCE(${dueDate ? new Date(dueDate).toISOString() : null}::timestamp, due_date),
                     supplier_id = COALESCE(${supplier_id ?? null}, supplier_id),
                     season_id = COALESCE(${seasonId ?? null}, season_id),
                     invoice_number = COALESCE(${invoiceNumber ?? null}, invoice_number),
@@ -1087,48 +1087,37 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { sql } = await import("drizzle-orm");
             const farmerId = (req.user as any).id;
 
-            // Aggregate grain stock from confirmed romaneios minus sold quantities
-            // Grouped by crop + season + buyer (granero) so each silo appears separately
+            // Return each confirmed romaneio as individual entry so user picks specific delivery
             const rows = await db.execute(sql`
                 SELECT
+                    r.id,
                     r.crop,
                     r.season_id AS "seasonId",
                     r.buyer AS "granero",
-                    SUM(CAST(r.final_weight AS numeric)) AS "totalWeight",
-                    COUNT(*) AS "deliveries",
-                    MAX(r.delivery_date) AS "lastDelivery",
-                    s.name AS "seasonName",
-                    COALESCE((
-                        SELECT SUM(
-                            CAST(ri.quantity AS numeric) *
-                            CASE WHEN UPPER(ri.unit) = 'TON' THEN 1000 ELSE 1 END
-                        )
-                        FROM farm_receivable_items ri
-                        JOIN farm_accounts_receivable ar2 ON ar2.id = ri.receivable_id
-                        WHERE ar2.farmer_id = ${farmerId}
-                          AND ri.grain_crop = r.crop
-                          AND (ri.grain_season_id = r.season_id OR (ri.grain_season_id IS NULL AND r.season_id IS NULL))
-                          AND (ri.grain_granero = r.buyer OR ri.grain_granero IS NULL)
-                    ), 0) AS "soldWeight"
+                    r.ticket_number AS "ticketNumber",
+                    r.delivery_date AS "deliveryDate",
+                    r.final_weight AS "totalWeight",
+                    s.name AS "seasonName"
                 FROM farm_romaneios r
                 LEFT JOIN farm_seasons s ON s.id = r.season_id
                 WHERE r.farmer_id = ${farmerId}
                   AND r.status = 'confirmed'
                   AND CAST(r.final_weight AS numeric) > 0
-                GROUP BY r.crop, r.season_id, r.buyer, s.name
-                ORDER BY MAX(r.delivery_date) DESC
+                ORDER BY r.delivery_date DESC
             `);
             const result = ((rows as any).rows ?? rows).map((r: any) => ({
-                id: `${r.crop}-${r.seasonId || 'none'}-${r.granero || 'none'}`,
+                id: r.id,
                 crop: r.crop,
                 seasonId: r.seasonId,
                 seasonName: r.seasonName,
                 granero: r.granero,
-                quantity: String(Math.max(0, parseFloat(r.totalWeight) - parseFloat(r.soldWeight))),
+                ticketNumber: r.ticketNumber,
+                deliveryDate: r.deliveryDate,
+                quantity: String(parseFloat(r.totalWeight || 0)),
                 totalWeight: r.totalWeight,
-                soldWeight: r.soldWeight,
-                deliveries: parseInt(r.deliveries),
-                lastDelivery: r.lastDelivery,
+                soldWeight: "0",
+                deliveries: 1,
+                lastDelivery: r.deliveryDate,
             }));
             res.json(result);
         } catch (error) {
