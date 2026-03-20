@@ -454,6 +454,46 @@ export function registerFarmFinancialRoutes(app: Express) {
 
             const firstDueDateISO = firstDueDate.toISOString();
 
+            // Validate grain stock before creating AR
+            const grainItemsToCheck = items.filter((it: any) => it.grainCrop);
+            for (const item of grainItemsToCheck) {
+                const cropKey = (item.grainCrop as string).toLowerCase().trim();
+                const unitUpper = (item.unit || "").toUpperCase();
+                const qtyKg = unitUpper === "TON"
+                    ? (parseFloat(item.quantity) || 0) * 1000
+                    : (parseFloat(item.quantity) || 0);
+                if (qtyKg <= 0) continue;
+
+                const deliveredRows = await db.execute(sql`
+                    SELECT COALESCE(SUM(CAST(final_weight AS NUMERIC)), 0) AS total
+                    FROM farm_romaneios
+                    WHERE farmer_id = ${farmerId}
+                      AND LOWER(TRIM(crop)) = ${cropKey}
+                `);
+                const totalDelivered = parseFloat(((deliveredRows as any).rows ?? deliveredRows)[0]?.total || "0");
+
+                const soldRows = await db.execute(sql`
+                    SELECT COALESCE(SUM(
+                        CASE WHEN UPPER(ri.unit) = 'TON'
+                             THEN CAST(ri.quantity AS NUMERIC) * 1000
+                             ELSE CAST(ri.quantity AS NUMERIC) END
+                    ), 0) AS total
+                    FROM farm_receivable_items ri
+                    JOIN farm_accounts_receivable ar ON ar.id = ri.receivable_id
+                    WHERE ar.farmer_id = ${farmerId}
+                      AND LOWER(TRIM(ri.grain_crop)) = ${cropKey}
+                      AND ar.status NOT IN ('anulado')
+                `);
+                const totalSold = parseFloat(((soldRows as any).rows ?? soldRows)[0]?.total || "0");
+
+                const available = totalDelivered - totalSold;
+                if (qtyKg > available) {
+                    return res.status(400).json({
+                        error: `Estoque insuficiente para ${item.grainCrop}. Disponivel: ${(available / 1000).toFixed(2)}t, Solicitado: ${(qtyKg / 1000).toFixed(2)}t`,
+                    });
+                }
+            }
+
             if (totalInstallments <= 1) {
                 const [ar] = await db.insert(farmAccountsReceivable).values({
                     ...baseValues,
@@ -634,19 +674,23 @@ export function registerFarmFinancialRoutes(app: Express) {
 
     app.put("/api/farm/accounts-receivable/:id", requireFarmer, async (req, res) => {
         try {
-            const { sql } = await import("drizzle-orm");
+            const { sql, eq } = await import("drizzle-orm");
             const { db } = await import("./db");
+            const { farmReceivableItems } = await import("../shared/schema");
             const farmerId = (req.user as any).id;
             const { buyer, description, totalAmount, dueDate, supplier_id, seasonId, invoiceNumber,
                 paymentCondition, customerRuc, customerAddress, subtotalExenta, subtotalGravada5,
-                subtotalGravada10, iva5, iva10, observation } = req.body;
+                subtotalGravada10, iva5, iva10, observation, items } = req.body;
+
+            // Pass Date object — avoids CAST('...Z' AS TIMESTAMP) failure in PostgreSQL
+            const dueDateParsed = dueDate ? new Date(dueDate) : null;
 
             const rows = await db.execute(sql`
                 UPDATE farm_accounts_receivable SET
                     buyer = COALESCE(${buyer ?? null}, buyer),
                     description = COALESCE(${description ?? null}, description),
                     total_amount = COALESCE(${totalAmount ?? null}, total_amount),
-                    due_date = COALESCE(CAST(${dueDate ? new Date(dueDate).toISOString() : null} AS TIMESTAMP), due_date),
+                    due_date = COALESCE(${dueDateParsed}::timestamptz, due_date),
                     supplier_id = COALESCE(${supplier_id ?? null}, supplier_id),
                     season_id = COALESCE(${seasonId ?? null}, season_id),
                     invoice_number = COALESCE(${invoiceNumber ?? null}, invoice_number),
@@ -663,6 +707,27 @@ export function registerFarmFinancialRoutes(app: Express) {
                 RETURNING *
             `);
             const updated = ((rows as any).rows ?? rows)[0];
+
+            // Update items: delete existing and reinsert with latest values
+            if (Array.isArray(items) && items.length > 0) {
+                await db.delete(farmReceivableItems).where(eq(farmReceivableItems.receivableId, req.params.id));
+                await db.insert(farmReceivableItems).values(
+                    items.map((item: any) => ({
+                        receivableId: req.params.id,
+                        productId: item.productId || null,
+                        productName: item.productName,
+                        unit: item.unit || "UN",
+                        quantity: String(item.quantity),
+                        unitPrice: String(item.unitPrice),
+                        ivaRate: item.ivaRate || "10",
+                        totalPrice: String(item.totalPrice || ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2)),
+                        grainCrop: item.grainCrop || null,
+                        grainSeasonId: item.grainSeasonId || null,
+                        grainGranero: item.grainGranero || null,
+                    }))
+                );
+            }
+
             res.json(updated);
         } catch (error) {
             console.error("[ACCOUNTS_RECEIVABLE_UPDATE]", error);

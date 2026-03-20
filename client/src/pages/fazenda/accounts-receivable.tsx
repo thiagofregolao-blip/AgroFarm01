@@ -205,7 +205,10 @@ export default function AccountsReceivable() {
             return r.json();
         },
         onError: (err: Error) => {
-            toast({ title: err.message || "Erro ao registrar conta a receber", variant: "destructive" });
+            const match = err.message.match(/^\d+: (.+)$/);
+            let msg = err.message;
+            if (match) { try { msg = JSON.parse(match[1]).error || match[1]; } catch { msg = match[1]; } }
+            toast({ title: msg || "Erro ao registrar conta a receber", variant: "destructive" });
         },
         onSuccess: (result: any) => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-receivable"] });
