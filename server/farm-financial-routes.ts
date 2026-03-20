@@ -439,7 +439,7 @@ export function registerFarmFinancialRoutes(app: Express) {
 
                 await insertItems(ar.id);
                 await deductGrainStock(db, farmerId, items);
-                return res.json({ ...ar, dueDate: ar.dueDate || firstDueDate });
+                return res.json({ ...ar, dueDate: firstDueDateISO });
             }
 
             // Generate N installments
@@ -470,15 +470,15 @@ export function registerFarmFinancialRoutes(app: Express) {
                 if (!ar.dueDate) {
                     await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${instDue.toISOString()}::timestamp WHERE id = ${ar.id}`);
                 }
-                created.push({ ...ar, dueDate: ar.dueDate || instDue });
+                created.push({ ...ar, dueDate: instDue.toISOString() });
 
                 if (i === 0) await insertItems(ar.id);
             }
             await deductGrainStock(db, farmerId, items);
             res.json(created);
-        } catch (error: any) {
+        } catch (error) {
             console.error("[ACCOUNTS_RECEIVABLE_CREATE]", error);
-            res.status(500).json({ error: "Failed to create account receivable", detail: error?.message || String(error) });
+            res.status(500).json({ error: "Failed to create account receivable" });
         }
     });
 
