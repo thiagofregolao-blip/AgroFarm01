@@ -348,6 +348,10 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { sql } = await import("drizzle-orm");
             const farmerId = (req.user as any).id;
 
+            if (!req.body.buyer) {
+                return res.status(400).json({ error: "buyer is required" });
+            }
+
             // Check invoice number uniqueness (skip if no invoice number)
             if (req.body.invoiceNumber) {
                 const existing = await db.execute(sql`
@@ -428,11 +432,10 @@ export function registerFarmFinancialRoutes(app: Express) {
 
                 // Force due_date via raw SQL (Drizzle may skip it if column added via ALTER TABLE)
                 await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${firstDueDate} WHERE id = ${ar.id}`);
-                ar.dueDate = firstDueDate;
 
                 await insertItems(ar.id);
                 await deductGrainStock(db, farmerId, items);
-                return res.json(ar);
+                return res.json({ ...ar, dueDate: firstDueDate });
             }
 
             // Generate N installments
@@ -461,8 +464,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                 }).returning();
                 // Force due_date via raw SQL
                 await db.execute(sql`UPDATE farm_accounts_receivable SET due_date = ${instDue} WHERE id = ${ar.id}`);
-                ar.dueDate = instDue;
-                created.push(ar);
+                created.push({ ...ar, dueDate: instDue });
 
                 if (i === 0) await insertItems(ar.id);
             }
@@ -1055,7 +1057,10 @@ export function registerFarmFinancialRoutes(app: Express) {
                     MAX(r.delivery_date) AS "lastDelivery",
                     s.name AS "seasonName",
                     COALESCE((
-                        SELECT SUM(CAST(ri.quantity AS numeric))
+                        SELECT SUM(
+                            CAST(ri.quantity AS numeric) *
+                            CASE WHEN UPPER(ri.unit) = 'TON' THEN 1000 ELSE 1 END
+                        )
                         FROM farm_receivable_items ri
                         JOIN farm_accounts_receivable ar2 ON ar2.id = ri.receivable_id
                         WHERE ar2.farmer_id = ${farmerId}
