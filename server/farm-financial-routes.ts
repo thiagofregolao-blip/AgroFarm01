@@ -470,9 +470,9 @@ export function registerFarmFinancialRoutes(app: Express) {
             }
             await deductGrainStock(db, farmerId, items);
             res.json(created);
-        } catch (error) {
+        } catch (error: any) {
             console.error("[ACCOUNTS_RECEIVABLE_CREATE]", error);
-            res.status(500).json({ error: "Failed to create account receivable" });
+            res.status(500).json({ error: "Failed to create account receivable", detail: error?.message || String(error) });
         }
     });
 
