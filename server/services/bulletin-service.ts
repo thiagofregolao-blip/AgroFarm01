@@ -8,9 +8,9 @@ import { getCommodityData, formatCommodityMessage } from "./commodity-service";
 import { getAgroNews, formatNewsMessage } from "./news-service";
 import { buildSmartAlertsMessage } from "./smart-alerts-service";
 
-const Z_API_INSTANCE = process.env.Z_API_INSTANCE_ID || "";
-const Z_API_TOKEN = process.env.Z_API_TOKEN || "";
-const Z_API_CLIENT_TOKEN = process.env.Z_API_CLIENT_TOKEN || "";
+const Z_API_INSTANCE = process.env.ZAPI_INSTANCE_ID || process.env.Z_API_INSTANCE_ID || "";
+const Z_API_TOKEN = process.env.ZAPI_TOKEN || process.env.Z_API_TOKEN || "";
+const Z_API_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN || process.env.Z_API_CLIENT_TOKEN || "";
 
 async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
     try {
