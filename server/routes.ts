@@ -805,7 +805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Endpoint de Setup para Migração do Banco de Dados (Planejamento 2026)
   // Útil quando não se tem acesso ao console do Railway
   // Modificado para usar SQL inline e evitar erro de leitura de arquivo em produção
-  app.get("/api/admin/setup-planning-db", async (req, res) => {
+  app.get("/api/admin/setup-planning-db", requireSuperAdmin, async (req, res) => {
     try {
       const migrationSql = `
 CREATE TABLE IF NOT EXISTS "planning_products_base"(
@@ -5838,8 +5838,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
           console.error("Failed to send password reset email");
         }
       } else {
-        console.log(`Password reset token for ${username}: ${resetToken} `);
-        console.log(`Reset URL: ${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'} /reset-password/${resetToken} `);
+        console.log(`Password reset requested for ${username} (email service not configured)`);
       }
 
       res.json({ message: "If the username exists, a password reset email has been sent." });
@@ -5885,7 +5884,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
       // Hash new password
       const salt = randomBytes(16).toString("hex");
       const buf = (await scryptAsync(newPassword, salt, 64)) as Buffer;
-      const hashedPassword = `${buf.toString("hex")}.${salt} `;
+      const hashedPassword = `${buf.toString("hex")}.${salt}`;
 
       // Update user password
       await db
@@ -8442,7 +8441,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
 
 
   // Sales Planning Import
-  app.post("/api/planning/import-products", upload.fields([{ name: 'salesPlanning' }, { name: 'productDoses' }]), async (req, res) => {
+  app.post("/api/planning/import-products", requireSuperAdmin, upload.fields([{ name: 'salesPlanning' }, { name: 'productDoses' }]), async (req, res) => {
     // ... existing codes ...
     try {
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -8512,7 +8511,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
   });
 
   // Check purchased history
-  app.get("/api/planning/client-history/:clientId", async (req, res) => {
+  app.get("/api/planning/client-history/:clientId", requireAuth, async (req, res) => {
     try {
       const { clientId } = req.params;
       // Check purchases in previous seasons from sales table
@@ -8562,9 +8561,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
   });
 
   // Get all planning products for a season
-  app.get("/api/planning/products", async (req, res) => {
+  app.get("/api/planning/products", requireAuth, async (req, res) => {
     try {
-      if (!req.user) return res.sendStatus(401);
       const { seasonId } = req.query;
 
       if (!seasonId) {
@@ -8598,9 +8596,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
   });
 
   // Get planning for a client
-  app.get("/api/planning/:clientId", async (req, res) => {
+  app.get("/api/planning/:clientId", requireAuth, async (req, res) => {
     try {
-      if (!req.user) return res.sendStatus(401);
       const { clientId } = req.params;
       const { seasonId } = req.query;
 
@@ -8617,9 +8614,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
   });
 
   // Global Planning Configuration
-  app.get("/api/planning/global", async (req, res) => {
+  app.get("/api/planning/global", requireAuth, async (req, res) => {
     try {
-      if (!req.user) return res.sendStatus(401);
       const { seasonId } = req.query;
       console.log(`[GLOBAL_GET] User: ${req.user.id}, Season: ${seasonId}`);
 
@@ -8635,9 +8631,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
     }
   });
 
-  app.post("/api/planning/global", async (req, res) => {
+  app.post("/api/planning/global", requireAuth, async (req, res) => {
     try {
-      if (!req.user) return res.sendStatus(401);
       const { seasonId, productIds } = req.body;
       console.log(`[GLOBAL_POST] User: ${req.user.id}, Season: ${seasonId}, IDs count: ${productIds?.length}`);
 
@@ -8692,9 +8687,8 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
   });
 
   // Save/Update sales planning
-  app.post("/api/planning", async (req, res) => {
+  app.post("/api/planning", requireAuth, async (req, res) => {
     try {
-      if (!req.user) return res.sendStatus(401);
       const { planning, items } = req.body;
 
       if (!planning || !planning.clientId || !planning.seasonId) {
