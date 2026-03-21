@@ -1412,7 +1412,7 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                             speechConfig: {
                                 voiceConfig: {
                                     prebuiltVoiceConfig: {
-                                        voiceName: "Kore"
+                                        voiceName: "Orus"
                                     }
                                 }
                             }
