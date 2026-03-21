@@ -1428,15 +1428,42 @@ Retorne APENAS UM JSON VALIDO no formato exato:
             }
 
             const audioData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-            const mimeType = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType || "audio/wav";
+            const srcMime = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType || "";
 
             if (!audioData) {
                 console.error("[TTS] No audio data in response");
                 return res.status(500).json({ error: "No audio generated" });
             }
 
-            console.log(`[TTS] Audio generated (${Math.round(audioData.length * 0.75 / 1024)}KB)`);
-            res.json({ audio: `data:${mimeType};base64,${audioData}`, mimeType });
+            // Gemini TTS returns PCM (audio/L16). Z-API needs WAV with proper header.
+            const pcmBuffer = Buffer.from(audioData, "base64");
+            const sampleRate = 24000; // Gemini TTS default
+            const numChannels = 1;
+            const bitsPerSample = 16;
+            const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+            const blockAlign = numChannels * (bitsPerSample / 8);
+
+            // Build WAV header (44 bytes)
+            const wavHeader = Buffer.alloc(44);
+            wavHeader.write("RIFF", 0);
+            wavHeader.writeUInt32LE(36 + pcmBuffer.length, 4);
+            wavHeader.write("WAVE", 8);
+            wavHeader.write("fmt ", 12);
+            wavHeader.writeUInt32LE(16, 16); // subchunk1 size
+            wavHeader.writeUInt16LE(1, 20);  // PCM format
+            wavHeader.writeUInt16LE(numChannels, 22);
+            wavHeader.writeUInt32LE(sampleRate, 24);
+            wavHeader.writeUInt32LE(byteRate, 28);
+            wavHeader.writeUInt16LE(blockAlign, 32);
+            wavHeader.writeUInt16LE(bitsPerSample, 34);
+            wavHeader.write("data", 36);
+            wavHeader.writeUInt32LE(pcmBuffer.length, 40);
+
+            const wavBuffer = Buffer.concat([wavHeader, pcmBuffer]);
+            const wavBase64 = wavBuffer.toString("base64");
+
+            console.log(`[TTS] Audio generated (${Math.round(wavBuffer.length / 1024)}KB WAV from ${srcMime})`);
+            res.json({ audio: `data:audio/wav;base64,${wavBase64}`, mimeType: "audio/wav" });
         } catch (error) {
             console.error("[TTS]", error);
             res.status(500).json({ error: "Internal server error" });
