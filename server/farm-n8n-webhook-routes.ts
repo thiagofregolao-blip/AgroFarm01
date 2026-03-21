@@ -1387,6 +1387,62 @@ Retorne APENAS UM JSON VALIDO no formato exato:
         }
     });
 
+    // ===== Text-to-Speech via Gemini for n8n =====
+    app.post("/api/farm/webhook/n8n/tts", requireWebhookSecret, async (req, res) => {
+        try {
+            const { text } = req.body;
+            if (!text) return res.status(400).json({ error: "text is required" });
+
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+
+            console.log(`[TTS] Generating audio for: "${text.substring(0, 80)}..."`);
+
+            const geminiResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text }]
+                        }],
+                        generationConfig: {
+                            responseModalities: ["AUDIO"],
+                            speechConfig: {
+                                voiceConfig: {
+                                    prebuiltVoiceConfig: {
+                                        voiceName: "Kore"
+                                    }
+                                }
+                            }
+                        }
+                    })
+                }
+            );
+
+            const data = await geminiResponse.json();
+            if (!geminiResponse.ok) {
+                console.error("[TTS] Gemini error:", data);
+                return res.status(500).json({ error: "TTS generation failed" });
+            }
+
+            const audioData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+            const mimeType = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.mimeType || "audio/wav";
+
+            if (!audioData) {
+                console.error("[TTS] No audio data in response");
+                return res.status(500).json({ error: "No audio generated" });
+            }
+
+            console.log(`[TTS] Audio generated (${Math.round(audioData.length * 0.75 / 1024)}KB)`);
+            res.json({ audio: `data:${mimeType};base64,${audioData}`, mimeType });
+        } catch (error) {
+            console.error("[TTS]", error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    });
+
     // ===== Weather Forecast for n8n =====
     app.get("/api/farm/webhook/n8n/weather", async (req, res) => {
         try {
