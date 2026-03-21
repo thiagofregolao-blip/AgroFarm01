@@ -334,44 +334,94 @@ export function registerFarmSprint24Routes(app: Express) {
             if (!targetAccountId) return res.status(400).json({ error: "Conta nao informada" });
             const chequeId = String(req.params.id);
             const farmerId = String(req.user!.id);
+
             // Update cheque status
             await db.execute(sql`
                 UPDATE farm_cheques SET status = 'compensado', compensation_date = ${nowStr}::timestamp
                 WHERE id = ${chequeId}
             `);
 
-            // Create cash transaction
-            const txType = (cheque.type === 'proprio' || cheque.type === 'emitido') ? 'saida' : 'entrada';
-            const chequeDesc = 'Cheque #' + String(cheque.cheque_number || '') + ' - ' + String(cheque.bank || '');
-            const chequeAmount = String(cheque.amount);
-            const chequeCurrency = String(cheque.currency || 'USD');
-            const txRows = await db.execute(sql`
-                INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description,
-                    payment_method, cheque_id, reference_type, transaction_date)
-                VALUES (${farmerId}, ${targetAccountId}, ${txType}, ${chequeAmount}, ${chequeCurrency},
-                    'cheque', ${chequeDesc}, 'cheque',
-                    ${String(cheque.id)}, 'cheque', ${nowStr}::timestamp)
-                RETURNING id
-            `);
-            const txId = ((txRows as any).rows ?? txRows)[0]?.id;
+            // Bug 7+11: only move money if cheque does not already have a cash_transaction linked.
+            // Cheques created via AP/AR payment already have a transaction — compensating must not duplicate it.
+            if (!cheque.cash_transaction_id) {
+                const txType = (cheque.type === 'proprio' || cheque.type === 'emitido') ? 'saida' : 'entrada';
+                const chequeDesc = 'Cheque #' + String(cheque.cheque_number || '') + ' - ' + String(cheque.bank || '');
+                const chequeAmount = String(cheque.amount);
+                const chequeCurrency = String(cheque.currency || 'USD');
+                const txRows = await db.execute(sql`
+                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description,
+                        payment_method, cheque_id, reference_type, transaction_date)
+                    VALUES (${farmerId}, ${targetAccountId}, ${txType}, ${chequeAmount}, ${chequeCurrency},
+                        'cheque', ${chequeDesc}, 'cheque',
+                        ${String(cheque.id)}, 'cheque', ${nowStr}::timestamp)
+                    RETURNING id
+                `);
+                const txId = ((txRows as any).rows ?? txRows)[0]?.id;
 
-            // Update account balance
-            if (txType === 'entrada') {
-                await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${chequeAmount}::numeric WHERE id = ${targetAccountId}`);
-            } else {
-                await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${chequeAmount}::numeric WHERE id = ${targetAccountId}`);
+                if (txType === 'entrada') {
+                    await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${chequeAmount}::numeric WHERE id = ${targetAccountId}`);
+                } else {
+                    await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${chequeAmount}::numeric WHERE id = ${targetAccountId}`);
+                }
+
+                await db.execute(sql`UPDATE farm_cheques SET cash_transaction_id = ${String(txId)} WHERE id = ${chequeId}`);
             }
 
-            await db.execute(sql`UPDATE farm_cheques SET cash_transaction_id = ${String(txId)} WHERE id = ${chequeId}`);
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
     });
 
+    // Cancel/devolver cheque — estorna transacao e reabre AR se necessario (Bug 13)
     app.put("/api/farm/cheques/:id/cancel", requireFarmer, async (req: Request, res: Response) => {
         try {
-            await db.execute(sql`
-                UPDATE farm_cheques SET status = 'cancelado' WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}
+            const farmerId = String(req.user!.id);
+            const chequeRows = await db.execute(sql`
+                SELECT * FROM farm_cheques WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
             `);
+            const cheque = ((chequeRows as any).rows ?? chequeRows)[0];
+            if (!cheque) return res.status(404).json({ error: "Cheque not found" });
+
+            // Mark cheque as devolvido
+            await db.execute(sql`
+                UPDATE farm_cheques SET status = 'devolvido' WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
+            `);
+
+            // If cheque had a cash transaction, reverse it
+            if (cheque.cash_transaction_id && cheque.account_id) {
+                const nowStr = new Date().toISOString();
+                const chequeAmount = String(cheque.amount);
+                const chequeCurrency = String(cheque.currency || 'USD');
+                const isEmitido = (cheque.type === 'proprio' || cheque.type === 'emitido');
+                // Reversal: opposite direction of original transaction
+                const reversalType = isEmitido ? 'entrada' : 'saida';
+                await db.execute(sql`
+                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description,
+                        payment_method, cheque_id, reference_type, transaction_date)
+                    VALUES (${farmerId}, ${String(cheque.account_id)}, ${reversalType}, ${chequeAmount}, ${chequeCurrency},
+                        'cheque', ${'Estorno Cheque #' + String(cheque.cheque_number || '')}, 'cheque',
+                        ${String(cheque.id)}, 'cheque_estorno', ${nowStr}::timestamp)
+                `);
+                if (reversalType === 'entrada') {
+                    await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${chequeAmount}::numeric WHERE id = ${String(cheque.account_id)}`);
+                } else {
+                    await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${chequeAmount}::numeric WHERE id = ${String(cheque.account_id)}`);
+                }
+            }
+
+            // If received cheque linked to an AR, revert receivedAmount and reopen AR
+            if (cheque.related_receivable_id) {
+                const chequeAmount = parseFloat(cheque.amount) || 0;
+                await db.execute(sql`
+                    UPDATE farm_accounts_receivable
+                    SET received_amount = GREATEST(0, CAST(received_amount AS NUMERIC) - ${chequeAmount}),
+                        status = CASE
+                            WHEN GREATEST(0, CAST(received_amount AS NUMERIC) - ${chequeAmount}) <= 0 THEN 'pendente'
+                            ELSE 'parcial'
+                        END
+                    WHERE id = ${String(cheque.related_receivable_id)} AND farmer_id = ${farmerId}
+                `);
+            }
+
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
     });

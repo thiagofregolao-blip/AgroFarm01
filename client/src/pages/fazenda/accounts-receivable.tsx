@@ -454,11 +454,18 @@ export default function AccountsReceivable() {
                 </Tabs>
 
                 {/* Create Dialog */}
-                <Dialog open={openCreate} onOpenChange={setOpenCreate}>
+                <Dialog open={openCreate} onOpenChange={(o) => { if (!o) save.reset(); setOpenCreate(o); }}>
                     <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
                         <DialogHeader className="px-6 pt-5 pb-3 border-b">
                             <DialogTitle>Nova Conta a Receber</DialogTitle>
                         </DialogHeader>
+                        {save.isError && (
+                            <div className="px-6 py-2 bg-red-50 border-b border-red-200">
+                                <p className="text-sm text-red-700 font-medium">
+                                    {(() => { const m = (save.error as Error)?.message || ""; const match = m.match(/^\d+: (.+)$/); if (match) { try { return JSON.parse(match[1]).error || match[1]; } catch { return match[1]; } } return m || "Erro ao registrar"; })()}
+                                </p>
+                            </div>
+                        )}
                         <div className="flex-1 overflow-y-auto px-6 py-4">
                             <CreateARForm
                                 suppliers={suppliers as any[]}

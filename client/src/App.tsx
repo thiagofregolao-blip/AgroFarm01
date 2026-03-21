@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -159,6 +159,7 @@ function Router() {
       <Route path="/fazenda/aplicacoes" component={FarmApplications} />
       <Route path="/fazenda/despesas" component={FarmExpenses} />
       <Route path="/fazenda/fluxo-caixa" component={FarmCashFlow} />
+      <Route path="/fazenda/cheques">{() => <Redirect to="/fazenda/fluxo-caixa" />}</Route>
       <Route path="/fazenda/custos" component={FarmPlotCosts} />
       <Route path="/fazenda/terminais" component={FarmTerminals} />
       <Route path="/fazenda/safras" component={FarmSeasons} />

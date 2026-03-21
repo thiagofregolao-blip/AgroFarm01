@@ -1104,7 +1104,9 @@ function TransferDialog({ accounts, onSuccess }: { accounts: any[]; onSuccess: (
 // ─────────────────────────────────────────────────────────────────────────────
 const CHEQUE_STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
     emitido: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Emitido" },
+    recebido: { bg: "bg-blue-100", text: "text-blue-700", label: "Recebido" },
     compensado: { bg: "bg-green-100", text: "text-green-700", label: "Compensado" },
+    devolvido: { bg: "bg-orange-100", text: "text-orange-700", label: "Devolvido" },
     cancelado: { bg: "bg-red-100", text: "text-red-700", label: "Cancelado" },
 };
 
@@ -1135,9 +1137,12 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
         mutationFn: (id: string) => apiRequest("PUT", `/api/farm/cheques/${id}/cancel`),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cheques"] });
-            toast({ title: "Cheque cancelado" });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-receivable"] });
+            toast({ title: "Cheque devolvido — estorno registrado" });
         },
-        onError: () => toast({ title: "Erro ao cancelar cheque", variant: "destructive" }),
+        onError: () => toast({ title: "Erro ao devolver cheque", variant: "destructive" }),
     });
 
     const deleteCheque = useMutation({
@@ -1151,7 +1156,7 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
 
     const [compensateDialogId, setCompensateDialogId] = useState<string | null>(null);
     const [compensateAccountId, setCompensateAccountId] = useState("");
-    const visibleCheques = cheques.filter((ch: any) => ch.status !== "cancelado");
+    const visibleCheques = cheques.filter((ch: any) => ch.status !== "cancelado" && ch.status !== "devolvido");
 
     return (
         <div className="space-y-4">
@@ -1213,9 +1218,9 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
                                                                 Compensar
                                                             </Button>
                                                             <Button size="sm" variant="outline" className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50"
-                                                                onClick={() => { if (confirm("Cancelar este cheque?")) cancel.mutate(ch.id); }}
+                                                                onClick={() => { if (confirm("Devolver este cheque? O valor sera estornado na conta bancaria.")) cancel.mutate(ch.id); }}
                                                                 disabled={cancel.isPending}>
-                                                                Cancelar
+                                                                Devolver
                                                             </Button>
                                                         </>)}
                                                         {ch.status === "cancelado" && (

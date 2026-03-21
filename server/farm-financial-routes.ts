@@ -221,32 +221,35 @@ export function registerFarmFinancialRoutes(app: Express) {
                 }).where(eq(farmExpenses.id, ap.expenseId));
             }
 
-            // Create cheque record if cheque data was provided (avoids frontend needing a separate call)
+            // Create cheque record if cheque data was provided — skip if one already exists for this AP (Bug 6: prevents duplicate)
             if (req.body.cheque && (req.body.cheque.bank || req.body.cheque.banco)) {
                 try {
                     const { sql: sqlCh } = await import("drizzle-orm");
                     const ch = req.body.cheque;
-                    const chequeAccountId = (accountRows && accountRows.length > 1)
-                        ? (accountRows.find((r: any) => r.paymentMethod === "cheque")?.accountId || null)
-                        : (accountId || null);
-                    const chequeAmountForRow = (accountRows && accountRows.length > 1)
-                        ? (accountRows.find((r: any) => r.paymentMethod === "cheque")?.amount || payAmount)
-                        : payAmount;
-                    const nowCh = new Date().toISOString();
-                    const dueCh = ch.dueDate ? new Date(ch.dueDate).toISOString() : nowCh;
-                    await db.execute(sqlCh`
-                        INSERT INTO farm_cheques
-                            (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
-                             issue_date, due_date, status, related_payable_id, cash_transaction_id)
-                        VALUES
-                            (${farmerId}, ${chequeAccountId}, ${'proprio'},
-                             ${String(ch.chequeNumber || ch.numero || '')},
-                             ${String(ch.bank || ch.banco || '')},
-                             ${String(ch.holder || ch.titular || ap.supplier || '')},
-                             ${String(chequeAmountForRow)}, ${ap.currency || 'USD'},
-                             ${nowCh}::timestamp, ${dueCh}::timestamp,
-                             ${'emitido'}, ${req.params.id}, ${firstTxId})
-                    `);
+                    const existing = await db.execute(sqlCh`SELECT id FROM farm_cheques WHERE related_payable_id = ${req.params.id} LIMIT 1`);
+                    if (((existing as any).rows ?? existing).length === 0) {
+                        const chequeAccountId = (accountRows && accountRows.length > 1)
+                            ? (accountRows.find((r: any) => r.paymentMethod === "cheque")?.accountId || null)
+                            : (accountId || null);
+                        const chequeAmountForRow = (accountRows && accountRows.length > 1)
+                            ? (accountRows.find((r: any) => r.paymentMethod === "cheque")?.amount || payAmount)
+                            : payAmount;
+                        const nowCh = new Date().toISOString();
+                        const dueCh = ch.dueDate ? new Date(ch.dueDate).toISOString() : nowCh;
+                        await db.execute(sqlCh`
+                            INSERT INTO farm_cheques
+                                (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
+                                 issue_date, due_date, status, related_payable_id, cash_transaction_id)
+                            VALUES
+                                (${farmerId}, ${chequeAccountId}, ${'proprio'},
+                                 ${String(ch.chequeNumber || ch.numero || '')},
+                                 ${String(ch.bank || ch.banco || '')},
+                                 ${String(ch.holder || ch.titular || ap.supplier || '')},
+                                 ${String(chequeAmountForRow)}, ${ap.currency || 'USD'},
+                                 ${nowCh}::timestamp, ${dueCh}::timestamp,
+                                 ${'emitido'}, ${req.params.id}, ${firstTxId})
+                        `);
+                    }
                 } catch (chErr) {
                     console.error("[AP_PAY_CHEQUE_INSERT]", chErr);
                 }
@@ -603,26 +606,29 @@ export function registerFarmFinancialRoutes(app: Express) {
                 cashTransactionId: tx.id,
             }).where(eq(farmAccountsReceivable.id, req.params.id));
 
-            // Create cheque record if payment method is cheque
+            // Create cheque record if payment method is cheque — skip if one already exists for this AR (prevents duplicate)
             if (paymentMethod === "cheque" && req.body.chequeData) {
                 try {
                     const cd = req.body.chequeData;
                     const { sql: sqlFn2 } = await import("drizzle-orm");
-                    const nowISO = new Date().toISOString();
-                    const chequeDueISO = cd.dueDate ? new Date(cd.dueDate).toISOString() : nowISO;
-                    await db.execute(sqlFn2`
-                        INSERT INTO farm_cheques
-                            (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
-                             issue_date, due_date, status, related_receivable_id, cash_transaction_id)
-                        VALUES
-                            (${farmerId}, ${accountId || null}, ${'recebido'},
-                             ${String(cd.chequeNumber || cd.numero || '')},
-                             ${String(cd.bank || cd.banco || '')},
-                             ${String(cd.holder || cd.titular || ar.buyer)},
-                             ${String(receiveAmount)}, ${ar.currency},
-                             ${nowISO}::timestamp, ${chequeDueISO}::timestamp,
-                             ${'emitido'}, ${req.params.id}, ${tx.id})
-                    `);
+                    const existing = await db.execute(sqlFn2`SELECT id FROM farm_cheques WHERE related_receivable_id = ${req.params.id} AND cheque_number = ${String(cd.chequeNumber || cd.numero || '')} LIMIT 1`);
+                    if (((existing as any).rows ?? existing).length === 0) {
+                        const nowISO = new Date().toISOString();
+                        const chequeDueISO = cd.dueDate ? new Date(cd.dueDate).toISOString() : nowISO;
+                        await db.execute(sqlFn2`
+                            INSERT INTO farm_cheques
+                                (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
+                                 issue_date, due_date, status, related_receivable_id, cash_transaction_id)
+                            VALUES
+                                (${farmerId}, ${accountId || null}, ${'recebido'},
+                                 ${String(cd.chequeNumber || cd.numero || '')},
+                                 ${String(cd.bank || cd.banco || '')},
+                                 ${String(cd.holder || cd.titular || ar.buyer)},
+                                 ${String(receiveAmount)}, ${ar.currency},
+                                 ${nowISO}::timestamp, ${chequeDueISO}::timestamp,
+                                 ${'recebido'}, ${req.params.id}, ${tx.id})
+                        `);
+                    }
                 } catch (chequeErr) {
                     console.error("[AR_RECEIVE_CHEQUE_INSERT]", chequeErr);
                     // Cheque creation failed but payment was already recorded — do not rollback
@@ -682,15 +688,11 @@ export function registerFarmFinancialRoutes(app: Express) {
                 paymentCondition, customerRuc, customerAddress, subtotalExenta, subtotalGravada5,
                 subtotalGravada10, iva5, iva10, observation, items } = req.body;
 
-            // Pass Date object — avoids CAST('...Z' AS TIMESTAMP) failure in PostgreSQL
-            const dueDateParsed = dueDate ? new Date(dueDate) : null;
-
             const rows = await db.execute(sql`
                 UPDATE farm_accounts_receivable SET
                     buyer = COALESCE(${buyer ?? null}, buyer),
                     description = COALESCE(${description ?? null}, description),
                     total_amount = COALESCE(${totalAmount ?? null}, total_amount),
-                    due_date = COALESCE(${dueDateParsed}::timestamptz, due_date),
                     supplier_id = COALESCE(${supplier_id ?? null}, supplier_id),
                     season_id = COALESCE(${seasonId ?? null}, season_id),
                     invoice_number = COALESCE(${invoiceNumber ?? null}, invoice_number),
@@ -706,6 +708,15 @@ export function registerFarmFinancialRoutes(app: Express) {
                 WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
                 RETURNING *
             `);
+
+            // due_date updated separately — avoids COALESCE type mismatch (timestamptz vs timestamp)
+            if (dueDate) {
+                const dueDateISO = new Date(dueDate).toISOString();
+                await db.execute(sql`
+                    UPDATE farm_accounts_receivable SET due_date = ${dueDateISO}::timestamp
+                    WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
+                `);
+            }
             const updated = ((rows as any).rows ?? rows)[0];
 
             // Update items: delete existing and reinsert with latest values
