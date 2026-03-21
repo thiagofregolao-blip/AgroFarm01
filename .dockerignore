@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+*.sql
+*.json.bak
+production_backup.json
+migrate-prod-to-local.ts
+test-zapi.ts
+WhatsApp AgroFarm*.json
+.DS_Store
+*.tar.gz
+*.zip

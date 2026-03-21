@@ -134,7 +134,7 @@ export function registerFarmPdvRoutes(app: Express) {
 
             // Create a persistent token to store in localStorage for reliable reconnects (especially iOS offline)
             const crypto = await import("crypto");
-            const tokenSeed = `${terminal.id}:${terminal.farmerId}:${terminal.propertyId}:${process.env.SESSION_SECRET || 'secret'}`;
+            const tokenSeed = `${terminal.id}:${terminal.farmerId}:${terminal.propertyId}:${process.env.PDV_TOKEN_SECRET || process.env.SESSION_SECRET}`;
             const token = crypto.createHash('sha256').update(tokenSeed).digest('hex');
 
             // Atrela o token à sessão tbm ou banco, pra validar no `/api/pdv/data`
@@ -172,7 +172,7 @@ export function registerFarmPdvRoutes(app: Express) {
             }
 
             const crypto = await import("crypto");
-            const expectedTokenSeed = `${terminal.id}:${terminal.farmerId}:${terminal.propertyId}:${process.env.SESSION_SECRET || 'secret'}`;
+            const expectedTokenSeed = `${terminal.id}:${terminal.farmerId}:${terminal.propertyId}:${process.env.PDV_TOKEN_SECRET || process.env.SESSION_SECRET}`;
             const expectedToken = crypto.createHash('sha256').update(expectedTokenSeed).digest('hex');
 
             if (token !== expectedToken) {

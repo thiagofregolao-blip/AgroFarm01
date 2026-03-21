@@ -8,6 +8,33 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 
+// Simple in-memory rate limiter for login attempts
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkRateLimit(ip: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, retryAfterMs: 0 };
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, retryAfterMs: entry.resetAt - now };
+  }
+  entry.count++;
+  return { allowed: true, retryAfterMs: 0 };
+}
+
+// Cleanup stale entries every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  loginAttempts.forEach((entry, ip) => {
+    if (now > entry.resetAt) loginAttempts.delete(ip);
+  });
+}, 30 * 60 * 1000);
+
 declare global {
   namespace Express {
     interface User extends SelectUser { }
@@ -26,8 +53,9 @@ async function comparePasswords(supplied: string, stored: string) {
   if (!stored) return false;
 
   if (!stored.includes(".")) {
-    // If the password was stored as plain text or invalid format, check exact match or fail safely
-    return supplied === stored;
+    // Reject unhashed passwords — force user to reset via "Esqueci minha senha"
+    console.warn("Login attempt with unhashed password detected. User must reset password.");
+    return false;
   }
 
   try {
@@ -45,7 +73,13 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || 'super-secret-session-key',
+    secret: (() => {
+      if (!process.env.SESSION_SECRET) {
+        console.error("FATAL: SESSION_SECRET environment variable is not set. Server cannot start securely.");
+        process.exit(1);
+      }
+      return process.env.SESSION_SECRET;
+    })(),
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -108,9 +142,15 @@ export function setupAuth(app: Express) {
       return res.status(400).send("Username already exists");
     }
 
+    // Whitelist allowed fields to prevent mass assignment (e.g. setting role via body)
+    const { username, password, name, email } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password are required" });
+    }
     const user = await storage.createUser({
-      ...req.body,
-      password: await hashPassword(req.body.password),
+      username,
+      name: name || username,
+      password: await hashPassword(password),
     });
 
     req.login(user, (err) => {
@@ -120,6 +160,16 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    const { allowed, retryAfterMs } = checkRateLimit(clientIp);
+    if (!allowed) {
+      const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+      res.set('Retry-After', String(retryAfterSec));
+      return res.status(429).json({
+        error: `Muitas tentativas de login. Tente novamente em ${Math.ceil(retryAfterSec / 60)} minutos.`
+      });
+    }
+
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) {
         return next(err);

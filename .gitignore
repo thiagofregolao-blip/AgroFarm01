@@ -7,3 +7,14 @@ vite.config.ts.*
 projeto.zip
 *.zip
 .config/
+
+# Security - never commit these
+.env
+.env.*
+!.env.example
+*.sql
+production_backup.json
+migrate-prod-to-local.ts
+test-zapi.ts
+WhatsApp AgroFarm*.json
+

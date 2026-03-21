@@ -303,13 +303,15 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 const supplierName = parsed.supplier || "";
                 const supplierRuc = (parsed as any).supplierRuc || "";
                 if (supplierName) {
-                    const namePrefix = supplierName.substring(0, 15);
+                    // Escape LIKE special characters to prevent injection
+                    const namePrefix = supplierName.substring(0, 15).replace(/[%_\\]/g, '\\$&');
+                    const likePattern = `%${namePrefix}%`;
                     const existing = await db.execute(sql`
                         SELECT id FROM farm_suppliers
                         WHERE farmer_id = ${farmerId}
                           AND is_active = true
                           AND (
-                            name ILIKE ${'%' + namePrefix + '%'}
+                            name ILIKE ${likePattern}
                             ${supplierRuc ? sql`OR ruc = ${supplierRuc}` : sql``}
                           )
                         LIMIT 1

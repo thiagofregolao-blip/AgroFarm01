@@ -5,10 +5,25 @@ import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { ZApiClient } from "./whatsapp/zapi-client";
 
+// Middleware to validate n8n webhook shared secret
+function requireWebhookSecret(req: any, res: any, next: any) {
+    const secret = process.env.N8N_WEBHOOK_SECRET;
+    if (!secret) {
+        console.warn("[N8N_WEBHOOK] N8N_WEBHOOK_SECRET not configured — webhooks disabled");
+        return res.status(503).json({ error: "Webhooks not configured" });
+    }
+    const provided = req.headers['x-webhook-secret'] || req.query.secret;
+    if (provided !== secret) {
+        return res.status(401).json({ error: "Invalid webhook secret" });
+    }
+    next();
+}
+
 export function registerFarmN8nWebhookRoutes(app: Express) {
     // ==================== n8n / WhatsApp Webhooks ====================
+    // All webhook routes require a shared secret via x-webhook-secret header or ?secret= query param
 
-    app.post("/api/farm/webhook/n8n/check-pending-equipment", async (req, res) => {
+    app.post("/api/farm/webhook/n8n/check-pending-equipment", requireWebhookSecret, async (req, res) => {
         try {
             const { whatsapp_number, message } = req.body;
             if (!whatsapp_number || !message) {
@@ -390,7 +405,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
         }
     });
 
-    app.post("/api/farm/webhook/n8n/receipt", async (req, res) => {
+    app.post("/api/farm/webhook/n8n/receipt", requireWebhookSecret, async (req, res) => {
         try {
             const { whatsapp_number, imageUrl, caption } = req.body;
             if (!whatsapp_number) {
@@ -1319,7 +1334,7 @@ Retorne APENAS UM JSON VALIDO no formato exato:
     });
 
     // ===== Audio Transcription for n8n =====
-    app.post("/api/farm/webhook/n8n/transcribe-audio", async (req, res) => {
+    app.post("/api/farm/webhook/n8n/transcribe-audio", requireWebhookSecret, async (req, res) => {
         try {
             const { audioUrl } = req.body;
             if (!audioUrl) return res.status(400).json({ error: "audioUrl is required" });
