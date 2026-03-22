@@ -431,7 +431,7 @@ export class FarmStorage {
     }
 
     // ==================== Stock Movements ====================
-    async getStockMovements(farmerId: string, limit = 50): Promise<(FarmStockMovement & { productName: string })[]> {
+    async getStockMovements(farmerId: string, limit = 50): Promise<any[]> {
         await dbReady;
         const result = await db.select({
             id: farmStockMovements.id,
@@ -445,12 +445,22 @@ export class FarmStorage {
             notes: farmStockMovements.notes,
             createdAt: farmStockMovements.createdAt,
             productName: farmProductsCatalog.name,
+            productCategory: farmProductsCatalog.category,
         }).from(farmStockMovements)
             .innerJoin(farmProductsCatalog, eq(farmStockMovements.productId, farmProductsCatalog.id))
             .where(eq(farmStockMovements.farmerId, farmerId))
             .orderBy(desc(farmStockMovements.createdAt))
             .limit(limit);
-        return result;
+
+        // Extract equipment name from notes for diesel movements
+        return result.map(r => {
+            let equipmentName: string | null = null;
+            if (r.notes?.startsWith("Abastecimento: ")) {
+                const match = r.notes.match(/^Abastecimento: ([^(]+)/);
+                if (match) equipmentName = match[1].trim();
+            }
+            return { ...r, equipmentName };
+        });
     }
 
     // ==================== Applications (PDV) ====================
@@ -471,7 +481,11 @@ export class FarmStorage {
             noteStr = `Aplicação talhão: ${plot?.name || data.plotId}`;
         } else if (data.equipmentId) {
             const [equip] = await db.select().from(farmEquipment).where(eq(farmEquipment.id, data.equipmentId));
-            noteStr = `Abastecimento: ${equip?.name || data.equipmentId}`;
+            const equipName = equip?.name || data.equipmentId;
+            const telemetry = [];
+            if (data.horimeter) telemetry.push(`${data.horimeter}h`);
+            if (data.odometer) telemetry.push(`${data.odometer}km`);
+            noteStr = `Abastecimento: ${equipName}${telemetry.length ? ` (${telemetry.join(', ')})` : ''}`;
         } else {
             noteStr = `Saída genérica`;
         }
