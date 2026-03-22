@@ -27,11 +27,13 @@ const runMigration = async () => {
     try {
         // Migration 1: Planning tables
         const planningPath = path.join(process.cwd(), 'migration_planning_2026.sql');
-        const planningSql = fs.readFileSync(planningPath, 'utf-8');
-        console.log('📄 Lendo arquivo de migração:', planningPath);
-        console.log('🚀 Executando SQL (planning)...');
-        await sql.unsafe(planningSql);
-        console.log('✅ Migração planning concluída!');
+        if (fs.existsSync(planningPath)) {
+            const planningSql = fs.readFileSync(planningPath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', planningPath);
+            console.log('🚀 Executando SQL (planning)...');
+            await sql.unsafe(planningSql);
+            console.log('✅ Migração planning concluída!');
+        }
 
         // Migration 2: Farm tables
         const farmPath = path.join(process.cwd(), 'migration_farm_system.sql');

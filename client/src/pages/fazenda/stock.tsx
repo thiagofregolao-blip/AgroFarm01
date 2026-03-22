@@ -640,6 +640,7 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
             const res = await fetch("/api/farm/stock/import-excel", {
                 method: "POST",
                 body: formData,
+                credentials: "include",
             });
             if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Falha na importacao"); }
             return res.json();
@@ -662,6 +663,7 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
             const res = await fetch("/api/farm/stock/update-ingredients", {
                 method: "POST",
                 body: formData,
+                credentials: "include",
             });
             if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Falha ao atualizar"); }
             return res.json();
@@ -752,102 +754,72 @@ function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
                         </Select>
                     </div>
 
-                    {/* Botao de Camera e IA */}
-                    <div className="flex flex-col gap-2">
-                        <Label>1. Tire uma foto do rotulo/embalagem</Label>
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={handleFileChange}
-                        />
+                    {/* Hidden file inputs */}
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleFileChange} />
+                    <input type="file" ref={excelInputRef} className="hidden" accept=".xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) importExcel.mutate(file); e.target.value = ""; }} />
+                    <input type="file" ref={ingredientInputRef} className="hidden" accept=".xlsx,.xls,.csv" onChange={(e) => { const file = e.target.files?.[0]; if (file) updateIngredients.mutate(file); e.target.value = ""; }} />
+
+                    {/* Action buttons row */}
+                    <div className="flex gap-2">
                         <Button
                             type="button"
                             variant="outline"
-                            className="w-full relative h-[60px]"
+                            size="sm"
+                            className="flex-1 h-10 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={extractPhoto.isPending}
                         >
                             {extractPhoto.isPending ? (
-                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analisando Rotulo...</>
-                            ) : previewUrl ? (
-                                <div className="flex items-center absolute inset-0 rounded-md overflow-hidden opacity-30">
-                                    <img src={previewUrl} className="w-full h-full object-cover" />
-                                </div>
-                            ) : null}
-                            <span className="relative z-10 flex items-center">
-                                <Camera className="mr-2 h-5 w-5 text-emerald-600" />
-                                {previewUrl ? "Trocar Foto" : "Tirar Foto (IA)"}
-                            </span>
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <Camera className="mr-1 h-3.5 w-3.5" />
+                            )}
+                            Foto (IA)
                         </Button>
-                        <p className="text-xs text-muted-foreground">A inteligencia artificial preenchera os dados automaticamente.</p>
-                    </div>
-
-                    {/* Importar via Excel */}
-                    <div className="flex flex-col gap-2">
-                        <input
-                            type="file"
-                            ref={excelInputRef}
-                            className="hidden"
-                            accept=".xlsx,.xls,.csv"
-                            onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) importExcel.mutate(file);
-                                e.target.value = "";
-                            }}
-                        />
                         <Button
                             type="button"
                             variant="outline"
-                            className="w-full h-[48px] border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            size="sm"
+                            className="flex-1 h-10 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                             onClick={() => excelInputRef.current?.click()}
                             disabled={importExcel.isPending}
                         >
                             {importExcel.isPending ? (
-                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Importando...</>
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                             ) : (
-                                <><Upload className="mr-2 h-4 w-4" /> Importar via Planilha Excel</>
+                                <Upload className="mr-1 h-3.5 w-3.5" />
                             )}
+                            Planilha
                         </Button>
-                        <p className="text-xs text-muted-foreground">Colunas aceitas: Produto/Nombre, Cantidad/Qtd, Precio/Custo, Categoria, Unidade, Lote, Vencimiento/Validade, Embalagem</p>
-                    </div>
-
-                    {/* Atualizar só Princípio Ativo via planilha */}
-                    <div className="flex flex-col gap-1">
-                        <input
-                            type="file"
-                            ref={ingredientInputRef}
-                            className="hidden"
-                            accept=".xlsx,.xls,.csv"
-                            onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) updateIngredients.mutate(file);
-                                e.target.value = "";
-                            }}
-                        />
                         <Button
                             type="button"
                             variant="outline"
-                            className="w-full h-[44px] border-dashed border-blue-300 text-blue-700 hover:bg-blue-50"
+                            size="sm"
+                            className="flex-1 h-10 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
                             onClick={() => ingredientInputRef.current?.click()}
                             disabled={updateIngredients.isPending}
                         >
                             {updateIngredients.isPending ? (
-                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Atualizando...</>
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                             ) : (
-                                <><Upload className="mr-2 h-4 w-4" /> Atualizar Princípio Ativo via Planilha</>
+                                <Upload className="mr-1 h-3.5 w-3.5" />
                             )}
+                            Princ. Ativo
                         </Button>
-                        <p className="text-xs text-muted-foreground">Envia a mesma planilha para preencher o princípio ativo nos produtos existentes, sem alterar estoque.</p>
                     </div>
 
-                    <hr className="my-2 border-emerald-100" />
+                    {previewUrl && (
+                        <div className="relative h-16 rounded-md overflow-hidden border">
+                            <img src={previewUrl} className="w-full h-full object-cover opacity-50" />
+                            <span className="absolute inset-0 flex items-center justify-center text-xs text-emerald-700 font-medium">Foto capturada</span>
+                        </div>
+                    )}
+
+                    <hr className="my-1 border-emerald-100" />
 
                     {/* Formulário de Produto */}
                     <div className="space-y-3">
-                        <Label className="text-emerald-800 font-semibold">2. Revise e Inseria Quantidades</Label>
+                        <Label className="text-emerald-800 font-semibold">Revise e Insira Quantidades</Label>
 
                         <div>
                             <Label>Nome do Produto *</Label>
