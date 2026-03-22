@@ -693,13 +693,12 @@ function DieselEntryDialog({ onSuccess }: { onSuccess: () => void }) {
     const saveDiesel = useMutation({
         mutationFn: async () => {
             return apiRequest("POST", "/api/farm/stock", {
-                productName: "DIESEL",
+                name: "DIESEL",
                 category: "Combustível",
                 unit: "LT",
                 quantity: parseFloat(quantity),
                 unitCost: parseFloat(unitCost) || 0,
-                depositId: depositId || null,
-                notes: supplier ? `Fornecedor: ${supplier}` : undefined,
+                depositId: depositId === "__none__" ? null : depositId || null,
             });
         },
         onSuccess: () => {
