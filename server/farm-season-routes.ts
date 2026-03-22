@@ -8,7 +8,7 @@ export function registerFarmSeasonRoutes(app: Express) {
     // ==================== Seasons (Safras) ====================
     app.get("/api/farm/seasons", requireFarmer, async (req, res) => {
         try {
-            const seasons = await farmStorage.getSeasons((req.user as any).id);
+            const seasons = await farmStorage.getSeasons(req.user!.id);
             res.json(seasons);
         } catch (error) {
             console.error("[FARM_SEASONS]", error);
@@ -19,7 +19,7 @@ export function registerFarmSeasonRoutes(app: Express) {
     app.post("/api/farm/seasons", requireFarmer, async (req, res) => {
         try {
             const season = await farmStorage.createSeason({
-                farmerId: (req.user as any).id,
+                farmerId: req.user!.id,
                 name: req.body.name,
                 crop: req.body.crop || null,
                 startDate: parseLocalDate(req.body.startDate),

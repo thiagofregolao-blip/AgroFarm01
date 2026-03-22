@@ -3798,7 +3798,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
   // CLIENT APPLICATION TRACKING ROUTES (Tracking applications per client)
   app.get("/api/client-application-tracking/:clientId/:seasonId", requireAuth, async (req, res) => {
     try {
-      const userId = (req.user as any).id;
+      const userId = req.user!.id;
       const { clientId, seasonId } = req.params;
 
       const trackingRecords = await db.select()
@@ -3829,7 +3829,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
 
   app.post("/api/client-application-tracking", requireAuth, async (req, res) => {
     try {
-      const userId = (req.user as any).id;
+      const userId = req.user!.id;
       const trackingData = insertClientApplicationTrackingSchema.parse({
         ...req.body,
         userId
@@ -3863,7 +3863,7 @@ CREATE TABLE IF NOT EXISTS "sales_planning_items"(
 
   app.patch("/api/client-application-tracking/:id", requireAuth, async (req, res) => {
     try {
-      const userId = (req.user as any).id;
+      const userId = req.user!.id;
       const { status, isLostToCompetitor, soldValue } = req.body;
 
       const [updated] = await db.update(clientApplicationTracking)

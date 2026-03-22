@@ -29,7 +29,7 @@ export function requireFarmer(req: Request, res: Response, next: NextFunction) {
     if (!req.isAuthenticated || !req.isAuthenticated()) {
         return res.status(401).json({ error: "Autenticacao necessaria" });
     }
-    const role = (req.user as any)?.role;
+    const role = req.user?.role;
     if (role !== 'agricultor' && role !== 'administrador') {
         return res.status(403).json({ error: "Acesso restrito a agricultores" });
     }
@@ -38,7 +38,7 @@ export function requireFarmer(req: Request, res: Response, next: NextFunction) {
 
 // Middleware: require PDV session
 export function requirePdv(req: Request, res: Response, next: NextFunction) {
-    if (!(req.session as any).pdvTerminalId) {
+    if (!req.session.pdvTerminalId) {
         return res.status(401).json({ error: "PDV authentication required" });
     }
     next();
@@ -49,7 +49,7 @@ export function requireAdminManuals(req: Request, res: Response, next: NextFunct
     if (!req.isAuthenticated || !req.isAuthenticated()) {
         return res.status(401).json({ error: "Autenticacao necessaria" });
     }
-    const role = (req.user as any)?.role;
+    const role = req.user?.role;
     if (role !== 'administrador') {
         return res.status(403).json({ error: "Acesso restrito a administradores" });
     }
@@ -58,7 +58,7 @@ export function requireAdminManuals(req: Request, res: Response, next: NextFunct
 
 // Helper: get farmer ID from request
 export function getFarmerId(req: any): string | null {
-    const id = (req.user as any)?.id;
+    const id = req.user?.id;
     return id ? id.toString() : null;
 }
 

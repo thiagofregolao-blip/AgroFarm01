@@ -178,7 +178,7 @@ export function registerInvoiceEmailRoutes(app: Express) {
     app.get("/api/farm/invoices/:id/pdf", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const { id } = req.params;
 
             const [invoice] = await db.select({
@@ -220,7 +220,7 @@ export function registerInvoiceEmailRoutes(app: Express) {
     app.get("/api/farm/invoices/imported", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
 
             const imported = await db
                 .select()
@@ -254,7 +254,7 @@ export function registerInvoiceEmailRoutes(app: Express) {
     app.put("/api/farm/profile/invoice-email", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const { invoiceEmail } = req.body;
 
             await db.update(users)
@@ -274,7 +274,7 @@ export function registerInvoiceEmailRoutes(app: Express) {
     app.get("/api/farm/profile/invoice-email", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
 
             const [farmer] = await db.select({ invoiceEmail: users.invoiceEmail } as any)
                 .from(users)
@@ -292,7 +292,7 @@ export function registerInvoiceEmailRoutes(app: Express) {
     app.post("/api/farm/invoices/:id/approve-import", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const { id } = req.params;
 
             // Verify invoice belongs to user and is pending
@@ -325,7 +325,7 @@ export function registerInvoiceEmailRoutes(app: Express) {
     app.post("/api/farm/invoices/:id/reject-import", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const { id } = req.params;
 
             // Verify invoice belongs to user
@@ -358,7 +358,7 @@ export function registerInvoiceEmailRoutes(app: Express) {
     app.post("/api/farm/invoices/test-import", upload.single("pdf"), async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
 
             const file = req.file;
             if (!file) return res.status(400).json({ error: "Envie um arquivo PDF" });

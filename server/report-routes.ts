@@ -17,7 +17,7 @@ function requireFarmer(req: Request, res: Response, next: NextFunction) {
     if (!req.isAuthenticated || !req.isAuthenticated()) {
         return res.status(401).json({ error: "Auth required" });
     }
-    const role = (req.user as any)?.role;
+    const role = req.user?.role;
     if (role !== "agricultor" && role !== "administrador") {
         return res.status(403).json({ error: "Acesso restrito" });
     }
@@ -29,7 +29,7 @@ export function registerReportRoutes(app: Express) {
     // ===== FILTER OPTIONS — dropdown data for frontend =====
     app.get("/api/farm/reports/options/filters", requireFarmer, async (req, res) => {
         await dbReady;
-        const farmerId = (req.user as any).id;
+        const farmerId = req.user!.id;
 
         try {
             // Categories from stock products
@@ -89,7 +89,7 @@ export function registerReportRoutes(app: Express) {
     // ===== REPORT DATA =====
     app.get("/api/farm/reports/:type", requireFarmer, async (req, res) => {
         await dbReady;
-        const farmerId = (req.user as any).id;
+        const farmerId = req.user!.id;
         const type = req.params.type;
         const startDate = req.query.startDate ? new Date(String(req.query.startDate)) : undefined;
         const endDate = req.query.endDate ? new Date(String(req.query.endDate)) : undefined;

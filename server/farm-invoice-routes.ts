@@ -66,7 +66,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
     app.get("/api/farm/invoices", requireFarmer, async (req, res) => {
         try {
-            const invoices = await farmStorage.getInvoices((req.user as any).id);
+            const invoices = await farmStorage.getInvoices(req.user!.id);
             // Filter by documentType if specified (faturas vs remissoes)
             const docTypeFilter = req.query.documentType as string | undefined;
             const filtered = docTypeFilter
@@ -87,7 +87,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
     // Invoices grouped by supplier for dashboard cards
     app.get("/api/farm/invoices/summary/by-supplier", requireFarmer, async (req, res) => {
         try {
-            const invoices = await farmStorage.getInvoices((req.user as any).id);
+            const invoices = await farmStorage.getInvoices(req.user!.id);
             const supplierMap: Record<string, any> = {};
 
             for (const inv of invoices) {
@@ -132,7 +132,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             if (!invoice) return res.status(404).json({ error: "Invoice not found" });
             const items = await farmStorage.getInvoiceItems(req.params.id);
             const { pdfBase64, rawPdfData, ...rest } = invoice as any;
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // For faturas: check if there are matching remissions
             let matchingRemissions: any[] = [];
@@ -212,7 +212,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             }
 
             // Verificacao de duplicidade
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { farmInvoices } = await import("../shared/schema");
             const { db } = await import("./db");
             const { eq, and, or, ilike } = await import("drizzle-orm");
@@ -431,7 +431,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 return res.status(400).json({ error: "Invoice already confirmed" });
             }
 
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // Update seasonId if provided during confirmation
             if (req.body.seasonId) {
@@ -517,7 +517,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
     // Find matching remissions for a given invoice (for conciliation)
     app.get("/api/farm/invoices/:id/match-remissions", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const invoice = await farmStorage.getInvoiceById(req.params.id);
             if (!invoice) return res.status(404).json({ error: "Invoice not found" });
 
@@ -574,7 +574,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const { remisionId } = req.body;
             if (!remisionId) return res.status(400).json({ error: "remisionId is required" });
 
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const invoice = await farmStorage.getInvoiceById(req.params.id);
             const remision = await farmStorage.getInvoiceById(remisionId);
             if (!invoice || !remision) return res.status(404).json({ error: "Invoice or remission not found" });
@@ -765,7 +765,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
     // Delete invoice
     app.delete("/api/farm/invoices/:id", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             // Delete related records first to avoid FK constraint errors
             await db.execute(sql`DELETE FROM farm_invoice_items WHERE invoice_id = ${req.params.id}`);
             await db.execute(sql`UPDATE farm_accounts_payable SET invoice_id = NULL WHERE invoice_id = ${req.params.id} AND farmer_id = ${farmerId}`);

@@ -14,7 +14,7 @@ export function registerAdminReportRoutes(app: Express) {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
 
-            const user = req.user as any;
+            const user = req.user!;
 
             // Buscar company role (não platform role)
             const [cu] = await db

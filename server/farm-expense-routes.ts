@@ -15,7 +15,7 @@ export function registerFarmExpenseRoutes(app: Express) {
     app.get("/api/farm/applications", requireFarmer, async (req, res) => {
         try {
             const plotId = req.query.plotId ? String(req.query.plotId) : undefined;
-            const applications = await farmStorage.getApplications((req.user as any).id, plotId);
+            const applications = await farmStorage.getApplications(req.user!.id, plotId);
             res.json(applications);
         } catch (error) {
             console.error("[FARM_APPLICATIONS_GET]", error);
@@ -27,7 +27,7 @@ export function registerFarmExpenseRoutes(app: Express) {
 
     app.get("/api/farm/plot-costs", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { db } = await import("./db");
             const { farmApplications, farmProductsCatalog, farmPlots, farmProperties, farmStock } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
@@ -156,7 +156,7 @@ export function registerFarmExpenseRoutes(app: Express) {
 
     app.get("/api/farm/expenses", requireFarmer, async (req, res) => {
         try {
-            const expenses = await farmStorage.getExpenses((req.user as any).id);
+            const expenses = await farmStorage.getExpenses(req.user!.id);
             const sanitized = (expenses as any[]).map(({ imageBase64, ...rest }) => ({
                 ...rest,
                 hasImage: !!imageBase64,
@@ -177,7 +177,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             } = req.body;
             if (!category || !amount) return res.status(400).json({ error: "Category and amount required" });
 
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const repeats = repeatTimes && parseInt(repeatTimes) > 1 ? parseInt(repeatTimes) : 1;
             const freq = frequency || "mensal";
             const baseDate = parseLocalDate(expenseDate) || new Date();
@@ -299,7 +299,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             const { db } = await import("./db");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
 
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { accountId, paymentMethod, paymentStatus, paymentType, dueDate, installments } = req.body || {};
 
             const [expense] = await db.select().from(farmExpenses).where(
@@ -351,7 +351,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             const { db } = await import("./db");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
 
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { accountId, paymentMethod, amount: payAmount } = req.body;
             if (!accountId) return res.status(400).json({ error: "accountId obrigatório" });
 
@@ -400,7 +400,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             await db.delete(farmExpenses).where(
                 and(
                     eq(farmExpenses.id, req.params.id),
-                    eq(farmExpenses.farmerId, (req.user as any).id)
+                    eq(farmExpenses.farmerId, req.user!.id)
                 )
             );
 
@@ -420,7 +420,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             const [expense] = await db.select().from(farmExpenses).where(
                 and(
                     eq(farmExpenses.id, req.params.id),
-                    eq(farmExpenses.farmerId, (req.user as any).id)
+                    eq(farmExpenses.farmerId, req.user!.id)
                 )
             ).limit(1);
 
@@ -453,7 +453,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             const [expense] = await db.select({ imageBase64: farmExpenses.imageBase64 }).from(farmExpenses).where(
                 and(
                     eq(farmExpenses.id, req.params.id),
-                    eq(farmExpenses.farmerId, (req.user as any).id)
+                    eq(farmExpenses.farmerId, req.user!.id)
                 )
             ).limit(1);
 
@@ -478,7 +478,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             const { farmExpenseCategories } = await import("../shared/schema");
             const { db } = await import("./db");
             const { eq } = await import("drizzle-orm");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const categories = await db.select().from(farmExpenseCategories).where(eq(farmExpenseCategories.farmerId, farmerId));
             res.json(categories);
         } catch (error) {
@@ -490,7 +490,7 @@ export function registerFarmExpenseRoutes(app: Express) {
         try {
             const { farmExpenseCategories } = await import("../shared/schema");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { name, type } = req.body;
             if (!name) return res.status(400).json({ error: "Nome é obrigatório" });
             const [cat] = await db.insert(farmExpenseCategories).values({
@@ -507,7 +507,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             const { farmExpenseCategories } = await import("../shared/schema");
             const { db } = await import("./db");
             const { eq, and } = await import("drizzle-orm");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             await db.delete(farmExpenseCategories).where(
                 and(eq(farmExpenseCategories.id, req.params.id), eq(farmExpenseCategories.farmerId, farmerId))
             );
