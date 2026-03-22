@@ -99,7 +99,7 @@ export default function PdvTerminal() {
             return res.json();
         },
         retry: false,
-        refetchInterval: 60000,
+        refetchInterval: 10000,
         // Try to initialize from localStorage as fallback
         initialData: () => {
             try {
