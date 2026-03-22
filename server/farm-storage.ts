@@ -493,6 +493,7 @@ export class FarmStorage {
         await db.insert(farmStockMovements).values({
             farmerId: data.farmerId,
             productId: data.productId,
+            seasonId: (data as any).seasonId || null,
             type: "exit",
             quantity: String(-qty),
             referenceType: "pdv",

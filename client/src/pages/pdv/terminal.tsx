@@ -50,10 +50,11 @@ export default function PdvTerminal() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
-    const [step, setStep] = useState<"product" | "plot" | "equipment" | "confirm">("product");
+    const [step, setStep] = useState<"product" | "plot" | "season" | "equipment" | "confirm">("product");
     const [search, setSearch] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
     const [selectedPlots, setSelectedPlots] = useState<any[]>([]);
+    const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [categoryFilter, setCategoryFilter] = useState<string>("");
@@ -187,8 +188,15 @@ export default function PdvTerminal() {
     const filtered = products.filter((p: any) => {
         const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
         const matchesCategory = !categoryFilter || p.category === categoryFilter;
-        const matchesDiesel = !isDiesel || p.category === "Combustível" || p.name.toLowerCase().includes("diesel");
-        return matchesSearch && matchesCategory && matchesDiesel;
+        // Terminal diesel: só mostra combustível. Terminal insumos: esconde combustível
+        if (isDiesel) {
+            const isFuel = p.category === "Combustível" || p.name.toLowerCase().includes("diesel");
+            if (!isFuel) return false;
+        } else {
+            const isFuel = p.category === "Combustível" || p.name.toLowerCase().includes("diesel");
+            if (isFuel) return false;
+        }
+        return matchesSearch && matchesCategory;
     });
 
     const isInCart = (productId: string) => cart.some(c => c.product.id === productId);
@@ -338,13 +346,33 @@ export default function PdvTerminal() {
                 return;
             }
             setDistOverrides({});
-            setStep("confirm");
+            // Diesel also needs season selection
+            const seasons = pdvData?.seasons || [];
+            if (seasons.length > 0) {
+                setStep("season");
+            } else {
+                setStep("confirm");
+            }
         } else {
             if (selectedPlots.length === 0) {
                 toast({ title: "Selecione pelo menos um talhão", variant: "destructive" });
                 return;
             }
             setDistOverrides({});
+            // Go to season selection before equipment
+            const seasons = pdvData?.seasons || [];
+            if (seasons.length > 0) {
+                setStep("season");
+            } else {
+                setStep("equipment");
+            }
+        }
+    };
+
+    const handleGoFromSeason = () => {
+        if (isDiesel) {
+            setStep("confirm");
+        } else {
             setStep("equipment");
         }
     };
@@ -500,6 +528,7 @@ export default function PdvTerminal() {
                         odometer: odometer || null,
                         notes: count === 0 ? instructions : undefined,
                         dosePerHa: validDose,
+                        seasonId: selectedSeasonId || null,
                     } : {
                         productId: item.product.id,
                         quantity: d.allocatedQty,
@@ -509,6 +538,7 @@ export default function PdvTerminal() {
                         dosePerHa: validDose,
                         equipmentId: selectedEquipment?.id || null,
                         flowRateLha: flowRateLha ? parseFloat(flowRateLha) : null,
+                        seasonId: selectedSeasonId || null,
                     };
                     payloads.push(payload);
 
@@ -703,6 +733,7 @@ export default function PdvTerminal() {
                     horimeter: dieselHours || null,
                     odometer: dieselKm || null,
                     notes: dieselNotes || `Abastecimento ${dieselEquip.name} - ${parsedQty}L`,
+                    seasonId: selectedSeasonId || null,
                 };
 
                 if (isOnline) {
@@ -1148,6 +1179,88 @@ export default function PdvTerminal() {
                                 <ArrowRight className="ml-2 h-5 w-5" />
                             </Button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ==================== STEP: SEASON (Seleção de Safra) ====================
+    if (step === "season") {
+        const seasons = pdvData?.seasons || [];
+        return (
+            <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
+                {/* Header */}
+                <header className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 shrink-0 shadow-sm">
+                    <button onClick={() => setStep(isDiesel ? "product" : "plot")} className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+                        <ArrowLeft className="h-4 w-4 text-gray-600" />
+                    </button>
+                    <div>
+                        <span className="font-bold text-base leading-tight block">Selecionar Safra</span>
+                        <span className="text-xs text-gray-500">Passo {isDiesel ? "2 de 2" : "3 de 4"} - Safra da Aplicação</span>
+                    </div>
+                </header>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-4">
+                    <div className="max-w-2xl mx-auto space-y-3">
+                        {seasons.length === 0 ? (
+                            <div className="text-center py-12">
+                                <p className="text-gray-500 text-lg">Nenhuma safra ativa cadastrada</p>
+                                <p className="text-gray-400 text-sm mt-2">Cadastre safras em Produção → Safras</p>
+                            </div>
+                        ) : (
+                            seasons.map((season: any) => (
+                                <button
+                                    key={season.id}
+                                    onClick={() => setSelectedSeasonId(season.id)}
+                                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                                        selectedSeasonId === season.id
+                                            ? "border-emerald-500 bg-emerald-50 shadow-md"
+                                            : "border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50"
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="font-bold text-gray-800">{season.name}</p>
+                                            {season.crop && <p className="text-sm text-gray-500">Cultura: {season.crop}</p>}
+                                            {season.startDate && (
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    {new Date(season.startDate).toLocaleDateString("pt-BR")}
+                                                    {season.endDate ? ` — ${new Date(season.endDate).toLocaleDateString("pt-BR")}` : ""}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {selectedSeasonId === season.id && (
+                                            <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
+                                                <Check className="h-4 w-4 text-white" />
+                                            </div>
+                                        )}
+                                    </div>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Bottom bar */}
+                <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
+                    <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+                        <Button
+                            variant="outline"
+                            className="px-6 py-6 rounded-xl"
+                            onClick={handleGoFromSeason}
+                        >
+                            Pular
+                        </Button>
+                        <Button
+                            className="flex-1 sm:flex-none px-8 py-6 text-base bg-[#16A249] hover:bg-[#15803d] text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all active:scale-[0.98]"
+                            onClick={handleGoFromSeason}
+                            disabled={!selectedSeasonId}
+                        >
+                            Avançar
+                            <ArrowRight className="ml-2 h-5 w-5" />
+                        </Button>
                     </div>
                 </div>
             </div>

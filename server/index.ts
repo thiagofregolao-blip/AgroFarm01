@@ -632,7 +632,8 @@ app.use((req, res, next) => {
     await recReady;
     await recDb.execute(recSql`ALTER TABLE farm_equipment ADD COLUMN IF NOT EXISTS tank_capacity_l decimal(10,2)`);
     await recDb.execute(recSql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS flow_rate_l_ha decimal(10,2)`);
-    log("✅ Migration: receituário columns (tank_capacity_l, flow_rate_l_ha) ensured");
+    await recDb.execute(recSql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS season_id varchar REFERENCES farm_seasons(id)`);
+    log("✅ Migration: receituário columns + season_id ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration receituário: ${(migErr as Error).message}`);
   }

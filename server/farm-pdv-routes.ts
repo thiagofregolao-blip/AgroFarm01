@@ -218,7 +218,7 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV withdraw: register application + update stock
     app.post("/api/pdv/withdraw", requirePdv, async (req, res) => {
         try {
-            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha } = req.body;
+            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId } = req.body;
             if (!productId || !quantity || (!plotId && !equipmentId)) {
                 return res.status(400).json({ error: "Product, quantity, and objective (plot or equipment) required" });
             }
@@ -266,6 +266,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 notes: notes || null,
                 appliedAt: new Date(),
                 syncedFromOffline: false,
+                seasonId: seasonId || null,
             });
 
             res.status(201).json(application);
@@ -366,7 +367,16 @@ export function registerFarmPdvRoutes(app: Express) {
                 );
             } catch (e) { /* table may not exist yet */ }
 
-            res.json({ products, stock, plots, properties, equipment, terminal, deposits });
+            // Fetch active seasons for season selector in PDV
+            let seasons: any[] = [];
+            try {
+                const { farmSeasons } = await import("../shared/schema");
+                seasons = await db.select().from(farmSeasons).where(
+                    and(eq(farmSeasons.farmerId, farmerId), eq(farmSeasons.isActive, true))
+                );
+            } catch (e) { /* table may not exist yet */ }
+
+            res.json({ products, stock, plots, properties, equipment, terminal, deposits, seasons });
         } catch (error) {
             console.error("[PDV_DATA]", error);
             res.status(500).json({ error: "Failed to get data" });
