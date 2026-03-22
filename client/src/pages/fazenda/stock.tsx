@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel } from "lucide-react";
 import { useState, useRef } from "react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -190,6 +190,7 @@ export default function FarmStock() {
                     </div>
                     <div className="flex gap-2 flex-wrap">
                         <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/deposits"] })} />
+                        <DieselEntryDialog onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] }); queryClient.invalidateQueries({ queryKey: ["/api/farm/stock/movements"] }); }} />
                         <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
                     </div>
                 </div>
@@ -201,6 +202,7 @@ export default function FarmStock() {
                         <TabsTrigger value="movements">Movimentações</TabsTrigger>
                         <TabsTrigger value="extrato"><FileText className="h-4 w-4 mr-1" />Extrato</TabsTrigger>
                         <TabsTrigger value="transferencias"><ArrowLeftRight className="h-4 w-4 mr-1" />Transferencias</TabsTrigger>
+                        <TabsTrigger value="diesel"><Fuel className="h-4 w-4 mr-1" />Diesel</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="stock" className="mt-4">
@@ -564,10 +566,103 @@ export default function FarmStock() {
                             </CardContent>
                         </Card>
                     </TabsContent>
+
+                    <TabsContent value="diesel" className="mt-4 space-y-4">
+                        {(() => {
+                            const dieselStock = (stock as any[]).filter((s: any) =>
+                                s.productCategory === "Combustível" || s.productName?.toLowerCase().includes("diesel")
+                            );
+                            const dieselMovements = (movements as any[]).filter((m: any) =>
+                                m.productCategory === "Combustível" || m.productName?.toLowerCase().includes("diesel")
+                            );
+                            const totalDieselL = dieselStock.reduce((sum: number, s: any) => sum + (parseFloat(s.quantity) || 0), 0);
+                            const totalDieselValue = dieselStock.reduce((sum: number, s: any) => sum + ((parseFloat(s.quantity) || 0) * (parseFloat(s.averageCost) || 0)), 0);
+
+                            return (
+                                <>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                        <Card className="border-emerald-100">
+                                            <CardContent className="p-4 text-center">
+                                                <Fuel className="h-8 w-8 text-amber-600 mx-auto mb-2" />
+                                                <p className="text-2xl font-bold text-gray-900">{fmtNum(totalDieselL)} L</p>
+                                                <p className="text-sm text-gray-500">Estoque Atual</p>
+                                            </CardContent>
+                                        </Card>
+                                        <Card className="border-emerald-100">
+                                            <CardContent className="p-4 text-center">
+                                                <p className="text-2xl font-bold text-emerald-700 mt-4">{formatCurrency(totalDieselValue)}</p>
+                                                <p className="text-sm text-gray-500">Valor em Estoque</p>
+                                            </CardContent>
+                                        </Card>
+                                        <Card className="border-emerald-100">
+                                            <CardContent className="p-4 text-center">
+                                                <p className="text-2xl font-bold text-gray-900 mt-4">{dieselMovements.length}</p>
+                                                <p className="text-sm text-gray-500">Movimentações</p>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+
+                                    <Card className="border-emerald-100">
+                                        <CardHeader>
+                                            <CardTitle className="text-emerald-800 flex items-center gap-2">
+                                                <Fuel className="h-5 w-5" />
+                                                Movimentações de Diesel
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {dieselMovements.length === 0 ? (
+                                                <div className="py-8 text-center">
+                                                    <Fuel className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                                                    <p className="text-gray-500">Nenhuma movimentação de diesel registrada</p>
+                                                    <p className="text-sm text-gray-400 mt-1">Use o botão "Adicionar Diesel" para cadastrar entradas</p>
+                                                </div>
+                                            ) : (
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm">
+                                                        <thead>
+                                                            <tr className="border-b border-gray-200">
+                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Data</th>
+                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Tipo</th>
+                                                                <th className="text-right py-3 px-2 font-semibold text-emerald-700">Quantidade (L)</th>
+                                                                <th className="text-right py-3 px-2 font-semibold text-emerald-700">Custo Unit.</th>
+                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Equipamento</th>
+                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Obs.</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {dieselMovements.map((m: any) => (
+                                                                <tr key={m.id} className="border-b border-gray-100">
+                                                                    <td className="py-2 px-2">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
+                                                                    <td className="py-2 px-2">
+                                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${m.type === "entry" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                                                                            {m.type === "entry" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                                                                            {m.type === "entry" ? "Entrada" : "Saída"}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="py-2 px-2 text-right font-mono">{fmtNum(parseFloat(m.quantity))}</td>
+                                                                    <td className="py-2 px-2 text-right font-mono">{m.unitCost ? formatCurrency(parseFloat(m.unitCost)) : "—"}</td>
+                                                                    <td className="py-2 px-2">{m.equipmentName || "—"}</td>
+                                                                    <td className="py-2 px-2 text-gray-500 truncate max-w-[200px]">{m.notes || "—"}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </>
+                            );
+                        })()}
+                    </TabsContent>
                 </Tabs>
             </div>
         </FarmLayout>
     );
+}
+
+function fmtNum(n: number, decimals = 2): string {
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 const CATEGORIES = [
@@ -581,6 +676,127 @@ const CATEGORIES = [
 ];
 
 const UNITS = ["LT", "KG", "UNI", "SC"];
+
+function DieselEntryDialog({ onSuccess }: { onSuccess: () => void }) {
+    const [open, setOpen] = useState(false);
+    const { toast } = useToast();
+    const [quantity, setQuantity] = useState("");
+    const [unitCost, setUnitCost] = useState("");
+    const [supplier, setSupplier] = useState("");
+    const [depositId, setDepositId] = useState("");
+
+    const { data: deposits = [] } = useQuery({
+        queryKey: ["/api/farm/deposits"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/deposits"); return r.json(); },
+    });
+
+    const saveDiesel = useMutation({
+        mutationFn: async () => {
+            return apiRequest("POST", "/api/farm/stock", {
+                productName: "DIESEL",
+                category: "Combustível",
+                unit: "LT",
+                quantity: parseFloat(quantity),
+                unitCost: parseFloat(unitCost) || 0,
+                depositId: depositId || null,
+                notes: supplier ? `Fornecedor: ${supplier}` : undefined,
+            });
+        },
+        onSuccess: () => {
+            toast({ title: "Diesel adicionado ao estoque!" });
+            setOpen(false);
+            setQuantity(""); setUnitCost(""); setSupplier(""); setDepositId("");
+            onSuccess();
+        },
+        onError: (e: any) => {
+            toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" });
+        }
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => {
+            setOpen(o);
+            if (!o) { setQuantity(""); setUnitCost(""); setSupplier(""); setDepositId(""); }
+        }}>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50">
+                    <Fuel className="mr-2 h-4 w-4" /> Adicionar Diesel
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Fuel className="h-5 w-5 text-amber-600" />
+                        Entrada de Diesel
+                    </DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                    <div>
+                        <Label>Depósito</Label>
+                        <Select value={depositId} onValueChange={setDepositId}>
+                            <SelectTrigger><SelectValue placeholder="Selecione o depósito..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__none__">Sem depósito</SelectItem>
+                                {(deposits as any[]).map((d: any) => (
+                                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label>Quantidade (Litros) *</Label>
+                            <Input
+                                type="number"
+                                step="any"
+                                value={quantity}
+                                onChange={e => setQuantity(e.target.value)}
+                                placeholder="Ex: 5000"
+                            />
+                        </div>
+                        <div>
+                            <Label>Custo por Litro ($) *</Label>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={unitCost}
+                                onChange={e => setUnitCost(e.target.value)}
+                                placeholder="Ex: 1.50"
+                            />
+                        </div>
+                    </div>
+
+                    {quantity && unitCost && (
+                        <div className="bg-amber-50 p-3 rounded-lg text-sm">
+                            <p className="text-amber-800 font-semibold">
+                                Total: {formatCurrency(parseFloat(quantity) * parseFloat(unitCost))}
+                            </p>
+                        </div>
+                    )}
+
+                    <div>
+                        <Label>Fornecedor (opcional)</Label>
+                        <Input
+                            value={supplier}
+                            onChange={e => setSupplier(e.target.value)}
+                            placeholder="Ex: Petrobras"
+                        />
+                    </div>
+
+                    <Button
+                        className="w-full bg-amber-600 hover:bg-amber-700 mt-2"
+                        onClick={() => saveDiesel.mutate()}
+                        disabled={saveDiesel.isPending || !quantity || parseFloat(quantity) <= 0}
+                    >
+                        {saveDiesel.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Confirmar Entrada de Diesel"}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 function ManualStockEntryDialog({ onSuccess }: { onSuccess: () => void }) {
     const [open, setOpen] = useState(false);
