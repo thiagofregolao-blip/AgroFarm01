@@ -52,7 +52,7 @@ export function registerFarmAuthRoutes(app: Express) {
             const { globalSilos, farmPlots, farmRomaneios } = await import("../shared/schema");
             const { eq, and, isNotNull } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // 1. Get all active global silos
             const silos = await db.select().from(globalSilos).where(eq(globalSilos.active, true));
@@ -158,7 +158,7 @@ export function registerFarmAuthRoutes(app: Express) {
     // /api/farm/me → returns current user info (no separate login needed)
     app.get("/api/farm/me", requireFarmer, async (req, res) => {
         try {
-            const user = req.user as any;
+            const user = req.user!;
             // Fetch location fields from DB (not in Drizzle schema)
             let locationData: any = {};
             try {
@@ -207,7 +207,7 @@ export function registerFarmAuthRoutes(app: Express) {
     app.put("/api/farm/me", requireFarmer, async (req, res) => {
         try {
             const { name, whatsapp_number, whatsapp_extra_numbers, farm_city, farm_latitude, farm_longitude, bulletin_enabled, invoice_email, accountant_email, language } = req.body;
-            const userId = (req.user as any).id;
+            const userId = req.user!.id;
 
             // Dynamically import db to avoid circular dependency issues
             const { db } = await import("./db");

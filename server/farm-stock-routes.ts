@@ -9,7 +9,7 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.get("/api/farm/stock", requireFarmer, async (req, res) => {
         try {
-            const stock = await farmStorage.getStock((req.user as any).id);
+            const stock = await farmStorage.getStock(req.user!.id);
             res.json(stock);
         } catch (error) {
             console.error("[FARM_STOCK_GET]", error);
@@ -20,7 +20,7 @@ export function registerFarmStockRoutes(app: Express) {
     app.get("/api/farm/stock/movements", requireFarmer, async (req, res) => {
         try {
             const limit = req.query.limit ? parseInt(String(req.query.limit)) : 50;
-            const movements = await farmStorage.getStockMovements((req.user as any).id, limit);
+            const movements = await farmStorage.getStockMovements(req.user!.id, limit);
             res.json(movements);
         } catch (error) {
             console.error("[FARM_MOVEMENTS_GET]", error);
@@ -37,7 +37,7 @@ export function registerFarmStockRoutes(app: Express) {
 
             const updatedStock = await farmStorage.updateStockManual(
                 req.params.id,
-                (req.user as any).id,
+                req.user!.id,
                 { quantity: Number(quantity), averageCost: Number(averageCost), reason }
             );
 
@@ -87,7 +87,7 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.post("/api/farm/stock", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { name, activeIngredient, category, unit, quantity, unitCost, depositId, lote, expiryDate, packageSize } = req.body;
 
             if (!name || isNaN(parseFloat(quantity)) || isNaN(parseFloat(unitCost))) {
@@ -161,7 +161,7 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.delete("/api/farm/stock/:id", requireFarmer, async (req, res) => {
         try {
-            await farmStorage.deleteStock(req.params.id, (req.user as any).id);
+            await farmStorage.deleteStock(req.params.id, req.user!.id);
             res.sendStatus(204);
         } catch (error) {
             console.error("[FARM_STOCK_DELETE]", error);
@@ -172,7 +172,7 @@ export function registerFarmStockRoutes(app: Express) {
     app.post("/api/farm/stock/transfer", requireFarmer, async (req: Request, res: Response) => {
         try {
             const { productId, fromWarehouseId: rawFrom, toWarehouseId: rawTo, quantity, notes } = req.body;
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const qty = parseFloat(quantity);
             if (!productId || !qty || qty <= 0) {
                 return res.status(400).json({ error: "productId and positive quantity are required" });
@@ -232,7 +232,7 @@ export function registerFarmStockRoutes(app: Express) {
     // ─── Depositos CRUD ──────────────────────────────────────────────────────
     app.get("/api/farm/deposits", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const rows = await db.select().from(farmDeposits).where(eq(farmDeposits.farmerId, farmerId));
             res.json(rows);
         } catch (error) {
@@ -243,7 +243,7 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.post("/api/farm/deposits", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { name, depositType, location } = req.body;
             if (!name) return res.status(400).json({ error: "Nome e obrigatorio" });
 
@@ -275,7 +275,7 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.put("/api/farm/deposits/:id", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { name, depositType, location, isActive } = req.body;
             const [updated] = await db.execute(sql`
                 UPDATE farm_deposits SET
@@ -295,7 +295,7 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.delete("/api/farm/deposits/:id", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             await db.delete(farmDeposits).where(
                 and(eq(farmDeposits.id, req.params.id), eq(farmDeposits.farmerId, farmerId))
             );
@@ -309,7 +309,7 @@ export function registerFarmStockRoutes(app: Express) {
     // ─── Stock by deposit (for AR product selection) ─────────────────────────
     app.get("/api/farm/stock/by-deposit", requireFarmer, async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const depositType = req.query.depositType as string || null;
             let rows;
             if (depositType) {
@@ -342,7 +342,7 @@ export function registerFarmStockRoutes(app: Express) {
     // ─── Import stock via Excel ──────────────────────────────────────────────
     app.post("/api/farm/stock/import-excel", requireFarmer, upload.single("file"), async (req, res) => {
         try {
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const depositId = req.body.depositId || null;
             if (!req.file) return res.status(400).json({ error: "Arquivo e obrigatorio" });
 

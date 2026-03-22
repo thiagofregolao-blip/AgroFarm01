@@ -9,7 +9,7 @@ export function registerFarmPdvRoutes(app: Express) {
 
     app.get("/api/farm/pdv-terminals", requireFarmer, async (req, res) => {
         try {
-            const terminals = await farmStorage.getPdvTerminals((req.user as any).id);
+            const terminals = await farmStorage.getPdvTerminals(req.user!.id);
             // Don't return passwords
             const safe = terminals.map(({ password, ...t }) => t);
             res.json(safe);
@@ -27,7 +27,7 @@ export function registerFarmPdvRoutes(app: Express) {
             }
 
             const terminal = await farmStorage.createPdvTerminal({
-                farmerId: (req.user as any).id,
+                farmerId: req.user!.id,
                 name,
                 username,
                 password: await hashPassword(password),
@@ -49,7 +49,7 @@ export function registerFarmPdvRoutes(app: Express) {
         try {
             const { id } = req.params;
             const { name, username, password, propertyId, type } = req.body;
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const { farmPdvTerminals } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
@@ -78,7 +78,7 @@ export function registerFarmPdvRoutes(app: Express) {
     app.delete("/api/farm/pdv-terminals/:id", requireFarmer, async (req, res) => {
         try {
             const { id } = req.params;
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const { farmPdvTerminals } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
@@ -110,9 +110,9 @@ export function registerFarmPdvRoutes(app: Express) {
                 return res.status(401).json({ error: "Credenciais inválidas" });
             }
 
-            (req.session as any).pdvTerminalId = terminal.id;
-            (req.session as any).pdvFarmerId = terminal.farmerId;
-            (req.session as any).pdvPropertyId = terminal.propertyId;
+            req.session.pdvTerminalId = terminal.id;
+            req.session.pdvFarmerId = terminal.farmerId;
+            req.session.pdvPropertyId = terminal.propertyId;
 
             // Mark as online
             await farmStorage.updatePdvHeartbeat(terminal.id);
@@ -138,7 +138,7 @@ export function registerFarmPdvRoutes(app: Express) {
             const token = crypto.createHash('sha256').update(tokenSeed).digest('hex');
 
             // Atrela o token à sessão tbm ou banco, pra validar no `/api/pdv/data`
-            (req.session as any).pdvToken = token;
+            req.session.pdvToken = token;
 
             res.json({
                 terminal: { id: terminal.id, name: terminal.name, propertyId: terminal.propertyId, type: terminal.type },
@@ -179,10 +179,10 @@ export function registerFarmPdvRoutes(app: Express) {
                 return res.status(401).json({ error: "Invalid token" });
             }
 
-            (req.session as any).pdvTerminalId = terminal.id;
-            (req.session as any).pdvFarmerId = terminal.farmerId;
-            (req.session as any).pdvPropertyId = terminal.propertyId;
-            (req.session as any).pdvToken = token;
+            req.session.pdvTerminalId = terminal.id;
+            req.session.pdvFarmerId = terminal.farmerId;
+            req.session.pdvPropertyId = terminal.propertyId;
+            req.session.pdvToken = token;
 
             await farmStorage.updatePdvHeartbeat(terminal.id);
 
@@ -223,8 +223,8 @@ export function registerFarmPdvRoutes(app: Express) {
                 return res.status(400).json({ error: "Product, quantity, and objective (plot or equipment) required" });
             }
 
-            const farmerId = (req.session as any).pdvFarmerId;
-            const resolvedPropertyId = propertyId || (req.session as any).pdvPropertyId;
+            const farmerId = req.session.pdvFarmerId;
+            const resolvedPropertyId = propertyId || req.session.pdvPropertyId;
 
             // Check if plotId is actually a property (when user selects property without plots)
             let resolvedPlotId = plotId || null;
@@ -283,7 +283,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 return res.status(400).json({ error: "Applications array required" });
             }
 
-            const farmerId = (req.session as any).pdvFarmerId;
+            const farmerId = req.session.pdvFarmerId;
             const results = [];
 
             for (const app of applications) {
@@ -320,7 +320,7 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV heartbeat
     app.post("/api/pdv/heartbeat", requirePdv, async (req, res) => {
         try {
-            await farmStorage.updatePdvHeartbeat((req.session as any).pdvTerminalId);
+            await farmStorage.updatePdvHeartbeat(req.session.pdvTerminalId);
             res.json({ status: "ok" });
         } catch (error) {
             res.status(500).json({ error: "Heartbeat failed" });
@@ -330,8 +330,8 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV refresh data (get latest stock/products)
     app.get("/api/pdv/data", requirePdv, async (req, res) => {
         try {
-            const farmerId = (req.session as any).pdvFarmerId;
-            const terminalId = (req.session as any).pdvTerminalId;
+            const farmerId = req.session.pdvFarmerId;
+            const terminalId = req.session.pdvTerminalId;
             // Exclude commercial deposit stock — PDV only uses farm stock
             const stock = await farmStorage.getStock(farmerId, true);
 
@@ -376,7 +376,7 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV withdrawals history (agrupar aplicações por batch)
     app.get("/api/pdv/withdrawals", requirePdv, async (req, res) => {
         try {
-            const farmerId = (req.session as any).pdvFarmerId;
+            const farmerId = req.session.pdvFarmerId;
             const applications = await farmStorage.getApplications(farmerId);
 
             // Agrupar aplicações por batch (aplicações criadas dentro de 5 minutos são do mesmo batch)

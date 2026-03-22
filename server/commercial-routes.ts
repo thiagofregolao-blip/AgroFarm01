@@ -566,7 +566,7 @@ export function registerCommercialRoutes(app: Express) {
     app.put("/api/company/profile", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const currentUser = req.user as any;
+            const currentUser = req.user!;
             const { name, email, password } = req.body;
 
             const updates: any = {};
@@ -589,7 +589,7 @@ export function registerCommercialRoutes(app: Express) {
     app.get("/api/company/profile/director-settings", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -613,7 +613,7 @@ export function registerCommercialRoutes(app: Express) {
     app.put("/api/company/profile/director-settings", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -643,7 +643,7 @@ export function registerCommercialRoutes(app: Express) {
     app.get("/api/company/me", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
 
             const [cu] = await db
                 .select()
@@ -665,7 +665,7 @@ export function registerCommercialRoutes(app: Express) {
     app.get("/api/company/team", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -694,7 +694,7 @@ export function registerCommercialRoutes(app: Express) {
     app.get("/api/company/clients", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
 
             const [cu] = await db.select({ companyId: companyUsers.companyId, role: companyUsers.role })
                 .from(companyUsers)
@@ -727,7 +727,7 @@ export function registerCommercialRoutes(app: Express) {
     app.post("/api/company/clients", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -763,7 +763,7 @@ export function registerCommercialRoutes(app: Express) {
     app.put("/api/company/clients/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -794,7 +794,7 @@ export function registerCommercialRoutes(app: Express) {
     app.delete("/api/company/clients/purge-all", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -824,7 +824,7 @@ export function registerCommercialRoutes(app: Express) {
     app.delete("/api/company/clients/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -849,7 +849,7 @@ export function registerCommercialRoutes(app: Express) {
     app.post("/api/company/clients/import-excel", upload.single("file"), async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
             if (!req.file) return res.status(400).json({ error: "Envie um arquivo Excel (.xlsx)" });
@@ -996,7 +996,7 @@ ${csvText}`;
     app.get("/api/company/products", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1015,7 +1015,7 @@ ${csvText}`;
     app.post("/api/company/products", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1035,7 +1035,7 @@ ${csvText}`;
     app.put("/api/company/products/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1054,7 +1054,7 @@ ${csvText}`;
     app.delete("/api/company/products/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1160,7 +1160,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.get("/api/company/price-lists", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1176,7 +1176,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.post("/api/company/price-lists", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1199,7 +1199,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.get("/api/company/price-lists/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1219,7 +1219,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.put("/api/company/price-lists/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1244,7 +1244,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.post("/api/company/price-lists/:id/items", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1305,7 +1305,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.get("/api/company/warehouses", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1321,7 +1321,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.post("/api/company/warehouses", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1345,7 +1345,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.get("/api/company/stock", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1383,7 +1383,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.get("/api/company/stock/available-by-product", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1416,7 +1416,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.get("/api/company/demand-vs-stock", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1479,7 +1479,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.post("/api/company/stock/adjust", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1515,7 +1515,7 @@ Se não encontrar produtos, retorne: {"produtos": []}`;
     app.post("/api/company/stock/import-excel", upload.single("file"), async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
             if (!req.file) return res.status(400).json({ error: "Envie um arquivo Excel (.xlsx)" });
@@ -1666,7 +1666,7 @@ ${csvText}`;
     app.get("/api/company/orders", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
 
             const [cu] = await db.select({ companyId: companyUsers.companyId, role: companyUsers.role })
                 .from(companyUsers)
@@ -1708,7 +1708,7 @@ ${csvText}`;
     app.get("/api/company/orders/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1731,7 +1731,7 @@ ${csvText}`;
     app.post("/api/company/orders", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1807,7 +1807,7 @@ ${csvText}`;
     app.delete("/api/company/orders/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1834,7 +1834,7 @@ ${csvText}`;
     app.put("/api/company/orders/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1894,7 +1894,7 @@ ${csvText}`;
     app.post("/api/company/orders/:id/submit", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1915,7 +1915,7 @@ ${csvText}`;
     app.post("/api/company/orders/:id/approve", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1976,7 +1976,7 @@ ${csvText}`;
     app.post("/api/company/orders/:id/reject", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -1995,7 +1995,7 @@ ${csvText}`;
     app.post("/api/company/orders/:id/to-finance", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2017,7 +2017,7 @@ ${csvText}`;
     app.post("/api/company/orders/:id/finance-approve", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2034,7 +2034,7 @@ ${csvText}`;
     app.post("/api/company/orders/:id/finance-reject", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2053,7 +2053,7 @@ ${csvText}`;
     app.post("/api/company/orders/:id/mark-billed", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2118,7 +2118,7 @@ ${csvText}`;
     app.get("/api/company/invoices", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2150,7 +2150,7 @@ ${csvText}`;
     app.get("/api/company/invoices/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2174,7 +2174,7 @@ ${csvText}`;
     app.post("/api/company/invoices", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2228,7 +2228,7 @@ ${csvText}`;
     app.post("/api/company/invoices/upload-pdf", upload.single("pdf"), async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
             if (!req.file) return res.status(400).json({ error: "Envie um arquivo PDF" });
@@ -2288,7 +2288,7 @@ ${csvText}`;
     app.post("/api/company/invoices/:id/reconcile", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2304,7 +2304,7 @@ ${csvText}`;
     app.get("/api/company/invoices/:id/pdf", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2330,7 +2330,7 @@ ${csvText}`;
     app.get("/api/company/pagares", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2363,7 +2363,7 @@ ${csvText}`;
     app.post("/api/company/pagares", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2393,7 +2393,7 @@ ${csvText}`;
     app.put("/api/company/pagares/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2424,7 +2424,7 @@ ${csvText}`;
     app.get("/api/company/remissions", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2440,7 +2440,7 @@ ${csvText}`;
     app.get("/api/company/remissions/:id", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2469,7 +2469,7 @@ ${csvText}`;
     app.post("/api/company/remissions", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2511,7 +2511,7 @@ ${csvText}`;
     app.post("/api/company/remissions/:id/complete", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2567,7 +2567,7 @@ ${csvText}`;
     app.post("/api/company/remissions/:id/cancel", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             const companyId = await getCompanyId(user.id);
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
 
@@ -2588,7 +2588,7 @@ ${csvText}`;
     app.post("/api/admin/companies", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             const { name, ruc, address, city, phone, email } = req.body;
@@ -2605,7 +2605,7 @@ ${csvText}`;
     app.post("/api/admin/companies/fix-platform-roles", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const admin = req.user as any;
+            const admin = req.user!;
             if (admin.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             // Busca todos os userIds vinculados a alguma empresa
@@ -2633,7 +2633,7 @@ ${csvText}`;
     app.get("/api/admin/companies", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             const all = await db.select().from(companies).orderBy(asc(companies.name));
@@ -2647,7 +2647,7 @@ ${csvText}`;
     app.post("/api/admin/companies/:companyId/users/create-and-link", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const admin = req.user as any;
+            const admin = req.user!;
             if (admin.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             const { username, name, email, password, role } = req.body;
@@ -2683,7 +2683,7 @@ ${csvText}`;
     app.post("/api/admin/companies/:companyId/users", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             const { userId, role } = req.body;
@@ -2711,7 +2711,7 @@ ${csvText}`;
     app.get("/api/admin/companies/:companyId/users", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             const rows = await db
@@ -2734,7 +2734,7 @@ ${csvText}`;
     app.put("/api/admin/companies/:companyId/users/:userId", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             const { role } = req.body;
@@ -2755,7 +2755,7 @@ ${csvText}`;
     app.delete("/api/admin/companies/:companyId/users/:userId", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             await db.delete(companyUsers).where(and(
@@ -2771,7 +2771,7 @@ ${csvText}`;
     app.put("/api/admin/companies/:companyId", async (req: Request, res: Response) => {
         try {
             if (!req.isAuthenticated()) return res.status(401).json({ error: "Não autenticado" });
-            const user = req.user as any;
+            const user = req.user!;
             if (user.role !== "administrador") return res.status(403).json({ error: "Acesso negado" });
 
             const { name, ruc, address, city, phone, email, isActive } = req.body;

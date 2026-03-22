@@ -49,7 +49,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsPayable } = await import("../shared/schema");
             const { eq, and, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const conditions: any[] = [eq(farmAccountsPayable.farmerId, farmerId)];
             if (req.query.status) conditions.push(eq(farmAccountsPayable.status, req.query.status as string));
@@ -68,7 +68,7 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { farmAccountsPayable } = await import("../shared/schema");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const totalInstallments = parseInt(req.body.totalInstallments) || 1;
             const firstDueDate = parseLocalDate(req.body.dueDate) || new Date();
@@ -115,7 +115,7 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { db } = await import("./db");
             const { sql } = await import("drizzle-orm");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { supplier, description, totalAmount, dueDate, seasonId } = req.body;
 
             const result = await db.execute(sql`
@@ -144,7 +144,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { eq, and } = await import("drizzle-orm");
             const { sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { accountId, amount, paymentMethod, accountRows } = req.body;
 
             // Get the account payable
@@ -267,7 +267,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsPayable } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             await db.delete(farmAccountsPayable).where(
                 and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
@@ -285,7 +285,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsPayable, farmInvoices } = await import("../shared/schema");
             const { eq, and, isNull } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // Get all confirmed invoices for this farmer
             const confirmedInvoices = await db.select().from(farmInvoices)
@@ -339,7 +339,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsReceivable } = await import("../shared/schema");
             const { eq, and, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const conditions: any[] = [eq(farmAccountsReceivable.farmerId, farmerId)];
             if (req.query.status) conditions.push(eq(farmAccountsReceivable.status, req.query.status as string));
@@ -360,7 +360,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsReceivable, farmReceivableItems } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const [ar] = await db.select().from(farmAccountsReceivable).where(
                 and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
@@ -380,7 +380,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsReceivable, farmReceivableItems } = await import("../shared/schema");
             const { db } = await import("./db");
             const { sql } = await import("drizzle-orm");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             if (!req.body.buyer) {
                 return res.status(400).json({ error: "buyer is required" });
@@ -563,7 +563,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsReceivable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { accountId, amount, paymentMethod } = req.body;
 
             const [ar] = await db.select().from(farmAccountsReceivable).where(
@@ -647,7 +647,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsReceivable } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             await db.delete(farmAccountsReceivable).where(
                 and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
@@ -664,7 +664,7 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { db } = await import("./db");
             const { sql } = await import("drizzle-orm");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const reason = req.body.reason || "Anulado pelo usuario";
             await db.execute(sql`
                 UPDATE farm_accounts_receivable
@@ -683,7 +683,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { sql, eq } = await import("drizzle-orm");
             const { db } = await import("./db");
             const { farmReceivableItems } = await import("../shared/schema");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { buyer, description, totalAmount, dueDate, supplier_id, seasonId, invoiceNumber,
                 paymentCondition, customerRuc, customerAddress, subtotalExenta, subtotalGravada5,
                 subtotalGravada10, iva5, iva10, observation, items } = req.body;
@@ -755,7 +755,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmInvoiceConfig } = await import("../shared/schema");
             const { eq } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const [config] = await db.select().from(farmInvoiceConfig).where(eq(farmInvoiceConfig.farmerId, farmerId));
             res.json(config || null);
@@ -770,7 +770,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmInvoiceConfig } = await import("../shared/schema");
             const { eq } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const [existing] = await db.select().from(farmInvoiceConfig).where(eq(farmInvoiceConfig.farmerId, farmerId));
 
@@ -817,7 +817,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { eq } = await import("drizzle-orm");
             const { db } = await import("./db");
             const { sql: sqlFn } = await import("drizzle-orm");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const [config] = await db.select().from(farmInvoiceConfig).where(eq(farmInvoiceConfig.farmerId, farmerId));
             if (!config) return res.status(400).json({ error: "Configure o timbrado primeiro" });
@@ -850,7 +850,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsReceivable, farmReceivableItems, farmInvoiceConfig } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const [ar] = await db.select().from(farmAccountsReceivable).where(
                 and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
@@ -918,7 +918,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // RECEITAS: Contas a Receber (recebido)
             const [receivableSum] = await db.select({
@@ -1001,7 +1001,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmBudgets, farmExpenses } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const budgets = await db.select().from(farmBudgets)
                 .where(eq(farmBudgets.farmerId, farmerId));
@@ -1033,7 +1033,7 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { farmBudgets } = await import("../shared/schema");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const [budget] = await db.insert(farmBudgets).values({
                 ...req.body,
@@ -1051,7 +1051,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmBudgets } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const [updated] = await db.update(farmBudgets).set(req.body).where(
                 and(eq(farmBudgets.id, req.params.id), eq(farmBudgets.farmerId, farmerId))
@@ -1068,7 +1068,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmBudgets } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             await db.delete(farmBudgets).where(
                 and(eq(farmBudgets.id, req.params.id), eq(farmBudgets.farmerId, farmerId))
@@ -1089,7 +1089,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmBankStatements } = await import("../shared/schema");
             const { eq, and, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const conditions: any[] = [eq(farmBankStatements.farmerId, farmerId)];
             if (req.query.accountId) conditions.push(eq(farmBankStatements.accountId, req.query.accountId as string));
@@ -1109,7 +1109,7 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { farmBankStatements } = await import("../shared/schema");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // Support batch import (array of statements)
             const items = Array.isArray(req.body) ? req.body : [req.body];
@@ -1137,7 +1137,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmBankStatements } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const { transactionId } = req.body;
 
             const [updated] = await db.update(farmBankStatements).set({
@@ -1161,7 +1161,7 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { db } = await import("./db");
             const { sql } = await import("drizzle-orm");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // Return grain stock grouped by crop + season + buyer (silo view)
             const rows = await db.execute(sql`
@@ -1210,7 +1210,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmGrainContracts } = await import("../shared/schema");
             const { eq, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const contracts = await db.select().from(farmGrainContracts)
                 .where(eq(farmGrainContracts.farmerId, farmerId))
@@ -1226,7 +1226,7 @@ export function registerFarmFinancialRoutes(app: Express) {
         try {
             const { farmGrainContracts } = await import("../shared/schema");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const { buyer, crop, contractNumber, contractType, totalQuantity, pricePerTon, currency, deliveryStartDate, deliveryEndDate, seasonId, notes } = req.body;
             if (!buyer || !crop || !totalQuantity || !pricePerTon) {
@@ -1264,7 +1264,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmGrainContracts } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const updateData = { ...req.body };
             delete updateData.id;
@@ -1292,7 +1292,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmGrainContracts } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             await db.delete(farmGrainContracts).where(
                 and(eq(farmGrainContracts.id, req.params.id), eq(farmGrainContracts.farmerId, farmerId))
@@ -1313,7 +1313,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmGrainDeliveries } = await import("../shared/schema");
             const { eq, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const deliveries = await db.select().from(farmGrainDeliveries)
                 .where(eq(farmGrainDeliveries.farmerId, farmerId))
@@ -1330,7 +1330,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmGrainDeliveries, farmGrainContracts, farmGrainStock, farmAccountsReceivable } = await import("../shared/schema");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const { contractId, romaneioId, quantity, deliveryDate, notes } = req.body;
             if (!contractId || !quantity) {
@@ -1417,7 +1417,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { farmAccountsPayable, farmAccountsReceivable } = await import("../shared/schema");
             const { eq, and, lte, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const now = new Date();
             const in7days = new Date();

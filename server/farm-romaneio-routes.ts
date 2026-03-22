@@ -20,7 +20,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmPlots, farmProperties, farmSeasons } = await import("../shared/schema");
             const { eq, and, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const romaneios = await db.select({
                 romaneio: farmRomaneios,
@@ -58,7 +58,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmAccountsReceivable, farmGrainStock } = await import("../shared/schema");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const body = { ...req.body };
             if (body.deliveryDate && typeof body.deliveryDate === "string") {
@@ -148,7 +148,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, globalSilos } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
             const file = req.file;
 
             if (!file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
@@ -214,7 +214,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmAccountsReceivable, farmGrainStock } = await import("../shared/schema");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // Update romaneio fields + set status to confirmed
             const updateData: any = { status: "confirmed", ...req.body };
@@ -280,7 +280,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios } = await import("../shared/schema");
             const { eq } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             // Normalization key: strip legal suffixes + punctuation
             const normKey = (s: string) => s.toUpperCase()
@@ -341,7 +341,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const [updated] = await db.update(farmRomaneios).set(req.body).where(
                 and(eq(farmRomaneios.id, req.params.id), eq(farmRomaneios.farmerId, farmerId))
@@ -358,7 +358,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             await db.delete(farmRomaneios).where(
                 and(eq(farmRomaneios.id, req.params.id), eq(farmRomaneios.farmerId, farmerId))
@@ -531,7 +531,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmPlots } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const conditions: any[] = [eq(farmRomaneios.farmerId, farmerId)];
             if (req.query.seasonId) {
@@ -573,7 +573,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmInvoices } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = (req.user as any).id;
+            const farmerId = req.user!.id;
 
             const conditions: any[] = [
                 eq(farmRomaneios.farmerId, farmerId),

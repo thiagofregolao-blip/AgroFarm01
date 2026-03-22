@@ -10,7 +10,7 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.get("/api/farm/properties", requireFarmer, async (req, res) => {
         try {
-            const properties = await farmStorage.getProperties((req.user as any).id);
+            const properties = await farmStorage.getProperties(req.user!.id);
             res.json(properties);
         } catch (error) {
             console.error("[FARM_PROPERTIES_GET]", error);
@@ -24,7 +24,7 @@ export function registerFarmPropertyRoutes(app: Express) {
             if (!name) return res.status(400).json({ error: "Property name required" });
 
             const property = await farmStorage.createProperty({
-                farmerId: (req.user as any).id,
+                farmerId: req.user!.id,
                 name,
                 location,
                 totalAreaHa: totalAreaHa ? String(totalAreaHa) : null,
@@ -75,7 +75,7 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.get("/api/farm/plots", requireFarmer, async (req, res) => {
         try {
-            const plots = await farmStorage.getPlotsByFarmer((req.user as any).id);
+            const plots = await farmStorage.getPlotsByFarmer(req.user!.id);
             res.json(plots);
         } catch (error) {
             console.error("[FARM_ALL_PLOTS_GET]", error);
@@ -132,7 +132,7 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.get("/api/farm/equipment", requireFarmer, async (req, res) => {
         try {
-            const equipment = await farmStorage.getEquipment((req.user as any).id);
+            const equipment = await farmStorage.getEquipment(req.user!.id);
             res.json(equipment);
         } catch (error) {
             console.error("[FARM_EQUIPMENT_GET]", error);
@@ -146,7 +146,7 @@ export function registerFarmPropertyRoutes(app: Express) {
             if (!name || !type) return res.status(400).json({ error: "Name and type required" });
 
             const equip = await farmStorage.createEquipment({
-                farmerId: (req.user as any).id,
+                farmerId: req.user!.id,
                 name,
                 type,
                 status: status || "Ativo",
