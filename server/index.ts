@@ -616,6 +616,18 @@ app.use((req, res, next) => {
     log(`⚠️  Migration AR safety: ${migErr.message}`);
   }
 
+  // Inline migration: receituário agronômico (tank capacity + flow rate)
+  try {
+    const { db: recDb, dbReady: recReady } = await import("./db");
+    const { sql: recSql } = await import("drizzle-orm");
+    await recReady;
+    await recDb.execute(recSql`ALTER TABLE farm_equipment ADD COLUMN IF NOT EXISTS tank_capacity_l decimal(10,2)`);
+    await recDb.execute(recSql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS flow_rate_l_ha decimal(10,2)`);
+    log("✅ Migration: receituário columns (tank_capacity_l, flow_rate_l_ha) ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration receituário: ${(migErr as Error).message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes

@@ -142,7 +142,7 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.post("/api/farm/equipment", requireFarmer, async (req, res) => {
         try {
-            const { name, type, status } = req.body;
+            const { name, type, status, tankCapacityL } = req.body;
             if (!name || !type) return res.status(400).json({ error: "Name and type required" });
 
             const equip = await farmStorage.createEquipment({
@@ -150,6 +150,7 @@ export function registerFarmPropertyRoutes(app: Express) {
                 name,
                 type,
                 status: status || "Ativo",
+                tankCapacityL: tankCapacityL ? String(tankCapacityL) : null,
             });
             res.status(201).json(equip);
         } catch (error) {
@@ -160,11 +161,12 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.put("/api/farm/equipment/:id", requireFarmer, async (req, res) => {
         try {
-            const { name, type, status } = req.body;
+            const { name, type, status, tankCapacityL } = req.body;
             const equip = await farmStorage.updateEquipment(req.params.id, {
                 name,
                 type,
                 status,
+                ...(tankCapacityL !== undefined && { tankCapacityL: tankCapacityL ? String(tankCapacityL) : null }),
             });
             res.json(equip);
         } catch (error) {

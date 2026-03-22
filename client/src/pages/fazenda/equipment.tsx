@@ -289,10 +289,14 @@ function CreateEquipmentDialog({ onSuccess }: { onSuccess: () => void }) {
     const [name, setName] = useState("");
     const [type, setType] = useState("");
     const [status, setStatus] = useState("Ativo");
+    const [tankCapacityL, setTankCapacityL] = useState("");
 
     const saveMachine = useMutation({
         mutationFn: async () => {
-            return apiRequest("POST", "/api/farm/equipment", { name, type, status });
+            return apiRequest("POST", "/api/farm/equipment", {
+                name, type, status,
+                tankCapacityL: tankCapacityL ? parseFloat(tankCapacityL) : null,
+            });
         },
         onSuccess: () => {
             toast({ title: "Equipamento adicionado!" });
@@ -308,7 +312,7 @@ function CreateEquipmentDialog({ onSuccess }: { onSuccess: () => void }) {
         <Dialog open={open} onOpenChange={(o) => {
             setOpen(o);
             if (!o) {
-                setName(""); setType(""); setStatus("Ativo");
+                setName(""); setType(""); setStatus("Ativo"); setTankCapacityL("");
             }
         }}>
             <DialogTrigger asChild>
@@ -352,6 +356,19 @@ function CreateEquipmentDialog({ onSuccess }: { onSuccess: () => void }) {
                             </Select>
                         </div>
                     </div>
+
+                    {type === "Pulverizador" && (
+                        <div>
+                            <Label>Capacidade do Tanque (Litros)</Label>
+                            <Input
+                                type="number"
+                                step="any"
+                                value={tankCapacityL}
+                                onChange={e => setTankCapacityL(e.target.value)}
+                                placeholder="Ex: 3000"
+                            />
+                        </div>
+                    )}
 
                     <Button
                         className="w-full bg-emerald-600 hover:bg-emerald-700 mt-2"

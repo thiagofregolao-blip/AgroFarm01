@@ -218,7 +218,7 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV withdraw: register application + update stock
     app.post("/api/pdv/withdraw", requirePdv, async (req, res) => {
         try {
-            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa } = req.body;
+            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha } = req.body;
             if (!productId || !quantity || (!plotId && !equipmentId)) {
                 return res.status(400).json({ error: "Product, quantity, and objective (plot or equipment) required" });
             }
@@ -258,6 +258,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 odometer: odometer ? parseInt(odometer, 10) : null,
                 quantity: String(quantity),
                 dosePerHa: dosePerHa ? String(dosePerHa) : null,
+                flowRateLha: flowRateLha ? String(flowRateLha) : null,
                 appliedBy: appliedBy || "PDV",
                 notes,
                 appliedAt: new Date(),
@@ -294,6 +295,7 @@ export function registerFarmPdvRoutes(app: Express) {
                         odometer: app.odometer ? parseInt(app.odometer, 10) : null,
                         quantity: String(app.quantity),
                         dosePerHa: app.dosePerHa ? String(app.dosePerHa) : null,
+                        flowRateLha: app.flowRateLha ? String(app.flowRateLha) : null,
                         appliedBy: app.appliedBy || "PDV (offline)",
                         notes: app.notes,
                         appliedAt: app.appliedAt ? new Date(app.appliedAt) : new Date(),
