@@ -626,7 +626,7 @@ export default function FarmStock() {
                                                                 <th className="text-right py-3 px-2 font-semibold text-emerald-700">Quantidade (L)</th>
                                                                 <th className="text-right py-3 px-2 font-semibold text-emerald-700">Custo Unit.</th>
                                                                 <th className="text-left py-3 px-2 font-semibold text-emerald-700">Equipamento</th>
-                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Obs.</th>
+                                                                <th className="text-right py-3 px-2 font-semibold text-emerald-700">Horímetro/Km</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -642,7 +642,10 @@ export default function FarmStock() {
                                                                     <td className="py-2 px-2 text-right font-mono">{fmtNum(parseFloat(m.quantity))}</td>
                                                                     <td className="py-2 px-2 text-right font-mono">{m.unitCost ? formatCurrency(parseFloat(m.unitCost)) : "—"}</td>
                                                                     <td className="py-2 px-2">{m.equipmentName || "—"}</td>
-                                                                    <td className="py-2 px-2 text-gray-500 truncate max-w-[200px]">{m.notes || "—"}</td>
+                                                                    <td className="py-2 px-2 text-right font-mono">{(() => {
+                                                                        const match = m.notes?.match(/\(([^)]+)\)/);
+                                                                        return match ? match[1] : "—";
+                                                                    })()}</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
