@@ -66,6 +66,7 @@ export default function PdvTerminal() {
     const [horimeter, setHorimeter] = useState<string>("");
     const [odometer, setOdometer] = useState<string>("");
     const [flowRateLha, setFlowRateLha] = useState<string>("");
+    const [depositFilter, setDepositFilter] = useState<string>("");
 
     // Load offline queue on mount
     useEffect(() => {
@@ -143,9 +144,34 @@ export default function PdvTerminal() {
         refetchInterval: 30000, // Atualizar a cada 30 segundos
     });
 
-    const products = pdvData?.products || [];
-    const stock = pdvData?.stock || [];
+    const allStock = pdvData?.stock || [];
+    const deposits = pdvData?.deposits || [];
     const plots = pdvData?.plots || [];
+    const hasDeposits = deposits.length > 0;
+
+    // Filter stock by selected deposit (or show all if no deposits exist)
+    const stock = useMemo(() => {
+        if (!hasDeposits || !depositFilter) return allStock;
+        if (depositFilter === "__no_deposit__") return allStock.filter((s: any) => !s.depositId);
+        return allStock.filter((s: any) => s.depositId === depositFilter);
+    }, [allStock, depositFilter, hasDeposits]);
+
+    // Derive products from filtered stock
+    const products = useMemo(() => {
+        const seen = new Set<string>();
+        return stock.filter((s: any) => {
+            if (seen.has(s.productId)) return false;
+            seen.add(s.productId);
+            return true;
+        }).map((s: any) => ({
+            id: s.productId,
+            name: s.productName,
+            category: s.productCategory,
+            unit: s.productUnit,
+            imageUrl: s.productImageUrl || null,
+            dosePerHa: s.productDosePerHa || null,
+        }));
+    }, [stock]);
 
     const getStockForProduct = (productId: string) => {
         const s = stock.find((s: any) => s.productId === productId);
@@ -1416,6 +1442,27 @@ export default function PdvTerminal() {
                         </div>
                     </div>
                 </div>
+
+                {/* Deposit selector (only if farmer has deposits) */}
+                {hasDeposits && (
+                    <div className="px-4 pb-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
+                        <button
+                            onClick={() => setDepositFilter("")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${!depositFilter ? "bg-white text-emerald-700 shadow-sm" : "bg-white/15 text-white/80 hover:bg-white/25 backdrop-blur-sm"}`}
+                        >Todos</button>
+                        {deposits.map((d: any) => (
+                            <button
+                                key={d.id}
+                                onClick={() => setDepositFilter(depositFilter === d.id ? "" : d.id)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${depositFilter === d.id ? "bg-white text-emerald-700 shadow-sm" : "bg-white/15 text-white/80 hover:bg-white/25 backdrop-blur-sm"}`}
+                            >{d.name}</button>
+                        ))}
+                        <button
+                            onClick={() => setDepositFilter(depositFilter === "__no_deposit__" ? "" : "__no_deposit__")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${depositFilter === "__no_deposit__" ? "bg-white text-emerald-700 shadow-sm" : "bg-white/15 text-white/80 hover:bg-white/25 backdrop-blur-sm"}`}
+                        >Sem deposito</button>
+                    </div>
+                )}
 
                 {/* Search */}
                 <div className="px-4 pb-3">
