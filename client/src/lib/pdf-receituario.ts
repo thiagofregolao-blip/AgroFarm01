@@ -80,11 +80,12 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text(`ÁREAS`, margin, yPos);
+    doc.text("ÁREAS ", margin, yPos);
+    const areasLabelW = doc.getTextWidth("ÁREAS ");
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
-    doc.text(` (${fmtNum(totalArea)} de ${fmtNum(totalArea)} ha)`, margin + doc.getTextWidth("ÁREAS "), yPos);
-    yPos += 2;
+    doc.text(`(${fmtNum(totalArea)} de ${fmtNum(totalArea)} ha)`, margin + areasLabelW, yPos);
+    yPos += 3;
 
     const areasBody = data.plots.map(p => [
       data.propertyName,
@@ -145,11 +146,12 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
-  doc.text(`PRODUTOS`, margin, yPos);
+  doc.text("PRODUTOS ", margin, yPos);
+  const prodLabelW = doc.getTextWidth("PRODUTOS ");
   doc.setFont("helvetica", "italic");
   doc.setFontSize(8);
-  doc.text(` (${totalProducts} produto${totalProducts !== 1 ? "s" : ""})`, margin + doc.getTextWidth("PRODUTOS "), yPos);
-  yPos += 2;
+  doc.text(`(${totalProducts} produto${totalProducts !== 1 ? "s" : ""})`, margin + prodLabelW, yPos);
+  yPos += 3;
 
   if (hasCalda) {
     const productRows = data.products.map((p, i) => {
@@ -173,24 +175,19 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
       startY: yPos,
       head: [["Ordem", "Produto", "Dose", "Quantidade\nTotal", "Quantidade\npor tanque", "Último\ntanque"]],
       body: productRows,
-      theme: "grid",
+      theme: "plain",
       headStyles: {
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
         fontStyle: "bold",
         fontSize: 8,
         cellPadding: 3,
-        lineColor: [0, 0, 0],
-        lineWidth: 0.3,
       },
       bodyStyles: {
         fontSize: 9,
         cellPadding: 3,
-        lineColor: [0, 0, 0],
-        lineWidth: 0.2,
         textColor: [0, 0, 0],
       },
-      styles: { lineColor: [0, 0, 0], lineWidth: 0.2 },
       columnStyles: {
         0: { cellWidth: 14, halign: "center" },
         1: { cellWidth: 32 },
@@ -198,6 +195,21 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
         3: { cellWidth: 28, halign: "right" },
         4: { cellWidth: 28, halign: "right" },
         5: { cellWidth: 28, halign: "right" },
+      },
+      didDrawCell: (hookData: any) => {
+        // Draw horizontal lines only (no vertical borders in body)
+        const { cell, row, section } = hookData;
+        if (section === "head") {
+          // Bottom border for header
+          doc.setDrawColor(0, 0, 0);
+          doc.setLineWidth(0.4);
+          doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
+        } else if (section === "body") {
+          // Thin bottom border for each row
+          doc.setDrawColor(180, 180, 180);
+          doc.setLineWidth(0.15);
+          doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
+        }
       },
       margin: { left: margin, right: margin },
     });
@@ -216,29 +228,36 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
       startY: yPos,
       head: [["Ordem", "Produto", "Dose", "Quantidade Total"]],
       body: productRows,
-      theme: "grid",
+      theme: "plain",
       headStyles: {
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
         fontStyle: "bold",
         fontSize: 9,
         cellPadding: 3,
-        lineColor: [0, 0, 0],
-        lineWidth: 0.3,
       },
       bodyStyles: {
         fontSize: 9,
         cellPadding: 3,
-        lineColor: [0, 0, 0],
-        lineWidth: 0.2,
         textColor: [0, 0, 0],
       },
-      styles: { lineColor: [0, 0, 0], lineWidth: 0.2 },
       columnStyles: {
         0: { cellWidth: 18, halign: "center" },
         1: { cellWidth: 60 },
         2: { cellWidth: 40 },
         3: { cellWidth: 42, halign: "right" },
+      },
+      didDrawCell: (hookData: any) => {
+        const { cell, section } = hookData;
+        if (section === "head") {
+          doc.setDrawColor(0, 0, 0);
+          doc.setLineWidth(0.4);
+          doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
+        } else if (section === "body") {
+          doc.setDrawColor(180, 180, 180);
+          doc.setLineWidth(0.15);
+          doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
+        }
       },
       margin: { left: margin, right: margin },
     });
