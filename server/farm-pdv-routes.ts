@@ -227,24 +227,27 @@ export function registerFarmPdvRoutes(app: Express) {
             const resolvedPropertyId = propertyId || (req.session as any).pdvPropertyId;
 
             // Check if plotId is actually a property (when user selects property without plots)
-            let resolvedPlotId = plotId;
-            const { db } = await import("./db");
-            const { farmPlots } = await import("../shared/schema");
-            const { eq } = await import("drizzle-orm");
+            let resolvedPlotId = plotId || null;
 
-            const [existingPlot] = await db.select().from(farmPlots).where(eq(farmPlots.id, plotId));
-            if (!existingPlot) {
-                // plotId is probably a propertyId — auto-create a default plot
-                const property = await farmStorage.getPropertyById(plotId);
-                if (property) {
-                    const newPlot = await farmStorage.createPlot({
-                        propertyId: property.id,
-                        name: property.name,
-                        areaHa: property.totalAreaHa || "0",
-                        crop: null,
-                    });
-                    resolvedPlotId = newPlot.id;
-                    console.log(`[PDV_WITHDRAW] Auto-created plot "${newPlot.name}" for property "${property.name}"`);
+            if (plotId) {
+                const { db } = await import("./db");
+                const { farmPlots } = await import("../shared/schema");
+                const { eq } = await import("drizzle-orm");
+
+                const [existingPlot] = await db.select().from(farmPlots).where(eq(farmPlots.id, plotId));
+                if (!existingPlot) {
+                    // plotId is probably a propertyId — auto-create a default plot
+                    const property = await farmStorage.getPropertyById(plotId);
+                    if (property) {
+                        const newPlot = await farmStorage.createPlot({
+                            propertyId: property.id,
+                            name: property.name,
+                            areaHa: property.totalAreaHa || "0",
+                            crop: null,
+                        });
+                        resolvedPlotId = newPlot.id;
+                        console.log(`[PDV_WITHDRAW] Auto-created plot "${newPlot.name}" for property "${property.name}"`);
+                    }
                 }
             }
 
@@ -252,7 +255,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 farmerId,
                 productId,
                 plotId: resolvedPlotId || null,
-                propertyId: resolvedPropertyId || plotId || null,
+                propertyId: resolvedPropertyId || null,
                 equipmentId: equipmentId || null,
                 horimeter: horimeter ? parseInt(horimeter, 10) : null,
                 odometer: odometer ? parseInt(odometer, 10) : null,
@@ -260,7 +263,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 dosePerHa: dosePerHa ? String(dosePerHa) : null,
                 flowRateLha: flowRateLha ? String(flowRateLha) : null,
                 appliedBy: appliedBy || "PDV",
-                notes,
+                notes: notes || null,
                 appliedAt: new Date(),
                 syncedFromOffline: false,
             });
