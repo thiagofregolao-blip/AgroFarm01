@@ -187,7 +187,7 @@ export default function PdvTerminal() {
     const filtered = products.filter((p: any) => {
         const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
         const matchesCategory = !categoryFilter || p.category === categoryFilter;
-        const matchesDiesel = !isDiesel || p.category === "Combustível" || p.name.toLowerCase().includes("ar");
+        const matchesDiesel = !isDiesel || p.category === "Combustível" || p.name.toLowerCase().includes("diesel");
         return matchesSearch && matchesCategory && matchesDiesel;
     });
 

@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Tractor, Plus, Trash2, Settings2, ShieldCheck, Wrench, DollarSign, Eye, FileText } from "lucide-react";
+import { Loader2, Tractor, Plus, Trash2, Settings2, ShieldCheck, Wrench, DollarSign, Eye, FileText, Pencil } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,6 +25,7 @@ export default function FarmEquipment() {
     const { user } = useAuth();
     const [selectedEquipId, setSelectedEquipId] = useState<string | null>(null);
     const [expenseDetailId, setExpenseDetailId] = useState<string | null>(null);
+    const [editingEquip, setEditingEquip] = useState<any>(null);
 
     const { data: equipment = [], isLoading } = useQuery({
         queryKey: ["/api/farm/equipment"],
@@ -74,7 +75,7 @@ export default function FarmEquipment() {
                             {equipment.length} equipamentos cadastrados
                         </p>
                     </div>
-                    <CreateEquipmentDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/equipment"] })} />
+                    <EquipmentFormDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/equipment"] })} />
                 </div>
 
                 {isLoading ? (
@@ -102,7 +103,10 @@ export default function FarmEquipment() {
                                     className="overflow-hidden border-emerald-100 hover:shadow-md transition-shadow relative group cursor-pointer"
                                     onClick={() => setSelectedEquipId(e.id)}
                                 >
-                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-1">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50" onClick={(ev) => { ev.stopPropagation(); setEditingEquip(e); }}>
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={(ev) => { ev.stopPropagation(); handleDelete(e.id, e.name); }}>
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
@@ -138,12 +142,23 @@ export default function FarmEquipment() {
                 )}
             </div>
 
+            {/* Edit dialog controlled by editingEquip state */}
+            <EquipmentFormDialog
+                equipment={editingEquip}
+                onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["/api/farm/equipment"] }); setEditingEquip(null); }}
+                externalOpen={!!editingEquip}
+                onExternalClose={() => setEditingEquip(null)}
+            />
+
             <Dialog open={!!selectedEquipId} onOpenChange={(open) => { if (!open) { setSelectedEquipId(null); setExpenseDetailId(null); } }}>
                 <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-emerald-800">
                             <Tractor className="h-5 w-5" />
                             {selectedEquip?.name || "Equipamento"}
+                            <Button variant="ghost" size="icon" className="h-8 w-8 ml-2 text-emerald-600 hover:bg-emerald-50" onClick={() => { setSelectedEquipId(null); setEditingEquip(selectedEquip); }}>
+                                <Pencil className="h-4 w-4" />
+                            </Button>
                         </DialogTitle>
                     </DialogHeader>
 
@@ -282,24 +297,53 @@ export default function FarmEquipment() {
     );
 }
 
-function CreateEquipmentDialog({ onSuccess }: { onSuccess: () => void }) {
-    const [open, setOpen] = useState(false);
+function EquipmentFormDialog({ onSuccess, equipment, externalOpen, onExternalClose }: {
+    onSuccess: () => void;
+    equipment?: any;
+    externalOpen?: boolean;
+    onExternalClose?: () => void;
+}) {
+    const [internalOpen, setInternalOpen] = useState(false);
     const { toast } = useToast();
+
+    const isEdit = !!equipment;
+    const open = externalOpen ?? internalOpen;
+    const setOpen = (v: boolean) => {
+        if (externalOpen !== undefined) {
+            if (!v && onExternalClose) onExternalClose();
+        } else {
+            setInternalOpen(v);
+        }
+    };
 
     const [name, setName] = useState("");
     const [type, setType] = useState("");
     const [status, setStatus] = useState("Ativo");
     const [tankCapacityL, setTankCapacityL] = useState("");
 
+    // Pre-fill form when editing
+    const [lastEquipId, setLastEquipId] = useState<string | null>(null);
+    if (equipment && equipment.id !== lastEquipId) {
+        setName(equipment.name || "");
+        setType(equipment.type || "");
+        setStatus(equipment.status || "Ativo");
+        setTankCapacityL(equipment.tankCapacityL ? String(equipment.tankCapacityL) : "");
+        setLastEquipId(equipment.id);
+    }
+
     const saveMachine = useMutation({
         mutationFn: async () => {
-            return apiRequest("POST", "/api/farm/equipment", {
+            const payload = {
                 name, type, status,
                 tankCapacityL: tankCapacityL ? parseFloat(tankCapacityL) : null,
-            });
+            };
+            if (isEdit) {
+                return apiRequest("PUT", `/api/farm/equipment/${equipment.id}`, payload);
+            }
+            return apiRequest("POST", "/api/farm/equipment", payload);
         },
         onSuccess: () => {
-            toast({ title: "Equipamento adicionado!" });
+            toast({ title: isEdit ? "Equipamento atualizado!" : "Equipamento adicionado!" });
             setOpen(false);
             onSuccess();
         },
@@ -308,21 +352,26 @@ function CreateEquipmentDialog({ onSuccess }: { onSuccess: () => void }) {
         }
     });
 
+    const resetForm = () => {
+        setName(""); setType(""); setStatus("Ativo"); setTankCapacityL("");
+        setLastEquipId(null);
+    };
+
     return (
         <Dialog open={open} onOpenChange={(o) => {
             setOpen(o);
-            if (!o) {
-                setName(""); setType(""); setStatus("Ativo"); setTankCapacityL("");
-            }
+            if (!o) resetForm();
         }}>
-            <DialogTrigger asChild>
-                <Button className="bg-emerald-600 hover:bg-emerald-700">
-                    <Plus className="mr-2 h-4 w-4" /> Nova Máquina
-                </Button>
-            </DialogTrigger>
+            {!externalOpen && (
+                <DialogTrigger asChild>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700">
+                        <Plus className="mr-2 h-4 w-4" /> Nova Máquina
+                    </Button>
+                </DialogTrigger>
+            )}
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Cadastro de Frota / Maquinário</DialogTitle>
+                    <DialogTitle>{isEdit ? "Editar Equipamento" : "Cadastro de Frota / Maquinário"}</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
@@ -375,7 +424,7 @@ function CreateEquipmentDialog({ onSuccess }: { onSuccess: () => void }) {
                         onClick={() => saveMachine.mutate()}
                         disabled={saveMachine.isPending || !name || !type}
                     >
-                        {saveMachine.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Cadastro"}
+                        {saveMachine.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isEdit ? "Salvar Alterações" : "Salvar Cadastro"}
                     </Button>
                 </div>
             </DialogContent>
