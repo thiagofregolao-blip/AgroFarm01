@@ -11,6 +11,7 @@ const CATEGORY_COLORS: Record<string, string> = {
     fertilizante: "#f59e0b",
     semente: "#eab308",
     adjuvante: "#a855f7",
+    combustivel: "#f97316",
     outro: "#64748b",
 };
 
@@ -21,6 +22,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     fertilizante: "Fertilizantes",
     semente: "Sementes",
     adjuvante: "Adjuvantes",
+    combustivel: "Combustível",
     outro: "Outros",
 };
 
@@ -31,6 +33,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
     fertilizante: "🧪",
     semente: "🌱",
     adjuvante: "💧",
+    combustivel: "⛽",
     outro: "📦",
 };
 
@@ -161,11 +164,15 @@ function PlotCostCard({ plot, maxCost }: { plot: any; maxCost: number }) {
 
 export default function PlotCosts() {
     const [selectedProperty, setSelectedProperty] = useState<string>("");
+    const [selectedSeason, setSelectedSeason] = useState<string>("");
 
     const { data, isLoading } = useQuery({
-        queryKey: ["/api/farm/plot-costs"],
+        queryKey: ["/api/farm/plot-costs", selectedSeason],
         queryFn: async () => {
-            const res = await apiRequest("GET", "/api/farm/plot-costs");
+            const url = selectedSeason
+                ? `/api/farm/plot-costs?seasonId=${selectedSeason}`
+                : "/api/farm/plot-costs";
+            const res = await apiRequest("GET", url);
             return res.json();
         },
     });
@@ -174,6 +181,7 @@ export default function PlotCosts() {
     const categoryTotals = data?.categoryTotals || {};
     const totalCost = data?.totalCost || 0;
     const totalArea = data?.totalArea || 0;
+    const seasons = data?.seasons || [];
 
     const properties = useMemo(() => {
         const props: Record<string, string> = {};
@@ -261,22 +269,42 @@ export default function PlotCosts() {
                                 </div>
                             </div>
 
-                            {/* Filter by property */}
-                            {properties.length > 1 && (
-                                <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-                                    <button
-                                        onClick={() => setSelectedProperty("")}
-                                        className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${!selectedProperty ? "bg-orange-500 text-white shadow-md" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
-                                    >Todas propriedades</button>
-                                    {properties.map(p => (
+                            {/* Filters */}
+                            <div className="space-y-3 mb-6">
+                                {/* Filter by season */}
+                                {seasons.length > 0 && (
+                                    <div className="flex gap-2 overflow-x-auto pb-1">
                                         <button
-                                            key={p.id}
-                                            onClick={() => setSelectedProperty(selectedProperty === p.id ? "" : p.id)}
-                                            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${selectedProperty === p.id ? "bg-orange-500 text-white shadow-md" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
-                                        >🌾 {p.name}</button>
-                                    ))}
-                                </div>
-                            )}
+                                            onClick={() => setSelectedSeason("")}
+                                            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${!selectedSeason ? "bg-emerald-600 text-white shadow-md" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                                        >Todas safras</button>
+                                        {seasons.map((s: any) => (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => setSelectedSeason(selectedSeason === s.id ? "" : s.id)}
+                                                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${selectedSeason === s.id ? "bg-emerald-600 text-white shadow-md" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                                            >{s.name}{s.crop ? ` (${s.crop})` : ""}</button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Filter by property */}
+                                {properties.length > 1 && (
+                                    <div className="flex gap-2 overflow-x-auto pb-1">
+                                        <button
+                                            onClick={() => setSelectedProperty("")}
+                                            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${!selectedProperty ? "bg-orange-500 text-white shadow-md" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                                        >Todas propriedades</button>
+                                        {properties.map(p => (
+                                            <button
+                                                key={p.id}
+                                                onClick={() => setSelectedProperty(selectedProperty === p.id ? "" : p.id)}
+                                                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${selectedProperty === p.id ? "bg-orange-500 text-white shadow-md" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                                            >🌾 {p.name}</button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 {/* Left: Plot cards */}

@@ -1190,6 +1190,7 @@ export const farmApplications = pgTable("farm_applications", {
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
   dosePerHa: decimal("dose_per_ha", { precision: 10, scale: 4 }),
   flowRateLha: decimal("flow_rate_l_ha", { precision: 10, scale: 2 }), // Vazão em L/ha
+  seasonId: varchar("season_id").references(() => farmSeasons.id), // Safra vinculada
   appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
   appliedBy: text("applied_by"),
   notes: text("notes"),

@@ -28,9 +28,21 @@ export function registerFarmExpenseRoutes(app: Express) {
     app.get("/api/farm/plot-costs", requireFarmer, async (req, res) => {
         try {
             const farmerId = req.user!.id;
+            const seasonFilter = req.query.seasonId as string | undefined;
             const { db } = await import("./db");
-            const { farmApplications, farmProductsCatalog, farmPlots, farmProperties, farmStock } = await import("../shared/schema");
+            const { farmApplications, farmProductsCatalog, farmPlots, farmProperties, farmStock, farmSeasons } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
+
+            // Get active seasons for filter dropdown
+            const seasons = await db.select().from(farmSeasons).where(
+                and(eq(farmSeasons.farmerId, farmerId), eq(farmSeasons.isActive, true))
+            );
+
+            // Build where conditions
+            const conditions = [eq(farmApplications.farmerId, farmerId)];
+            if (seasonFilter) {
+                conditions.push(eq(farmApplications.seasonId, seasonFilter));
+            }
 
             // Get all applications with product and plot info
             const apps = await db.select({
@@ -40,6 +52,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                 propertyId: farmApplications.propertyId,
                 quantity: farmApplications.quantity,
                 appliedAt: farmApplications.appliedAt,
+                seasonId: farmApplications.seasonId,
                 productName: farmProductsCatalog.name,
                 productUnit: farmProductsCatalog.unit,
                 productCategory: farmProductsCatalog.category,
@@ -54,7 +67,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                 .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
                 .innerJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))
                 .innerJoin(farmProperties, eq(farmApplications.propertyId, farmProperties.id))
-                .where(eq(farmApplications.farmerId, farmerId))
+                .where(and(...conditions))
                 .orderBy(farmApplications.appliedAt);
 
             // Get stock with averageCost for each product
@@ -131,7 +144,28 @@ export function registerFarmExpenseRoutes(app: Express) {
                 applications: undefined, // Don't send raw apps to reduce payload
             }));
 
-            // Category totals
+            // Normalize category names (lowercase, singular) to avoid duplicates
+            const normalizeCategory = (cat: string | null): string => {
+                if (!cat) return "outro";
+                const lower = cat.toLowerCase().trim();
+                if (lower.includes("herbicida")) return "herbicida";
+                if (lower.includes("fungicida")) return "fungicida";
+                if (lower.includes("inseticida") || lower.includes("insecticida")) return "inseticida";
+                if (lower.includes("fertilizante") || lower.includes("foliar")) return "fertilizante";
+                if (lower.includes("semente") || lower.includes("curasemilla")) return "semente";
+                if (lower.includes("adjuvante") || lower.includes("coadyuvante")) return "adjuvante";
+                if (lower.includes("combustível") || lower.includes("diesel")) return "combustivel";
+                return "outro";
+            };
+
+            // Apply normalization to product categories
+            for (const p of result) {
+                for (const prod of p.products) {
+                    prod.category = normalizeCategory(prod.category);
+                }
+            }
+
+            // Category totals (normalized)
             const categoryTotals: Record<string, number> = {};
             for (const p of result) {
                 for (const prod of p.products) {
@@ -145,6 +179,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                 categoryTotals,
                 totalCost: result.reduce((s, p) => s + p.totalCost, 0),
                 totalArea: result.reduce((s, p) => s + p.plotAreaHa, 0),
+                seasons,
             });
         } catch (error) {
             console.error("[FARM_PLOT_COSTS]", error);
