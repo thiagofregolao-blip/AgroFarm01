@@ -27,50 +27,64 @@ export interface ReceituarioData {
   flowRateLha?: number;
 }
 
-// Formata número no padrão brasileiro
 function fmtNum(n: number, decimals = 2): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export function generateReceituarioPDF(data: ReceituarioData): Blob {
-  const doc = new jsPDF();
-  const pageWidth = 210;
-  const margin = 15;
-  const contentWidth = pageWidth - margin * 2;
-
-  // ===== HEADER =====
-  doc.setFontSize(16);
+// Underlined bold text helper (mimics the original PDF style)
+function drawUnderlinedText(doc: jsPDF, text: string, x: number, y: number, fontSize = 10) {
+  doc.setFontSize(fontSize);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
-  doc.text("Recomendação de Produtos", margin, 18);
+  doc.text(text, x, y);
+  const textWidth = doc.getTextWidth(text);
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(x, y + 1, x + textWidth, y + 1);
+}
 
-  doc.setFontSize(13);
-  doc.text("Nova Prescrição", margin, 26);
+export function generateReceituarioPDF(data: ReceituarioData): Blob {
+  const doc = new jsPDF();
+  const margin = 20;
+  const pageWidth = 210;
+  const contentWidth = pageWidth - margin * 2;
+
+  const dateStr = data.appliedAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  const firstPlot = data.plots?.[0];
+  const crop = firstPlot?.crop || "";
+  const totalArea = data.plots?.reduce((sum, p) => sum + p.areaHa, 0) || 0;
+
+  // ===== HEADER =====
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("Recomendação de Produtos", margin, 20);
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Nova Prescrição", margin, 28);
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 80);
+  doc.setTextColor(0, 0, 0);
+  doc.text(dateStr, margin, 35);
 
-  const dateStr = data.appliedAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
-  doc.text(dateStr, margin, 33);
-
-  // Property + crop info
-  const firstPlot = data.plots?.[0];
-  const crop = firstPlot?.crop || "";
+  // Property + crop line
   const infoLine = [data.propertyName, crop ? `Cultura: ${crop}` : ""].filter(Boolean).join(" • ");
-  doc.text(infoLine, margin, 38);
+  doc.text(infoLine, margin, 40);
 
-  let yPos = 45;
+  let yPos = 48;
 
   // ===== ÁREAS SECTION =====
-  const totalArea = data.plots?.reduce((sum, p) => sum + p.areaHa, 0) || 0;
-
   if (data.plots && data.plots.length > 0) {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text(`ÁREAS (${fmtNum(totalArea)} de ${fmtNum(totalArea)} ha)`, margin, yPos);
-    yPos += 3;
+    doc.text(`ÁREAS`, margin, yPos);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.text(` (${fmtNum(totalArea)} de ${fmtNum(totalArea)} ha)`, margin + doc.getTextWidth("ÁREAS "), yPos);
+    yPos += 2;
 
     const areasBody = data.plots.map(p => [
       data.propertyName,
@@ -83,9 +97,36 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
       startY: yPos,
       head: [["Região", "Área", "Área a Aplicar", "Área Total"]],
       body: areasBody,
-      theme: "plain",
-      headStyles: { fontStyle: "bold", textColor: [0, 0, 0], fontSize: 9, cellPadding: 2 },
-      styles: { fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: 0.3 },
+      theme: "grid",
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+        fontSize: 9,
+        cellPadding: 3,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.3,
+      },
+      bodyStyles: {
+        fontSize: 9,
+        cellPadding: 3,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2,
+        textColor: [0, 0, 0],
+      },
+      styles: {
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2,
+      },
+      // Make "Área a Aplicar" bold
+      didParseCell: (hookData: any) => {
+        if (hookData.section === 'head') {
+          // Underline effect for header — just bold is enough
+        }
+        if (hookData.section === 'body' && hookData.column.index === 2) {
+          hookData.cell.styles.fontStyle = 'bold';
+        }
+      },
       margin: { left: margin, right: margin },
     });
 
@@ -93,23 +134,24 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
   }
 
   // ===== PRODUTOS SECTION =====
-  const hasCalda = data.equipment?.tankCapacityL && data.flowRateLha;
+  const hasCalda = !!(data.equipment?.tankCapacityL && data.flowRateLha);
   const tankCapacity = data.equipment?.tankCapacityL || 0;
   const flowRate = data.flowRateLha || 0;
   const caldaTotal = flowRate * totalArea;
   const tanques = tankCapacity > 0 ? caldaTotal / tankCapacity : 0;
   const tanquesCheios = Math.floor(tanques);
 
-  // Count total products
   const totalProducts = data.products.length;
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
-  doc.text(`PRODUTOS (${totalProducts} produto${totalProducts !== 1 ? "s" : ""})`, margin, yPos);
-  yPos += 3;
+  doc.text(`PRODUTOS`, margin, yPos);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8);
+  doc.text(` (${totalProducts} produto${totalProducts !== 1 ? "s" : ""})`, margin + doc.getTextWidth("PRODUTOS "), yPos);
+  yPos += 2;
 
   if (hasCalda) {
-    // Full table with tank calculations
     const productRows = data.products.map((p, i) => {
       const dose = p.dosePerHa || 0;
       const qtdTotal = dose * totalArea;
@@ -130,21 +172,35 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
       startY: yPos,
       head: [["Ordem", "Produto", "Dose", "Quantidade\nTotal", "Quantidade\npor tanque", "Último\ntanque"]],
       body: productRows,
-      theme: "plain",
-      headStyles: { fontStyle: "bold", textColor: [0, 0, 0], fontSize: 8, cellPadding: 2 },
-      styles: { fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: 0.3 },
+      theme: "grid",
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+        fontSize: 8,
+        cellPadding: 3,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.3,
+      },
+      bodyStyles: {
+        fontSize: 9,
+        cellPadding: 3,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2,
+        textColor: [0, 0, 0],
+      },
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.2 },
       columnStyles: {
-        0: { cellWidth: 12, halign: "center" },
-        1: { cellWidth: 35 },
+        0: { cellWidth: 14, halign: "center" },
+        1: { cellWidth: 32 },
         2: { cellWidth: 28 },
-        3: { cellWidth: 30, halign: "right" },
-        4: { cellWidth: 30, halign: "right" },
-        5: { cellWidth: 30, halign: "right" },
+        3: { cellWidth: 28, halign: "right" },
+        4: { cellWidth: 28, halign: "right" },
+        5: { cellWidth: 28, halign: "right" },
       },
       margin: { left: margin, right: margin },
     });
   } else {
-    // Simple table without tank calculations
     const productRows = data.products.map((p, i) => {
       const totalQty = p.plots.reduce((sum, pl) => sum + pl.quantity, 0);
       return [
@@ -159,185 +215,241 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
       startY: yPos,
       head: [["Ordem", "Produto", "Dose", "Quantidade Total"]],
       body: productRows,
-      theme: "plain",
-      headStyles: { fontStyle: "bold", textColor: [0, 0, 0], fontSize: 9, cellPadding: 2 },
-      styles: { fontSize: 9, cellPadding: 2, lineColor: [200, 200, 200], lineWidth: 0.3 },
+      theme: "grid",
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+        fontSize: 9,
+        cellPadding: 3,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.3,
+      },
+      bodyStyles: {
+        fontSize: 9,
+        cellPadding: 3,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2,
+        textColor: [0, 0, 0],
+      },
+      styles: { lineColor: [0, 0, 0], lineWidth: 0.2 },
       columnStyles: {
-        0: { cellWidth: 15, halign: "center" },
+        0: { cellWidth: 18, halign: "center" },
         1: { cellWidth: 60 },
         2: { cellWidth: 40 },
-        3: { cellWidth: 45, halign: "right" },
+        3: { cellWidth: 42, halign: "right" },
       },
       margin: { left: margin, right: margin },
     });
   }
 
-  yPos = (doc as any).lastAutoTable.finalY + 8;
+  yPos = (doc as any).lastAutoTable.finalY + 10;
 
-  // ===== CALDA SECTION (only if equipment + flow rate) =====
+  // ===== CALDA SECTION =====
   if (hasCalda) {
     const caldaUltimoTanque = (tanques - tanquesCheios) * tankCapacity;
 
-    // Left column
+    // Row 1: Vazão + Calda Total
+    drawUnderlinedText(doc, "Vazão", margin, yPos, 9);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("Vazão", margin, yPos);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${fmtNum(flowRate)} L/ha`, margin, yPos + 5);
+    doc.text(`${fmtNum(flowRate)} L/ha`, margin, yPos + 6);
 
-    // Center column
-    doc.setFont("helvetica", "bold");
-    doc.text("Quantidade Total da Calda", margin + 55, yPos);
+    drawUnderlinedText(doc, "Quantidade Total da Calda", margin + 60, yPos, 9);
     doc.setFont("helvetica", "normal");
-    doc.text(`${fmtNum(caldaTotal)} L`, margin + 55, yPos + 5);
+    doc.setFontSize(9);
+    doc.text(`${fmtNum(caldaTotal)} L`, margin + 60, yPos + 6);
+
+    yPos += 16;
+
+    // Row 2: Capacidade + Tanques + Último Tanque
+    drawUnderlinedText(doc, "Capacidade do Tanque", margin, yPos, 9);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`${fmtNum(tankCapacity)} L`, margin, yPos + 6);
+
+    drawUnderlinedText(doc, "Tanques Necessários", margin + 60, yPos, 9);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`${fmtNum(tanques, 3)}`, margin + 60, yPos + 6);
+
+    drawUnderlinedText(doc, "Quantidade no Último Tanque", margin + 120, yPos, 9);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`${fmtNum(caldaUltimoTanque)} L`, margin + 120, yPos + 6);
 
     yPos += 14;
 
-    // Bottom row
-    doc.setFont("helvetica", "bold");
-    doc.text("Capacidade do Tanque", margin, yPos);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${fmtNum(tankCapacity)} L`, margin, yPos + 5);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Tanques Necessários", margin + 55, yPos);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${fmtNum(tanques, 3)}`, margin + 55, yPos + 5);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Quantidade no Último Tanque", margin + 110, yPos);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${fmtNum(caldaUltimoTanque)} L`, margin + 110, yPos + 5);
-
-    yPos += 12;
-
-    // Separator line
-    doc.setDrawColor(200, 200, 200);
+    // Separator
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
     doc.line(margin, yPos, pageWidth - margin, yPos);
-    yPos += 6;
+    yPos += 8;
   }
 
   // ===== COMENTÁRIOS =====
   if (data.instructions) {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0, 0, 0);
-    doc.text("Comentários", margin, yPos);
+    drawUnderlinedText(doc, "Comentários", margin, yPos, 10);
     yPos += 5;
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     const instrLines = doc.splitTextToSize(data.instructions, contentWidth);
     doc.text(instrLines, margin, yPos);
-    yPos += instrLines.length * 4 + 5;
+    yPos += instrLines.length * 4 + 3;
 
-    doc.setDrawColor(200, 200, 200);
+    // Separator
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
     doc.line(margin, yPos, pageWidth - margin, yPos);
     yPos += 10;
   }
 
   // ===== ASSINATURAS =====
-  if (yPos > 240) {
+  if (yPos > 230) {
     doc.addPage();
-    yPos = 30;
+    yPos = 40;
   }
 
-  const sigY = Math.max(yPos + 20, 240);
-  const sigWidth = 70;
+  const sigY = Math.max(yPos + 30, 245);
+  const sigLineWidth = 65;
 
   // Left signature
   doc.setDrawColor(0, 0, 0);
-  doc.line(margin + 10, sigY, margin + 10 + sigWidth, sigY);
+  doc.setLineWidth(0.4);
+  doc.line(margin + 15, sigY, margin + 15 + sigLineWidth, sigY);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
-  doc.text("Responsável Técnico", margin + 10 + sigWidth / 2, sigY + 5, { align: "center" });
+  doc.text("Responsável Técnico", margin + 15 + sigLineWidth / 2, sigY + 5, { align: "center" });
 
   // Right signature
-  doc.line(pageWidth - margin - 10 - sigWidth, sigY, pageWidth - margin - 10, sigY);
-  doc.text("Agricultor", pageWidth - margin - 10 - sigWidth / 2, sigY + 5, { align: "center" });
+  doc.line(pageWidth - margin - 15 - sigLineWidth, sigY, pageWidth - margin - 15, sigY);
+  doc.text("Agricultor", pageWidth - margin - 15 - sigLineWidth / 2, sigY + 5, { align: "center" });
 
-  // ===== PAGE 2: MAP (if coordinates available) =====
-  const plotsWithCoords = (data.plots || []).filter(p => p.coordinates);
+  // ===== PAGE 2: MAP =====
+  const plotsWithCoords = (data.plots || []).filter(p => {
+    if (!p.coordinates) return false;
+    try {
+      const coords = JSON.parse(p.coordinates);
+      return Array.isArray(coords) && coords.length >= 3;
+    } catch {
+      return false;
+    }
+  });
+
   if (plotsWithCoords.length > 0) {
     doc.addPage();
 
-    // Header
-    doc.setFontSize(16);
+    // Repeat header on page 2
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text("Recomendação de Produtos", margin, 18);
-    doc.setFontSize(13);
-    doc.text("Nova Prescrição", margin, 26);
+    doc.text("Recomendação de Produtos", margin, 20);
+    doc.setFontSize(12);
+    doc.text("Nova Prescrição", margin, 28);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(80, 80, 80);
-    doc.text(dateStr, margin, 33);
-    doc.text(infoLine, margin, 38);
+    doc.text(dateStr, margin, 35);
+    doc.text(infoLine, margin, 40);
 
-    // Draw map
-    let mapY = 50;
-    const mapHeight = 180;
+    // Map area
+    const mapY = 55;
     const mapWidth = contentWidth;
+    const mapHeight = 180;
 
-    // Parse all coordinates and find bounding box
-    let allPoints: Array<{ lat: number; lng: number; plotIndex: number }> = [];
-    plotsWithCoords.forEach((plot, idx) => {
+    // Parse all coordinates
+    const allCoords: Array<{ lat: number; lng: number }> = [];
+    const plotPolygons: Array<{ coords: Array<{ lat: number; lng: number }>; name: string }> = [];
+
+    plotsWithCoords.forEach(plot => {
       try {
         const coords = JSON.parse(plot.coordinates!);
-        if (Array.isArray(coords)) {
-          coords.forEach((c: any) => {
-            allPoints.push({ lat: c.lat, lng: c.lng, plotIndex: idx });
-          });
+        if (Array.isArray(coords) && coords.length >= 3) {
+          plotPolygons.push({ coords, name: plot.plotName });
+          coords.forEach((c: any) => allCoords.push({ lat: c.lat, lng: c.lng }));
         }
       } catch {}
     });
 
-    if (allPoints.length > 0) {
-      const minLat = Math.min(...allPoints.map(p => p.lat));
-      const maxLat = Math.max(...allPoints.map(p => p.lat));
-      const minLng = Math.min(...allPoints.map(p => p.lng));
-      const maxLng = Math.max(...allPoints.map(p => p.lng));
+    if (allCoords.length > 0) {
+      const minLat = Math.min(...allCoords.map(p => p.lat));
+      const maxLat = Math.max(...allCoords.map(p => p.lat));
+      const minLng = Math.min(...allCoords.map(p => p.lng));
+      const maxLng = Math.max(...allCoords.map(p => p.lng));
 
       const latRange = maxLat - minLat || 0.001;
       const lngRange = maxLng - minLng || 0.001;
 
-      // Colors for different plots
-      const plotColors: Array<[number, number, number]> = [
-        [180, 180, 180], [150, 150, 150], [120, 120, 120],
-        [200, 200, 200], [160, 160, 160],
+      // Add padding (10%)
+      const padLat = latRange * 0.1;
+      const padLng = lngRange * 0.1;
+      const adjMinLat = minLat - padLat;
+      const adjMaxLat = maxLat + padLat;
+      const adjMinLng = minLng - padLng;
+      const adjMaxLng = maxLng + padLng;
+      const adjLatRange = adjMaxLat - adjMinLat;
+      const adjLngRange = adjMaxLng - adjMinLng;
+
+      // Gray fills for different plots
+      const fillColors: Array<[number, number, number]> = [
+        [200, 200, 200], [170, 170, 170], [220, 220, 220],
+        [185, 185, 185], [210, 210, 210],
       ];
 
-      plotsWithCoords.forEach((plot, idx) => {
-        try {
-          const coords = JSON.parse(plot.coordinates!);
-          if (!Array.isArray(coords) || coords.length < 3) return;
+      plotPolygons.forEach((polygon, idx) => {
+        const color = fillColors[idx % fillColors.length];
 
-          const color = plotColors[idx % plotColors.length];
-          doc.setFillColor(...color);
-          doc.setDrawColor(80, 80, 80);
-          doc.setLineWidth(0.5);
+        // Convert geo coords to page positions
+        const points = polygon.coords.map(c => ({
+          x: margin + ((c.lng - adjMinLng) / adjLngRange) * mapWidth,
+          y: mapY + mapHeight - ((c.lat - adjMinLat) / adjLatRange) * mapHeight,
+        }));
 
-          // Convert coordinates to page positions
-          const points = coords.map((c: any) => ({
-            x: margin + ((c.lng - minLng) / lngRange) * mapWidth,
-            y: mapY + mapHeight - ((c.lat - minLat) / latRange) * mapHeight,
-          }));
+        // Draw filled polygon
+        doc.setFillColor(...color);
+        doc.setDrawColor(80, 80, 80);
+        doc.setLineWidth(0.5);
 
-          // Draw polygon using lines
-          doc.moveTo(points[0].x, points[0].y);
-          for (let i = 1; i < points.length; i++) {
-            doc.lineTo(points[i].x, points[i].y);
-          }
-          doc.lineTo(points[0].x, points[0].y);
-          doc.fill();
+        // Build polygon path
+        const firstPoint = points[0];
+        let pathStr = `${firstPoint.x} ${firstPoint.y} m `;
+        for (let i = 1; i < points.length; i++) {
+          pathStr += `${points[i].x} ${points[i].y} l `;
+        }
 
-          // Label
-          const centX = points.reduce((s: number, p: any) => s + p.x, 0) / points.length;
-          const centY = points.reduce((s: number, p: any) => s + p.y, 0) / points.length;
-          doc.setFontSize(7);
-          doc.setTextColor(0, 0, 0);
-          doc.text(plot.plotName, centX, centY, { align: "center" });
-        } catch {}
+        // Use triangle/polygon drawing
+        doc.triangle(
+          points[0].x, points[0].y,
+          points[1].x, points[1].y,
+          points[2].x, points[2].y,
+          "FD"
+        );
+
+        // Draw remaining triangles from first point to fill polygon
+        for (let i = 2; i < points.length - 1; i++) {
+          doc.triangle(
+            points[0].x, points[0].y,
+            points[i].x, points[i].y,
+            points[i + 1].x, points[i + 1].y,
+            "FD"
+          );
+        }
+
+        // Draw outline
+        doc.setDrawColor(60, 60, 60);
+        doc.setLineWidth(0.5);
+        for (let i = 0; i < points.length; i++) {
+          const next = points[(i + 1) % points.length];
+          doc.line(points[i].x, points[i].y, next.x, next.y);
+        }
+
+        // Label at centroid
+        const centX = points.reduce((s, p) => s + p.x, 0) / points.length;
+        const centY = points.reduce((s, p) => s + p.y, 0) / points.length;
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30, 30, 30);
+        doc.text(polygon.name, centX, centY, { align: "center" });
       });
     }
   }
