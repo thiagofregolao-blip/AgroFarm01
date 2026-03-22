@@ -568,7 +568,16 @@ app.use((req, res, next) => {
     `);
     await depDb.execute(depSql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS deposit_id varchar`);
     await depDb.execute(depSql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS deposit_id varchar`);
-    log("✅ Migration: farm_deposits + deposit_id ensured");
+    // Replace old unique constraint (farmer_id, product_id) with (farmer_id, product_id, property_id)
+    // This allows the same product in multiple deposits
+    await depDb.execute(depSql`
+      ALTER TABLE farm_stock DROP CONSTRAINT IF EXISTS farm_stock_farmer_id_product_id_key
+    `);
+    await depDb.execute(depSql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_stock_farmer_product_deposit
+      ON farm_stock (farmer_id, product_id, COALESCE(property_id, '__none__'))
+    `);
+    log("✅ Migration: farm_deposits + deposit_id + unique constraint ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration farm_deposits: ${migErr.message}`);
   }
