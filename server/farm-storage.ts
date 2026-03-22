@@ -499,6 +499,7 @@ export class FarmStorage {
             propertyId: farmApplications.propertyId,
             quantity: farmApplications.quantity,
             dosePerHa: farmApplications.dosePerHa,
+            flowRateLha: farmApplications.flowRateLha,
             appliedAt: farmApplications.appliedAt,
             appliedBy: farmApplications.appliedBy,
             notes: farmApplications.notes,
@@ -509,8 +510,12 @@ export class FarmStorage {
             odometer: farmApplications.odometer,
             productName: farmProductsCatalog.name,
             plotName: farmPlots.name,
+            plotAreaHa: farmPlots.areaHa,
+            plotCrop: farmPlots.crop,
+            plotCoordinates: farmPlots.coordinates,
             propertyName: farmProperties.name,
             equipmentName: farmEquipment.name,
+            equipmentTankCapacityL: farmEquipment.tankCapacityL,
         }).from(farmApplications)
             .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
             .leftJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))

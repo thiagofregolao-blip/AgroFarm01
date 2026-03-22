@@ -174,8 +174,10 @@ export default function PdvTerminal() {
     }, [stock]);
 
     const getStockForProduct = (productId: string) => {
-        const s = stock.find((s: any) => s.productId === productId);
-        return s ? parseFloat(s.quantity) : 0;
+        // Sum stock across all matching entries (product may exist in multiple deposits)
+        return stock
+            .filter((s: any) => s.productId === productId)
+            .reduce((sum: number, s: any) => sum + (parseFloat(s.quantity) || 0), 0);
     };
 
     const categories = Array.from(new Set(products.map((p: any) => p.category).filter(Boolean))) as string[];
@@ -575,10 +577,15 @@ export default function PdvTerminal() {
             ) || properties[0];
 
             const productsByProduct = new Map<string, { productName: string; dosePerHa?: number; unit: string; plots: Array<{ plotName: string; quantity: number }> }>();
-            const products = pdvData?.products || [];
+            const pdvProducts = pdvData?.products || [];
+
+            // Collect unique plots and equipment info from applications
+            const plotsMap = new Map<string, { plotName: string; areaHa: number; crop?: string; coordinates?: string }>();
+            let batchFlowRate: number | undefined;
+            let batchEquipment: { name: string; tankCapacityL?: number } | undefined;
 
             batch.applications.forEach((app: any) => {
-                const productInfo = products.find((p: any) => p.id === app.productId || p.name === app.productName);
+                const productInfo = pdvProducts.find((p: any) => p.id === app.productId || p.name === app.productName);
                 const storedDose = app.dosePerHa ? parseFloat(app.dosePerHa) : undefined;
                 const fallbackDose = productInfo?.dosePerHa ? parseFloat(productInfo.dosePerHa) : undefined;
                 const dosePerHa = storedDose || fallbackDose;
@@ -602,6 +609,25 @@ export default function PdvTerminal() {
                         quantity: parseFloat(app.quantity),
                     });
                 }
+
+                // Collect plot info
+                if (app.plotName && app.plotAreaHa && !plotsMap.has(app.plotName)) {
+                    plotsMap.set(app.plotName, {
+                        plotName: app.plotName,
+                        areaHa: parseFloat(app.plotAreaHa) || 0,
+                        crop: app.plotCrop || undefined,
+                        coordinates: app.plotCoordinates || undefined,
+                    });
+                }
+
+                // Collect equipment & flow rate (same for all apps in batch)
+                if (!batchFlowRate && app.flowRateLha) batchFlowRate = parseFloat(app.flowRateLha);
+                if (!batchEquipment && app.equipmentName) {
+                    batchEquipment = {
+                        name: app.equipmentName,
+                        tankCapacityL: app.equipmentTankCapacityL ? parseFloat(app.equipmentTankCapacityL) : undefined,
+                    };
+                }
             });
 
             const productsWithDetails = Array.from(productsByProduct.values());
@@ -611,6 +637,9 @@ export default function PdvTerminal() {
                 appliedAt: new Date(batch.appliedAt),
                 instructions: batch.notes || undefined,
                 products: productsWithDetails,
+                plots: plotsMap.size > 0 ? Array.from(plotsMap.values()) : undefined,
+                equipment: batchEquipment,
+                flowRateLha: batchFlowRate,
             };
 
             const pdfBlob = generateReceituarioPDF(pdfData);

@@ -154,7 +154,8 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
   if (hasCalda) {
     const productRows = data.products.map((p, i) => {
       const dose = p.dosePerHa || 0;
-      const qtdTotal = dose * totalArea;
+      // If no dose, use actual quantity from plots instead of calculating from dose * area
+      const qtdTotal = dose > 0 ? dose * totalArea : p.plots.reduce((sum, pl) => sum + pl.quantity, 0);
       const qtdPorTanque = tanques > 0 ? qtdTotal / tanques : qtdTotal;
       const qtdUltimoTanque = qtdTotal - (tanquesCheios * qtdPorTanque);
 
