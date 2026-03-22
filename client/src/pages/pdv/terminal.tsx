@@ -50,7 +50,7 @@ export default function PdvTerminal() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
-    const [step, setStep] = useState<"product" | "plot" | "confirm">("product");
+    const [step, setStep] = useState<"product" | "plot" | "equipment" | "confirm">("product");
     const [search, setSearch] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
     const [selectedPlots, setSelectedPlots] = useState<any[]>([]);
@@ -65,6 +65,7 @@ export default function PdvTerminal() {
     const [selectedEquipment, setSelectedEquipment] = useState<any>(null);
     const [horimeter, setHorimeter] = useState<string>("");
     const [odometer, setOdometer] = useState<string>("");
+    const [flowRateLha, setFlowRateLha] = useState<string>("");
 
     // Load offline queue on mount
     useEffect(() => {
@@ -308,12 +309,19 @@ export default function PdvTerminal() {
                 toast({ title: "Selecione a máquina/veículo", variant: "destructive" });
                 return;
             }
+            setDistOverrides({});
+            setStep("confirm");
         } else {
             if (selectedPlots.length === 0) {
                 toast({ title: "Selecione pelo menos um talhão", variant: "destructive" });
                 return;
             }
+            setDistOverrides({});
+            setStep("equipment");
         }
+    };
+
+    const handleGoFromEquipment = () => {
         setDistOverrides({});
         setStep("confirm");
     };
@@ -355,6 +363,17 @@ export default function PdvTerminal() {
             appliedAt: new Date(),
             instructions: instructions || undefined,
             products: Array.from(productsByProduct.values()),
+            plots: selectedPlots.map((p: any) => ({
+                plotName: p.name,
+                areaHa: parseFloat(p.areaHa) || 0,
+                crop: p.crop || undefined,
+                coordinates: p.coordinates || undefined,
+            })),
+            equipment: selectedEquipment ? {
+                name: selectedEquipment.name,
+                tankCapacityL: selectedEquipment.tankCapacityL ? parseFloat(selectedEquipment.tankCapacityL) : undefined,
+            } : undefined,
+            flowRateLha: flowRateLha ? parseFloat(flowRateLha) : undefined,
         };
 
         // Gerar PDF
@@ -460,6 +479,8 @@ export default function PdvTerminal() {
                         propertyId: plot?.propertyId,
                         notes: count === 0 ? instructions : undefined,
                         dosePerHa: validDose,
+                        equipmentId: selectedEquipment?.id || null,
+                        flowRateLha: flowRateLha ? parseFloat(flowRateLha) : null,
                     };
                     payloads.push(payload);
 
@@ -517,6 +538,7 @@ export default function PdvTerminal() {
         setSelectedEquipment(null);
         setHorimeter("");
         setOdometer("");
+        setFlowRateLha("");
     };
 
     const handleRegenerateReceituario = async (batch: any) => {
@@ -1077,8 +1099,11 @@ export default function PdvTerminal() {
         );
     }
 
-    // ==================== STEP: CONFIRM (Distribution) ====================
-    if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
+    // ==================== STEP: EQUIPMENT (Pulverizador + Vazão) ====================
+    if (step === "equipment" && !isDiesel && selectedPlots.length > 0 && cart.length > 0) {
+        const sprayers = (pdvData?.equipment || []).filter((e: any) => e.type === "Pulverizador" && e.status === "Ativo");
+        const totalArea = selectedPlots.reduce((sum: number, p: any) => sum + (parseFloat(p.areaHa) || 0), 0);
+
         return (
             <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
                 <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 text-white shrink-0 shadow-md">
@@ -1087,8 +1112,106 @@ export default function PdvTerminal() {
                             <ArrowLeft className="h-5 w-5 text-white" />
                         </button>
                         <div>
+                            <span className="font-bold text-base leading-tight block">Selecionar Pulverizador</span>
+                            <span className="text-emerald-200 text-xs">Passo 3 de 4 - Equipamento & Vazão</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                        <span className="bg-white/20 px-3 py-1 rounded-lg text-xs">{cart.length} produto(s) | {totalArea.toFixed(1)} ha</span>
+                    </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {sprayers.length > 0 ? (
+                        <>
+                            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Pulverizadores Disponíveis</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {sprayers.map((equip: any) => (
+                                    <button
+                                        key={equip.id}
+                                        onClick={() => setSelectedEquipment(selectedEquipment?.id === equip.id ? null : equip)}
+                                        className={`p-4 rounded-xl border-2 text-left transition-all ${selectedEquipment?.id === equip.id
+                                            ? "border-emerald-500 bg-emerald-50 shadow-md"
+                                            : "border-gray-200 bg-white hover:border-emerald-300 hover:shadow-sm"
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedEquipment?.id === equip.id ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                                                <Tractor className="h-6 w-6" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-gray-900">{equip.name}</p>
+                                                {equip.tankCapacityL && (
+                                                    <p className="text-sm text-emerald-600 font-medium">Tanque: {parseFloat(equip.tankCapacityL).toLocaleString("pt-BR")} L</p>
+                                                )}
+                                            </div>
+                                            {selectedEquipment?.id === equip.id && (
+                                                <Check className="h-5 w-5 text-emerald-600 ml-auto" />
+                                            )}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm">
+                            <p className="font-semibold">Nenhum pulverizador cadastrado</p>
+                            <p className="mt-1">Cadastre um equipamento do tipo "Pulverizador" em Frota & Maquinário para usar esta função.</p>
+                        </div>
+                    )}
+
+                    {selectedEquipment && (
+                        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+                            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider">Vazão da Aplicação</h3>
+                            <div>
+                                <Label className="text-sm font-medium">Vazão (L/ha) *</Label>
+                                <Input
+                                    type="number"
+                                    step="any"
+                                    value={flowRateLha}
+                                    onChange={e => setFlowRateLha(e.target.value)}
+                                    placeholder="Ex: 120"
+                                    className="mt-1 text-lg h-12"
+                                />
+                            </div>
+                            {flowRateLha && selectedEquipment.tankCapacityL && (
+                                <div className="bg-emerald-50 rounded-lg p-3 text-sm space-y-1">
+                                    <p><span className="text-gray-500">Calda total:</span> <strong>{(parseFloat(flowRateLha) * totalArea).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L</strong></p>
+                                    <p><span className="text-gray-500">Tanques necessários:</span> <strong>{((parseFloat(flowRateLha) * totalArea) / parseFloat(selectedEquipment.tankCapacityL)).toFixed(2)}</strong></p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                <div className="shrink-0 p-4 bg-white border-t border-gray-200 flex gap-3">
+                    <Button variant="outline" className="flex-1 h-12" onClick={handleGoFromEquipment}>
+                        Pular
+                    </Button>
+                    <Button
+                        className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={handleGoFromEquipment}
+                        disabled={selectedEquipment && !flowRateLha}
+                    >
+                        Avançar <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    // ==================== STEP: CONFIRM (Distribution) ====================
+    if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
+        return (
+            <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
+                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 text-white shrink-0 shadow-md">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => setStep("equipment")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
+                            <ArrowLeft className="h-5 w-5 text-white" />
+                        </button>
+                        <div>
                             <span className="font-bold text-base leading-tight block">Confirmar Saída</span>
-                            <span className="text-[10px] text-emerald-200">Passo 3 de 3</span>
+                            <span className="text-[10px] text-emerald-200">Passo 4 de 4</span>
                         </div>
                     </div>
                 </header>

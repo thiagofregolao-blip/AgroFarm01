@@ -1060,6 +1060,7 @@ export const farmEquipment = pgTable("farm_equipment", {
   name: text("name").notNull(), // Ex: "Trator Valtra A950", "Caminhão MB 1620"
   type: text("type").notNull(), // Trator, Implemento, Caminhao, Colheitadeira, Outros
   status: text("status").default("Ativo"), // Ativo, Manutenção, Inativo
+  tankCapacityL: decimal("tank_capacity_l", { precision: 10, scale: 2 }), // Capacidade do tanque em litros (Pulverizador)
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -1188,6 +1189,7 @@ export const farmApplications = pgTable("farm_applications", {
   odometer: integer("odometer"), // Hodômetro no momento (opcional)
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull(),
   dosePerHa: decimal("dose_per_ha", { precision: 10, scale: 4 }),
+  flowRateLha: decimal("flow_rate_l_ha", { precision: 10, scale: 2 }), // Vazão em L/ha
   appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
   appliedBy: text("applied_by"),
   notes: text("notes"),
