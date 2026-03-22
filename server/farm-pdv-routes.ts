@@ -353,7 +353,17 @@ export function registerFarmPdvRoutes(app: Express) {
             const properties = await farmStorage.getProperties(farmerId);
             const equipment = await farmStorage.getEquipment(farmerId);
 
-            res.json({ products, stock, plots, properties, equipment, terminal });
+            // Fetch farmer's deposits (non-commercial only) for deposit selector in PDV
+            let deposits: any[] = [];
+            try {
+                const { farmDeposits } = await import("../shared/schema");
+                const { and, ne } = await import("drizzle-orm");
+                deposits = await db.select().from(farmDeposits).where(
+                    and(eq(farmDeposits.farmerId, farmerId), ne(farmDeposits.depositType, 'comercial'))
+                );
+            } catch (e) { /* table may not exist yet */ }
+
+            res.json({ products, stock, plots, properties, equipment, terminal, deposits });
         } catch (error) {
             console.error("[PDV_DATA]", error);
             res.status(500).json({ error: "Failed to get data" });
