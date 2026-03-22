@@ -1101,7 +1101,7 @@ export default function PdvTerminal() {
 
     // ==================== STEP: EQUIPMENT (Pulverizador + Vazão) ====================
     if (step === "equipment" && !isDiesel && selectedPlots.length > 0 && cart.length > 0) {
-        const sprayers = (pdvData?.equipment || []).filter((e: any) => e.type === "Pulverizador" && e.status === "Ativo");
+        const sprayers = (pdvData?.equipment || []).filter((e: any) => e.type === "Pulverizador" && (e.status === "Ativo" || !e.status));
         const totalArea = selectedPlots.reduce((sum: number, p: any) => sum + (parseFloat(p.areaHa) || 0), 0);
 
         return (
