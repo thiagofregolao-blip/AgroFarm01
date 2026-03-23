@@ -49,6 +49,7 @@ export default function AccountsReceivable() {
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [printingId, setPrintingId] = useState<string | null>(null);
     const [timbradoConfigOpen, setTimbradoConfigOpen] = useState(false);
+    const [viewingNotasId, setViewingNotasId] = useState<string | null>(null);
 
     // Fetch detail with items when editing
     const { data: editingDetail } = useQuery({
@@ -284,9 +285,9 @@ export default function AccountsReceivable() {
                 {/* Tabs: Contas / Recebimento / Historico */}
                 <Tabs defaultValue="contas">
                     <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
-                        <TabsTrigger value="contas" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Contas</TabsTrigger>
-                        <TabsTrigger value="recebimento" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Recebimento</TabsTrigger>
-                        <TabsTrigger value="historico" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Historico</TabsTrigger>
+                        <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Contas</TabsTrigger>
+                        <TabsTrigger value="recebimento" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Recebimento</TabsTrigger>
+                        <TabsTrigger value="historico" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Histórico e Recibos</TabsTrigger>
                     </TabsList>
 
                     {/* ── CONTAS TAB ─────────────────────────────────────────── */}
@@ -390,28 +391,16 @@ export default function AccountsReceivable() {
                                                     <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount)}</td>
                                                     <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.receivedAmount || 0)}</td>
                                                     <td className="p-3 flex gap-1 justify-end">
-                                                        {item.status !== "recebido" && (
-                                                            <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-                                                                onClick={() => openEdit(item)}>
-                                                                <Pencil className="h-3 w-3 mr-1" />Editar
-                                                            </Button>
-                                                        )}
                                                         {item.invoiceNumber && (
                                                             <Button variant="outline" size="sm" className="h-7 text-xs border-gray-200 text-gray-600 hover:bg-gray-50"
-                                                                onClick={() => setPrintingId(item.id)} aria-label="Imprimir">
-                                                                <Printer className="h-3 w-3" />
+                                                                onClick={() => setPrintingId(item.id)} aria-label="Imprimir fatura">
+                                                                <Printer className="h-3 w-3 mr-1" />Imprimir
                                                             </Button>
                                                         )}
-                                                        {item.status !== "recebido" && (
-                                                            <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
-                                                                onClick={() => {
-                                                                    const reason = prompt(`Motivo da anulacao de "${item.buyer}" - ${formatCurrency(item.totalAmount)}:`);
-                                                                    if (reason !== null) anular.mutate({ id: item.id, reason: reason || "Anulado pelo usuario" });
-                                                                }}
-                                                                aria-label="Anular">
-                                                                <Trash2 className="h-3 w-3" />
-                                                            </Button>
-                                                        )}
+                                                        <Button variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                                            onClick={() => setViewingNotasId(item.id)} aria-label="Ver notas emitidas">
+                                                            <Receipt className="h-3 w-3 mr-1" />Notas
+                                                        </Button>
                                                     </td>
                                                 </tr>
                                             );
@@ -509,6 +498,14 @@ export default function AccountsReceivable() {
                 {printingId && (
                     <InvoicePrintOverlay receivableId={printingId} onClose={() => setPrintingId(null)} />
                 )}
+
+                {/* Ver Notas Emitidas Dialog */}
+                <Dialog open={!!viewingNotasId} onOpenChange={o => !o && setViewingNotasId(null)}>
+                    <DialogContent className="max-w-lg">
+                        <DialogHeader><DialogTitle>Notas Emitidas</DialogTitle></DialogHeader>
+                        {viewingNotasId && <ViewNotasContent receivableId={viewingNotasId} items={items as any[]} />}
+                    </DialogContent>
+                </Dialog>
 
                 {/* Timbrado Config Dialog */}
                 <Dialog open={timbradoConfigOpen} onOpenChange={setTimbradoConfigOpen}>
@@ -1406,6 +1403,15 @@ function HistoricoTab({ items }: { items: any[] }) {
         },
     });
 
+    // #14 — fetch receipts to display receiptNumber
+    const { data: receipts = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/receipts"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/receipts"); return r.json(); },
+    });
+    const receiptMap = new Map<string, string>((receipts as any[]).map((rc: any) =>
+        [String(rc.id), rc.receipt_number || rc.receiptNumber || String(rc.id)]
+    ));
+
     // Extract buyer name from description: "Receb: NomeBuyer - descricao"
     function extractBuyer(desc: string): string {
         if (!desc) return "—";
@@ -1420,16 +1426,21 @@ function HistoricoTab({ items }: { items: any[] }) {
         !searchTerm || t.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Group by date + buyer
-    const groups: { key: string; date: string; buyer: string; items: any[]; total: number }[] = [];
+    // #15 — Group by receiptId when available, otherwise by date + buyer
+    const groups: { key: string; date: string; buyer: string; receiptId?: string; receiptNumber?: string; items: any[]; total: number }[] = [];
     const groupMap = new Map<string, typeof groups[0]>();
     for (const t of filtered) {
         const rawDate = t.transactionDate || t.transaction_date || t.createdAt;
         const dateStr = rawDate ? new Date(rawDate).toLocaleDateString("pt-BR") : "—";
         const buyer = extractBuyer(t.description || "");
-        const key = `${dateStr}|${buyer}`;
+        const receiptId = t.receiptId || t.receipt_id;
+        const key = receiptId ? `receipt:${receiptId}` : `${dateStr}|${buyer}`;
         if (!groupMap.has(key)) {
-            const g = { key, date: dateStr, buyer, items: [], total: 0 };
+            const g = {
+                key, date: dateStr, buyer, items: [], total: 0,
+                receiptId: receiptId ? String(receiptId) : undefined,
+                receiptNumber: receiptId ? receiptMap.get(String(receiptId)) : undefined,
+            };
             groupMap.set(key, g);
             groups.push(g);
         }
@@ -1481,9 +1492,24 @@ function HistoricoTab({ items }: { items: any[] }) {
                                         <p className="text-xs text-gray-500">{group.date} · {group.items.length} recebimento(s)</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
                                     <span className="font-mono font-bold text-green-600 text-sm">{formatCurrency(group.total)}</span>
-                                    <span className="text-xs text-gray-400">{expandedGroups.has(group.key) ? "▲" : "▼"}</span>
+                                    {group.receiptId && (
+                                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono">
+                                            Recibo #{group.receiptNumber || group.receiptId}
+                                        </span>
+                                    )}
+                                    <Button
+                                        variant="outline" size="sm"
+                                        className="h-7 text-xs border-gray-200 text-gray-600 hover:bg-gray-50"
+                                        onClick={() => window.print()}
+                                        aria-label="Imprimir recibo"
+                                    >
+                                        <Printer className="h-3 w-3 mr-1" />Recibo
+                                    </Button>
+                                    <span className="text-xs text-gray-400" onClick={() => toggleGroup(group.key)}>
+                                        {expandedGroups.has(group.key) ? "▲" : "▼"}
+                                    </span>
                                 </div>
                             </div>
                             {expandedGroups.has(group.key) && (
@@ -1503,6 +1529,72 @@ function HistoricoTab({ items }: { items: any[] }) {
                             )}
                         </Card>
                     ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Ver Notas Emitidas ────────────────────────────────────────────────────────
+function ViewNotasContent({ receivableId, items }: { receivableId: string; items: any[] }) {
+    const { data: detail, isLoading } = useQuery({
+        queryKey: ["/api/farm/accounts-receivable", receivableId],
+        queryFn: async () => {
+            const r = await apiRequest("GET", `/api/farm/accounts-receivable/${receivableId}`);
+            return r.json();
+        },
+    });
+
+    const receivable = items.find((i: any) => i.id === receivableId);
+
+    if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>;
+
+    const invoiceItems = detail?.items || [];
+    return (
+        <div className="space-y-4">
+            {receivable?.invoiceNumber && (
+                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
+                    <Receipt className="h-4 w-4 text-emerald-600" />
+                    <span className="text-sm font-medium text-emerald-800">Fatura nº {receivable.invoiceNumber}</span>
+                    {receivable.buyer && <span className="text-xs text-gray-500">— {receivable.buyer}</span>}
+                </div>
+            )}
+            {invoiceItems.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="text-left p-2 font-semibold text-gray-600">Produto</th>
+                                <th className="text-center p-2 font-semibold text-gray-600">Qtd</th>
+                                <th className="text-right p-2 font-semibold text-gray-600">Valor Unit.</th>
+                                <th className="text-right p-2 font-semibold text-gray-600">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {invoiceItems.map((it: any, idx: number) => (
+                                <tr key={idx} className="border-t border-gray-100">
+                                    <td className="p-2">{it.productName || it.product_name}</td>
+                                    <td className="p-2 text-center">{it.quantity} {it.unit}</td>
+                                    <td className="p-2 text-right font-mono">{formatCurrency(it.unitPrice || it.unit_price)}</td>
+                                    <td className="p-2 text-right font-mono font-semibold">
+                                        {formatCurrency((parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice || it.unit_price) || 0))}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <p className="text-sm text-gray-500 text-center py-4">
+                    {receivable?.invoiceNumber
+                        ? "Sem itens detalhados para esta fatura."
+                        : "Nenhuma fatura associada a esta conta."}
+                </p>
+            )}
+            {receivable?.totalAmount && (
+                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                    <span className="text-sm font-semibold text-gray-700">Total da Conta</span>
+                    <span className="font-mono font-bold text-emerald-700">{formatCurrency(receivable.totalAmount)}</span>
                 </div>
             )}
         </div>

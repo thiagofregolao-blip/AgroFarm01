@@ -116,18 +116,9 @@ export default function AccountsPayable() {
 
     const pay = useMutation({
         mutationFn: async ({ id, data }: { id: string; data: any }) => {
+            // O servidor já cria o registro de cheque em /pay quando data.cheque é fornecido.
+            // Não chamar POST /api/farm/cheques aqui para evitar duplicidade.
             const result = await apiRequest("POST", `/api/farm/accounts-payable/${id}/pay`, data);
-            if (data.cheque) {
-                await apiRequest("POST", "/api/farm/cheques", {
-                    bank: data.cheque.banco,
-                    chequeNumber: data.cheque.numero,
-                    type: data.cheque.tipo,
-                    amount: data.amount,
-                    holder: data.supplier || "",
-                    relatedPayableId: id,
-                    accountId: data.accountId || (data.accountRows?.[0]?.accountId),
-                });
-            }
             return result;
         },
         onSuccess: () => {
@@ -202,9 +193,9 @@ export default function AccountsPayable() {
                 {/* Tabs: Contas / Pagamento / Historico */}
                 <Tabs defaultValue="contas">
                     <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
-                        <TabsTrigger value="contas" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Contas</TabsTrigger>
-                        <TabsTrigger value="pagamento" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Pagamento</TabsTrigger>
-                        <TabsTrigger value="historico" className="text-sm font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5">Historico</TabsTrigger>
+                        <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Contas</TabsTrigger>
+                        <TabsTrigger value="pagamento" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Pagamento</TabsTrigger>
+                        <TabsTrigger value="historico" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Historico</TabsTrigger>
                     </TabsList>
 
                     {/* ── CONTAS TAB ─────────────────────────────────────────── */}
@@ -286,7 +277,6 @@ export default function AccountsPayable() {
                                             <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Pago</th>
-                                            <th className="p-3"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -304,21 +294,6 @@ export default function AccountsPayable() {
                                                     <td className="p-3">{statusBadge(isOverdue && item.status !== "pago" ? "vencido" : item.status)}</td>
                                                     <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount, item.currency || "USD")}</td>
                                                     <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.paidAmount || 0, item.currency || "USD")}</td>
-                                                    <td className="p-3 flex gap-1">
-                                                        {item.status !== "pago" && (
-                                                            <Button variant="outline" size="sm" className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-                                                                onClick={() => setEditingItem(item)}>
-                                                                <Pencil className="h-3 w-3 mr-1" />Editar
-                                                            </Button>
-                                                        )}
-                                                        {item.status !== "pago" && (
-                                                            <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
-                                                                onClick={() => { if (confirm(`Remover conta "${item.supplier}" - ${formatCurrency(item.totalAmount, item.currency || "USD")}?`)) del.mutate(item.id); }}
-                                                                aria-label="Remover">
-                                                                <Trash2 className="h-3 w-3" />
-                                                            </Button>
-                                                        )}
-                                                    </td>
                                                 </tr>
                                             );
                                         })}
@@ -355,7 +330,13 @@ export default function AccountsPayable() {
 
                     {/* ── HISTORICO TAB ──────────────────────────────────────── */}
                     <TabsContent value="historico" className="mt-4">
-                        <HistoricoTab items={items as any[]} />
+                        <HistoricoTab
+                            items={items as any[]}
+                            accounts={accounts as any[]}
+                            seasons={seasons as any[]}
+                            onPay={(id, data) => pay.mutate({ id, data })}
+                            paying={pay.isPending}
+                        />
                     </TabsContent>
                 </Tabs>
 
@@ -391,6 +372,18 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
     const [chequeBanco, setChequeBanco] = useState("");
     const [chequeNumero, setChequeNumero] = useState("");
     const [chequeTipo, setChequeTipo] = useState("proprio");
+    const [selectedChequeId, setSelectedChequeId] = useState("");
+
+    // #20 — available cheques list for auto-fill
+    const { data: availableCheques = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/cheques"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/cheques"); return r.json(); },
+        enabled: payModalOpen,
+    });
+    const emitidoCheques = (availableCheques as any[]).filter((ch: any) => ch.status === "emitido");
+    const [receiptNumber, setReceiptNumber] = useState("");
+    const [receiptFile, setReceiptFile] = useState<File | null>(null);
+    const [receiptFileUrl, setReceiptFileUrl] = useState("");
 
     // Filter pending items
     const pendingItems = items.filter((i: any) => i.status !== "pago");
@@ -437,7 +430,8 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
 
     function openPayModal() {
         setPaymentRows([{ accountId: "", amount: totalChecked.toFixed(2), paymentMethod: "transferencia" }]);
-        setChequeBanco(""); setChequeNumero(""); setChequeTipo("proprio");
+        setChequeBanco(""); setChequeNumero(""); setChequeTipo("proprio"); setSelectedChequeId("");
+        setReceiptNumber(""); setReceiptFile(null); setReceiptFileUrl("");
         setPayModalOpen(true);
     }
 
@@ -470,6 +464,8 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
             if (hasChequeMethod && chequeBanco && chequeNumero) {
                 payload.cheque = { banco: chequeBanco, numero: chequeNumero, tipo: chequeTipo };
             }
+            if (receiptNumber) payload.receiptNumber = receiptNumber;
+            if (receiptFileUrl) payload.receiptFileUrl = receiptFileUrl;
             onPay(item.id, payload);
         }
         setCheckedIds(new Set());
@@ -685,19 +681,44 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                             ))}
                         </div>
 
-                        {/* Cheque fields */}
+                        {/* Cheque fields — #20: select from existing emitido cheques */}
                         {hasChequeMethod && (
-                            <div className="grid grid-cols-3 gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                                <div><Label className="text-xs text-blue-700">Banco *</Label><Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} placeholder="Nome do banco" /></div>
-                                <div><Label className="text-xs text-blue-700">Numero *</Label><Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="000000" /></div>
-                                <div><Label className="text-xs text-blue-700">Tipo</Label>
-                                    <Select value={chequeTipo} onValueChange={setChequeTipo}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="proprio">Proprio</SelectItem>
-                                            <SelectItem value="terceiro">Terceiro</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
+                                {emitidoCheques.length > 0 && (
+                                    <div>
+                                        <Label className="text-xs text-blue-700">Selecionar Cheque Existente</Label>
+                                        <Select value={selectedChequeId} onValueChange={(id) => {
+                                            setSelectedChequeId(id);
+                                            const ch = emitidoCheques.find((c: any) => String(c.id) === id);
+                                            if (ch) {
+                                                setChequeBanco(ch.bank || "");
+                                                setChequeNumero(ch.cheque_number || ch.chequeNumber || "");
+                                                setChequeTipo(ch.type || "proprio");
+                                            }
+                                        }}>
+                                            <SelectTrigger><SelectValue placeholder="Selecionar cheque emitido..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {emitidoCheques.map((ch: any) => (
+                                                    <SelectItem key={ch.id} value={String(ch.id)}>
+                                                        #{ch.cheque_number || ch.chequeNumber} — {ch.bank} — {ch.holder} — {formatCurrency(parseFloat(ch.amount), ch.currency)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div><Label className="text-xs text-blue-700">Banco *</Label><Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} placeholder="Nome do banco" /></div>
+                                    <div><Label className="text-xs text-blue-700">Numero *</Label><Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="000000" /></div>
+                                    <div><Label className="text-xs text-blue-700">Tipo</Label>
+                                        <Select value={chequeTipo} onValueChange={setChequeTipo}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="proprio">Proprio</SelectItem>
+                                                <SelectItem value="terceiro">Terceiro</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -707,6 +728,35 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                 Total alocado: {formatCurrency(totalAllocated)} / Total selecionado: {formatCurrency(totalChecked)}
                             </p>
                         )}
+
+                        {/* Recibo do fornecedor */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                            <div>
+                                <Label className="text-xs text-gray-500">Nº Recibo do Fornecedor</Label>
+                                <Input
+                                    placeholder="Ex: 001-001-0000123"
+                                    value={receiptNumber}
+                                    onChange={e => setReceiptNumber(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-xs text-gray-500">Importar Recibo (PDF/imagem)</Label>
+                                <input
+                                    type="file"
+                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 border border-gray-200 rounded-md px-2 py-1.5 cursor-pointer"
+                                    onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        setReceiptFile(file);
+                                        const reader = new FileReader();
+                                        reader.onload = ev => setReceiptFileUrl(ev.target?.result as string);
+                                        reader.readAsDataURL(file);
+                                    }}
+                                />
+                                {receiptFile && <p className="text-xs text-emerald-600 mt-1">✓ {receiptFile.name}</p>}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Footer fixo */}
@@ -728,12 +778,16 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
 }
 
 // ─── Historico Tab ────────────────────────────────────────────────────────────
-function HistoricoTab({ items }: { items: any[] }) {
+function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
+    items: any[]; accounts: any[]; seasons: any[];
+    onPay: (id: string, data: any) => void; paying: boolean;
+}) {
     const [searchTerm, setSearchTerm] = useState("");
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [editingHistItem, setEditingHistItem] = useState<any>(null);
 
     const paidItems = items
-        .filter((i: any) => i.status === "pago")
+        .filter((i: any) => i.status === "pago" || i.status === "parcial")
         .sort((a: any, b: any) => new Date(b.paidDate || b.updatedAt || b.dueDate).getTime() - new Date(a.paidDate || a.updatedAt || a.dueDate).getTime());
 
     const filteredPaid = paidItems.filter((i: any) =>
@@ -801,8 +855,15 @@ function HistoricoTab({ items }: { items: any[] }) {
                                         <p className="text-xs text-gray-500">{group.date} · {group.items.length} titulo(s)</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
                                     <span className="font-mono font-bold text-green-600 text-sm">{formatCurrency(group.total, group.currency)}</span>
+                                    <Button
+                                        variant="outline" size="sm"
+                                        className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
+                                        onClick={() => setEditingHistItem(group.items[0])}
+                                    >
+                                        <Pencil className="h-3 w-3 mr-1" />Editar
+                                    </Button>
                                     <span className="text-xs text-gray-400">{expandedGroups.has(group.key) ? "▲" : "▼"}</span>
                                 </div>
                             </div>
@@ -812,8 +873,32 @@ function HistoricoTab({ items }: { items: any[] }) {
                                         <tbody>
                                             {group.items.map((item: any) => (
                                                 <tr key={item.id} className="border-t border-gray-50">
-                                                    <td className="px-4 py-2 text-gray-600 max-w-[250px] truncate">{item.description || "--"}</td>
+                                                    <td className="px-4 py-2 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
                                                     <td className="px-4 py-2 text-gray-500">{item.installmentNumber}/{item.totalInstallments}</td>
+                                                    <td className="px-4 py-2">
+                                                        {(item.receiptNumber || item.receipt_number) && (
+                                                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono">
+                                                                Recibo: {item.receiptNumber || item.receipt_number}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-2">
+                                                        {(item.receiptFileUrl || item.receipt_file_url) && (
+                                                            <a
+                                                                href={item.receiptFileUrl || item.receipt_file_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-1"
+                                                            >
+                                                                <Receipt className="h-3 w-3" /> Ver recibo
+                                                            </a>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-2">
+                                                        {(item.status === "parcial") && (
+                                                            <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">Parcial</span>
+                                                        )}
+                                                    </td>
                                                     <td className="text-right px-4 py-2 font-mono text-green-600">{formatCurrency(item.paidAmount || item.totalAmount, item.currency || "USD")}</td>
                                                 </tr>
                                             ))}
@@ -825,6 +910,24 @@ function HistoricoTab({ items }: { items: any[] }) {
                     ))}
                 </div>
             )}
+
+            {/* Dialog de edição do histórico — mesmo modal de pagamento */}
+            <Dialog open={!!editingHistItem} onOpenChange={o => !o && setEditingHistItem(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader><DialogTitle>Editar Lançamento</DialogTitle></DialogHeader>
+                    {editingHistItem && (
+                        <EditAPForm
+                            item={editingHistItem}
+                            seasons={seasons}
+                            onSave={(data: any) => {
+                                onPay(editingHistItem.id, { ...data, _editOnly: true });
+                                setEditingHistItem(null);
+                            }}
+                            saving={paying}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

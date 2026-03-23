@@ -234,14 +234,14 @@ export default function FarmCashFlow() {
                     <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
                 ) : (
                     <Tabs defaultValue="dashboard">
-                        <TabsList className="bg-emerald-50 text-emerald-800">
-                            <TabsTrigger value="dashboard">Painel</TabsTrigger>
-                            <TabsTrigger value="previsao">Previsao</TabsTrigger>
-                            <TabsTrigger value="extrato">Extrato</TabsTrigger>
-                            <TabsTrigger value="transferencias">Transferencias</TabsTrigger>
-                            <TabsTrigger value="contas">Contas / Bancos</TabsTrigger>
-                            <TabsTrigger value="cheques">Cheques</TabsTrigger>
-                            <TabsTrigger value="categorias">Categorias</TabsTrigger>
+                        <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10 flex-wrap">
+                            <TabsTrigger value="dashboard" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Painel</TabsTrigger>
+                            <TabsTrigger value="previsao" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Previsao</TabsTrigger>
+                            <TabsTrigger value="extrato" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Extrato</TabsTrigger>
+                            <TabsTrigger value="transferencias" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Transferencias</TabsTrigger>
+                            <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Contas / Bancos</TabsTrigger>
+                            <TabsTrigger value="cheques" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Cheques</TabsTrigger>
+                            <TabsTrigger value="categorias" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Categorias</TabsTrigger>
                         </TabsList>
 
                         {/* ── DASHBOARD ─────────────────── */}
@@ -1162,7 +1162,6 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-emerald-800">Cheques</h2>
-                <CreateChequeDialog accounts={accounts} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cheques"] })} />
             </div>
 
             {isLoading ? (
@@ -1187,6 +1186,7 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
                                         <th className="text-right p-3 font-semibold text-gray-600">Valor</th>
                                         <th className="text-center p-3 font-semibold text-gray-600">Moeda</th>
                                         <th className="text-center p-3 font-semibold text-gray-600">Status</th>
+                                        <th className="text-left p-3 font-semibold text-gray-600">Origem</th>
                                         <th className="text-center p-3 font-semibold text-gray-600">Emissao</th>
                                         <th className="text-center p-3 font-semibold text-gray-600">Vencimento</th>
                                         <th className="text-center p-3 font-semibold text-gray-600">Acoes</th>
@@ -1207,6 +1207,19 @@ function ChequesTab({ accounts }: { accounts: any[] }) {
                                                         {ch.status === "compensado" ? <CheckCircle className="h-3 w-3" /> : ch.status === "cancelado" ? <XCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                                                         {status.label}
                                                     </span>
+                                                </td>
+                                                <td className="p-3">
+                                                    {(ch.relatedPayableId || ch.related_payable_id) ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
+                                                            Pagamento #{ch.relatedPayableId || ch.related_payable_id}
+                                                        </span>
+                                                    ) : (ch.relatedReceivableId || ch.related_receivable_id) ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                                                            Recebimento #{ch.relatedReceivableId || ch.related_receivable_id}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400 text-xs">--</span>
+                                                    )}
                                                 </td>
                                                 <td className="p-3 text-center">{(ch.issue_date || ch.issueDate) ? new Date(ch.issue_date || ch.issueDate).toLocaleDateString("pt-BR") : "--"}</td>
                                                 <td className="p-3 text-center">{(ch.due_date || ch.dueDate) ? new Date(ch.due_date || ch.dueDate).toLocaleDateString("pt-BR") : "--"}</td>

@@ -5,7 +5,7 @@ import {
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
     Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2,
-    Settings, HelpCircle, Download, ChevronDown
+    Settings, HelpCircle, Download, ChevronDown, FilePlus
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -71,31 +71,32 @@ const farmNavGroups: NavGroup[] = [
 // ─── FINANCEIRO nav groups ────────────────────────────────────────────────────
 const financeNavGroups: NavGroup[] = [
     {
-        label: "Caixa",
+        label: "Fluxo de Caixa",
         items: [
-            { labelKey: "nav_cash_flow", href: "/fazenda/fluxo-caixa", icon: Wallet,   moduleKey: "cash_flow" },
-            { labelKey: "nav_invoices",  href: "/fazenda/faturas",     icon: FileText, moduleKey: "invoices" },
+            { labelKey: "nav_cash_flow", href: "/fazenda/fluxo-caixa", icon: Wallet, moduleKey: "cash_flow" },
         ],
     },
     {
-        label: "Saidas",
+        label: "Despesas e Faturas",
         items: [
-            { labelKey: "nav_accounts_payable",  href: "/fazenda/contas-pagar",   icon: Receipt,    moduleKey: "accounts_payable" },
-            { labelKey: "nav_suppliers",          href: "/fazenda/fornecedores",  icon: Building2,  moduleKey: "suppliers" },
+            { labelKey: "nav_invoices",         href: "/fazenda/faturas",      icon: FileText,  moduleKey: "invoices" },
+            { labelKey: "nav_accounts_payable", href: "/fazenda/contas-pagar", icon: Receipt,   moduleKey: "accounts_payable" },
+            { labelKey: "nav_suppliers",        href: "/fazenda/fornecedores", icon: Building2, moduleKey: "suppliers" },
         ],
     },
     {
         label: "Entradas",
         items: [
-            { labelKey: "nav_accounts_receivable", href: "/fazenda/contas-receber", icon: HandCoins, moduleKey: "accounts_receivable" },
+            { labelKey: "nav_accounts_receivable", href: "/fazenda/contas-receber",      icon: HandCoins, moduleKey: "accounts_receivable" },
+            { labelKey: "nav_emission_faturas",    href: "/fazenda/contas-receber?nova=1", icon: FilePlus,  moduleKey: "accounts_receivable", alwaysOn: true },
         ],
     },
     {
         label: "Analise",
         items: [
-            { labelKey: "nav_dre",             href: "/fazenda/dre",         icon: PieChart, moduleKey: "dre" },
-            { labelKey: "nav_budget",          href: "/fazenda/orcamento",   icon: Target,   moduleKey: "budget" },
-            { labelKey: "nav_reconciliation",  href: "/fazenda/conciliacao", icon: Landmark, moduleKey: "reconciliation" },
+            { labelKey: "nav_dre",            href: "/fazenda/dre",         icon: PieChart, moduleKey: "dre" },
+            { labelKey: "nav_budget",         href: "/fazenda/orcamento",   icon: Target,   moduleKey: "budget" },
+            { labelKey: "nav_reconciliation", href: "/fazenda/conciliacao", icon: Landmark, moduleKey: "reconciliation" },
         ],
     },
 ];

@@ -145,7 +145,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = req.user!.id;
-            const { accountId, amount, paymentMethod, accountRows } = req.body;
+            const { accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl } = req.body;
 
             // Get the account payable
             const [ap] = await db.select().from(farmAccountsPayable).where(
@@ -205,12 +205,15 @@ export function registerFarmFinancialRoutes(app: Express) {
 
             // Update account payable status
             const newStatus = newPaidTotal >= totalDue ? "pago" : "parcial";
-            await db.update(farmAccountsPayable).set({
+            const updatePayload: any = {
                 paidAmount: String(newPaidTotal),
                 paidDate: new Date(),
                 status: newStatus,
                 cashTransactionId: firstTxId,
-            }).where(eq(farmAccountsPayable.id, req.params.id));
+            };
+            if (receiptNumber) updatePayload.receiptNumber = receiptNumber;
+            if (receiptFileUrl) updatePayload.receiptFileUrl = receiptFileUrl;
+            await db.update(farmAccountsPayable).set(updatePayload).where(eq(farmAccountsPayable.id, req.params.id));
 
             // Bug #1 fix: sync farmExpenses when payment made via AP
             if (ap.expenseId) {

@@ -359,6 +359,7 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS payment_method text`);
     await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS cheque_id varchar`);
     await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS receipt_number text`);
+    await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS receipt_file_url text`);
     await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS supplier_id varchar`);
     await db.execute(sql`ALTER TABLE farm_accounts_payable ADD COLUMN IF NOT EXISTS season_id varchar`);
 
