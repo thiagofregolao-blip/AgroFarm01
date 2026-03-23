@@ -307,10 +307,8 @@ function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, o
     // Supplier validation state
     const [triedSubmit, setTriedSubmit] = useState(false);
 
-    // Item #7 — currency symbol from supplier invoices
-    const supplierInvoices = invoices.filter((inv: any) => inv.supplier === supplier || inv.supplierName === supplier);
-    const latestInvoiceCurrency = supplierInvoices.length > 0 ? (supplierInvoices[supplierInvoices.length - 1].currency || "USD") : "USD";
-    const currencySymbol = latestInvoiceCurrency === "PYG" ? "Gs" : "$";
+    const [currency, setCurrency] = useState<"USD" | "PYG">(initialData?.currency || "USD");
+    const currencySymbol = currency === "PYG" ? "Gs" : "$";
 
     // Item #17 — pending invoices for selected supplier
     const pendingInvoicesForSupplier = invoices.filter((inv: any) =>
@@ -342,6 +340,7 @@ function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, o
             category,
             description,
             amount,
+            currency,
             supplier: supplier || null,
             propertyId: propertyId === "__none__" ? null : propertyId || null,
             seasonId: seasonId === "__none__" ? null : seasonId || null,
@@ -431,10 +430,20 @@ function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, o
 
             <div className="grid grid-cols-2 gap-3">
                 <div>
-                    <Label>Valor ({currencySymbol}) *</Label>
-                    <CurrencyInput value={amount} onValueChange={setAmount} />
+                    <Label>Moeda</Label>
+                    <Select value={currency} onValueChange={(v) => setCurrency(v as "USD" | "PYG")}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="USD">Dólar (USD — $)</SelectItem>
+                            <SelectItem value="PYG">Guarani (PYG — Gs)</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div><Label>Data</Label><Input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)} /></div>
+            </div>
+            <div>
+                <Label>Valor ({currencySymbol}) *</Label>
+                <CurrencyInput value={amount} onValueChange={setAmount} />
             </div>
             <div><Label>Descricao</Label><Input value={description} onChange={e => setDescription(e.target.value)} /></div>
 

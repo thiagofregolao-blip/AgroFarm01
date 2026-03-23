@@ -28,12 +28,13 @@ const translations = {
     nav_tab_farm: "Fazenda",
     nav_tab_finance: "Financeiro",
     nav_romaneios: "Romaneios",
-    nav_accounts_payable: "Contas a Pagar",
-    nav_accounts_receivable: "Contas a Receber",
+    nav_accounts_payable: "Pagamentos",
+    nav_accounts_receivable: "Recebimentos",
+    nav_emission_faturas: "Emissão de Faturas",
     nav_dre: "DRE / Resultado",
     nav_budget: "Orçamento",
     nav_reconciliation: "Conciliação",
-    nav_suppliers: "Fornecedores",
+    nav_suppliers: "Campo",
     nav_productivity: "Produtividade",
 
     // Profile
@@ -165,12 +166,13 @@ const translations = {
     nav_tab_farm: "Finca",
     nav_tab_finance: "Financiero",
     nav_romaneios: "Romaneos",
-    nav_accounts_payable: "Cuentas por Pagar",
-    nav_accounts_receivable: "Cuentas por Cobrar",
+    nav_accounts_payable: "Pagos",
+    nav_accounts_receivable: "Cobros",
+    nav_emission_faturas: "Emisión de Facturas",
     nav_dre: "Estado de Resultados",
     nav_budget: "Presupuesto",
     nav_reconciliation: "Conciliación",
-    nav_suppliers: "Proveedores",
+    nav_suppliers: "Campo",
     nav_productivity: "Productividad",
 
     // Profile

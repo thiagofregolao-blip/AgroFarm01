@@ -742,11 +742,11 @@ export default function FarmInvoices() {
                 </Dialog>
 
                 <Tabs defaultValue="invoices" className="space-y-4">
-                    <TabsList className="bg-emerald-50 text-emerald-800">
-                        <TabsTrigger value="invoices">Faturas</TabsTrigger>
-                        <TabsTrigger value="remissions">Remissoes</TabsTrigger>
-                        <TabsTrigger value="receipts">Recibos de Frota</TabsTrigger>
-                        <TabsTrigger value="expenses-nofatura">Despesas s/ Fatura</TabsTrigger>
+                    <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
+                        <TabsTrigger value="invoices" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Faturas</TabsTrigger>
+                        <TabsTrigger value="remissions" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Remissoes</TabsTrigger>
+                        <TabsTrigger value="receipts" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Recibos de Frota</TabsTrigger>
+                        <TabsTrigger value="expenses-nofatura" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Despesas s/ Fatura</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="invoices">
@@ -1720,9 +1720,6 @@ export default function FarmInvoices() {
                                     <CardTitle className="text-emerald-800 flex items-center gap-2">
                                         <DollarSign className="h-5 w-5" /> Despesas sem Fatura
                                     </CardTitle>
-                                    <Button variant="outline" size="sm" onClick={() => setExpenseDialogOpen(true)}>
-                                        <Plus className="mr-1 h-3 w-3" /> Nova Despesa
-                                    </Button>
                                 </div>
                             </CardHeader>
                             <CardContent className="p-0">

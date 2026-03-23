@@ -142,7 +142,7 @@ export default function FarmStock() {
         // Check available stock for selected product in source warehouse
         const sourceItem = stock.find((s: any) =>
             s.productId === transferProductId &&
-            (transferFromWarehouse ? String(s.propertyId) === transferFromWarehouse : !s.propertyId)
+            (transferFromWarehouse ? String(s.depositId || s.deposit_id) === transferFromWarehouse : !s.depositId)
         );
         if (sourceItem && qty > parseFloat(sourceItem.quantity)) {
             toast({ title: "Quantidade excede estoque disponivel", description: `Disponivel: ${parseFloat(sourceItem.quantity).toFixed(2)}`, variant: "destructive" }); return;
@@ -526,7 +526,7 @@ export default function FarmStock() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="none">Sem deposito</SelectItem>
-                                                {properties.map((p: any) => (
+                                                {depositsMain.map((p: any) => (
                                                     <SelectItem key={p.id} value={String(p.id)}>
                                                         {p.name}
                                                     </SelectItem>
@@ -543,7 +543,7 @@ export default function FarmStock() {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="none">Sem deposito</SelectItem>
-                                                {properties.filter((p: any) => String(p.id) !== transferFromWarehouse).map((p: any) => (
+                                                {depositsMain.filter((p: any) => String(p.id) !== transferFromWarehouse).map((p: any) => (
                                                     <SelectItem key={p.id} value={String(p.id)}>
                                                         {p.name}
                                                     </SelectItem>
