@@ -78,12 +78,7 @@ export default function LandingPage() {
             <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md shadow-[0_2px_20px_rgba(0,0,0,0.07)]">
                 <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-[70px]">
                     {/* Logo */}
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 bg-[#F7D601] rounded-xl flex items-center justify-center">
-                            <Sprout className="w-5 h-5 text-green-700" />
-                        </div>
-                        <span className="text-xl font-extrabold text-green-700 tracking-tight">AgroFarm</span>
-                    </div>
+                    <img src="/logo-datagrow.png" alt="DataGrow" className="h-10 w-auto object-contain" />
 
                     {/* Desktop links */}
                     <div className="hidden lg:flex items-center gap-8">
@@ -400,18 +395,16 @@ export default function LandingPage() {
 
             {/* ── FOOTER ──────────────────────────────────────────────── */}
             <footer className="py-10 px-6 bg-slate-900 text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                    <Sprout className="w-5 h-5 text-green-500" />
-                    <span className="font-bold text-white text-base">AgroFarm</span>
+                <div className="flex items-center justify-center mb-3">
+                    <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" style={{ filter: "brightness(0) invert(1)" }} />
                 </div>
-                <p className="text-slate-500 text-sm">© 2026 AgroFarm — Sistema de Gestão Agrícola Digital</p>
+                <p className="text-slate-500 text-sm">© 2026 DataGrow — Sistema de Gestão Agrícola Digital</p>
                 <p className="text-slate-600 text-xs mt-1">Para agricultores do Brasil e Paraguai</p>
             </footer>
 
             {/* ── STICKY FOOTER CTA ───────────────────────────────────── */}
             <div className="fixed bottom-0 left-0 right-0 z-50 bg-green-900/95 backdrop-blur-sm px-6 py-3 flex items-center justify-center gap-6 shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
                 <div className="flex items-center gap-2">
-                    <Sprout className="w-4 h-4 text-[#F7D601]" />
                     <span className="text-[#F7D601] font-bold text-xs tracking-widest uppercase hidden sm:block">Domine sua Lavoura</span>
                 </div>
                 <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
