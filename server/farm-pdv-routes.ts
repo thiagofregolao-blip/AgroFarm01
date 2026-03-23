@@ -224,7 +224,7 @@ export function registerFarmPdvRoutes(app: Express) {
             }
 
             const farmerId = req.session.pdvFarmerId;
-            const resolvedPropertyId = propertyId || req.session.pdvPropertyId;
+            let resolvedPropertyId = propertyId || req.session.pdvPropertyId || null;
 
             // Check if plotId is actually a property (when user selects property without plots)
             let resolvedPlotId = plotId || null;
@@ -235,7 +235,12 @@ export function registerFarmPdvRoutes(app: Express) {
                 const { eq } = await import("drizzle-orm");
 
                 const [existingPlot] = await db.select().from(farmPlots).where(eq(farmPlots.id, plotId));
-                if (!existingPlot) {
+                if (existingPlot) {
+                    // Resolve propertyId from the plot if not provided
+                    if (!resolvedPropertyId) {
+                        resolvedPropertyId = existingPlot.propertyId;
+                    }
+                } else {
                     // plotId is probably a propertyId — auto-create a default plot
                     const property = await farmStorage.getPropertyById(plotId);
                     if (property) {
@@ -246,6 +251,7 @@ export function registerFarmPdvRoutes(app: Express) {
                             crop: null,
                         });
                         resolvedPlotId = newPlot.id;
+                        resolvedPropertyId = property.id;
                         console.log(`[PDV_WITHDRAW] Auto-created plot "${newPlot.name}" for property "${property.name}"`);
                     }
                 }
@@ -371,10 +377,13 @@ export function registerFarmPdvRoutes(app: Express) {
             let seasons: any[] = [];
             try {
                 const { farmSeasons } = await import("../shared/schema");
+                const { and: andOp, eq: eqOp } = await import("drizzle-orm");
                 seasons = await db.select().from(farmSeasons).where(
-                    and(eq(farmSeasons.farmerId, farmerId), eq(farmSeasons.isActive, true))
+                    andOp(eqOp(farmSeasons.farmerId, farmerId), eqOp(farmSeasons.isActive, true))
                 );
-            } catch (e) { /* table may not exist yet */ }
+            } catch (e) {
+                console.error("[PDV_SEASONS]", e);
+            }
 
             res.json({ products, stock, plots, properties, equipment, terminal, deposits, seasons });
         } catch (error) {

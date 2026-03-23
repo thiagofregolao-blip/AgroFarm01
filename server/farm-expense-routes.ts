@@ -65,8 +65,8 @@ export function registerFarmExpenseRoutes(app: Express) {
             })
                 .from(farmApplications)
                 .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
-                .innerJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))
-                .innerJoin(farmProperties, eq(farmApplications.propertyId, farmProperties.id))
+                .leftJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))
+                .leftJoin(farmProperties, eq(farmApplications.propertyId, farmProperties.id))
                 .where(and(...conditions))
                 .orderBy(farmApplications.appliedAt);
 
@@ -98,14 +98,18 @@ export function registerFarmExpenseRoutes(app: Express) {
             }> = {};
 
             for (const app of apps) {
-                if (!plotData[app.plotId]) {
-                    plotData[app.plotId] = {
+                // Skip applications without a plot (e.g. diesel fueling)
+                if (!app.plotId) continue;
+
+                const plotKey = app.plotId;
+                if (!plotData[plotKey]) {
+                    plotData[plotKey] = {
                         plotId: app.plotId,
-                        plotName: app.plotName,
+                        plotName: app.plotName || "Sem talhão",
                         plotAreaHa: parseFloat(app.plotAreaHa || "0"),
                         plotCrop: app.plotCrop,
-                        propertyId: app.propertyId,
-                        propertyName: app.propertyName,
+                        propertyId: app.propertyId || "",
+                        propertyName: app.propertyName || "Sem propriedade",
                         totalCost: 0,
                         totalQtyByProduct: {},
                         applications: [],
@@ -116,11 +120,11 @@ export function registerFarmExpenseRoutes(app: Express) {
                 const unitCost = costMap[app.productId] || 0;
                 const appCost = qty * unitCost;
 
-                plotData[app.plotId].totalCost += appCost;
-                plotData[app.plotId].applications.push(app);
+                plotData[plotKey].totalCost += appCost;
+                plotData[plotKey].applications.push(app);
 
-                if (!plotData[app.plotId].totalQtyByProduct[app.productId]) {
-                    plotData[app.plotId].totalQtyByProduct[app.productId] = {
+                if (!plotData[plotKey].totalQtyByProduct[app.productId]) {
+                    plotData[plotKey].totalQtyByProduct[app.productId] = {
                         productId: app.productId,
                         productName: app.productName,
                         productUnit: app.productUnit,
@@ -132,8 +136,8 @@ export function registerFarmExpenseRoutes(app: Express) {
                         dosePerHa: app.productDosePerHa ? parseFloat(app.productDosePerHa) : null,
                     };
                 }
-                plotData[app.plotId].totalQtyByProduct[app.productId].quantity += qty;
-                plotData[app.plotId].totalQtyByProduct[app.productId].totalCost += appCost;
+                plotData[plotKey].totalQtyByProduct[app.productId].quantity += qty;
+                plotData[plotKey].totalQtyByProduct[app.productId].totalCost += appCost;
             }
 
             // Convert to array and compute per-hectare for each plot
