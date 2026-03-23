@@ -218,7 +218,7 @@ export default function FarmStock() {
                                 <Warehouse className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                                 <p className="text-gray-500">Estoque vazio</p>
                             </CardContent></Card>
-                        ) : (
+                        ) : (<>
                             {/* Desktop: table */}
                             <div className="hidden md:block bg-white rounded-xl border border-emerald-100 overflow-hidden">
                                 <table className="w-full text-sm">
@@ -331,7 +331,7 @@ export default function FarmStock() {
                                     );
                                 })}
                             </div>
-                        )}
+                        </>)}
                     </TabsContent>
 
                     {/* Deposits tab - horizontal tabs per deposit */}
