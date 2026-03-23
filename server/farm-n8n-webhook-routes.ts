@@ -12,7 +12,7 @@ function requireWebhookSecret(req: any, res: any, next: any) {
         console.warn("[N8N_WEBHOOK] N8N_WEBHOOK_SECRET not configured — webhooks disabled");
         return res.status(503).json({ error: "Webhooks not configured" });
     }
-    const provided = req.headers['x-webhook-secret'] || req.query.secret;
+    const provided = req.headers['x-webhook-secret'] || req.query.secret || req.query['x-webhook-secret'];
     if (provided !== secret) {
         return res.status(401).json({ error: "Invalid webhook secret" });
     }
