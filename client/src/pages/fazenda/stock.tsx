@@ -219,7 +219,8 @@ export default function FarmStock() {
                                 <p className="text-gray-500">Estoque vazio</p>
                             </CardContent></Card>
                         ) : (
-                            <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                            {/* Desktop: table */}
+                            <div className="hidden md:block bg-white rounded-xl border border-emerald-100 overflow-hidden">
                                 <table className="w-full text-sm">
                                     <thead className="bg-emerald-50">
                                         <tr>
@@ -274,6 +275,61 @@ export default function FarmStock() {
                                         })}
                                     </tbody>
                                 </table>
+                            </div>
+
+                            {/* Mobile: cards */}
+                            <div className="md:hidden flex flex-col gap-2">
+                                {filtered.map((s: any) => {
+                                    const qty = parseFloat(s.quantity);
+                                    const cost = parseFloat(s.averageCost);
+                                    return (
+                                        <div key={s.id} className="bg-white rounded-xl border border-emerald-100 p-4 shadow-sm">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <div className="flex-1 mr-2">
+                                                    <div className="font-bold text-sm text-gray-900">{s.productName}</div>
+                                                    {s.activeIngredient && (
+                                                        <div className="text-[11px] text-gray-500">{s.activeIngredient}</div>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-1.5 flex-shrink-0">
+                                                    <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
+                                                        {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 text-emerald-700 mb-3">
+                                                {s.productCategory || "—"}
+                                            </span>
+                                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                                <div>
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Quantidade</div>
+                                                    <div className={`text-[15px] font-bold ${qty <= 0 ? "text-red-600" : "text-emerald-700"}`}>
+                                                        {qty.toFixed(2)} {s.productUnit}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Custo Médio</div>
+                                                    <div className="text-xs font-mono text-gray-700">{formatCurrency(cost)}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Lote</div>
+                                                    <div className={`text-xs ${s.lote ? "text-gray-700" : "text-gray-300"}`}>{s.lote || "—"}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Validade</div>
+                                                    <div className={`text-xs ${s.expiryDate ? "text-gray-700" : "text-gray-300"}`}>
+                                                        {s.expiryDate ? new Date(s.expiryDate).toLocaleDateString("pt-BR") : "—"}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="border-t border-gray-100 mt-3 pt-2 flex justify-between items-center">
+                                                <span className="text-[10px] text-gray-400 uppercase font-medium">Valor Total</span>
+                                                <span className="text-sm font-bold font-mono text-gray-900">{formatCurrency(qty * cost)}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </TabsContent>
