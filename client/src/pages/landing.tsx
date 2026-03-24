@@ -179,15 +179,15 @@ export default function LandingPage() {
 
                     {/* Right — carousel */}
                     <div className="flex-1 min-w-[300px] flex flex-col items-center gap-5">
-                        {/* CTAs — ACIMA da imagem do carrossel */}
-                        <div className="flex gap-4 flex-wrap justify-center w-full">
+                        {/* CTAs — ACIMA da imagem, mesma largura do carrossel */}
+                        <div className="flex gap-3 w-[clamp(280px,38vw,460px)]">
                             <button onClick={() => scrollTo("features")}
-                                className="flex items-center gap-2 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 shadow-md border-none cursor-pointer">
-                                Conhecer Funcionalidades <ChevronDown className="w-4 h-4" />
+                                className="flex-1 flex items-center justify-center gap-2 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold py-3.5 rounded-2xl text-sm transition-all duration-150 shadow-md border-none cursor-pointer">
+                                Conhecer Funcionalidades <ChevronDown className="w-4 h-4 flex-shrink-0" />
                             </button>
                             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-white border-2 border-white/30 hover:border-white/60 font-semibold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 no-underline">
-                                <MessageCircle className="w-4 h-4" /> Solicite uma Visita
+                                className="flex-1 flex items-center justify-center gap-2 text-white border-2 border-white/30 hover:border-white/60 font-semibold py-3.5 rounded-2xl text-sm transition-all duration-150 no-underline">
+                                <MessageCircle className="w-4 h-4 flex-shrink-0" /> Solicite uma Visita
                             </a>
                         </div>
                         <div className="relative">
