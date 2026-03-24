@@ -81,7 +81,11 @@ export function registerFarmExpenseRoutes(app: Express) {
 
             const costMap: Record<string, number> = {};
             for (const s of stockData) {
-                costMap[s.productId] = parseFloat(s.averageCost || "0");
+                const cost = parseFloat(s.averageCost || "0");
+                // Keep the highest non-zero cost across multiple deposits for the same product
+                if (cost > 0 || costMap[s.productId] === undefined) {
+                    costMap[s.productId] = cost;
+                }
             }
 
             // Build aggregated data
