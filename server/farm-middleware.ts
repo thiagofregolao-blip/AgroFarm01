@@ -50,7 +50,7 @@ export function requireAdminManuals(req: Request, res: Response, next: NextFunct
         return res.status(401).json({ error: "Autenticacao necessaria" });
     }
     const role = req.user?.role;
-    if (role !== 'administrador') {
+    if (role !== 'administrador' && role !== 'admin_agricultor') {
         return res.status(403).json({ error: "Acesso restrito a administradores" });
     }
     next();
