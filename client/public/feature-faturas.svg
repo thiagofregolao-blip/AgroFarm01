@@ -1,0 +1,273 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#0f2240"/>
+    </linearGradient>
+    <linearGradient id="cardLeft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#162035"/>
+      <stop offset="100%" stop-color="#0d1a2e"/>
+    </linearGradient>
+    <linearGradient id="cardRight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#163020"/>
+      <stop offset="100%" stop-color="#0e2518"/>
+    </linearGradient>
+    <linearGradient id="botGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#1a56db" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#1a56db" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow">
+      <feGaussianBlur stdDeviation="20" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background full canvas -->
+  <rect width="1200" height="900" fill="url(#bg)"/>
+
+  <!-- Subtle grid pattern -->
+  <g opacity="0.04" stroke="#4a90d9" stroke-width="1">
+    <line x1="0" y1="150" x2="1200" y2="150"/>
+    <line x1="0" y1="300" x2="1200" y2="300"/>
+    <line x1="0" y1="450" x2="1200" y2="450"/>
+    <line x1="0" y1="600" x2="1200" y2="600"/>
+    <line x1="0" y1="750" x2="1200" y2="750"/>
+    <line x1="150" y1="0" x2="150" y2="900"/>
+    <line x1="300" y1="0" x2="300" y2="900"/>
+    <line x1="450" y1="0" x2="450" y2="900"/>
+    <line x1="600" y1="0" x2="600" y2="900"/>
+    <line x1="750" y1="0" x2="750" y2="900"/>
+    <line x1="900" y1="0" x2="900" y2="900"/>
+    <line x1="1050" y1="0" x2="1050" y2="900"/>
+  </g>
+
+  <!-- ══ TOP HEADER BAR ══ -->
+  <rect x="0" y="0" width="1200" height="60" fill="#0d1e35" opacity="0.9"/>
+  <!-- Left tag: Fatura Emitida -->
+  <rect x="40" y="16" width="200" height="28" rx="14" fill="#1a3a6b" opacity="0.8"/>
+  <circle cx="62" cy="30" r="5" fill="#22c55e"/>
+  <text x="76" y="34" font-family="Arial, sans-serif" font-size="13" fill="#90bff0" font-weight="600">Fatura Emitida</text>
+  <!-- Right tag: Registrado Automaticamente -->
+  <rect x="960" y="16" width="200" height="28" rx="14" fill="#163020" opacity="0.8"/>
+  <circle cx="982" cy="30" r="5" fill="#22c55e"/>
+  <text x="996" y="34" font-family="Arial, sans-serif" font-size="13" fill="#86efac" font-weight="600">Registrado Auto.</text>
+
+  <!-- ══ LEFT CARD: Empresa de Insumos ══ -->
+  <rect x="40" y="90" width="360" height="580" rx="16" fill="url(#cardLeft)" stroke="#1e3a5f" stroke-width="1.5"/>
+  <!-- Card header -->
+  <rect x="40" y="90" width="360" height="56" rx="16" fill="#1a3060" opacity="0.7"/>
+  <rect x="40" y="130" width="360" height="16" fill="#1a3060" opacity="0.7"/>
+  <text x="220" y="123" font-family="Arial, sans-serif" font-size="14" fill="#90bff0" font-weight="700" text-anchor="middle">EMPRESA DE INSUMOS</text>
+  <text x="220" y="140" font-family="Arial, sans-serif" font-size="10" fill="#4a7ab5" text-anchor="middle">FATURA #2024-0981</text>
+
+  <!-- Column headers -->
+  <text x="68" y="172" font-family="Arial, sans-serif" font-size="10" fill="#4a7ab5" font-weight="600">PRODUTO</text>
+  <text x="290" y="172" font-family="Arial, sans-serif" font-size="10" fill="#4a7ab5" font-weight="600">QTD</text>
+  <text x="360" y="172" font-family="Arial, sans-serif" font-size="10" fill="#4a7ab5" font-weight="600" text-anchor="end">VALOR</text>
+  <line x1="56" y1="178" x2="384" y2="178" stroke="#1e3a5f" stroke-width="1"/>
+
+  <!-- Row 1 -->
+  <rect x="56" y="184" width="328" height="36" rx="6" fill="#1a2d4a" opacity="0.5"/>
+  <text x="68" y="207" font-family="Arial, sans-serif" font-size="13" fill="#c8dcf0">Roundup Original</text>
+  <text x="290" y="207" font-family="Arial, sans-serif" font-size="13" fill="#90bff0">120 L</text>
+  <text x="384" y="207" font-family="Arial, sans-serif" font-size="13" fill="#22c55e" text-anchor="end">R$ 2.850</text>
+
+  <!-- Row 2 -->
+  <rect x="56" y="226" width="328" height="36" rx="6" fill="#1a2d4a" opacity="0.3"/>
+  <text x="68" y="249" font-family="Arial, sans-serif" font-size="13" fill="#c8dcf0">Fox Xpro</text>
+  <text x="290" y="249" font-family="Arial, sans-serif" font-size="13" fill="#90bff0">48 L</text>
+  <text x="384" y="249" font-family="Arial, sans-serif" font-size="13" fill="#22c55e" text-anchor="end">R$ 1.920</text>
+
+  <!-- Row 3 -->
+  <rect x="56" y="268" width="328" height="36" rx="6" fill="#1a2d4a" opacity="0.5"/>
+  <text x="68" y="291" font-family="Arial, sans-serif" font-size="13" fill="#c8dcf0">Engeo Pleno</text>
+  <text x="290" y="291" font-family="Arial, sans-serif" font-size="13" fill="#90bff0">30 L</text>
+  <text x="384" y="291" font-family="Arial, sans-serif" font-size="13" fill="#22c55e" text-anchor="end">R$ 4.200</text>
+
+  <!-- Row 4 -->
+  <rect x="56" y="310" width="328" height="36" rx="6" fill="#1a2d4a" opacity="0.3"/>
+  <text x="68" y="333" font-family="Arial, sans-serif" font-size="13" fill="#c8dcf0">Nimbus</text>
+  <text x="290" y="333" font-family="Arial, sans-serif" font-size="13" fill="#90bff0">55 L</text>
+  <text x="384" y="333" font-family="Arial, sans-serif" font-size="13" fill="#22c55e" text-anchor="end">R$ 825</text>
+
+  <!-- Row 5 -->
+  <rect x="56" y="352" width="328" height="36" rx="6" fill="#1a2d4a" opacity="0.5"/>
+  <text x="68" y="375" font-family="Arial, sans-serif" font-size="13" fill="#c8dcf0">Opera Ultra</text>
+  <text x="290" y="375" font-family="Arial, sans-serif" font-size="13" fill="#90bff0">22 L</text>
+  <text x="384" y="375" font-family="Arial, sans-serif" font-size="13" fill="#22c55e" text-anchor="end">R$ 1.540</text>
+
+  <!-- Row 6 -->
+  <rect x="56" y="394" width="328" height="36" rx="6" fill="#1a2d4a" opacity="0.3"/>
+  <text x="68" y="417" font-family="Arial, sans-serif" font-size="13" fill="#c8dcf0">Amistar Top</text>
+  <text x="290" y="417" font-family="Arial, sans-serif" font-size="13" fill="#90bff0">18 L</text>
+  <text x="384" y="417" font-family="Arial, sans-serif" font-size="13" fill="#22c55e" text-anchor="end">R$ 970</text>
+
+  <!-- Row 7 -->
+  <rect x="56" y="436" width="328" height="36" rx="6" fill="#1a2d4a" opacity="0.5"/>
+  <text x="68" y="459" font-family="Arial, sans-serif" font-size="13" fill="#c8dcf0">Zapp QI 620</text>
+  <text x="290" y="459" font-family="Arial, sans-serif" font-size="13" fill="#90bff0">80 L</text>
+  <text x="384" y="459" font-family="Arial, sans-serif" font-size="13" fill="#22c55e" text-anchor="end">R$ 1.200</text>
+
+  <!-- Divider -->
+  <line x1="56" y1="488" x2="384" y2="488" stroke="#1e3a5f" stroke-width="1.5"/>
+
+  <!-- Total -->
+  <rect x="56" y="496" width="328" height="46" rx="8" fill="#1a3060" opacity="0.7"/>
+  <text x="68" y="524" font-family="Arial, sans-serif" font-size="14" fill="#90bff0" font-weight="700">TOTAL</text>
+  <text x="384" y="524" font-family="Arial, sans-serif" font-size="18" fill="#22c55e" font-weight="800" text-anchor="end">R$ 13.505</text>
+
+  <!-- Data -->
+  <text x="68" y="568" font-family="Arial, sans-serif" font-size="11" fill="#4a7ab5">Data de emissão: 22/03/2026</text>
+  <text x="68" y="586" font-family="Arial, sans-serif" font-size="11" fill="#4a7ab5">Vencimento: 05/04/2026</text>
+  <text x="68" y="604" font-family="Arial, sans-serif" font-size="11" fill="#4a7ab5">Pagamento: 30 dias</text>
+
+  <!-- ══ CENTER: AI Bot ══ -->
+  <!-- Glow circle background -->
+  <circle cx="600" cy="380" r="120" fill="#1a56db" opacity="0.08" filter="url(#softglow)"/>
+  <circle cx="600" cy="380" r="80" fill="#1a56db" opacity="0.10"/>
+
+  <!-- Connection dots left side -->
+  <circle cx="408" cy="340" r="5" fill="#1a56db" opacity="0.6"/>
+  <circle cx="440" cy="340" r="4" fill="#1a56db" opacity="0.4"/>
+  <circle cx="468" cy="340" r="3" fill="#1a56db" opacity="0.3"/>
+  <line x1="408" y1="340" x2="520" y2="370" stroke="#1a56db" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.4"/>
+
+  <!-- Connection dots right side -->
+  <circle cx="792" cy="340" r="5" fill="#22c55e" opacity="0.6"/>
+  <circle cx="760" cy="340" r="4" fill="#22c55e" opacity="0.4"/>
+  <circle cx="732" cy="340" r="3" fill="#22c55e" opacity="0.3"/>
+  <line x1="792" y1="340" x2="680" y2="370" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.4"/>
+
+  <!-- Bot circle -->
+  <circle cx="600" cy="375" r="58" fill="#0f1e38" stroke="#1a56db" stroke-width="2.5"/>
+  <circle cx="600" cy="375" r="52" fill="#122040" stroke="#1d3a6e" stroke-width="1"/>
+  <!-- Bot icon: robot head -->
+  <rect x="576" y="354" width="48" height="38" rx="8" fill="#1a56db" opacity="0.9"/>
+  <rect x="583" y="361" width="14" height="10" rx="3" fill="white" opacity="0.9"/>
+  <rect x="603" y="361" width="14" height="10" rx="3" fill="white" opacity="0.9"/>
+  <rect x="588" y="376" width="24" height="4" rx="2" fill="white" opacity="0.6"/>
+  <rect x="592" y="346" width="16" height="8" rx="4" fill="#1a56db"/>
+  <circle cx="600" cy="344" r="4" fill="#22c55e"/>
+  <!-- Label -->
+  <rect x="557" y="440" width="86" height="22" rx="11" fill="#1a56db" opacity="0.9"/>
+  <text x="600" y="455" font-family="Arial, sans-serif" font-size="10" fill="white" font-weight="700" text-anchor="middle">IA DataGrow</text>
+
+  <!-- Processing text -->
+  <text x="600" y="490" font-family="Arial, sans-serif" font-size="11" fill="#4a7ab5" text-anchor="middle">Processando...</text>
+
+  <!-- ══ RIGHT CARD: DataGrow Sistema ══ -->
+  <rect x="800" y="90" width="360" height="580" rx="16" fill="url(#cardRight)" stroke="#1e4a30" stroke-width="1.5"/>
+  <!-- Card header -->
+  <rect x="800" y="90" width="360" height="56" rx="16" fill="#163020" opacity="0.8"/>
+  <rect x="800" y="130" width="360" height="16" fill="#163020" opacity="0.8"/>
+  <text x="980" y="123" font-family="Arial, sans-serif" font-size="14" fill="#86efac" font-weight="700" text-anchor="middle">DATAGROW SISTEMA</text>
+  <text x="980" y="140" font-family="Arial, sans-serif" font-size="10" fill="#4a8a60" text-anchor="middle">Aguardando aprovação</text>
+
+  <!-- Items detected -->
+  <text x="820" y="175" font-family="Arial, sans-serif" font-size="10" fill="#4a8a60" font-weight="600">ITENS DETECTADOS</text>
+  <line x1="816" y1="181" x2="1144" y2="181" stroke="#1e4a30" stroke-width="1"/>
+
+  <!-- Item rows right card -->
+  <g>
+    <circle cx="830" cy="201" r="4" fill="#22c55e"/>
+    <text x="844" y="205" font-family="Arial, sans-serif" font-size="13" fill="#c8f0d8">Roundup Original</text>
+    <text x="1144" y="205" font-family="Arial, sans-serif" font-size="12" fill="#86efac" text-anchor="end">120 L</text>
+  </g>
+  <g>
+    <circle cx="830" cy="231" r="4" fill="#22c55e"/>
+    <text x="844" y="235" font-family="Arial, sans-serif" font-size="13" fill="#c8f0d8">Fox Xpro</text>
+    <text x="1144" y="235" font-family="Arial, sans-serif" font-size="12" fill="#86efac" text-anchor="end">48 L</text>
+  </g>
+  <g>
+    <circle cx="830" cy="261" r="4" fill="#22c55e"/>
+    <text x="844" y="265" font-family="Arial, sans-serif" font-size="13" fill="#c8f0d8">Engeo Pleno</text>
+    <text x="1144" y="265" font-family="Arial, sans-serif" font-size="12" fill="#86efac" text-anchor="end">30 L</text>
+  </g>
+  <g>
+    <circle cx="830" cy="291" r="4" fill="#22c55e"/>
+    <text x="844" y="295" font-family="Arial, sans-serif" font-size="13" fill="#c8f0d8">Nimbus</text>
+    <text x="1144" y="295" font-family="Arial, sans-serif" font-size="12" fill="#86efac" text-anchor="end">55 L</text>
+  </g>
+  <g>
+    <circle cx="830" cy="321" r="4" fill="#22c55e"/>
+    <text x="844" y="325" font-family="Arial, sans-serif" font-size="13" fill="#c8f0d8">Opera Ultra</text>
+    <text x="1144" y="325" font-family="Arial, sans-serif" font-size="12" fill="#86efac" text-anchor="end">22 L</text>
+  </g>
+  <g>
+    <circle cx="830" cy="351" r="4" fill="#22c55e"/>
+    <text x="844" y="355" font-family="Arial, sans-serif" font-size="13" fill="#c8f0d8">Amistar Top</text>
+    <text x="1144" y="355" font-family="Arial, sans-serif" font-size="12" fill="#86efac" text-anchor="end">18 L</text>
+  </g>
+  <g>
+    <circle cx="830" cy="381" r="4" fill="#22c55e"/>
+    <text x="844" y="385" font-family="Arial, sans-serif" font-size="13" fill="#c8f0d8">Zapp QI 620</text>
+    <text x="1144" y="385" font-family="Arial, sans-serif" font-size="12" fill="#86efac" text-anchor="end">80 L</text>
+  </g>
+
+  <line x1="816" y1="400" x2="1144" y2="400" stroke="#1e4a30" stroke-width="1.5"/>
+
+  <!-- Status block -->
+  <rect x="816" y="408" width="328" height="50" rx="8" fill="#163020" opacity="0.8"/>
+  <text x="828" y="430" font-family="Arial, sans-serif" font-size="12" fill="#86efac">7 produtos identificados</text>
+  <text x="828" y="449" font-family="Arial, sans-serif" font-size="11" fill="#4a8a60">Estoque pronto para atualizar após aprovação</text>
+
+  <!-- Approve button -->
+  <rect x="816" y="472" width="328" height="52" rx="12" fill="#22c55e"/>
+  <text x="980" y="503" font-family="Arial, sans-serif" font-size="16" fill="white" font-weight="700" text-anchor="middle">✓ Aprovar com 1 clique</text>
+
+  <!-- Info lines -->
+  <text x="820" y="548" font-family="Arial, sans-serif" font-size="11" fill="#4a8a60">Recebido em: 22/03/2026 às 09:14</text>
+  <text x="820" y="566" font-family="Arial, sans-serif" font-size="11" fill="#4a8a60">Processado pela IA em 1.2 segundos</text>
+  <text x="820" y="584" font-family="Arial, sans-serif" font-size="11" fill="#4a8a60">Zero digitação manual necessária</text>
+
+  <!-- ══ BOTTOM BADGES BAR ══ -->
+  <rect x="0" y="710" width="1200" height="110" fill="#0a1628" opacity="0.95"/>
+  <line x1="0" y1="710" x2="1200" y2="710" stroke="#1e3a5f" stroke-width="1.5"/>
+
+  <!-- Badge 1: Zero Digitação -->
+  <rect x="160" y="730" width="240" height="56" rx="14" fill="#1a3060" stroke="#1e4a80" stroke-width="1"/>
+  <text x="190" y="755" font-family="Arial, sans-serif" font-size="20">⚡</text>
+  <text x="220" y="752" font-family="Arial, sans-serif" font-size="13" fill="#90bff0" font-weight="700">Zero digitação</text>
+  <text x="220" y="770" font-family="Arial, sans-serif" font-size="10" fill="#4a7ab5">100% automatizado</text>
+
+  <!-- Badge 2: IA Processa -->
+  <rect x="480" y="730" width="240" height="56" rx="14" fill="#1a3060" stroke="#1e4a80" stroke-width="1"/>
+  <text x="510" y="755" font-family="Arial, sans-serif" font-size="20">🤖</text>
+  <text x="540" y="752" font-family="Arial, sans-serif" font-size="13" fill="#90bff0" font-weight="700">IA processa</text>
+  <text x="540" y="770" font-family="Arial, sans-serif" font-size="10" fill="#4a7ab5">Em menos de 2 segundos</text>
+
+  <!-- Badge 3: Estoque Atualizado -->
+  <rect x="800" y="730" width="240" height="56" rx="14" fill="#163020" stroke="#1e4a30" stroke-width="1"/>
+  <text x="830" y="755" font-family="Arial, sans-serif" font-size="20">📦</text>
+  <text x="860" y="752" font-family="Arial, sans-serif" font-size="13" fill="#86efac" font-weight="700">Estoque atualizado</text>
+  <text x="860" y="770" font-family="Arial, sans-serif" font-size="10" fill="#4a8a60">Após sua aprovação</text>
+
+  <!-- ══ FOOTER BAR ══ -->
+  <rect x="0" y="820" width="1200" height="80" fill="#071020" opacity="0.98"/>
+  <line x1="0" y1="820" x2="1200" y2="820" stroke="#0d1e35" stroke-width="1"/>
+
+  <!-- Progress indicator -->
+  <rect x="200" y="847" width="800" height="6" rx="3" fill="#162035"/>
+  <rect x="200" y="847" width="640" height="6" rx="3" fill="#1a56db"/>
+  <circle cx="840" cy="850" r="8" fill="#1a56db" filter="url(#glow)"/>
+
+  <!-- Steps -->
+  <circle cx="200" cy="850" r="6" fill="#22c55e"/>
+  <text x="200" y="876" font-family="Arial, sans-serif" font-size="10" fill="#22c55e" text-anchor="middle">Emitida</text>
+
+  <circle cx="400" cy="850" r="6" fill="#22c55e"/>
+  <text x="400" y="876" font-family="Arial, sans-serif" font-size="10" fill="#22c55e" text-anchor="middle">Recebida</text>
+
+  <circle cx="600" cy="850" r="6" fill="#22c55e"/>
+  <text x="600" y="876" font-family="Arial, sans-serif" font-size="10" fill="#22c55e" text-anchor="middle">Processada</text>
+
+  <circle cx="840" cy="850" r="8" fill="#1a56db"/>
+  <text x="840" y="876" font-family="Arial, sans-serif" font-size="10" fill="#90bff0" text-anchor="middle" font-weight="700">Aprovação</text>
+
+  <circle cx="1000" cy="850" r="6" fill="#1e3a5f"/>
+  <text x="1000" y="876" font-family="Arial, sans-serif" font-size="10" fill="#4a7ab5" text-anchor="middle">Estoque ✓</text>
+</svg>

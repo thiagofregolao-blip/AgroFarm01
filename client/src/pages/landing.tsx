@@ -241,7 +241,7 @@ export default function LandingPage() {
 
                     {/* Feature rows */}
                     {[
-                        { icon: Sparkles, title: "Recebimento Inteligente de Faturas", desc: "Esqueça o cadastro manual. Assim que sua empresa de insumos emite a fatura, a DataGrow recebe automaticamente, identifica os produtos, quantidades e valores — e já registra no sistema aguardando sua aprovação com um clique.", image: "/feature-faturas.png", reverse: true, noOverlay: true,
+                        { icon: Sparkles, title: "Recebimento Inteligente de Faturas", desc: "Esqueça o cadastro manual. Assim que sua empresa de insumos emite a fatura, a DataGrow recebe automaticamente, identifica os produtos, quantidades e valores — e já registra no sistema aguardando sua aprovação com um clique.", image: "/feature-faturas.svg", reverse: true, noOverlay: true,
                           items: ["Zero digitação — 100% automatizado", "Aprovação em um clique direto no app", "Estoque atualizado automaticamente após aprovação", "Histórico completo de todas as faturas recebidas"],
                           badge: "IA DataGrow" },
                         { icon: Package, title: "Controle de Estoque & Insumos", desc: "Saiba exatamente o que tem, quanto custou e quando comprar mais.", image: "/feature-estoque.png",
