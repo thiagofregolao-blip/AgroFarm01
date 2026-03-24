@@ -28,6 +28,25 @@ export function registerFarmStockRoutes(app: Express) {
         }
     });
 
+    // Receipt/signature for diesel movement (accessible from stock page)
+    app.get("/api/farm/stock/receipt/:id", requireFarmer, async (req, res) => {
+        try {
+            const rows = await db.execute(sql`
+                SELECT a.id, a.quantity, a.notes, a.applied_at AS "appliedAt",
+                       a.horimeter, a.odometer, a.signature_base64 AS "signatureBase64",
+                       e.name AS "equipmentName", e.type AS "equipmentType"
+                FROM farm_applications a
+                LEFT JOIN farm_equipment e ON a.equipment_id = e.id
+                WHERE a.id = ${req.params.id} AND a.farmer_id = ${req.user!.id}
+            `);
+            if (!rows.rows?.length) return res.status(404).json({ error: "Comprovante não encontrado" });
+            res.json(rows.rows[0]);
+        } catch (error) {
+            console.error("[FARM_RECEIPT_GET]", error);
+            res.status(500).json({ error: "Failed to get receipt" });
+        }
+    });
+
     app.put("/api/farm/stock/:id", requireFarmer, async (req, res) => {
         try {
             const { quantity, averageCost, reason, productName, productCategory, productUnit, depositId } = req.body;

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel, User, Eye } from "lucide-react";
 import { useState, useRef } from "react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,6 +20,8 @@ export default function FarmStock() {
     const [, setLocation] = useLocation();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
+    const [dieselReceipt, setDieselReceipt] = useState<any>(null);
+    const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
     const { toast } = useToast();
 
     const { user } = useAuth();
@@ -682,7 +684,9 @@ export default function FarmStock() {
                                                                 <th className="text-right py-3 px-2 font-semibold text-emerald-700">Quantidade (L)</th>
                                                                 <th className="text-right py-3 px-2 font-semibold text-emerald-700">Custo Unit.</th>
                                                                 <th className="text-left py-3 px-2 font-semibold text-emerald-700">Equipamento</th>
+                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Funcionário</th>
                                                                 <th className="text-right py-3 px-2 font-semibold text-emerald-700">Horímetro/Km</th>
+                                                                <th className="text-center py-3 px-2 font-semibold text-emerald-700">Comprov.</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -698,10 +702,42 @@ export default function FarmStock() {
                                                                     <td className="py-2 px-2 text-right font-mono">{fmtNum(parseFloat(m.quantity))}</td>
                                                                     <td className="py-2 px-2 text-right font-mono">{m.unitCost ? formatCurrency(parseFloat(m.unitCost)) : "—"}</td>
                                                                     <td className="py-2 px-2">{m.equipmentName || "—"}</td>
+                                                                    <td className="py-2 px-2">
+                                                                        {m.employeeName ? (
+                                                                            <span className="inline-flex items-center gap-1 text-xs">
+                                                                                <User className="h-3 w-3 text-emerald-600" />
+                                                                                {m.employeeName}
+                                                                            </span>
+                                                                        ) : "—"}
+                                                                    </td>
                                                                     <td className="py-2 px-2 text-right font-mono">{(() => {
                                                                         const match = m.notes?.match(/\(([^)]+)\)/);
                                                                         return match ? match[1] : "—";
                                                                     })()}</td>
+                                                                    <td className="py-2 px-2 text-center">
+                                                                        {m.referenceType === "pdv" && m.referenceId ? (
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                className="h-7 w-7 p-0"
+                                                                                disabled={loadingReceiptId === m.referenceId}
+                                                                                onClick={async () => {
+                                                                                    setLoadingReceiptId(m.referenceId);
+                                                                                    try {
+                                                                                        const res = await apiRequest("GET", `/api/farm/stock/receipt/${m.referenceId}`);
+                                                                                        const data = await res.json();
+                                                                                        setDieselReceipt(data);
+                                                                                    } catch {
+                                                                                        toast({ title: "Erro", description: "Não foi possível carregar o comprovante", variant: "destructive" });
+                                                                                    } finally {
+                                                                                        setLoadingReceiptId(null);
+                                                                                    }
+                                                                                }}
+                                                                            >
+                                                                                {loadingReceiptId === m.referenceId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4 text-emerald-600" />}
+                                                                            </Button>
+                                                                        ) : "—"}
+                                                                    </td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -710,6 +746,63 @@ export default function FarmStock() {
                                             )}
                                         </CardContent>
                                     </Card>
+
+                                    {/* Modal de Comprovante de Abastecimento */}
+                                    {dieselReceipt && (
+                                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setDieselReceipt(null)}>
+                                            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                                <div className="bg-emerald-700 text-white px-6 py-4 rounded-t-xl flex justify-between items-center">
+                                                    <h3 className="font-bold text-lg flex items-center gap-2">
+                                                        <FileText className="h-5 w-5" />
+                                                        Comprovante de Abastecimento
+                                                    </h3>
+                                                    <button onClick={() => setDieselReceipt(null)} className="text-white/80 hover:text-white text-xl">&times;</button>
+                                                </div>
+                                                <div className="p-6 space-y-4">
+                                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                                        <div>
+                                                            <span className="text-gray-500 text-xs uppercase">Data</span>
+                                                            <p className="font-medium">{new Date(dieselReceipt.appliedAt).toLocaleString("pt-BR")}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-gray-500 text-xs uppercase">Equipamento</span>
+                                                            <p className="font-medium">{dieselReceipt.equipmentName || "—"}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-gray-500 text-xs uppercase">Quantidade</span>
+                                                            <p className="font-medium">{parseFloat(dieselReceipt.quantity).toFixed(0)} L</p>
+                                                        </div>
+                                                        {dieselReceipt.odometer && (
+                                                            <div>
+                                                                <span className="text-gray-500 text-xs uppercase">Km</span>
+                                                                <p className="font-medium">{dieselReceipt.odometer} km</p>
+                                                            </div>
+                                                        )}
+                                                        {dieselReceipt.horimeter && (
+                                                            <div>
+                                                                <span className="text-gray-500 text-xs uppercase">Horímetro</span>
+                                                                <p className="font-medium">{dieselReceipt.horimeter}h</p>
+                                                            </div>
+                                                        )}
+                                                        {dieselReceipt.notes && (
+                                                            <div className="col-span-2">
+                                                                <span className="text-gray-500 text-xs uppercase">Observações</span>
+                                                                <p className="font-medium">{dieselReceipt.notes}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="border-t pt-4">
+                                                        <span className="text-gray-500 text-xs uppercase block mb-2">Assinatura</span>
+                                                        {dieselReceipt.signatureBase64 ? (
+                                                            <img src={dieselReceipt.signatureBase64} alt="Assinatura" className="max-h-32 mx-auto border rounded-lg p-2 bg-gray-50" />
+                                                        ) : (
+                                                            <p className="text-gray-400 text-sm text-center py-4">Sem assinatura registrada</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </>
                             );
                         })()}

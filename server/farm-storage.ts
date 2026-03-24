@@ -478,14 +478,23 @@ export class FarmStorage {
             .orderBy(desc(farmStockMovements.createdAt))
             .limit(limit);
 
-        // Extract equipment name from notes for diesel movements
+        // Extract equipment name and employee name from notes for diesel movements
         return result.map(r => {
             let equipmentName: string | null = null;
-            if (r.notes?.startsWith("Abastecimento: ")) {
-                const match = r.notes.match(/^Abastecimento: ([^(]+)/);
-                if (match) equipmentName = match[1].trim();
+            let employeeName: string | null = null;
+            if (r.notes) {
+                // Format: "Abastecimento EquipName - QL | Funcionário: Name"
+                const equipMatch = r.notes.match(/^Abastecimento\s+([^-]+)/);
+                if (equipMatch) equipmentName = equipMatch[1].trim();
+                // Legacy format
+                if (!equipmentName && r.notes.startsWith("Abastecimento: ")) {
+                    const legacyMatch = r.notes.match(/^Abastecimento: ([^(]+)/);
+                    if (legacyMatch) equipmentName = legacyMatch[1].trim();
+                }
+                const empMatch = r.notes.match(/Funcionário:\s*(.+)$/);
+                if (empMatch) employeeName = empMatch[1].trim();
             }
-            return { ...r, equipmentName };
+            return { ...r, equipmentName, employeeName };
         });
     }
 
@@ -511,7 +520,10 @@ export class FarmStorage {
             const telemetry = [];
             if (data.horimeter) telemetry.push(`${data.horimeter}h`);
             if (data.odometer) telemetry.push(`${data.odometer}km`);
-            noteStr = `Abastecimento: ${equipName}${telemetry.length ? ` (${telemetry.join(', ')})` : ''}`;
+            noteStr = `Abastecimento ${equipName}${telemetry.length ? ` (${telemetry.join(', ')})` : ''}`;
+            // Preserve employee name from PDV notes
+            const empMatch = data.notes?.match(/Funcionário:\s*(.+)$/);
+            if (empMatch) noteStr += ` | Funcionário: ${empMatch[1].trim()}`;
         } else {
             noteStr = `Saída genérica`;
         }
