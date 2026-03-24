@@ -851,7 +851,14 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
                                 <div className="flex items-center gap-3">
                                     <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
                                     <div>
-                                        <p className="font-semibold text-gray-800">{group.supplier}</p>
+                                        <p className="font-semibold text-gray-800">
+                                            {(group.items[0]?.receiptNumber || group.items[0]?.receipt_number) && (
+                                                <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono mr-2">
+                                                    #{group.items[0].receiptNumber || group.items[0].receipt_number}
+                                                </span>
+                                            )}
+                                            {group.supplier}
+                                        </p>
                                         <p className="text-xs text-gray-500">{group.date} · {group.items.length} titulo(s)</p>
                                     </div>
                                 </div>
