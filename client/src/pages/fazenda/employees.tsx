@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit2, Trash2, Loader2, Users, Camera, Image, Phone, Search, X, CheckCircle, AlertCircle } from "lucide-react";
+import { useToast, toast } from "@/hooks/use-toast";
+import { Plus, Edit2, Trash2, Loader2, Users, Camera, Image, Phone, Search, X, CheckCircle, AlertCircle, ScanFace } from "lucide-react";
 import { loadFaceModels, generateFaceEmbedding } from "@/lib/face-recognition";
 
 const ROLES = ["Gerente", "Operador", "Tratorista", "Motorista", "Mecânico", "Auxiliar", "Encarregado", "Outro"];
@@ -34,18 +34,26 @@ function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmi
         }
         setEmbeddingStatus("loading");
         try {
+            console.log("[FaceEmbed] Carregando modelos...");
             await loadFaceModels();
+            console.log("[FaceEmbed] Modelos carregados. Gerando embedding...");
             const emb = await generateFaceEmbedding(base64);
             if (emb) {
                 setFaceEmbedding(emb);
                 setEmbeddingStatus("success");
+                console.log("[FaceEmbed] Embedding gerado com sucesso:", emb.length, "dimensões");
+                toast({ title: "Rosto detectado com sucesso!", description: "Vetor facial de 128 dimensões gerado" });
             } else {
                 setFaceEmbedding(null);
                 setEmbeddingStatus("error");
+                console.warn("[FaceEmbed] Nenhum rosto detectado na imagem");
+                toast({ title: "Nenhum rosto detectado", description: "Tente outra foto com o rosto bem visível", variant: "destructive" });
             }
-        } catch {
+        } catch (err) {
+            console.error("[FaceEmbed] Erro ao gerar embedding:", err);
             setFaceEmbedding(null);
             setEmbeddingStatus("error");
+            toast({ title: "Erro na detecção facial", description: String(err), variant: "destructive" });
         }
     }, []);
 
@@ -256,15 +264,22 @@ export default function FarmEmployees() {
                                         </div>
                                     </div>
 
-                                    {/* Signature preview */}
-                                    {emp.signatureBase64 && (
-                                        <div className="px-4 pb-2">
+                                    {/* Face embedding + Signature */}
+                                    <div className="px-4 pb-2 space-y-2">
+                                        {/* Face embedding badge */}
+                                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${emp.faceEmbedding ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-600"}`}>
+                                            <ScanFace className="h-4 w-4" />
+                                            {emp.faceEmbedding ? "Vetor facial cadastrado" : "Sem vetor facial — edite e reenvie a foto"}
+                                        </div>
+
+                                        {/* Signature preview */}
+                                        {emp.signatureBase64 && (
                                             <div className="bg-gray-50 rounded-lg p-2 border border-gray-100">
                                                 <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Assinatura</p>
                                                 <img src={emp.signatureBase64} alt="Assinatura" className="h-12 object-contain" />
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
 
                                     {/* Actions */}
                                     <div className="flex border-t border-gray-100">
