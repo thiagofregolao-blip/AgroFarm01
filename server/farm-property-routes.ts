@@ -231,7 +231,9 @@ export function registerFarmPropertyRoutes(app: Express) {
             if (signatureBase64 !== undefined) data.signatureBase64 = signatureBase64;
             if (faceEmbedding !== undefined) data.faceEmbedding = faceEmbedding;
 
+            console.log(`[FARM_EMPLOYEES_UPDATE] id=${req.params.id}, fields=${Object.keys(data).join(",")}, hasFaceEmbedding=${!!data.faceEmbedding}, embeddingLength=${data.faceEmbedding?.length || 0}`);
             const emp = await farmStorage.updateEmployee(req.params.id, data);
+            console.log(`[FARM_EMPLOYEES_UPDATE] saved ok, emp.faceEmbedding=${!!emp.faceEmbedding}`);
             res.json(emp);
         } catch (error) {
             console.error("[FARM_EMPLOYEES_UPDATE]", error);

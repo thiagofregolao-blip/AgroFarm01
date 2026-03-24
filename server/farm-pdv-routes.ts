@@ -469,6 +469,8 @@ export function registerFarmPdvRoutes(app: Express) {
         try {
             const farmerId = req.session.pdvFarmerId;
             const employees = await farmStorage.getEmployees(farmerId);
+            console.log(`[PDV_EMBEDDINGS] Total: ${employees.length}, withEmbedding: ${employees.filter((e: any) => e.faceEmbedding).length}`);
+            employees.forEach((e: any) => console.log(`[PDV_EMBEDDINGS] ${e.name}: hasEmbedding=${!!e.faceEmbedding}, status=${e.status}`));
             const withEmbeddings = employees
                 .filter((e: any) => e.faceEmbedding && e.status === "Ativo")
                 .map((e: any) => ({
