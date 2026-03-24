@@ -8,7 +8,7 @@ import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { farmProductsCatalog, farmStockMovements, farmInvoiceItems, farmInvoices } from "@shared/schema";
-import { parseFarmInvoicePDF, parseFarmInvoiceImage } from "./parse-farm-invoice";
+import { parseWithGemini } from "./gemini-invoice-parser";
 import { eq } from "drizzle-orm";
 
 // Helper: find matching remissions for a given invoice
@@ -194,19 +194,19 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 return res.status(400).json({ error: "PDF file required" });
             }
 
-            let parsed;
             const mimeType = req.file.mimetype;
 
-            if (mimeType === "application/pdf") {
-                parsed = await parseFarmInvoicePDF(req.file.buffer);
-            } else if (mimeType.startsWith("image/")) {
-                parsed = await parseFarmInvoiceImage(req.file.buffer, mimeType);
-            } else {
+            if (mimeType !== "application/pdf" && !mimeType.startsWith("image/")) {
                 return res.status(400).json({ error: "Unsupported file type. Use PDF or Image (JPG, PNG)." });
             }
 
+            // Use Gemini Vision for extraction (same engine as WhatsApp webhook)
+            const fileBase64 = req.file.buffer.toString("base64");
+            const parsed = await parseWithGemini(fileBase64, mimeType);
+            console.log(`[INVOICE_IMPORT] Gemini extracted: type=${parsed.type}, supplier=${parsed.supplier}, items=${parsed.items.length}, total=${parsed.totalAmount}`);
+
             // Auto-detect: se a IA detectou que e Nota de Remision, forcar skipStockEntry e zerar valores
-            const isRemision = parsed.documentType === "remision" || req.body?.isRemision === "true";
+            const isRemision = parsed.type === "remision" || req.body?.isRemision === "true";
             if (parsed.documentType === "remision") {
                 console.log(`[INVOICE_IMPORT] Documento detectado como NOTA DE REMISION (auto-detected by AI)`);
             }
@@ -251,9 +251,10 @@ export function registerFarmInvoiceRoutes(app: Express) {
             }
 
             // Determine dueDate: from parser, or fallback to issueDate + 30 days
-            let invoiceDueDate: Date | null = parsed.dueDate;
-            if (!invoiceDueDate && parsed.issueDate) {
-                invoiceDueDate = new Date(parsed.issueDate);
+            let invoiceDueDate: Date | null = parsed.dueDate ? new Date(parsed.dueDate + "T12:00:00") : null;
+            const invoiceIssueDate: Date | null = parsed.issueDate ? new Date(parsed.issueDate + "T12:00:00") : null;
+            if (!invoiceDueDate && invoiceIssueDate) {
+                invoiceDueDate = new Date(invoiceIssueDate);
                 invoiceDueDate.setDate(invoiceDueDate.getDate() + 30);
             }
 
@@ -279,19 +280,18 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
             // Create invoice record — store full file as base64
             const skipStockEntry = req.body?.skipStockEntry === "true";
-            const fileBase64 = req.file.buffer.toString("base64");
             const invoice = await farmStorage.createInvoice({
                 farmerId,
                 seasonId,
                 invoiceNumber: parsed.invoiceNumber,
                 supplier: parsed.supplier,
-                issueDate: parsed.issueDate,
+                issueDate: invoiceIssueDate || new Date(),
                 dueDate: isRemision ? null : invoiceDueDate,
                 currency: parsed.currency,
                 totalAmount: isRemision ? "0" : String(parsed.totalAmount),
                 status: "pending",
                 skipStockEntry,
-                rawPdfData: parsed.rawText.substring(0, 5000),
+                rawPdfData: parsed.description || "",
                 source: "manual",
                 pdfBase64: fileBase64,
                 fileMimeType: mimeType,
@@ -301,7 +301,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             // Auto-create or link supplier in farm_suppliers
             try {
                 const supplierName = parsed.supplier || "";
-                const supplierRuc = (parsed as any).supplierRuc || "";
+                const supplierRuc = parsed.supplierRuc || "";
                 if (supplierName) {
                     // Escape LIKE special characters to prevent injection
                     const namePrefix = supplierName.substring(0, 15).replace(/[%_\\]/g, '\\$&');
@@ -321,9 +321,9 @@ export function registerFarmInvoiceRoutes(app: Express) {
                         supplierId = (existing.rows[0] as any).id;
                         console.log(`[INVOICE_IMPORT] Linked existing supplier id=${supplierId} for "${supplierName}"`);
                     } else {
-                        const supplierPhone = (parsed as any).supplierPhone || null;
-                        const supplierEmail = (parsed as any).supplierEmail || null;
-                        const supplierAddress = (parsed as any).supplierAddress || null;
+                        const supplierPhone = parsed.supplierPhone || null;
+                        const supplierEmail = parsed.supplierEmail || null;
+                        const supplierAddress = parsed.supplierAddress || null;
                         const created = await db.execute(sql`
                             INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, person_type, entity_type)
                             VALUES (${farmerId}, ${supplierName}, ${supplierRuc || null}, ${supplierPhone}, ${supplierEmail}, ${supplierAddress}, 'provedor', 'juridica')
@@ -377,15 +377,15 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 invoiceItems.push({
                     invoiceId: invoice.id,
                     productId: matchedProduct?.id || null,
-                    productCode: item.productCode,
+                    productCode: item.productCode || null,
                     productName: item.productName,
-                    unit: item.unit,
-                    quantity: String(item.quantity),
-                    unitPrice: isRemision ? "0" : String(item.unitPrice),
-                    discount: isRemision ? "0" : String(item.discount),
-                    totalPrice: isRemision ? "0" : String(item.totalPrice),
-                    batch: item.batch || null,
-                    expiryDate: item.expiryDate || null,
+                    unit: item.unit || "UN",
+                    quantity: String(item.quantity || 0),
+                    unitPrice: isRemision ? "0" : String(item.unitPrice || 0),
+                    discount: "0",
+                    totalPrice: isRemision ? "0" : String(item.totalPrice || 0),
+                    batch: null,
+                    expiryDate: null,
                 });
             }
 
@@ -410,7 +410,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 invoice,
                 items,
                 parsedItemCount: parsed.items.length,
-                documentType: parsed.documentType || "unknown",
+                documentType: parsed.type || "unknown",
                 isRemision,
                 matchingRemissions,
                 message: isRemision
