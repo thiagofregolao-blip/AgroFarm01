@@ -28,7 +28,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { FileText, Loader2, Plus, UploadCloud } from "lucide-react";
+import { FileText, Loader2, Plus, Trash2, UploadCloud } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export function ManualsManagement() {
@@ -94,6 +94,18 @@ export function ManualsManagement() {
         },
     });
 
+    const deleteMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const res = await apiRequest("DELETE", `/api/admin/manuals/${id}`);
+            if (!res.ok) throw new Error("Erro ao excluir");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/webhook/n8n/manuals"] });
+            toast({ title: "Manual excluído com sucesso" });
+        },
+        onError: () => toast({ title: "Erro ao excluir manual", variant: "destructive" }),
+    });
+
     const handleUpload = () => {
         setUploading(true);
         uploadMutation.mutate();
@@ -130,6 +142,7 @@ export function ManualsManagement() {
                                 <TableHead>Segmento</TableHead>
                                 <TableHead>Data de Inclusão</TableHead>
                                 <TableHead>Status da Indexação (Texto)</TableHead>
+                                <TableHead className="w-16"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -157,6 +170,21 @@ export function ManualsManagement() {
                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                             Extraído ({manual.contentText?.length || 0} caracteres)
                                         </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-red-400 hover:text-red-600 hover:bg-red-50"
+                                            disabled={deleteMutation.isPending}
+                                            onClick={() => {
+                                                if (confirm(`Excluir "${manual.title}"?`)) {
+                                                    deleteMutation.mutate(manual.id);
+                                                }
+                                            }}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}

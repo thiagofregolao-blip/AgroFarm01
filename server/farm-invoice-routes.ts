@@ -817,4 +817,17 @@ export function registerFarmInvoiceRoutes(app: Express) {
             res.status(500).json({ error: "Failed to process and upload manual" });
         }
     });
+
+    app.delete("/api/admin/manuals/:id", requireAdminManuals, async (req, res) => {
+        try {
+            const { farmManuals } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq } = await import("drizzle-orm");
+            await db.delete(farmManuals).where(eq(farmManuals.id, req.params.id));
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[ADMIN_MANUALS_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete manual" });
+        }
+    });
 }
