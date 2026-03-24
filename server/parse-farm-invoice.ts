@@ -30,6 +30,9 @@ export interface ParsedInvoice {
     invoiceNumber: string;
     supplier: string;
     supplierRuc: string; // RUC do fornecedor/emissor da fatura
+    supplierPhone?: string;
+    supplierEmail?: string;
+    supplierAddress?: string;
     clientName: string;
     clientDocument: string;
     issueDate: Date | null;
@@ -55,6 +58,9 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
     let invoiceNumber = '';
     let supplier = '';
     let supplierRuc = '';
+    let supplierPhone = '';
+    let supplierEmail = '';
+    let supplierAddress = '';
     let clientName = '';
     let clientDocument = '';
     let clientSectionReached = false;
@@ -108,6 +114,35 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         // Track last non-trivial line before RUC (for supplier name extraction)
         if (!clientSectionReached && !supplierRuc && line.length > 3 && !line.match(/^[\d\s\-\/]+$/)) {
             lastLineBeforeRuc = line.trim();
+        }
+
+        // Supplier phone: extract from header area before client section
+        if (!supplierPhone && !clientSectionReached) {
+            const phoneMatch = line.match(/(?:TELEFONO|Tel|Fone|Cel)[:\s]*([0-9\s\-\(\)]{7,})/i);
+            if (phoneMatch) {
+                supplierPhone = phoneMatch[1].trim();
+            }
+        }
+
+        // Supplier email: extract from header area before client section
+        if (!supplierEmail && !clientSectionReached) {
+            const emailMatch = line.match(/[\w.\-]+@[\w.\-]+\.\w+/i);
+            if (emailMatch) {
+                supplierEmail = emailMatch[0].trim();
+            }
+        }
+
+        // Supplier address: lines in header that look like addresses (after RUC, before client section)
+        if (!supplierAddress && !clientSectionReached && supplierRuc) {
+            // Address lines typically contain street names, intersections, or city references
+            if (line.match(/(?:calle|avda|avenida|ruta|km|barrio|esq\.|y\s|esquina)/i) ||
+                (line.length > 15 && !line.match(/^(?:RUC|TELEFONO|TIMBRADO|INICIO|FACTURA|CONDICION|FECHA|COMERCIO)/i) &&
+                 !line.match(/@/) && !line.match(/^\d{4,}$/) && !supplierEmail?.includes(line))) {
+                // Avoid lines that are clearly not addresses
+                if (!line.match(/HIPERMERCADO|SUPERMERCADO|POR MENOR|POR MAYOR/i)) {
+                    supplierAddress = line.trim();
+                }
+            }
         }
 
         // Supplier name: known hardcoded patterns as fallback
@@ -339,6 +374,9 @@ export async function parseFarmInvoicePDF(buffer: Buffer): Promise<ParsedInvoice
         invoiceNumber,
         supplier,
         supplierRuc,
+        supplierPhone: supplierPhone || undefined,
+        supplierEmail: supplierEmail || undefined,
+        supplierAddress: supplierAddress || undefined,
         clientName,
         clientDocument,
         issueDate,
@@ -507,6 +545,9 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
       "invoiceNumber": "string (número da nota)",
       "supplier": "string (nome do fornecedor/empresa emissora do documento)",
       "supplierRuc": "string (RUC/CNPJ do FORNECEDOR/EMISSOR do documento, não do cliente)",
+      "supplierPhone": "string (telefone do fornecedor/emissor, se disponível no cabecalho)",
+      "supplierEmail": "string (email do fornecedor/emissor, se disponível no cabecalho)",
+      "supplierAddress": "string (endereço do fornecedor/emissor, se disponível no cabecalho)",
       "clientName": "string (nome do cliente/comprador)",
       "clientDocument": "string (CPF/CNPJ/RUC do cliente)",
       "issueDate": "YYYY-MM-DD (data de emissão)",
@@ -595,6 +636,9 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
             invoiceNumber: parsed.invoiceNumber || "",
             supplier: parsed.supplier || "Fornecedor Desconhecido",
             supplierRuc: parsed.supplierRuc || "",
+            supplierPhone: parsed.supplierPhone || undefined,
+            supplierEmail: parsed.supplierEmail || undefined,
+            supplierAddress: parsed.supplierAddress || undefined,
             clientName: parsed.clientName || "",
             clientDocument: parsed.clientDocument || "",
             issueDate: safeDateParse(parsed.issueDate) || new Date(),

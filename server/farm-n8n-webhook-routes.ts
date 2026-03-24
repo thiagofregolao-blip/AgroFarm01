@@ -511,6 +511,13 @@ IMPORTANTE para faturas (invoice):
 - Extraia a moeda ("Moneda", "Currency"): "USD" para US Dollar, "PYG" para Guarani, "BRL" para Real
 - Extraia as condicoes de pagamento ("Condicion de Venta": "Credito" ou "Contado")
 
+IMPORTANTE - Dados do Fornecedor (EXTRAIA SEMPRE que disponivel no documento):
+- "supplierRuc": o RUC ou CNPJ da empresa emissora (ex: "3538088-8", "80131506-9"). Procure por "RUC:", "R.U.C.", "CNPJ:"
+- "supplierPhone": telefone da empresa emissora. Procure por "TELEFONO:", "Tel:", "Fone:"
+- "supplierEmail": email da empresa emissora. Procure por "@" no cabecalho
+- "supplierAddress": endereco completo da empresa emissora. Geralmente aparece abaixo do nome/RUC no cabecalho
+- Se nao encontrar algum desses campos, retorne null para ele
+
 Retorne APENAS UM JSON VALIDO no formato exato:
 {
   "type": "expense" | "invoice" | "romaneio" | "remision" | "unknown",
@@ -519,6 +526,10 @@ Retorne APENAS UM JSON VALIDO no formato exato:
   "category": "diesel" | "pecas" | "frete" | "mao_de_obra" | "outro",
   "invoiceNumber": "123456",
   "supplier": "Nome da Empresa Fornecedora",
+  "supplierRuc": "3538088-8",
+  "supplierPhone": "0983231599",
+  "supplierEmail": "email@empresa.com",
+  "supplierAddress": "Endereço completo da empresa",
   "issueDate": "2025-10-02",
   "dueDate": "2026-04-01",
   "currency": "USD",
@@ -769,25 +780,49 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                     console.error("[WEBHOOK_INVOICE_SEASON]", err);
                 }
 
-                // Auto-register supplier if not exists
+                // Auto-register supplier if not exists (with full data from receipt)
                 let supplierId = null;
                 if (parsed.supplier) {
                     try {
+                        const supplierRuc = parsed.supplierRuc || null;
+                        const supplierPhone = parsed.supplierPhone || null;
+                        const supplierEmail = parsed.supplierEmail || null;
+                        const supplierAddress = parsed.supplierAddress || null;
+
+                        // Search by RUC first (most reliable), then by name
                         const existingSup = await db.execute(sql`
-                            SELECT id FROM farm_suppliers WHERE farmer_id = ${farmer.id} AND is_active = true
-                            AND (name ILIKE ${'%' + parsed.supplier.substring(0, 15) + '%'} OR ruc = ${parsed.invoiceNumber || '__none__'})
+                            SELECT id, ruc, phone, email, address FROM farm_suppliers WHERE farmer_id = ${farmer.id} AND is_active = true
+                            AND (
+                                (${supplierRuc}::text IS NOT NULL AND ruc = ${supplierRuc})
+                                OR name ILIKE ${'%' + parsed.supplier.substring(0, 15) + '%'}
+                            )
                             LIMIT 1
                         `);
                         const supRows = (existingSup as any).rows ?? existingSup;
                         if (supRows.length > 0) {
                             supplierId = supRows[0].id;
+                            // Update missing fields on existing supplier
+                            const existing = supRows[0];
+                            if ((!existing.ruc && supplierRuc) || (!existing.phone && supplierPhone) || (!existing.email && supplierEmail) || (!existing.address && supplierAddress)) {
+                                await db.execute(sql`
+                                    UPDATE farm_suppliers SET
+                                        ruc = COALESCE(ruc, ${supplierRuc}),
+                                        phone = COALESCE(phone, ${supplierPhone}),
+                                        email = COALESCE(email, ${supplierEmail}),
+                                        address = COALESCE(address, ${supplierAddress}),
+                                        updated_at = NOW()
+                                    WHERE id = ${supplierId}
+                                `);
+                                console.log(`[WEBHOOK_INVOICE_SUPPLIER] Updated missing fields for supplier ${supplierId}`);
+                            }
                         } else {
                             const newSup = await db.execute(sql`
-                                INSERT INTO farm_suppliers (farmer_id, name, person_type, entity_type)
-                                VALUES (${farmer.id}, ${parsed.supplier}, 'provedor', 'juridica')
+                                INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, person_type, entity_type)
+                                VALUES (${farmer.id}, ${parsed.supplier}, ${supplierRuc}, ${supplierPhone}, ${supplierEmail}, ${supplierAddress}, 'provedor', 'juridica')
                                 RETURNING id
                             `);
                             supplierId = ((newSup as any).rows ?? newSup)[0]?.id;
+                            console.log(`[WEBHOOK_INVOICE_SUPPLIER] Created new supplier ${supplierId}: ${parsed.supplier} | RUC: ${supplierRuc}`);
                         }
                     } catch (err) {
                         console.error("[WEBHOOK_INVOICE_SUPPLIER]", err);

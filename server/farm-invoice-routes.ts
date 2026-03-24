@@ -321,13 +321,16 @@ export function registerFarmInvoiceRoutes(app: Express) {
                         supplierId = (existing.rows[0] as any).id;
                         console.log(`[INVOICE_IMPORT] Linked existing supplier id=${supplierId} for "${supplierName}"`);
                     } else {
+                        const supplierPhone = (parsed as any).supplierPhone || null;
+                        const supplierEmail = (parsed as any).supplierEmail || null;
+                        const supplierAddress = (parsed as any).supplierAddress || null;
                         const created = await db.execute(sql`
-                            INSERT INTO farm_suppliers (farmer_id, name, ruc, person_type, entity_type)
-                            VALUES (${farmerId}, ${supplierName}, ${supplierRuc || null}, 'provedor', 'juridica')
+                            INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, person_type, entity_type)
+                            VALUES (${farmerId}, ${supplierName}, ${supplierRuc || null}, ${supplierPhone}, ${supplierEmail}, ${supplierAddress}, 'provedor', 'juridica')
                             RETURNING id
                         `);
                         supplierId = (created.rows[0] as any).id;
-                        console.log(`[INVOICE_IMPORT] Auto-created supplier id=${supplierId} for "${supplierName}"`);
+                        console.log(`[INVOICE_IMPORT] Auto-created supplier id=${supplierId} for "${supplierName}" RUC: ${supplierRuc}`);
                     }
                     if (supplierId) {
                         await db.execute(sql`
