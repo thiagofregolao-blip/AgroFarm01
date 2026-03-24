@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X, Tractor, Gauge, Eraser, PenTool } from "lucide-react";
+import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X, Tractor, Gauge, Eraser, PenTool, Camera } from "lucide-react";
 import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
 
 interface CartItem {
@@ -825,6 +825,12 @@ export default function PdvTerminal() {
         const [signatureData, setSignatureData] = useState<string | null>(null);
         const [viewReceipt, setViewReceipt] = useState<any>(null);
         const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
+        const [recognizedEmployee, setRecognizedEmployee] = useState<{ name: string; role?: string; signatureBase64?: string } | null>(null);
+        const [recognizing, setRecognizing] = useState(false);
+        const [showCamera, setShowCamera] = useState(false);
+        const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+        const videoRef = useRef<HTMLVideoElement>(null);
+        const streamRef = useRef<MediaStream | null>(null);
 
         const parsedQty = parseFloat(dieselQty) || 0;
         const stockAfter = dieselStock - parsedQty;
@@ -837,7 +843,62 @@ export default function PdvTerminal() {
             if (parsedQty > dieselStock) { toast({ title: "Quantidade excede o estoque disponível", variant: "destructive" }); return; }
             if (!dieselProduct) { toast({ title: "Nenhum produto diesel encontrado no estoque", variant: "destructive" }); return; }
             setSignatureData(null);
+            setRecognizedEmployee(null);
+            setCapturedPhoto(null);
             setShowReceiptModal(true);
+        };
+
+        // Start camera for face recognition
+        const startCamera = async () => {
+            setShowCamera(true);
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+                streamRef.current = stream;
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play();
+                }
+            } catch (err) {
+                toast({ title: "Erro ao acessar câmera", description: "Verifique as permissões do navegador", variant: "destructive" });
+                setShowCamera(false);
+            }
+        };
+
+        const stopCamera = () => {
+            streamRef.current?.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
+            setShowCamera(false);
+        };
+
+        const captureAndRecognize = async () => {
+            if (!videoRef.current) return;
+            const canvas = document.createElement("canvas");
+            canvas.width = videoRef.current.videoWidth || 640;
+            canvas.height = videoRef.current.videoHeight || 480;
+            const ctx = canvas.getContext("2d")!;
+            ctx.drawImage(videoRef.current, 0, 0);
+            const photoData = canvas.toDataURL("image/jpeg", 0.8);
+            setCapturedPhoto(photoData);
+            stopCamera();
+
+            setRecognizing(true);
+            try {
+                const res = await apiRequest("POST", "/api/pdv/recognize-face", { photoBase64: photoData });
+                const result = await res.json();
+                if (result.matchedId && result.confidence >= 60) {
+                    setRecognizedEmployee({ name: result.matchedName, role: result.employeeRole, signatureBase64: result.signatureBase64 });
+                    if (result.signatureBase64) {
+                        setSignatureData(result.signatureBase64);
+                    }
+                    toast({ title: `✅ Funcionário identificado: ${result.matchedName} (${result.confidence}%)` });
+                } else {
+                    toast({ title: "Funcionário não reconhecido", description: "Use a assinatura manual abaixo", variant: "destructive" });
+                }
+            } catch {
+                toast({ title: "Erro no reconhecimento", variant: "destructive" });
+            } finally {
+                setRecognizing(false);
+            }
         };
 
         // Actually submit after signing
@@ -852,7 +913,9 @@ export default function PdvTerminal() {
                     equipmentId: dieselEquip.id,
                     horimeter: dieselHours || null,
                     odometer: dieselKm || null,
-                    notes: dieselNotes || `Abastecimento ${dieselEquip.name} - ${parsedQty}L`,
+                    notes: recognizedEmployee
+                        ? `Abastecimento ${dieselEquip.name} - ${parsedQty}L | Funcionário: ${recognizedEmployee.name}`
+                        : (dieselNotes || `Abastecimento ${dieselEquip.name} - ${parsedQty}L`),
                     seasonId: selectedSeasonId || null,
                     signatureBase64: signatureData,
                 };
@@ -1106,8 +1169,63 @@ export default function PdvTerminal() {
                                             )}
                                         </div>
 
-                                        {/* Signature */}
-                                        <SignatureCanvas onSignatureChange={setSignatureData} />
+                                        {/* Face Recognition */}
+                                        <div>
+                                            <p className="text-xs text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                <Camera className="h-3.5 w-3.5" /> Identificação do Funcionário
+                                            </p>
+
+                                            {showCamera ? (
+                                                <div className="relative rounded-xl overflow-hidden border border-gray-600 bg-black">
+                                                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-48 object-cover" />
+                                                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-3">
+                                                        <Button onClick={captureAndRecognize} className="bg-emerald-600 hover:bg-emerald-700 rounded-full px-6">
+                                                            <Camera className="h-4 w-4 mr-2" /> Capturar
+                                                        </Button>
+                                                        <Button onClick={stopCamera} variant="outline" className="rounded-full border-gray-500 text-gray-300 hover:bg-gray-700">
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : recognizing ? (
+                                                <div className="flex flex-col items-center py-6 bg-gray-800/60 rounded-xl">
+                                                    <Loader2 className="h-8 w-8 animate-spin text-amber-400 mb-2" />
+                                                    <p className="text-sm text-gray-300">Reconhecendo rosto...</p>
+                                                </div>
+                                            ) : recognizedEmployee ? (
+                                                <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        {capturedPhoto && <img src={capturedPhoto} alt="Foto" className="w-14 h-14 rounded-full object-cover border-2 border-emerald-400" />}
+                                                        <div>
+                                                            <p className="text-emerald-300 font-bold text-sm">{recognizedEmployee.name}</p>
+                                                            {recognizedEmployee.role && <p className="text-emerald-400/60 text-xs">{recognizedEmployee.role}</p>}
+                                                            <p className="text-emerald-500 text-[10px] mt-0.5">✅ Identificado com sucesso</p>
+                                                        </div>
+                                                    </div>
+                                                    {recognizedEmployee.signatureBase64 && (
+                                                        <div className="mt-3 bg-white rounded-lg p-2">
+                                                            <p className="text-[10px] text-gray-400 mb-1">Assinatura cadastrada</p>
+                                                            <img src={recognizedEmployee.signatureBase64} alt="Assinatura" className="h-12 object-contain" />
+                                                        </div>
+                                                    )}
+                                                    <button onClick={() => { setRecognizedEmployee(null); setCapturedPhoto(null); setSignatureData(null); }} className="text-xs text-gray-500 hover:text-gray-300 mt-2">
+                                                        Tentar novamente
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <Button onClick={startCamera} variant="outline" className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 py-5">
+                                                    <Camera className="h-5 w-5 mr-2" /> Abrir Câmera para Identificação
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {/* Manual Signature fallback (only if not recognized) */}
+                                        {!recognizedEmployee && (
+                                            <div>
+                                                <p className="text-xs text-gray-500 text-center mb-2">— ou assine manualmente —</p>
+                                                <SignatureCanvas onSignatureChange={setSignatureData} />
+                                            </div>
+                                        )}
 
                                         {/* Confirm button */}
                                         <Button
@@ -1118,7 +1236,7 @@ export default function PdvTerminal() {
                                             {dieselSubmitting ? (
                                                 <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Registrando...</>
                                             ) : (
-                                                <>✅ Assinar e Confirmar</>
+                                                <>✅ {recognizedEmployee ? `Confirmar (${recognizedEmployee.name})` : "Assinar e Confirmar"}</>
                                             )}
                                         </Button>
                                     </div>

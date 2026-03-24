@@ -464,6 +464,45 @@ export function registerFarmPdvRoutes(app: Express) {
         }
     });
 
+    // Face recognition for diesel receipt
+    app.post("/api/pdv/recognize-face", requirePdv, async (req, res) => {
+        try {
+            const { photoBase64 } = req.body;
+            if (!photoBase64) return res.status(400).json({ error: "Foto não enviada" });
+
+            const farmerId = req.session.pdvFarmerId;
+            const employees = await farmStorage.getEmployees(farmerId);
+
+            // Filter employees that have photos
+            const withPhotos = employees.filter((e: any) => e.photoBase64);
+            if (!withPhotos.length) {
+                return res.json({ matchedId: null, matchedName: null, confidence: 0, message: "Nenhum funcionário com foto cadastrada" });
+            }
+
+            const { recognizeFace } = await import("./whatsapp/gemini-client");
+            const result = await recognizeFace(photoBase64, withPhotos.map((e: any) => ({
+                id: e.id,
+                name: e.name,
+                photoBase64: e.photoBase64,
+            })));
+
+            // If matched, also return the employee's signature
+            if (result.matchedId && result.confidence >= 60) {
+                const matched = employees.find((e: any) => e.id === result.matchedId);
+                return res.json({
+                    ...result,
+                    signatureBase64: matched?.signatureBase64 || null,
+                    employeeRole: matched?.role || null,
+                });
+            }
+
+            res.json(result);
+        } catch (error) {
+            console.error("[PDV_RECOGNIZE_FACE]", error);
+            res.status(500).json({ error: "Falha no reconhecimento facial" });
+        }
+    });
+
     // Get receipt/signature for a specific application
     app.get("/api/pdv/receipt/:id", requirePdv, async (req, res) => {
         try {

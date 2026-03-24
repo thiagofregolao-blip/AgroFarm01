@@ -872,3 +872,100 @@ SUA RESPOSTA COMPLETA E DETALHADA:`;
     throw error;
   }
 }
+
+/**
+ * Compare a captured face photo against registered employee photos.
+ * Returns the matched employee ID or null if no match.
+ */
+export async function recognizeFace(
+  capturedPhotoBase64: string,
+  employees: Array<{ id: string; name: string; photoBase64: string }>
+): Promise<{ matchedId: string | null; matchedName: string | null; confidence: number }> {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
+
+    if (!employees.length) return { matchedId: null, matchedName: null, confidence: 0 };
+
+    // Build the employee list for the prompt
+    const employeeList = employees.map((e, i) => `FUNCIONÁRIO ${i + 1}: "${e.name}" (ID: ${e.id})`).join("\n");
+
+    // Build parts array: text prompt + captured photo + all employee photos
+    const parts: any[] = [
+      {
+        text: `Você é um sistema de reconhecimento facial para controle de abastecimento de diesel em fazendas.
+
+TAREFA: Compare a PRIMEIRA imagem (foto capturada na bomba de diesel) com as fotos cadastradas dos funcionários abaixo. Identifique qual funcionário está na primeira imagem.
+
+FUNCIONÁRIOS CADASTRADOS:
+${employeeList}
+
+As imagens seguintes (a partir da segunda) correspondem às fotos cadastradas dos funcionários, NA MESMA ORDEM da lista acima.
+
+REGRAS:
+- Compare características faciais: formato do rosto, nariz, boca, olhos, sobrancelhas
+- Considere que a foto capturada pode ter iluminação diferente, ângulo diferente, ou EPI (capacete, boné)
+- Se tiver certeza da correspondência, retorne confidence alto (80-100)
+- Se não tiver certeza, retorne confidence baixo (0-50)
+- Se nenhum funcionário corresponder, retorne matchedId como null
+
+Retorne APENAS JSON válido:
+{
+  "matchedId": "uuid-do-funcionario-ou-null",
+  "matchedName": "Nome do funcionário ou null",
+  "confidence": 85
+}`
+      },
+      // Captured photo (first image)
+      {
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: capturedPhotoBase64.replace(/^data:image\/[a-z]+;base64,/, "")
+        }
+      }
+    ];
+
+    // Add each employee photo
+    for (const emp of employees) {
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: emp.photoBase64.replace(/^data:image\/[a-z]+;base64,/, "")
+        }
+      });
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { temperature: 0.1 }
+        })
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("[recognizeFace] API Error:", data);
+      throw new Error(data.error?.message || "Erro na API Gemini");
+    }
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { matchedId: null, matchedName: null, confidence: 0 };
+
+    const result = JSON.parse(jsonMatch[0]);
+    console.log("[recognizeFace] Result:", result);
+    return {
+      matchedId: result.matchedId || null,
+      matchedName: result.matchedName || null,
+      confidence: result.confidence || 0,
+    };
+  } catch (error) {
+    console.error("[recognizeFace] Fatal error:", error);
+    return { matchedId: null, matchedName: null, confidence: 0 };
+  }
+}
