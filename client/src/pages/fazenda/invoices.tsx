@@ -777,6 +777,7 @@ export default function FarmInvoices() {
                                                         invoiceNumber: invoiceDetail.invoiceNumber || "",
                                                         supplier: invoiceDetail.supplier || "",
                                                         issueDate: invoiceDetail.issueDate ? new Date(invoiceDetail.issueDate).toISOString().split("T")[0] : "",
+                                                        dueDate: invoiceDetail.dueDate ? new Date(invoiceDetail.dueDate).toISOString().split("T")[0] : "",
                                                         totalAmount: invoiceDetail.totalAmount || "",
                                                         currency: invoiceDetail.currency || "USD",
                                                         expenseCategory: invoiceDetail.expenseCategory || "",
@@ -837,9 +838,14 @@ export default function FarmInvoices() {
                                                 </Select>
                                             </div>
                                             <div>
-                                                <Label className="text-xs text-gray-500">Data</Label>
+                                                <Label className="text-xs text-gray-500">Data Emissão</Label>
                                                 <Input type="date" className="h-8 text-sm" value={editInvData.issueDate}
                                                     onChange={e => setEditInvData({ ...editInvData, issueDate: e.target.value })} />
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Vencimento</Label>
+                                                <Input type="date" className="h-8 text-sm" value={editInvData.dueDate || ""}
+                                                    onChange={e => setEditInvData({ ...editInvData, dueDate: e.target.value })} />
                                             </div>
                                             <div>
                                                 <Label className="text-xs text-gray-500">Valor Total ($)</Label>

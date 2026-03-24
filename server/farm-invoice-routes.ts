@@ -662,13 +662,15 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const { farmInvoices } = await import("../shared/schema");
             const { eq } = await import("drizzle-orm");
 
-            const { invoiceNumber, supplier, issueDate, totalAmount, currency } = req.body;
+            const { invoiceNumber, supplier, issueDate, dueDate, totalAmount, currency, expenseCategory } = req.body;
             const updateData: any = {};
             if (invoiceNumber !== undefined) updateData.invoiceNumber = invoiceNumber;
             if (supplier !== undefined) updateData.supplier = supplier;
             if (issueDate !== undefined) updateData.issueDate = issueDate ? new Date(issueDate) : null;
+            if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
             if (totalAmount !== undefined) updateData.totalAmount = String(totalAmount);
             if (currency !== undefined) updateData.currency = currency;
+            if (expenseCategory !== undefined) updateData.expenseCategory = expenseCategory || null;
 
             const [updated] = await db.update(farmInvoices)
                 .set(updateData)
