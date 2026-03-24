@@ -9,7 +9,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel, User, Eye } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -53,6 +53,7 @@ export default function FarmStock() {
     // Extrato filters
     const [extratoProduct, setExtratoProduct] = useState("");
     const [extratoType, setExtratoType] = useState("");
+    const [extratoDeposit, setExtratoDeposit] = useState("");
     const [extratoStartDate, setExtratoStartDate] = useState("");
     const [extratoEndDate, setExtratoEndDate] = useState("");
 
@@ -66,11 +67,18 @@ export default function FarmStock() {
         return `/api/farm/stock/movements?${params.toString()}`;
     })();
 
-    const { data: extratoMovements = [], isLoading: extratoLoading } = useQuery({
+    const { data: extratoMovementsRaw = [], isLoading: extratoLoading } = useQuery({
         queryKey: ["/api/farm/stock/movements/extrato", extratoProduct, extratoType, extratoStartDate, extratoEndDate],
         queryFn: async () => { const r = await apiRequest("GET", extratoQueryUrl); return r.json(); },
         enabled: !!user,
     });
+
+    // Client-side deposit filter (depositId comes from server join)
+    const extratoMovements = useMemo(() => {
+        if (!extratoDeposit) return extratoMovementsRaw;
+        if (extratoDeposit === "__none__") return extratoMovementsRaw.filter((m: any) => !m.depositId);
+        return extratoMovementsRaw.filter((m: any) => m.depositId === extratoDeposit);
+    }, [extratoMovementsRaw, extratoDeposit]);
 
     const productNames: string[] = Array.from(new Set(stock.map((s: any) => s.productName).filter(Boolean))) as string[];
 
@@ -416,6 +424,18 @@ export default function FarmStock() {
                                             </SelectContent>
                                         </Select>
                                     </div>
+                                    <div className="w-full sm:min-w-[150px] sm:w-auto">
+                                        <Label className="text-xs text-gray-500">Depósito</Label>
+                                        <Select value={extratoDeposit} onValueChange={setExtratoDeposit}>
+                                            <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="__none__">Sem depósito</SelectItem>
+                                                {(depositsMain as any[]).map((d: any) => (
+                                                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                     <div className="w-full sm:min-w-[130px] sm:w-auto">
                                         <Label className="text-xs text-gray-500">Data Inicio</Label>
                                         <Input type="date" value={extratoStartDate} onChange={e => setExtratoStartDate(e.target.value)} className="h-9" />
@@ -424,8 +444,8 @@ export default function FarmStock() {
                                         <Label className="text-xs text-gray-500">Data Fim</Label>
                                         <Input type="date" value={extratoEndDate} onChange={e => setExtratoEndDate(e.target.value)} className="h-9" />
                                     </div>
-                                    {(extratoProduct || extratoType || extratoStartDate || extratoEndDate) && (
-                                        <Button variant="ghost" size="sm" className="h-9 text-red-500 hover:text-red-700" onClick={() => { setExtratoProduct(""); setExtratoType(""); setExtratoStartDate(""); setExtratoEndDate(""); }}>
+                                    {(extratoProduct || extratoType || extratoDeposit || extratoStartDate || extratoEndDate) && (
+                                        <Button variant="ghost" size="sm" className="h-9 text-red-500 hover:text-red-700" onClick={() => { setExtratoProduct(""); setExtratoType(""); setExtratoDeposit(""); setExtratoStartDate(""); setExtratoEndDate(""); }}>
                                             Limpar
                                         </Button>
                                     )}
@@ -448,6 +468,7 @@ export default function FarmStock() {
                                             <tr>
                                                 <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Data</th>
                                                 <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Produto</th>
+                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Depósito</th>
                                                 <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Tipo</th>
                                                 <th className="text-right p-3 font-semibold text-emerald-800 text-xs">Quantidade</th>
                                                 <th className="text-right p-3 font-semibold text-emerald-800 text-xs">Custo Unit.</th>
@@ -460,6 +481,7 @@ export default function FarmStock() {
                                                 <tr key={m.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
                                                     <td className="p-3 whitespace-nowrap text-sm">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
                                                     <td className="p-3 font-medium">{m.productName}</td>
+                                                    <td className="p-3 text-xs text-gray-500">{m.depositName || "—"}</td>
                                                     <td className="p-3">
                                                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${m.type === "entry" ? "bg-green-50 text-green-700" : m.type === "exit" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>
                                                             {m.type === "entry" ? "Entrada" : m.type === "exit" ? "Saida" : "Ajuste"}

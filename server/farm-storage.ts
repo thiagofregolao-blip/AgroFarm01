@@ -459,24 +459,23 @@ export class FarmStorage {
     // ==================== Stock Movements ====================
     async getStockMovements(farmerId: string, limit = 50): Promise<any[]> {
         await dbReady;
-        const result = await db.select({
-            id: farmStockMovements.id,
-            farmerId: farmStockMovements.farmerId,
-            productId: farmStockMovements.productId,
-            type: farmStockMovements.type,
-            quantity: farmStockMovements.quantity,
-            unitCost: farmStockMovements.unitCost,
-            referenceType: farmStockMovements.referenceType,
-            referenceId: farmStockMovements.referenceId,
-            notes: farmStockMovements.notes,
-            createdAt: farmStockMovements.createdAt,
-            productName: farmProductsCatalog.name,
-            productCategory: farmProductsCatalog.category,
-        }).from(farmStockMovements)
-            .innerJoin(farmProductsCatalog, eq(farmStockMovements.productId, farmProductsCatalog.id))
-            .where(eq(farmStockMovements.farmerId, farmerId))
-            .orderBy(desc(farmStockMovements.createdAt))
-            .limit(limit);
+        // Use raw SQL to include deposit info via farm_stock → farm_properties join
+        const rows = await db.execute(sql`
+            SELECT m.id, m.farmer_id AS "farmerId", m.product_id AS "productId",
+                   m.type, m.quantity, m.unit_cost AS "unitCost",
+                   m.reference_type AS "referenceType", m.reference_id AS "referenceId",
+                   m.notes, m.created_at AS "createdAt",
+                   p.name AS "productName", p.category AS "productCategory",
+                   s.property_id AS "depositId", d.name AS "depositName"
+            FROM farm_stock_movements m
+            INNER JOIN farm_products_catalog p ON m.product_id = p.id
+            LEFT JOIN farm_stock s ON s.product_id = m.product_id AND s.farmer_id = m.farmer_id
+            LEFT JOIN farm_properties d ON s.property_id = d.id
+            WHERE m.farmer_id = ${farmerId}
+            ORDER BY m.created_at DESC
+            LIMIT ${limit}
+        `);
+        const result = (rows as any).rows ?? rows;
 
         // Extract equipment name and employee name from notes for diesel movements
         return result.map(r => {
