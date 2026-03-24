@@ -118,6 +118,52 @@ draft → pending_director → pending_billing → billed
 
 ## Conexões Externas
 - **n8n**: webhooks em `/api/farm/webhook/n8n/` para automações de estoque e notificações
+  - Autenticação: aceita `x-webhook-secret` como header HTTP **ou** query param (`?x-webhook-secret=xxx`)
 - **Mailgun**: domínio `mail.agrofarmdigital.com`, variável `MAILGUN_API_KEY`
 - **Railway**: deploy automático via push para `main`
 - **Obsidian/MCP**: dados sobre rede Mikrotik e Solar
+
+---
+
+## Módulos da Fazenda
+
+### Funcionários (farm_employees)
+- **Tabela**: `farm_employees` (id, farmer_id, name, role, phone, photo_base64, signature_base64, face_embedding)
+- **Tela**: `client/src/pages/fazenda/employees.tsx`
+- **CRUD** via `GET/POST/PUT/DELETE /api/pdv/employees`
+- Integrado ao módulo diesel: nome e foto registrados no abastecimento
+
+### Reconhecimento Facial (PDV/Diesel)
+- **Lib**: `face-api.js` com modelo FaceNet — 128-dim embeddings, threshold euclidiano 0.6
+- Roda inteiramente **no browser** — sem chamada a API externa
+- Modelos em `client/public/models/` (tiny_face_detector + face_landmark_68_tiny + face_recognition)
+- **Helper**: `client/src/lib/face-recognition.ts`
+- **Endpoint**: `GET /api/pdv/employee-embeddings` — retorna embeddings de todos os funcionários
+- Cache no `localStorage` para uso **offline** na bomba diesel
+- Campos adicionados: `farm_employees.face_embedding`, `farm_applications.employee_name`, `farm_applications.photo_base64`
+- Se reconhecido: usa assinatura pré-cadastrada automaticamente (sem canvas manual)
+
+### Comprovante de Abastecimento Diesel
+- Modal com canvas de assinatura digital (suporte a caneta stylus)
+- Exibe: data, veículo, quantidade, km/horímetro, observações, nome do funcionário
+- **Endpoint**: `GET /api/pdv/receipt/:id` — retorna dados completos + assinatura
+
+### Parser Unificado de Faturas (Gemini Vision)
+- **Arquivo**: `server/gemini-invoice-parser.ts`
+- **Função**: `parseWithGemini(fileBuffer, mimeType)` → dados estruturados da fatura
+- Usado por: upload manual (`/api/farm/invoices`) **e** webhook WhatsApp n8n
+- Extrai: número, data, fornecedor, RUC, telefone, email, endereço, itens, totais, vencimento
+- Ao criar fornecedor: auto-preenche todos os campos disponíveis no recibo
+
+### Bot WhatsApp — Consultas por Categoria
+- **Regra de categoria é PRIORIDADE 1** no prompt Gemini — antes da regra de recomendação agronômica
+- "quais fungicidas tenho?" → `type:"query"`, `entity:"stock"`, `filters:{category:"fungicida"}`
+- **Fallback hardcoded**: detecta fungicida/herbicida/inseticida/fertilizante/semente/adjuvante mesmo sem Gemini
+- Preços: exibe `averageCost` quando não há fatura (label "Custo Médio cadastrado")
+- **Extração de PDFs**: usa `pdf-parse` localmente — sem limite de tokens (Gemini truncava PDFs grandes)
+- `requireAdminManuals`: aceita `role === 'admin_agricultor'` **e** `'administrador'`
+- Arquivo do cliente: `server/whatsapp/gemini-client.ts`
+
+### Menu Fazenda — Estrutura atualizada
+- **"Cadastros"** (submenu novo no menu financeiro): contém **"Empresas e Pessoas"** (antigo Fornecedores)
+- Arquivo: `client/src/components/fazenda/layout.tsx`
