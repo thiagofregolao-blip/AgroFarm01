@@ -605,15 +605,17 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
                     documentType: farmInvoices.documentType,
                 }).from(farmInvoices).where(eq(farmInvoices.farmerId, farmer.id));
 
-                // Exclude remissions from duplicate check — a remission and its invoice share the same number
+                // Duplicate check: requires matching invoice NUMBER + (same amount OR same supplier)
+                // Never flag as duplicate based only on supplier+amount (different invoices can have same value)
                 const invDuplicate = existingInvs.filter(inv => inv.documentType !== "remision").find(inv => {
                     const invAmt = parseFloat(inv.totalAmount as string) || 0;
                     const sameNum = parsed.invoiceNumber && inv.invoiceNumber &&
                         inv.invoiceNumber.replace(/\D/g, '') === String(parsed.invoiceNumber).replace(/\D/g, '');
+                    if (!sameNum) return false; // Different invoice numbers = never duplicate
                     const sameSup = parsed.supplier && inv.supplier &&
                         inv.supplier.toLowerCase().includes(String(parsed.supplier).toLowerCase().substring(0, 10));
                     const sameAmt = Math.abs(invAmt - amount) < 0.01;
-                    return (sameNum && sameAmt) || (sameNum && sameSup) || (sameSup && sameAmt);
+                    return sameAmt || sameSup;
                 });
 
                 if (invDuplicate) {
