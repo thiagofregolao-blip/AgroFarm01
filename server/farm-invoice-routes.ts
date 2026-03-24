@@ -773,7 +773,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const farmerId = req.user!.id;
             // Delete related records first to avoid FK constraint errors
             await db.execute(sql`DELETE FROM farm_invoice_items WHERE invoice_id = ${req.params.id}`);
-            await db.execute(sql`UPDATE farm_accounts_payable SET invoice_id = NULL WHERE invoice_id = ${req.params.id} AND farmer_id = ${farmerId}`);
+            await db.execute(sql`DELETE FROM farm_accounts_payable WHERE invoice_id = ${req.params.id} AND farmer_id = ${farmerId}`);
             await db.execute(sql`UPDATE farm_remissions SET reconciled_invoice_id = NULL WHERE reconciled_invoice_id = ${req.params.id} AND farmer_id = ${farmerId}`);
             await db.execute(sql`DELETE FROM farm_invoices WHERE id = ${req.params.id} AND farmer_id = ${farmerId}`);
             res.json({ message: "Fatura excluida com sucesso." });
