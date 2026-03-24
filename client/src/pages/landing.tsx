@@ -78,7 +78,17 @@ export default function LandingPage() {
             <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md shadow-[0_2px_20px_rgba(0,0,0,0.07)]">
                 <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-[84px]">
                     {/* Logo */}
-                    <img src="/logo-datagrow.png" alt="DataGrow" className="h-14 w-auto object-contain" />
+                    <div className="flex items-center gap-3">
+                        <img src="/icon-datagrow.png" alt="" className="h-12 w-auto object-contain" />
+                        <div className="flex flex-col leading-none">
+                            <span className="font-black tracking-tight" style={{ fontSize: "1.9rem", lineHeight: 1.1 }}>
+                                <span style={{ color: "#024177" }}>Data</span><span style={{ color: "#215F30" }}>Grow</span>
+                            </span>
+                            <span className="font-semibold tracking-widest uppercase" style={{ fontSize: "0.6rem", color: "#555", letterSpacing: "0.12em" }}>
+                                Seus dados. Seu crescimento.
+                            </span>
+                        </div>
+                    </div>
 
                     {/* Desktop links */}
                     <div className="hidden lg:flex items-center gap-8">
@@ -405,8 +415,16 @@ export default function LandingPage() {
 
             {/* ── FOOTER ──────────────────────────────────────────────── */}
             <footer className="py-10 px-6 bg-slate-900 text-center">
-                <div className="flex items-center justify-center mb-3">
-                    <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" style={{ filter: "brightness(0) invert(1)" }} />
+                <div className="flex items-center justify-center gap-2 mb-3">
+                    <img src="/icon-datagrow.png" alt="" className="h-8 w-auto object-contain" style={{ filter: "brightness(0) invert(1)" }} />
+                    <div className="flex flex-col leading-none text-left">
+                        <span className="font-black tracking-tight" style={{ fontSize: "1.3rem", lineHeight: 1.1 }}>
+                            <span style={{ color: "#5b9fd4" }}>Data</span><span style={{ color: "#6abf7a" }}>Grow</span>
+                        </span>
+                        <span className="font-semibold tracking-widest uppercase" style={{ fontSize: "0.5rem", color: "#666", letterSpacing: "0.12em" }}>
+                            Seus dados. Seu crescimento.
+                        </span>
+                    </div>
                 </div>
                 <p className="text-slate-500 text-sm">© 2026 DataGrow — Sistema de Gestão Agrícola Digital</p>
                 <p className="text-slate-600 text-xs mt-1">Para agricultores do Brasil e Paraguai</p>
