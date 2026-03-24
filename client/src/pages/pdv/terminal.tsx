@@ -258,16 +258,24 @@ export default function PdvTerminal() {
     const { data: employeeEmbeddings } = useQuery({
         queryKey: ["/api/pdv/employee-embeddings"],
         queryFn: async () => {
+            console.log("[PDV] Fetching employee embeddings...");
             const res = await apiRequest("GET", "/api/pdv/employee-embeddings");
             if (!res.ok) throw new Error("Failed to fetch embeddings");
             const data = await res.json();
+            console.log("[PDV] Employee embeddings loaded:", data?.length || 0, "employees");
             // Cache in localStorage for offline use
-            try { localStorage.setItem("pdv_employee_embeddings", JSON.stringify(data)); } catch {}
+            if (data?.length > 0) {
+                try { localStorage.setItem("pdv_employee_embeddings", JSON.stringify(data)); } catch {}
+            }
             return data;
         },
-        staleTime: 5 * 60 * 1000, // cache 5 minutes
-        initialData: () => {
-            try { return JSON.parse(localStorage.getItem("pdv_employee_embeddings") || "[]"); } catch { return []; }
+        staleTime: 60 * 1000, // refresh every 1 minute
+        refetchOnMount: "always",
+        placeholderData: () => {
+            try {
+                const cached = JSON.parse(localStorage.getItem("pdv_employee_embeddings") || "[]");
+                return cached.length > 0 ? cached : undefined;
+            } catch { return undefined; }
         },
     });
 
