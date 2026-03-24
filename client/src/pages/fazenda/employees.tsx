@@ -57,6 +57,13 @@ function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmi
         }
     }, []);
 
+    // Auto-generate embedding for existing employees with photo but no embedding
+    useEffect(() => {
+        if (initial?.photoBase64 && !initial?.faceEmbedding && photoPreview && embeddingStatus === "idle") {
+            processPhoto(photoPreview);
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void, isPhoto = false) => {
         const file = e.target.files?.[0];
         if (!file) return;
