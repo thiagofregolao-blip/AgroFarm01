@@ -486,13 +486,14 @@ export function registerFarmPdvRoutes(app: Express) {
                 photoBase64: e.photoBase64,
             })));
 
-            // If matched, also return the employee's signature
-            if (result.matchedId && result.confidence >= 90) {
+            // If matched with decent confidence, return employee data for confirmation
+            if (result.matchedId && result.confidence >= 70) {
                 const matched = employees.find((e: any) => e.id === result.matchedId);
                 return res.json({
                     ...result,
                     signatureBase64: matched?.signatureBase64 || null,
                     employeeRole: matched?.role || null,
+                    employeePhoto: matched?.photoBase64 || null,
                 });
             }
 
