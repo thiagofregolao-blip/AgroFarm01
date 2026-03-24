@@ -79,12 +79,12 @@ export default function LandingPage() {
                 <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-[84px]">
                     {/* Logo */}
                     <div className="flex items-center gap-3">
-                        <img src="/icon-datagrow.png" alt="" className="h-12 w-auto object-contain" />
+                        <img src="/icon-datagrow.png" alt="" className="h-16 w-auto object-contain" />
                         <div className="flex flex-col leading-none">
-                            <span className="font-black tracking-tight" style={{ fontSize: "1.9rem", lineHeight: 1.1 }}>
+                            <span className="font-black tracking-tight" style={{ fontSize: "2.4rem", lineHeight: 1.05 }}>
                                 <span style={{ color: "#024177" }}>Data</span><span style={{ color: "#215F30" }}>Grow</span>
                             </span>
-                            <span className="font-semibold tracking-widest uppercase" style={{ fontSize: "0.6rem", color: "#555", letterSpacing: "0.12em" }}>
+                            <span className="font-semibold tracking-widest uppercase" style={{ fontSize: "0.65rem", color: "#555", letterSpacing: "0.14em" }}>
                                 Seus dados. Seu crescimento.
                             </span>
                         </div>
@@ -150,18 +150,6 @@ export default function LandingPage() {
                             nossa <span className="text-[#F7D601]">inteligência agrícola</span> começa
                         </h1>
 
-                        {/* CTAs — acima do carrossel */}
-                        <div className="flex gap-4 flex-wrap mb-8">
-                            <button onClick={() => scrollTo("features")}
-                                className="flex items-center gap-2 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 shadow-md border-none cursor-pointer">
-                                Conhecer Funcionalidades <ChevronDown className="w-4 h-4" />
-                            </button>
-                            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-white border-2 border-white/30 hover:border-white/60 font-semibold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 no-underline">
-                                <MessageCircle className="w-4 h-4" /> Solicite uma Visita
-                            </a>
-                        </div>
-
                         <p className="text-base text-green-100/85 leading-relaxed mb-3 max-w-[520px] font-semibold">
                             DataGrow: A Inteligência que dita o futuro do Agro.
                         </p>
@@ -190,7 +178,18 @@ export default function LandingPage() {
                     </div>
 
                     {/* Right — carousel */}
-                    <div className="flex-1 min-w-[300px] flex justify-center">
+                    <div className="flex-1 min-w-[300px] flex flex-col items-center gap-5">
+                        {/* CTAs — ACIMA da imagem do carrossel */}
+                        <div className="flex gap-4 flex-wrap justify-center w-full">
+                            <button onClick={() => scrollTo("features")}
+                                className="flex items-center gap-2 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 shadow-md border-none cursor-pointer">
+                                Conhecer Funcionalidades <ChevronDown className="w-4 h-4" />
+                            </button>
+                            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-2 text-white border-2 border-white/30 hover:border-white/60 font-semibold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 no-underline">
+                                <MessageCircle className="w-4 h-4" /> Solicite uma Visita
+                            </a>
+                        </div>
                         <div className="relative">
                             {/* Main image frame */}
                             <div className="relative w-[clamp(280px,38vw,460px)] h-[clamp(280px,38vw,460px)] rounded-2xl overflow-hidden shadow-[0_40px_80px_rgba(0,0,0,0.35)] border-2 border-yellow-400/30">
