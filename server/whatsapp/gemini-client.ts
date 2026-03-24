@@ -791,49 +791,15 @@ Retorne APENAS UM JSON VÁLIDO no formato exato baixo, sem comentários adiciona
 
 export async function extractManualText(fileBuffer: Buffer, mimeType: string): Promise<string> {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
-
-    const base64Data = fileBuffer.toString("base64");
-    const prompt = `Extraia TODO o texto legível deste documento agronômico. 
-Não invente informações. 
-Preserve ao máximo a formatação de tabelas e tópicos.
-Retorne APENAS o texto extraído, sem introduções ou formatação markdown desnecessária.`;
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: mimeType,
-                    data: base64Data
-                  }
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.1
-          }
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("[Gemini Manual Extract] API Error:", data);
-      throw new Error(data.error?.message || "Erro na API Gemini");
+    // Use pdf-parse for direct text extraction — no token limits, full document preserved
+    const pdfParse = (await import("pdf-parse")).default;
+    const parsed = await pdfParse(fileBuffer);
+    const text = parsed.text?.trim();
+    if (text && text.length > 100) {
+      console.log(`[extractManualText] pdf-parse extracted ${text.length} chars from PDF`);
+      return text;
     }
-
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    throw new Error("pdf-parse returned empty text");
   } catch (error) {
     console.error("[extractManualText] Fatal error:", error);
     throw error;
