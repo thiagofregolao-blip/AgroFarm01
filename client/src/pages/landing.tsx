@@ -135,13 +135,23 @@ export default function LandingPage() {
                             <span className="text-xs font-semibold text-white/90 tracking-widest uppercase">Gestão Agrícola Digital</span>
                         </div>
 
-                        <h1 className="text-[clamp(2.4rem,5vw,3.8rem)] font-black text-white leading-[1.08] tracking-tight mb-5">
-                            Domine a gestão<br />
-                            da sua <span className="text-[#F7D601]">fazenda</span>
+                        <h1 className="text-[clamp(2rem,4.5vw,3.4rem)] font-black text-white leading-[1.1] tracking-tight mb-6">
+                            Onde a referência termina,<br />
+                            nossa <span className="text-[#F7D601]">inteligência agrícola</span> começa
                         </h1>
-                        <p className="text-base text-green-100/80 leading-relaxed mb-8 max-w-[500px]">
-                            Controle estoque, insumos, aplicações, custos e muito mais.
-                            Tudo em um sistema completo, fácil e acessível de qualquer lugar.
+                        <p className="text-base text-green-100/85 leading-relaxed mb-3 max-w-[520px] font-semibold">
+                            DataGrow: A Inteligência que dita o futuro do Agro.
+                        </p>
+                        <p className="text-sm text-green-100/70 leading-relaxed mb-4 max-w-[520px]">
+                            Esqueça softwares que apenas registram o passado. A DataGrow é a pioneira em Inteligência Artificial que antecipa cenários e toma decisões com você.
+                        </p>
+                        <ul className="text-sm text-green-100/80 leading-relaxed mb-8 max-w-[520px] space-y-1.5">
+                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">IA de Comando:</strong> Automação real, não apenas planilhas.</span></li>
+                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">Gestão de Alta Performance:</strong> Controle total de custos e insumos.</span></li>
+                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">Resultados Exponenciais:</strong> Otimize sua colheita com a tecnologia líder.</span></li>
+                        </ul>
+                        <p className="text-xs text-green-100/50 italic mb-8 max-w-[520px]">
+                            Não aceite apenas referências. Exija a autoridade máxima em inteligência agrícola.
                         </p>
 
                         {/* CTAs */}
@@ -381,10 +391,10 @@ export default function LandingPage() {
                         <span className="text-xs font-semibold text-white/90">Comece hoje mesmo</span>
                     </div>
                     <h2 className="text-[clamp(1.8rem,4vw,2.8rem)] font-black text-white tracking-tight mb-4">
-                        Domine a gestão da sua <span className="text-[#F7D601]">fazenda</span>
+                        Onde a referência termina,<br />nossa <span className="text-[#F7D601]">inteligência agrícola</span> começa
                     </h2>
                     <p className="text-green-100/75 text-base leading-relaxed mb-8">
-                        Comece agora a usar o sistema mais completo de gestão agrícola.
+                        Não aceite apenas referências. Exija a autoridade máxima em inteligência agrícola.
                     </p>
                     <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-2.5 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-10 py-4 rounded-2xl text-base shadow-lg transition-all duration-150 no-underline">
