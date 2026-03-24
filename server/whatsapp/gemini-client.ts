@@ -792,8 +792,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato baixo, sem comentários adiciona
 export async function extractManualText(fileBuffer: Buffer, mimeType: string): Promise<string> {
   try {
     // Use pdf-parse for direct text extraction — no token limits, full document preserved
-    const pdfMod = await import("pdf-parse");
-    const pdfParse = (pdfMod as any).default ?? pdfMod;
+    const { pdf: pdfParse } = await import("pdf-parse");
     const parsed = await pdfParse(fileBuffer);
     const text = parsed.text?.trim();
     if (text && text.length > 100) {
