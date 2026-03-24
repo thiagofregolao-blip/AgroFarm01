@@ -1,7 +1,7 @@
 import { db, dbReady } from "./db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import {
-    users, farmProperties, farmPlots, farmEquipment, farmProductsCatalog,
+    users, farmProperties, farmPlots, farmEquipment, farmEmployees, farmProductsCatalog,
     farmStock, farmInvoices, farmInvoiceItems, farmStockMovements,
     farmApplications, farmExpenses, farmPdvTerminals, farmSeasons,
     farmPriceHistory,
@@ -9,6 +9,7 @@ import {
     type InsertFarmProperty, type FarmProperty,
     type InsertFarmPlot, type FarmPlot,
     type InsertFarmEquipment, type FarmEquipment,
+    type InsertFarmEmployee, type FarmEmployee,
     type InsertFarmProductCatalog, type FarmProductCatalog,
     type InsertFarmStock, type FarmStock,
     type InsertFarmInvoice, type FarmInvoice,
@@ -153,6 +154,31 @@ export class FarmStorage {
     async deleteEquipment(id: string): Promise<void> {
         await dbReady;
         await db.delete(farmEquipment).where(eq(farmEquipment.id, id));
+    }
+
+    // ==================== Employees (Funcionários) ====================
+    async getEmployees(farmerId: string): Promise<FarmEmployee[]> {
+        await dbReady;
+        return db.select().from(farmEmployees)
+            .where(eq(farmEmployees.farmerId, farmerId))
+            .orderBy(farmEmployees.name);
+    }
+
+    async createEmployee(data: InsertFarmEmployee): Promise<FarmEmployee> {
+        await dbReady;
+        const [emp] = await db.insert(farmEmployees).values(data).returning();
+        return emp;
+    }
+
+    async updateEmployee(id: string, data: Partial<InsertFarmEmployee>): Promise<FarmEmployee> {
+        await dbReady;
+        const [emp] = await db.update(farmEmployees).set(data).where(eq(farmEmployees.id, id)).returning();
+        return emp;
+    }
+
+    async deleteEmployee(id: string): Promise<void> {
+        await dbReady;
+        await db.delete(farmEmployees).where(eq(farmEmployees.id, id));
     }
 
     // ==================== Products Catalog ====================

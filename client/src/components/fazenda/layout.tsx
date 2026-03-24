@@ -5,7 +5,7 @@ import {
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
     Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2,
-    Settings, HelpCircle, Download, ChevronDown, FilePlus
+    Settings, HelpCircle, Download, ChevronDown, FilePlus, Users
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -48,6 +48,7 @@ const farmNavGroups: NavGroup[] = [
             { labelKey: "nav_field_notebook", href: "/fazenda/caderno-campo", icon: BookOpen, moduleKey: "field_notebook" },
             { labelKey: "nav_romaneios",       href: "/fazenda/romaneios",     icon: Scale,    moduleKey: "romaneios" },
             { labelKey: "nav_fleet",           href: "/fazenda/equipamentos",  icon: Tractor,  moduleKey: "fleet" },
+            { labelKey: "nav_employees",       href: "/fazenda/funcionarios",  icon: Users,    moduleKey: "employees" },
         ],
     },
     {

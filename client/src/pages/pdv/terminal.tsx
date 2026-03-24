@@ -823,6 +823,8 @@ export default function PdvTerminal() {
         const [dieselSubmitting, setDieselSubmitting] = useState(false);
         const [showReceiptModal, setShowReceiptModal] = useState(false);
         const [signatureData, setSignatureData] = useState<string | null>(null);
+        const [viewReceipt, setViewReceipt] = useState<any>(null);
+        const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
 
         const parsedQty = parseFloat(dieselQty) || 0;
         const stockAfter = dieselStock - parsedQty;
@@ -1143,15 +1145,101 @@ export default function PdvTerminal() {
                                                     <p className="text-sm font-medium text-gray-300">{batch.equipmentName || batch.applications?.[0]?.equipmentName || "Veículo"}</p>
                                                     <p className="text-[10px] text-gray-500">{new Date(batch.appliedAt).toLocaleString("pt-BR")}</p>
                                                 </div>
-                                                <span className="text-amber-400 font-bold text-sm">
-                                                    {batch.applications?.reduce((s: number, a: any) => s + parseFloat(a.quantity || 0), 0).toFixed(0)}L
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-amber-400 font-bold text-sm">
+                                                        {batch.applications?.reduce((s: number, a: any) => s + parseFloat(a.quantity || 0), 0).toFixed(0)}L
+                                                    </span>
+                                                    <button
+                                                        onClick={async () => {
+                                                            const appId = batch.batchId || batch.applications?.[0]?.id;
+                                                            if (!appId) return;
+                                                            setLoadingReceipt(appId);
+                                                            try {
+                                                                const r = await apiRequest("GET", `/api/pdv/receipt/${appId}`);
+                                                                const data = await r.json();
+                                                                setViewReceipt(data);
+                                                            } catch { toast({ title: "Erro ao carregar comprovante", variant: "destructive" }); }
+                                                            finally { setLoadingReceipt(null); }
+                                                        }}
+                                                        className="text-gray-500 hover:text-amber-400 transition-colors p-1"
+                                                        title="Ver comprovante"
+                                                    >
+                                                        {loadingReceipt === (batch.batchId || batch.applications?.[0]?.id) ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <FileText className="h-4 w-4" />
+                                                        )}
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             ) : null;
                         })()}
+
+                        {/* === VIEW RECEIPT MODAL === */}
+                        {viewReceipt && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setViewReceipt(null)}>
+                                <div className="w-full max-w-md bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                                    <div className="bg-gradient-to-r from-amber-600 to-amber-700 px-5 py-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <FileText className="h-5 w-5 text-amber-100" />
+                                            <h2 className="font-bold text-lg text-white">Comprovante</h2>
+                                        </div>
+                                        <button onClick={() => setViewReceipt(null)} className="text-amber-200 hover:text-white transition-colors">
+                                            <X className="h-5 w-5" />
+                                        </button>
+                                    </div>
+                                    <div className="p-5 space-y-4">
+                                        <div className="bg-gray-800/60 rounded-xl p-4 space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs text-gray-400 uppercase tracking-wider">Data</span>
+                                                <span className="text-sm font-medium text-white">{viewReceipt.appliedAt ? new Date(viewReceipt.appliedAt).toLocaleString("pt-BR") : "—"}</span>
+                                            </div>
+                                            <div className="border-t border-gray-700/50" />
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs text-gray-400 uppercase tracking-wider">Veículo</span>
+                                                <span className="text-sm font-medium text-white">{viewReceipt.equipmentName || "—"}</span>
+                                            </div>
+                                            <div className="border-t border-gray-700/50" />
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs text-gray-400 uppercase tracking-wider">Quantidade</span>
+                                                <span className="text-lg font-bold text-amber-400">{Math.abs(parseFloat(viewReceipt.quantity || 0)).toFixed(0)}L</span>
+                                            </div>
+                                            {viewReceipt.odometer && (
+                                                <>
+                                                    <div className="border-t border-gray-700/50" />
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-gray-400 uppercase tracking-wider">Km</span>
+                                                        <span className="text-sm font-medium text-white">{viewReceipt.odometer} km</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {viewReceipt.horimeter && (
+                                                <>
+                                                    <div className="border-t border-gray-700/50" />
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-gray-400 uppercase tracking-wider">Horímetro</span>
+                                                        <span className="text-sm font-medium text-white">{viewReceipt.horimeter}h</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                        {viewReceipt.signatureBase64 ? (
+                                            <div>
+                                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Assinatura</p>
+                                                <div className="bg-white rounded-xl p-3">
+                                                    <img src={viewReceipt.signatureBase64} alt="Assinatura" className="w-full h-auto" />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-gray-500 text-center italic">Sem assinatura registrada</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

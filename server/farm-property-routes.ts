@@ -185,4 +185,66 @@ export function registerFarmPropertyRoutes(app: Express) {
         }
     });
 
+    // ==================== EMPLOYEES (Funcionários) ====================
+
+    app.get("/api/farm/employees", requireFarmer, async (req, res) => {
+        try {
+            const employees = await farmStorage.getEmployees(req.user!.id);
+            res.json(employees);
+        } catch (error) {
+            console.error("[FARM_EMPLOYEES_GET]", error);
+            res.status(500).json({ error: "Failed to get employees" });
+        }
+    });
+
+    app.post("/api/farm/employees", requireFarmer, async (req, res) => {
+        try {
+            const { name, role, phone, status, photoBase64, signatureBase64 } = req.body;
+            if (!name || !role) return res.status(400).json({ error: "Nome e cargo são obrigatórios" });
+
+            const emp = await farmStorage.createEmployee({
+                farmerId: req.user!.id,
+                name,
+                role,
+                phone: phone || null,
+                status: status || "Ativo",
+                photoBase64: photoBase64 || null,
+                signatureBase64: signatureBase64 || null,
+            });
+            res.status(201).json(emp);
+        } catch (error) {
+            console.error("[FARM_EMPLOYEES_CREATE]", error);
+            res.status(500).json({ error: "Failed to create employee" });
+        }
+    });
+
+    app.put("/api/farm/employees/:id", requireFarmer, async (req, res) => {
+        try {
+            const { name, role, phone, status, photoBase64, signatureBase64 } = req.body;
+            const data: any = {};
+            if (name !== undefined) data.name = name;
+            if (role !== undefined) data.role = role;
+            if (phone !== undefined) data.phone = phone;
+            if (status !== undefined) data.status = status;
+            if (photoBase64 !== undefined) data.photoBase64 = photoBase64;
+            if (signatureBase64 !== undefined) data.signatureBase64 = signatureBase64;
+
+            const emp = await farmStorage.updateEmployee(req.params.id, data);
+            res.json(emp);
+        } catch (error) {
+            console.error("[FARM_EMPLOYEES_UPDATE]", error);
+            res.status(500).json({ error: "Failed to update employee" });
+        }
+    });
+
+    app.delete("/api/farm/employees/:id", requireFarmer, async (req, res) => {
+        try {
+            await farmStorage.deleteEmployee(req.params.id);
+            res.sendStatus(204);
+        } catch (error) {
+            console.error("[FARM_EMPLOYEES_DELETE]", error);
+            res.status(500).json({ error: "Failed to delete employee" });
+        }
+    });
+
 }

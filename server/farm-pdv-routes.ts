@@ -463,4 +463,26 @@ export function registerFarmPdvRoutes(app: Express) {
             res.status(500).json({ error: "Failed to get withdrawals" });
         }
     });
+
+    // Get receipt/signature for a specific application
+    app.get("/api/pdv/receipt/:id", requirePdv, async (req, res) => {
+        try {
+            const { db } = await import("./db");
+            const { sql } = await import("drizzle-orm");
+            const rows = await db.execute(sql`
+                SELECT a.id, a.quantity, a.notes, a.applied_at AS "appliedAt",
+                       a.horimeter, a.odometer, a.signature_base64 AS "signatureBase64",
+                       e.name AS "equipmentName", e.type AS "equipmentType"
+                FROM farm_applications a
+                LEFT JOIN farm_equipment e ON a.equipment_id = e.id
+                WHERE a.id = ${req.params.id}
+            `);
+            const result = (rows as any).rows ?? rows;
+            if (!result.length) return res.status(404).json({ error: "Not found" });
+            res.json(result[0]);
+        } catch (error) {
+            console.error("[PDV_RECEIPT]", error);
+            res.status(500).json({ error: "Failed to get receipt" });
+        }
+    });
 }

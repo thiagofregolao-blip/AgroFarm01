@@ -1064,6 +1064,23 @@ export const farmEquipment = pgTable("farm_equipment", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// Funcionários da Fazenda
+export const farmEmployees = pgTable("farm_employees", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  role: text("role").notNull(), // Gerente, Operador, Mecanico, Motorista, Tratorista, etc.
+  phone: text("phone"),
+  status: text("status").default("Ativo"), // Ativo, Inativo
+  photoBase64: text("photo_base64"), // Foto do rosto
+  signatureBase64: text("signature_base64"), // Imagem da assinatura em papel
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFarmEmployeeSchema = createInsertSchema(farmEmployees);
+export type InsertFarmEmployee = z.infer<typeof insertFarmEmployeeSchema>;
+export type FarmEmployee = typeof farmEmployees.$inferSelect;
+
 // Catálogo Global de Produtos (dose, unidade, categoria)
 export const farmProductsCatalog = pgTable("farm_products_catalog", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
