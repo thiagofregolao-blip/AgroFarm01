@@ -241,7 +241,7 @@ export default function LandingPage() {
 
                     {/* Feature rows */}
                     {[
-                        { icon: Sparkles, title: "Recebimento Inteligente de Faturas", desc: "Esqueça o cadastro manual. Assim que sua empresa de insumos emite a fatura, a DataGrow recebe automaticamente, identifica os produtos, quantidades e valores — e já registra no sistema aguardando sua aprovação com um clique.", image: "/feature-faturas.png",
+                        { icon: Sparkles, title: "Recebimento Inteligente de Faturas", desc: "Esqueça o cadastro manual. Assim que sua empresa de insumos emite a fatura, a DataGrow recebe automaticamente, identifica os produtos, quantidades e valores — e já registra no sistema aguardando sua aprovação com um clique.", image: "/feature-faturas.png", reverse: true, noOverlay: true,
                           items: ["Zero digitação — 100% automatizado", "Aprovação em um clique direto no app", "Estoque atualizado automaticamente após aprovação", "Histórico completo de todas as faturas recebidas"],
                           badge: "IA DataGrow" },
                         { icon: Package, title: "Controle de Estoque & Insumos", desc: "Saiba exatamente o que tem, quanto custou e quando comprar mais.", image: "/feature-estoque.png",
@@ -292,10 +292,12 @@ export default function LandingPage() {
                                 <div className="flex-1 min-w-[280px] flex justify-center">
                                     <div className="w-full max-w-[420px] aspect-[4/3] rounded-2xl overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.10)] relative">
                                         <img src={feature.image} alt={feature.title} className="w-full h-full object-cover" />
-                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-5 pb-4 pt-10">
-                                            <p className="text-[11px] text-white/60">AgroFarm</p>
-                                            <p className="text-sm font-bold text-white">{feature.title}</p>
-                                        </div>
+                                        {!feature.noOverlay && (
+                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-5 pb-4 pt-10">
+                                                <p className="text-[11px] text-white/60">DataGrow</p>
+                                                <p className="text-sm font-bold text-white">{feature.title}</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
