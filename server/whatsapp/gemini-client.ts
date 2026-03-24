@@ -893,27 +893,30 @@ export async function recognizeFace(
     // Build parts array: text prompt + captured photo + all employee photos
     const parts: any[] = [
       {
-        text: `Você é um sistema de reconhecimento facial para controle de abastecimento de diesel em fazendas.
+        text: `You are a strict facial recognition system for diesel fueling control on farms.
 
-TAREFA: Compare a PRIMEIRA imagem (foto capturada na bomba de diesel) com as fotos cadastradas dos funcionários abaixo. Identifique qual funcionário está na primeira imagem.
+TASK: Compare the FIRST image (captured photo at the diesel pump) with the registered employee photos below. Identify which employee is in the first image.
 
-FUNCIONÁRIOS CADASTRADOS:
+REGISTERED EMPLOYEES:
 ${employeeList}
 
-As imagens seguintes (a partir da segunda) correspondem às fotos cadastradas dos funcionários, NA MESMA ORDEM da lista acima.
+The following images (from the second onward) are the registered photos of the employees, IN THE SAME ORDER as the list above.
 
-REGRAS:
-- Compare características faciais: formato do rosto, nariz, boca, olhos, sobrancelhas
-- Considere que a foto capturada pode ter iluminação diferente, ângulo diferente, ou EPI (capacete, boné)
-- Se tiver certeza da correspondência, retorne confidence alto (80-100)
-- Se não tiver certeza, retorne confidence baixo (0-50)
-- Se nenhum funcionário corresponder, retorne matchedId como null
+STRICT MATCHING RULES:
+- Compare facial bone structure, eye shape, nose bridge, jawline, ear position, and unique facial features (scars, moles, skin marks)
+- Do NOT match based on clothing, hat, glasses, or body build alone
+- If the person is wearing PPE (helmet, sunglasses, mask) that hides key facial features, return confidence below 50
+- Only return confidence >= 90 if you can clearly identify at least 3 distinct matching facial features
+- Return confidence 70-89 if there is a resemblance but you are not certain
+- Return confidence 0-50 if no clear match or if face is obstructed
+- If multiple employees look similar, compare them carefully and pick the best match ONLY if clearly distinguishable
+- When in doubt, return null - a false rejection is better than a false match
 
-Retorne APENAS JSON válido:
+Return ONLY valid JSON:
 {
-  "matchedId": "uuid-do-funcionario-ou-null",
-  "matchedName": "Nome do funcionário ou null",
-  "confidence": 85
+  "matchedId": "employee-uuid-or-null",
+  "matchedName": "Employee name or null",
+  "confidence": 0
 }`
       },
       // Captured photo (first image)
@@ -942,7 +945,7 @@ Retorne APENAS JSON válido:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { temperature: 0.1 }
+          generationConfig: { temperature: 0 }
         })
       }
     );
