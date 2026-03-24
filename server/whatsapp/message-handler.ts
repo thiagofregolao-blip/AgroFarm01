@@ -62,7 +62,12 @@ export class MessageHandler {
     }
 
     if (filters?.category) {
-      query = query.where(ilike(farmProductsCatalog.category, `%${filters.category}%`));
+      query = query.where(
+        and(
+          eq(farmStock.farmerId, userId),
+          ilike(farmProductsCatalog.category, `%${filters.category}%`)
+        )
+      );
     }
 
     const stock = await query.orderBy(desc(farmStock.updatedAt));
