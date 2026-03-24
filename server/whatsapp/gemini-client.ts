@@ -224,30 +224,30 @@ ${context ? JSON.stringify(context) : "Primeiro contato."}
 MENSAGEM DO USUÁRIO:
 "${question}"
 
-REGRAS:
-1. Se for SAUDAÇÃO/CONVERSA (oi, bom dia, como vai, obrigado, tchau, piada):
-   - type: "conversation", entity: "general"
-   - No campo "response", escreva uma resposta QUENTE e HUMANA
-   - Para "bom dia" → algo motivador sobre o dia na roça
-   - Para "obrigado/valeu" → agradeça e diga que tá sempre ali
-   - Para "tchau" → despeça-se caloroso, deseje boa safra
-   - Para perguntas sobre você → conte quem você é de forma simpática
+REGRAS (aplique na ORDEM abaixo — a primeira que bater vence):
 
-2. Se for CONSULTA AGRONÔMICA / RECOMENDAÇÃO (ex: "o que usar contra ferrugem?", "tem algo bom pra planta daninha?", "como controlar percevejo?", "qual herbicida usar?", "preciso de fungicida para soja"):
-   - type: "recommendation", entity: "stock"
-   - No campo "filters", extraia a "pest" (praga/doença/erva daninha) e opcionalmente a "crop" (cultura)
-   - Ex: {"pest": "ferrugem", "crop": "soja"}
-   - IMPORTANTE: NÃO responda direto — o sistema vai buscar o estoque do agricultor primeiro!
+1. ⚡ CONSULTA DE ESTOQUE POR CATEGORIA — PRIORIDADE MÁXIMA
+   Padrões: "quais [categoria] tenho", "meu estoque de [categoria]", "liste [categoria]", "mostre [categoria]", "estoque [categoria]", "tenho [categoria]"
+   Categorias: fungicida, herbicida, inseticida, fertilizante, semente, adjuvante (e plurais: fungicidas, herbicidas, etc.)
+   → type: "query", entity: "stock", filters: {"category": "[categoria no singular]"}
+   ⚠️ NUNCA classifique isso como recommendation ou conversation!
 
-3. Se for CONSULTA DE DADOS (estoque, preço, fatura, despesa, aplicação):
-   - type: "query", entity: a tabela certa
-   - Extraia filters: product, period, category
-   - "preço/valor/quanto paguei" → entity: "invoices"
-   - "liste/mostre/quero ver [tipo de produto] do estoque" → entity: "stock", filters: {"category": "[tipo]"}
-   - Tipos válidos de category: fungicida, herbicida, inseticida, fertilizante, semente, adjuvante
+2. CONSULTA DE DADOS (estoque geral, preço, fatura, despesa, aplicação):
+   - type: "query", entity: a entidade certa
+   - "preço/valor/quanto paguei/custou" → entity: "invoices", filters: {"product": "nome"}
+   - "meu estoque" (sem categoria) → entity: "stock", filters: {}
+   - "despesa/gasto" → entity: "expenses"
    - Corrija erros de digitação em nomes de produtos
 
-4. Se tiver CONTEXTO anterior e o usuário fizer referência ("e dele?", "desse produto"):
+3. CONSULTA AGRONÔMICA / RECOMENDAÇÃO — quando perguntar O QUE USAR CONTRA uma praga/doença:
+   Padrões: "o que usar contra X", "tem algo pra X", "como controlar X", "qual produto pra X"
+   → type: "recommendation", entity: "stock", filters: {"pest": "X", "crop": "cultura se mencionada"}
+   ⚠️ NÃO é recomendação quando o usuário pergunta "quais fungicidas TENHO" — isso é consulta de categoria (regra 1)!
+
+4. SAUDAÇÃO/CONVERSA (oi, bom dia, como vai, obrigado, tchau, piada, perguntas sobre você):
+   - type: "conversation", entity: "general", response: "Texto quente e humano"
+
+5. Se tiver CONTEXTO anterior e o usuário fizer referência ("e dele?", "desse produto"):
    - USE o filtro do contexto anterior
 
 RETORNE APENAS JSON:
@@ -299,6 +299,21 @@ RESPOSTA (apenas JSON, sem markdown):`;
   private getDefaultIntent(question: string): QueryIntent {
     // Fallback: tenta identificar por palavras-chave
     const lower = question.toLowerCase();
+
+    // Detecção de categoria de produto antes da detecção genérica de estoque
+    const categoryMap: Record<string, string> = {
+      fungicida: "fungicida", fungicidas: "fungicida",
+      herbicida: "herbicida", herbicidas: "herbicida",
+      inseticida: "inseticida", inseticidas: "inseticida",
+      fertilizante: "fertilizante", fertilizantes: "fertilizante",
+      semente: "semente", sementes: "semente",
+      adjuvante: "adjuvante", adjuvantes: "adjuvante",
+    };
+    for (const [keyword, category] of Object.entries(categoryMap)) {
+      if (lower.includes(keyword)) {
+        return { type: "query", entity: "stock", filters: { category }, confidence: 0.7, question };
+      }
+    }
 
     if (lower.includes("estoque") || lower.includes("stock")) {
       return { type: "query", entity: "stock", filters: {}, confidence: 0.6, question };

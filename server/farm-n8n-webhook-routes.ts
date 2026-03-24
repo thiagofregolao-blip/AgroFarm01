@@ -1293,7 +1293,7 @@ Retorne APENAS UM JSON VALIDO no formato exato:
                     fp.name as product_name, fs.quantity, fs.average_cost as unit_price,
                     fp.active_ingredient
                 FROM farm_stock fs
-                JOIN farm_products fp ON fp.id = fs.product_id
+                JOIN farm_products_catalog fp ON fp.id = fs.product_id
                 WHERE fs.farmer_id = ${farmers[0].id}
                 ${search && String(search).trim() !== "" ? sql`AND fp.name ILIKE ${'%' + String(search).trim() + '%'}` : sql``}
                 ORDER BY fs.updated_at DESC LIMIT 20
