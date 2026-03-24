@@ -35,7 +35,7 @@ const translations = {
     nav_dre: "DRE / Resultado",
     nav_budget: "Orçamento",
     nav_reconciliation: "Conciliação",
-    nav_suppliers: "Campo",
+    nav_suppliers: "Empresas e Pessoas",
     nav_productivity: "Produtividade",
 
     // Profile
@@ -174,7 +174,7 @@ const translations = {
     nav_dre: "Estado de Resultados",
     nav_budget: "Presupuesto",
     nav_reconciliation: "Conciliación",
-    nav_suppliers: "Campo",
+    nav_suppliers: "Empresas e Pessoas",
     nav_productivity: "Productividad",
 
     // Profile

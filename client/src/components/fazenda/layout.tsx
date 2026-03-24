@@ -82,6 +82,11 @@ const financeNavGroups: NavGroup[] = [
         items: [
             { labelKey: "nav_invoices",         href: "/fazenda/faturas",      icon: FileText,  moduleKey: "invoices" },
             { labelKey: "nav_accounts_payable", href: "/fazenda/contas-pagar", icon: Receipt,   moduleKey: "accounts_payable" },
+        ],
+    },
+    {
+        label: "Cadastros",
+        items: [
             { labelKey: "nav_suppliers",        href: "/fazenda/fornecedores", icon: Building2, moduleKey: "suppliers" },
         ],
     },
