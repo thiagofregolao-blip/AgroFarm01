@@ -218,7 +218,7 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV withdraw: register application + update stock
     app.post("/api/pdv/withdraw", requirePdv, async (req, res) => {
         try {
-            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId } = req.body;
+            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId, signatureBase64 } = req.body;
             if (!productId || !quantity || (!plotId && !equipmentId)) {
                 return res.status(400).json({ error: "Product, quantity, and objective (plot or equipment) required" });
             }
@@ -274,6 +274,17 @@ export function registerFarmPdvRoutes(app: Express) {
                 syncedFromOffline: false,
                 seasonId: seasonId || null,
             });
+
+            // Save signature if provided
+            if (signatureBase64 && application.id) {
+                try {
+                    const { db } = await import("./db");
+                    const { sql } = await import("drizzle-orm");
+                    await db.execute(sql`UPDATE farm_applications SET signature_base64 = ${signatureBase64} WHERE id = ${application.id}`);
+                } catch (sigErr: any) {
+                    console.warn("[PDV_WITHDRAW] Could not save signature:", sigErr?.message);
+                }
+            }
 
             res.status(201).json(application);
         } catch (error) {

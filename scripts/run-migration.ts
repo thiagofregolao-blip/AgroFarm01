@@ -396,6 +396,16 @@ const runMigration = async () => {
             console.log('✅ Migração stock_lote concluída!');
         }
 
+        // Migration 35: Add signature_base64 to farm_applications
+        const signaturePath = path.join(process.cwd(), 'migration_add_signature.sql');
+        if (fs.existsSync(signaturePath)) {
+            const signatureSql = fs.readFileSync(signaturePath, 'utf-8');
+            console.log('📄 Lendo arquivo de migração:', signaturePath);
+            console.log('🚀 Executando SQL (signature)...');
+            await sql.unsafe(signatureSql);
+            console.log('✅ Migração signature concluída!');
+        }
+
         console.log('✅ Todas as migrações concluídas com sucesso!');
 
     } catch (error) {

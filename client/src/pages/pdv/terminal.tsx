@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -8,13 +8,121 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X, Tractor, Gauge } from "lucide-react";
+import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X, Tractor, Gauge, Eraser, PenTool } from "lucide-react";
 import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
 
 interface CartItem {
     product: any;
     quantity: number | string;
     dosePerHa?: number | string;
+}
+
+// ==================== SIGNATURE CANVAS COMPONENT ====================
+function SignatureCanvas({ onSignatureChange }: { onSignatureChange: (dataUrl: string | null) => void }) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const isDrawingRef = useRef(false);
+    const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+    const [hasSigned, setHasSigned] = useState(false);
+
+    const getPoint = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        const canvas = canvasRef.current!;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY,
+            pressure: e.pressure || 0.5,
+        };
+    };
+
+    const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        e.preventDefault();
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.setPointerCapture(e.pointerId);
+        isDrawingRef.current = true;
+        const pt = getPoint(e);
+        lastPointRef.current = { x: pt.x, y: pt.y };
+    };
+
+    const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (!isDrawingRef.current || !canvasRef.current) return;
+        e.preventDefault();
+        const ctx = canvasRef.current.getContext("2d")!;
+        const pt = getPoint(e);
+        const last = lastPointRef.current;
+        if (!last) return;
+
+        ctx.beginPath();
+        ctx.moveTo(last.x, last.y);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.strokeStyle = "#1a1a2e";
+        ctx.lineWidth = Math.max(1.2, pt.pressure * 3.5);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        lastPointRef.current = { x: pt.x, y: pt.y };
+        if (!hasSigned) setHasSigned(true);
+    };
+
+    const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        isDrawingRef.current = false;
+        lastPointRef.current = null;
+        if (canvasRef.current && hasSigned) {
+            onSignatureChange(canvasRef.current.toDataURL("image/png"));
+        }
+    };
+
+    useEffect(() => {
+        if (hasSigned && canvasRef.current) {
+            onSignatureChange(canvasRef.current.toDataURL("image/png"));
+        }
+    }, [hasSigned]);
+
+    const clearSignature = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d")!;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setHasSigned(false);
+        onSignatureChange(null);
+    };
+
+    return (
+        <div>
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-gray-400 text-xs">
+                    <PenTool className="h-3.5 w-3.5" />
+                    <span>Assine com a caneta no campo abaixo</span>
+                </div>
+                {hasSigned && (
+                    <button onClick={clearSignature} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors">
+                        <Eraser className="h-3.5 w-3.5" /> Limpar
+                    </button>
+                )}
+            </div>
+            <div className="relative rounded-xl border-2 border-dashed border-gray-600 bg-white overflow-hidden" style={{ touchAction: "none" }}>
+                <canvas
+                    ref={canvasRef}
+                    width={600}
+                    height={200}
+                    className="w-full"
+                    style={{ height: 150, cursor: "crosshair" }}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                />
+                {!hasSigned && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="text-gray-300 text-lg italic select-none">Assinatura</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -713,27 +821,38 @@ export default function PdvTerminal() {
         const [dieselHours, setDieselHours] = useState<string>("");
         const [dieselNotes, setDieselNotes] = useState<string>("");
         const [dieselSubmitting, setDieselSubmitting] = useState(false);
+        const [showReceiptModal, setShowReceiptModal] = useState(false);
+        const [signatureData, setSignatureData] = useState<string | null>(null);
 
         const parsedQty = parseFloat(dieselQty) || 0;
         const stockAfter = dieselStock - parsedQty;
         const stockPercent = dieselProduct ? Math.max(0, Math.min(100, (dieselStock / Math.max(dieselStock, 1)) * 100)) : 0;
 
-        const handleDieselSubmit = async () => {
+        // Open receipt modal for signature
+        const handleOpenReceipt = () => {
             if (!dieselEquip) { toast({ title: "Selecione o veículo/máquina", variant: "destructive" }); return; }
             if (parsedQty <= 0) { toast({ title: "Informe a quantidade de diesel", variant: "destructive" }); return; }
             if (parsedQty > dieselStock) { toast({ title: "Quantidade excede o estoque disponível", variant: "destructive" }); return; }
             if (!dieselProduct) { toast({ title: "Nenhum produto diesel encontrado no estoque", variant: "destructive" }); return; }
+            setSignatureData(null);
+            setShowReceiptModal(true);
+        };
+
+        // Actually submit after signing
+        const handleDieselSubmit = async () => {
+            if (!signatureData) { toast({ title: "Assinatura obrigatória", variant: "destructive" }); return; }
 
             setDieselSubmitting(true);
             try {
                 const payload = {
-                    productId: dieselProduct.id,
+                    productId: dieselProduct!.id,
                     quantity: parsedQty,
                     equipmentId: dieselEquip.id,
                     horimeter: dieselHours || null,
                     odometer: dieselKm || null,
                     notes: dieselNotes || `Abastecimento ${dieselEquip.name} - ${parsedQty}L`,
                     seasonId: selectedSeasonId || null,
+                    signatureBase64: signatureData,
                 };
 
                 if (isOnline) {
@@ -747,6 +866,8 @@ export default function PdvTerminal() {
                 }
 
                 // Reset form
+                setShowReceiptModal(false);
+                setSignatureData(null);
                 setDieselQty("");
                 setDieselEquip(null);
                 setDieselKm("");
@@ -913,18 +1034,95 @@ export default function PdvTerminal() {
                             </div>
                         </div>
 
-                        {/* === SUBMIT BUTTON === */}
+                        {/* === SUBMIT BUTTON (opens receipt modal) === */}
                         <Button
-                            onClick={handleDieselSubmit}
+                            onClick={handleOpenReceipt}
                             disabled={dieselSubmitting || parsedQty <= 0 || !dieselEquip || !dieselProduct}
                             className="w-full py-7 text-lg font-black rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-gray-900 shadow-lg shadow-amber-500/20 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            {dieselSubmitting ? (
-                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Registrando...</>
-                            ) : (
-                                <>⛽ Confirmar Abastecimento — {parsedQty > 0 ? `${parsedQty}L` : "..."}</>
-                            )}
+                            <>⛽ Confirmar Abastecimento — {parsedQty > 0 ? `${parsedQty}L` : "..."}</>
                         </Button>
+
+                        {/* === RECEIPT / SIGNATURE MODAL === */}
+                        {showReceiptModal && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setShowReceiptModal(false)}>
+                                <div className="w-full max-w-md bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                                    {/* Header */}
+                                    <div className="bg-gradient-to-r from-amber-600 to-amber-700 px-5 py-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <FileText className="h-5 w-5 text-amber-100" />
+                                            <h2 className="font-bold text-lg text-white">Comprovante de Abastecimento</h2>
+                                        </div>
+                                        <button onClick={() => setShowReceiptModal(false)} className="text-amber-200 hover:text-white transition-colors">
+                                            <X className="h-5 w-5" />
+                                        </button>
+                                    </div>
+
+                                    {/* Receipt details */}
+                                    <div className="p-5 space-y-4">
+                                        <div className="bg-gray-800/60 rounded-xl p-4 space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs text-gray-400 uppercase tracking-wider">Data</span>
+                                                <span className="text-sm font-medium text-white">{new Date().toLocaleString("pt-BR")}</span>
+                                            </div>
+                                            <div className="border-t border-gray-700/50" />
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs text-gray-400 uppercase tracking-wider">Veículo / Equipamento</span>
+                                                <span className="text-sm font-medium text-white">{dieselEquip?.name}</span>
+                                            </div>
+                                            <div className="border-t border-gray-700/50" />
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs text-gray-400 uppercase tracking-wider">Quantidade</span>
+                                                <span className="text-lg font-bold text-amber-400">{parsedQty}L</span>
+                                            </div>
+                                            {dieselKm && (
+                                                <>
+                                                    <div className="border-t border-gray-700/50" />
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-gray-400 uppercase tracking-wider">Quilometragem</span>
+                                                        <span className="text-sm font-medium text-white">{dieselKm} km</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {dieselHours && (
+                                                <>
+                                                    <div className="border-t border-gray-700/50" />
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-gray-400 uppercase tracking-wider">Horímetro</span>
+                                                        <span className="text-sm font-medium text-white">{dieselHours}h</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {dieselNotes && (
+                                                <>
+                                                    <div className="border-t border-gray-700/50" />
+                                                    <div className="flex justify-between items-start">
+                                                        <span className="text-xs text-gray-400 uppercase tracking-wider">Obs</span>
+                                                        <span className="text-sm text-gray-300 text-right max-w-[200px]">{dieselNotes}</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        {/* Signature */}
+                                        <SignatureCanvas onSignatureChange={setSignatureData} />
+
+                                        {/* Confirm button */}
+                                        <Button
+                                            onClick={handleDieselSubmit}
+                                            disabled={dieselSubmitting || !signatureData}
+                                            className="w-full py-6 text-base font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            {dieselSubmitting ? (
+                                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Registrando...</>
+                                            ) : (
+                                                <>✅ Assinar e Confirmar</>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* === RECENT FUELING HISTORY === */}
                         {(() => {
