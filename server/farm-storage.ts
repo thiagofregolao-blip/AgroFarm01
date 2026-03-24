@@ -483,16 +483,15 @@ export class FarmStorage {
             let equipmentName: string | null = null;
             let employeeName: string | null = null;
             if (r.notes) {
-                // Format: "Abastecimento EquipName - QL | Funcionário: Name"
-                const equipMatch = r.notes.match(/^Abastecimento\s+([^-]+)/);
-                if (equipMatch) equipmentName = equipMatch[1].trim();
-                // Legacy format
-                if (!equipmentName && r.notes.startsWith("Abastecimento: ")) {
-                    const legacyMatch = r.notes.match(/^Abastecimento: ([^(]+)/);
-                    if (legacyMatch) equipmentName = legacyMatch[1].trim();
-                }
+                // Extract employee name first (before cleaning)
                 const empMatch = r.notes.match(/Funcionário:\s*(.+)$/);
                 if (empMatch) employeeName = empMatch[1].trim();
+
+                // Format: "Abastecimento EquipName (telemetry) | Funcionário: Name"
+                // or: "Abastecimento: EquipName (telemetry)"
+                // or: "Abastecimento EquipName - QL | Funcionário: Name"
+                const equipMatch = r.notes.match(/^Abastecimento[:\s]+([^(|\-]+)/);
+                if (equipMatch) equipmentName = equipMatch[1].trim();
             }
             return { ...r, equipmentName, employeeName };
         });

@@ -39,8 +39,9 @@ export function registerFarmStockRoutes(app: Express) {
                 LEFT JOIN farm_equipment e ON a.equipment_id = e.id
                 WHERE a.id = ${req.params.id} AND a.farmer_id = ${req.user!.id}
             `);
-            if (!rows.rows?.length) return res.status(404).json({ error: "Comprovante não encontrado" });
-            res.json(rows.rows[0]);
+            const result = (rows as any).rows ?? rows;
+            if (!result.length) return res.status(404).json({ error: "Comprovante não encontrado" });
+            res.json(result[0]);
         } catch (error) {
             console.error("[FARM_RECEIPT_GET]", error);
             res.status(500).json({ error: "Failed to get receipt" });

@@ -487,7 +487,7 @@ export function registerFarmPdvRoutes(app: Express) {
             })));
 
             // If matched, also return the employee's signature
-            if (result.matchedId && result.confidence >= 60) {
+            if (result.matchedId && result.confidence >= 95) {
                 const matched = employees.find((e: any) => e.id === result.matchedId);
                 return res.json({
                     ...result,

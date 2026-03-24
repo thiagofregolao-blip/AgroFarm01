@@ -885,7 +885,7 @@ export default function PdvTerminal() {
             try {
                 const res = await apiRequest("POST", "/api/pdv/recognize-face", { photoBase64: photoData });
                 const result = await res.json();
-                if (result.matchedId && result.confidence >= 60) {
+                if (result.matchedId && result.confidence >= 95) {
                     setRecognizedEmployee({ name: result.matchedName, role: result.employeeRole, signatureBase64: result.signatureBase64 });
                     if (result.signatureBase64) {
                         setSignatureData(result.signatureBase64);
