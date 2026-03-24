@@ -466,7 +466,10 @@ export function registerFarmPdvRoutes(app: Express) {
 
     // Return employee face embeddings for client-side recognition (face-api.js)
     // Debug endpoint - temporary
-    app.get("/api/pdv/debug-embeddings", async (_req, res) => {
+    app.get("/api/pdv/debug-embeddings", async (req, res) => {
+        // Also show session farmerId for comparison
+        const sessionFarmerId = req.session?.pdvFarmerId || "NO_SESSION";
+        console.log(`[DEBUG] Session pdvFarmerId: ${sessionFarmerId}`);
         try {
             const { db, dbReady } = await import("./db");
             const { sql } = await import("drizzle-orm");
@@ -478,7 +481,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 FROM farm_employees
                 ORDER BY name
             `);
-            res.json(result.rows || result);
+            res.json({ sessionFarmerId, employees: result.rows || result });
         } catch (error: any) {
             res.status(500).json({ error: error.message });
         }
