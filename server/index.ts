@@ -639,6 +639,28 @@ app.use((req, res, next) => {
     log(`⚠️  Migration receituário: ${(migErr as Error).message}`);
   }
 
+  // Inline migration: farm_employees table + signature column
+  try {
+    const { db: empDb, dbReady: empReady } = await import("./db");
+    const { sql: empSql } = await import("drizzle-orm");
+    await empReady;
+    await empDb.execute(empSql`CREATE TABLE IF NOT EXISTS farm_employees (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name text NOT NULL,
+      role text NOT NULL,
+      phone text,
+      status text DEFAULT 'Ativo',
+      photo_base64 text,
+      signature_base64 text,
+      created_at timestamp NOT NULL DEFAULT now()
+    )`);
+    await empDb.execute(empSql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS signature_base64 text`);
+    log("✅ Migration: farm_employees table + signature_base64 ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_employees: ${(migErr as Error).message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes
