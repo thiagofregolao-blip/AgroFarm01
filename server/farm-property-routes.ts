@@ -199,7 +199,7 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.post("/api/farm/employees", requireFarmer, async (req, res) => {
         try {
-            const { name, role, phone, status, photoBase64, signatureBase64 } = req.body;
+            const { name, role, phone, status, photoBase64, signatureBase64, faceEmbedding } = req.body;
             if (!name || !role) return res.status(400).json({ error: "Nome e cargo são obrigatórios" });
 
             const emp = await farmStorage.createEmployee({
@@ -210,6 +210,7 @@ export function registerFarmPropertyRoutes(app: Express) {
                 status: status || "Ativo",
                 photoBase64: photoBase64 || null,
                 signatureBase64: signatureBase64 || null,
+                faceEmbedding: faceEmbedding || null,
             });
             res.status(201).json(emp);
         } catch (error) {
@@ -220,7 +221,7 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.put("/api/farm/employees/:id", requireFarmer, async (req, res) => {
         try {
-            const { name, role, phone, status, photoBase64, signatureBase64 } = req.body;
+            const { name, role, phone, status, photoBase64, signatureBase64, faceEmbedding } = req.body;
             const data: any = {};
             if (name !== undefined) data.name = name;
             if (role !== undefined) data.role = role;
@@ -228,6 +229,7 @@ export function registerFarmPropertyRoutes(app: Express) {
             if (status !== undefined) data.status = status;
             if (photoBase64 !== undefined) data.photoBase64 = photoBase64;
             if (signatureBase64 !== undefined) data.signatureBase64 = signatureBase64;
+            if (faceEmbedding !== undefined) data.faceEmbedding = faceEmbedding;
 
             const emp = await farmStorage.updateEmployee(req.params.id, data);
             res.json(emp);

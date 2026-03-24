@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import FarmLayout from "@/components/fazenda/layout";
@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit2, Trash2, Loader2, Users, Camera, Image, Phone, Search, X } from "lucide-react";
+import { Plus, Edit2, Trash2, Loader2, Users, Camera, Image, Phone, Search, X, CheckCircle, AlertCircle } from "lucide-react";
+import { loadFaceModels, generateFaceEmbedding } from "@/lib/face-recognition";
 
 const ROLES = ["Gerente", "Operador", "Tratorista", "Motorista", "Mecânico", "Auxiliar", "Encarregado", "Outro"];
 
@@ -18,21 +19,58 @@ function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmi
     const [phone, setPhone] = useState(initial?.phone || "");
     const [photoPreview, setPhotoPreview] = useState<string>(initial?.photoBase64 || "");
     const [signaturePreview, setSignaturePreview] = useState<string>(initial?.signatureBase64 || "");
+    const [faceEmbedding, setFaceEmbedding] = useState<number[] | null>(initial?.faceEmbedding ? JSON.parse(initial.faceEmbedding) : null);
+    const [embeddingStatus, setEmbeddingStatus] = useState<"idle" | "loading" | "success" | "error">(initial?.faceEmbedding ? "success" : "idle");
     const photoInputRef = useRef<HTMLInputElement>(null);
     const sigInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
+    // Auto-generate face embedding when photo changes
+    const processPhoto = useCallback(async (base64: string) => {
+        if (!base64) {
+            setFaceEmbedding(null);
+            setEmbeddingStatus("idle");
+            return;
+        }
+        setEmbeddingStatus("loading");
+        try {
+            await loadFaceModels();
+            const emb = await generateFaceEmbedding(base64);
+            if (emb) {
+                setFaceEmbedding(emb);
+                setEmbeddingStatus("success");
+            } else {
+                setFaceEmbedding(null);
+                setEmbeddingStatus("error");
+            }
+        } catch {
+            setFaceEmbedding(null);
+            setEmbeddingStatus("error");
+        }
+    }, []);
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void, isPhoto = false) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => setter(reader.result as string);
+        reader.onload = () => {
+            const result = reader.result as string;
+            setter(result);
+            if (isPhoto) processPhoto(result);
+        };
         reader.readAsDataURL(file);
     };
 
     const handleSubmit = () => {
         if (!name.trim() || !role) return;
-        onSubmit({ name: name.trim(), role, phone, photoBase64: photoPreview || null, signatureBase64: signaturePreview || null });
+        onSubmit({
+            name: name.trim(),
+            role,
+            phone,
+            photoBase64: photoPreview || null,
+            signatureBase64: signaturePreview || null,
+            faceEmbedding: faceEmbedding ? JSON.stringify(faceEmbedding) : null,
+        });
     };
 
     return (
@@ -61,9 +99,24 @@ function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmi
                     {photoPreview ? (
                         <div className="relative">
                             <img src={photoPreview} alt="Foto" className="w-24 h-24 rounded-xl object-cover border-2 border-emerald-200" />
-                            <button onClick={() => setPhotoPreview("")} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                            <button onClick={() => { setPhotoPreview(""); setFaceEmbedding(null); setEmbeddingStatus("idle"); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
                                 <X className="h-3 w-3" />
                             </button>
+                            {embeddingStatus === "loading" && (
+                                <div className="absolute bottom-0 left-0 right-0 bg-amber-500/90 text-white text-[9px] text-center py-0.5 rounded-b-xl">
+                                    <Loader2 className="h-3 w-3 animate-spin inline mr-1" />Detectando...
+                                </div>
+                            )}
+                            {embeddingStatus === "success" && (
+                                <div className="absolute bottom-0 left-0 right-0 bg-emerald-600/90 text-white text-[9px] text-center py-0.5 rounded-b-xl flex items-center justify-center gap-1">
+                                    <CheckCircle className="h-3 w-3" /> Rosto detectado
+                                </div>
+                            )}
+                            {embeddingStatus === "error" && (
+                                <div className="absolute bottom-0 left-0 right-0 bg-red-600/90 text-white text-[9px] text-center py-0.5 rounded-b-xl flex items-center justify-center gap-1">
+                                    <AlertCircle className="h-3 w-3" /> Rosto não encontrado
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
@@ -71,11 +124,11 @@ function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmi
                         </div>
                     )}
                     <div className="flex flex-col gap-2">
-                        <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="user" onChange={e => handleImageUpload(e, setPhotoPreview)} />
+                        <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="user" onChange={e => handleImageUpload(e, setPhotoPreview, true)} />
                         <Button type="button" variant="outline" size="sm" onClick={() => cameraInputRef.current?.click()} className="text-xs">
                             <Camera className="h-3.5 w-3.5 mr-1.5" /> Tirar Foto
                         </Button>
-                        <input type="file" ref={photoInputRef} className="hidden" accept="image/*" onChange={e => handleImageUpload(e, setPhotoPreview)} />
+                        <input type="file" ref={photoInputRef} className="hidden" accept="image/*" onChange={e => handleImageUpload(e, setPhotoPreview, true)} />
                         <Button type="button" variant="outline" size="sm" onClick={() => photoInputRef.current?.click()} className="text-xs">
                             <Image className="h-3.5 w-3.5 mr-1.5" /> Galeria
                         </Button>

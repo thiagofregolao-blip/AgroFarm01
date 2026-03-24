@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescri
 import { useToast } from "@/hooks/use-toast";
 import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wifi, WifiOff, ShoppingCart, Trash2, Droplets, MapPin, FileText, Share2, X, Tractor, Gauge, Eraser, PenTool, Camera } from "lucide-react";
 import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
+import { loadFaceModels, generateFaceEmbedding, findBestMatch } from "@/lib/face-recognition";
 
 interface CartItem {
     product: any;
@@ -250,7 +251,24 @@ export default function PdvTerminal() {
             return res.json();
         },
         enabled: step === "product",
-        refetchInterval: 30000, // Atualizar a cada 30 segundos
+        refetchInterval: 30000,
+    });
+
+    // Employee face embeddings for client-side recognition
+    const { data: employeeEmbeddings } = useQuery({
+        queryKey: ["/api/pdv/employee-embeddings"],
+        queryFn: async () => {
+            const res = await apiRequest("GET", "/api/pdv/employee-embeddings");
+            if (!res.ok) throw new Error("Failed to fetch embeddings");
+            const data = await res.json();
+            // Cache in localStorage for offline use
+            try { localStorage.setItem("pdv_employee_embeddings", JSON.stringify(data)); } catch {}
+            return data;
+        },
+        staleTime: 5 * 60 * 1000, // cache 5 minutes
+        initialData: () => {
+            try { return JSON.parse(localStorage.getItem("pdv_employee_embeddings") || "[]"); } catch { return []; }
+        },
     });
 
     const allStock = pdvData?.stock || [];
@@ -825,8 +843,7 @@ export default function PdvTerminal() {
         const [signatureData, setSignatureData] = useState<string | null>(null);
         const [viewReceipt, setViewReceipt] = useState<any>(null);
         const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
-        const [recognizedEmployee, setRecognizedEmployee] = useState<{ name: string; role?: string; signatureBase64?: string; photoBase64?: string } | null>(null);
-        const [pendingRecognition, setPendingRecognition] = useState<{ name: string; role?: string; signatureBase64?: string; photoBase64?: string; confidence: number } | null>(null);
+        const [recognizedEmployee, setRecognizedEmployee] = useState<{ name: string; role?: string; signatureBase64?: string } | null>(null);
         const [recognizing, setRecognizing] = useState(false);
         const [showCamera, setShowCamera] = useState(false);
         const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -882,24 +899,31 @@ export default function PdvTerminal() {
             setCapturedPhoto(photoData);
             stopCamera();
 
+            // Client-side face recognition with face-api.js
             setRecognizing(true);
             try {
-                const res = await apiRequest("POST", "/api/pdv/recognize-face", { photoBase64: photoData });
-                const result = await res.json();
-                if (result.matchedId && result.confidence >= 70) {
-                    // Show pending confirmation with both photos
-                    setPendingRecognition({
-                        name: result.matchedName,
-                        role: result.employeeRole,
-                        signatureBase64: result.signatureBase64,
-                        photoBase64: result.employeePhoto,
-                        confidence: result.confidence,
-                    });
+                await loadFaceModels();
+                const descriptor = await generateFaceEmbedding(photoData);
+                if (!descriptor) {
+                    toast({ title: "Nenhum rosto detectado", description: "Tente novamente com boa iluminação", variant: "destructive" });
+                    return;
+                }
+                if (!employeeEmbeddings?.length) {
+                    toast({ title: "Nenhum funcionário com face cadastrada", description: "Cadastre funcionários com foto primeiro", variant: "destructive" });
+                    return;
+                }
+                const match = findBestMatch(descriptor, employeeEmbeddings, 0.6);
+                if (match) {
+                    const emp = employeeEmbeddings.find((e: any) => e.id === match.matchedId);
+                    setRecognizedEmployee({ name: match.matchedName, role: emp?.role, signatureBase64: emp?.signatureBase64 });
+                    if (emp?.signatureBase64) setSignatureData(emp.signatureBase64);
+                    toast({ title: `Funcionário identificado: ${match.matchedName}` });
                 } else {
                     toast({ title: "Funcionário não reconhecido", description: "Use a assinatura manual abaixo", variant: "destructive" });
                 }
-            } catch {
-                toast({ title: "Erro no reconhecimento", variant: "destructive" });
+            } catch (err) {
+                console.error("[FACE_RECOGNITION]", err);
+                toast({ title: "Erro no reconhecimento facial", variant: "destructive" });
             } finally {
                 setRecognizing(false);
             }
@@ -1196,47 +1220,6 @@ export default function PdvTerminal() {
                                                     <Loader2 className="h-8 w-8 animate-spin text-amber-400 mb-2" />
                                                     <p className="text-sm text-gray-300">Reconhecendo rosto...</p>
                                                 </div>
-                                            ) : pendingRecognition ? (
-                                                <div className="bg-amber-900/30 border border-amber-700/50 rounded-xl p-4">
-                                                    <p className="text-amber-300 font-bold text-sm text-center mb-3">Confirme a identificação</p>
-                                                    <div className="flex items-center justify-center gap-4 mb-3">
-                                                        {capturedPhoto && (
-                                                            <div className="text-center">
-                                                                <img src={capturedPhoto} alt="Capturada" className="w-20 h-20 rounded-lg object-cover border-2 border-amber-400" />
-                                                                <p className="text-[10px] text-gray-400 mt-1">Foto capturada</p>
-                                                            </div>
-                                                        )}
-                                                        <span className="text-gray-500 text-lg">=?</span>
-                                                        {pendingRecognition.photoBase64 && (
-                                                            <div className="text-center">
-                                                                <img src={pendingRecognition.photoBase64} alt="Cadastro" className="w-20 h-20 rounded-lg object-cover border-2 border-blue-400" />
-                                                                <p className="text-[10px] text-gray-400 mt-1">Foto cadastrada</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-amber-200 text-center text-sm mb-1">{pendingRecognition.name}</p>
-                                                    {pendingRecognition.role && <p className="text-amber-400/60 text-center text-xs mb-3">{pendingRecognition.role}</p>}
-                                                    <div className="flex gap-2">
-                                                        <Button
-                                                            onClick={() => {
-                                                                setRecognizedEmployee(pendingRecognition);
-                                                                if (pendingRecognition.signatureBase64) setSignatureData(pendingRecognition.signatureBase64);
-                                                                setPendingRecognition(null);
-                                                                toast({ title: `✅ Funcionário confirmado: ${pendingRecognition.name}` });
-                                                            }}
-                                                            className="flex-1 bg-emerald-700 hover:bg-emerald-600 text-white"
-                                                        >
-                                                            Sim, sou eu
-                                                        </Button>
-                                                        <Button
-                                                            onClick={() => { setPendingRecognition(null); setCapturedPhoto(null); }}
-                                                            variant="outline"
-                                                            className="flex-1 border-red-700 text-red-400 hover:bg-red-900/30"
-                                                        >
-                                                            Não sou eu
-                                                        </Button>
-                                                    </div>
-                                                </div>
                                             ) : recognizedEmployee ? (
                                                 <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl p-4">
                                                     <div className="flex items-center gap-3">
@@ -1244,7 +1227,7 @@ export default function PdvTerminal() {
                                                         <div>
                                                             <p className="text-emerald-300 font-bold text-sm">{recognizedEmployee.name}</p>
                                                             {recognizedEmployee.role && <p className="text-emerald-400/60 text-xs">{recognizedEmployee.role}</p>}
-                                                            <p className="text-emerald-500 text-[10px] mt-0.5">Identificado e confirmado</p>
+                                                            <p className="text-emerald-500 text-[10px] mt-0.5">Identificado com sucesso</p>
                                                         </div>
                                                     </div>
                                                     {recognizedEmployee.signatureBase64 && (

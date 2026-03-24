@@ -1074,6 +1074,7 @@ export const farmEmployees = pgTable("farm_employees", {
   status: text("status").default("Ativo"), // Ativo, Inativo
   photoBase64: text("photo_base64"), // Foto do rosto
   signatureBase64: text("signature_base64"), // Imagem da assinatura em papel
+  faceEmbedding: text("face_embedding"), // JSON array of 128 floats from face-api.js
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
