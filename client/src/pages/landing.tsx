@@ -5,7 +5,7 @@ import {
     Map, FileText, DollarSign, Satellite, BookOpen, ArrowDownUp,
     ChevronDown, ChevronUp, MessageCircle, ArrowRight, Menu, X,
     Shield, Zap, Smartphone, Globe, Bell, Users, CloudSun, Target,
-    CheckCircle,
+    CheckCircle, Sparkles,
 } from "lucide-react";
 
 const WHATSAPP_URL = "https://wa.me/595986848326?text=Olá! Gostaria de saber mais sobre o AgroFarm.";
@@ -241,6 +241,9 @@ export default function LandingPage() {
 
                     {/* Feature rows */}
                     {[
+                        { icon: Sparkles, title: "Recebimento Inteligente de Faturas", desc: "Esqueça o cadastro manual. Assim que sua empresa de insumos emite a fatura, a DataGrow recebe automaticamente, identifica os produtos, quantidades e valores — e já registra no sistema aguardando sua aprovação com um clique.", image: "/feature-faturas.png",
+                          items: ["Zero digitação — 100% automatizado", "Aprovação em um clique direto no app", "Estoque atualizado automaticamente após aprovação", "Histórico completo de todas as faturas recebidas"],
+                          badge: "IA DataGrow" },
                         { icon: Package, title: "Controle de Estoque & Insumos", desc: "Saiba exatamente o que tem, quanto custou e quando comprar mais.", image: "/feature-estoque.png",
                           items: ["Custo médio automático por produto", "Alertas de estoque baixo via WhatsApp", "Movimentações com rastreabilidade", "Integração com faturas de compra", "Histórico completo de preços"] },
                         { icon: Satellite, title: "Monitoramento NDVI por Satélite", desc: "Imagens do Sentinel-2 atualizadas a cada 5 dias, direto no mapa dos seus talhões.", image: "/feature-ndvi.png", reverse: true,
@@ -265,7 +268,14 @@ export default function LandingPage() {
                                         <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center flex-shrink-0">
                                             <Icon className="w-6 h-6 text-green-700" />
                                         </div>
-                                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">{feature.title}</h3>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-slate-900 tracking-tight">{feature.title}</h3>
+                                            {feature.badge && (
+                                                <span className="inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-bold rounded-full uppercase tracking-wider">
+                                                    <Sparkles className="w-3 h-3" /> {feature.badge}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <p className="text-slate-500 text-base leading-relaxed mb-5">{feature.desc}</p>
                                     <ul className="space-y-2.5">
