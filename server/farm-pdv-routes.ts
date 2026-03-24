@@ -465,9 +465,29 @@ export function registerFarmPdvRoutes(app: Express) {
     });
 
     // Return employee face embeddings for client-side recognition (face-api.js)
+    // Debug endpoint - temporary
+    app.get("/api/pdv/debug-embeddings", async (_req, res) => {
+        try {
+            const { db, dbReady } = await import("./db");
+            const { sql } = await import("drizzle-orm");
+            await dbReady;
+            const result = await db.execute(sql`
+                SELECT id, name, status, farmer_id,
+                       CASE WHEN face_embedding IS NOT NULL THEN 'YES (' || length(face_embedding) || ' chars)' ELSE 'NULL' END as has_embedding,
+                       CASE WHEN photo_base64 IS NOT NULL THEN 'YES' ELSE 'NULL' END as has_photo
+                FROM farm_employees
+                ORDER BY name
+            `);
+            res.json(result.rows || result);
+        } catch (error: any) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+
     app.get("/api/pdv/employee-embeddings", requirePdv, async (req, res) => {
         try {
             const farmerId = req.session.pdvFarmerId;
+            console.log(`[PDV_EMBEDDINGS] farmerId from session: ${farmerId}`);
             const employees = await farmStorage.getEmployees(farmerId);
             console.log(`[PDV_EMBEDDINGS] Total: ${employees.length}, withEmbedding: ${employees.filter((e: any) => e.faceEmbedding).length}`);
             employees.forEach((e: any) => console.log(`[PDV_EMBEDDINGS] ${e.name}: hasEmbedding=${!!e.faceEmbedding}, status=${e.status}`));
