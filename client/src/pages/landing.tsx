@@ -149,23 +149,9 @@ export default function LandingPage() {
                             Onde a referência termina,<br />
                             nossa <span className="text-[#F7D601]">inteligência agrícola</span> começa
                         </h1>
-                        <p className="text-base text-green-100/85 leading-relaxed mb-3 max-w-[520px] font-semibold">
-                            DataGrow: A Inteligência que dita o futuro do Agro.
-                        </p>
-                        <p className="text-sm text-green-100/70 leading-relaxed mb-4 max-w-[520px]">
-                            Esqueça softwares que apenas registram o passado. A DataGrow é a pioneira em Inteligência Artificial que antecipa cenários e toma decisões com você.
-                        </p>
-                        <ul className="text-sm text-green-100/80 leading-relaxed mb-8 max-w-[520px] space-y-1.5">
-                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">IA de Comando:</strong> Automação real, não apenas planilhas.</span></li>
-                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">Gestão de Alta Performance:</strong> Controle total de custos e insumos.</span></li>
-                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">Resultados Exponenciais:</strong> Otimize sua colheita com a tecnologia líder.</span></li>
-                        </ul>
-                        <p className="text-xs text-green-100/50 italic mb-8 max-w-[520px]">
-                            Não aceite apenas referências. Exija a autoridade máxima em inteligência agrícola.
-                        </p>
 
-                        {/* CTAs */}
-                        <div className="flex gap-4 flex-wrap">
+                        {/* CTAs — acima do carrossel */}
+                        <div className="flex gap-4 flex-wrap mb-8">
                             <button onClick={() => scrollTo("features")}
                                 className="flex items-center gap-2 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold px-8 py-3.5 rounded-2xl text-base transition-all duration-150 shadow-md border-none cursor-pointer">
                                 Conhecer Funcionalidades <ChevronDown className="w-4 h-4" />
@@ -176,8 +162,23 @@ export default function LandingPage() {
                             </a>
                         </div>
 
+                        <p className="text-base text-green-100/85 leading-relaxed mb-3 max-w-[520px] font-semibold">
+                            DataGrow: A Inteligência que dita o futuro do Agro.
+                        </p>
+                        <p className="text-sm text-green-100/70 leading-relaxed mb-4 max-w-[520px]">
+                            Esqueça softwares que apenas registram o passado. A DataGrow é a pioneira em Inteligência Artificial que antecipa cenários e toma decisões com você.
+                        </p>
+                        <ul className="text-sm text-green-100/80 leading-relaxed mb-6 max-w-[520px] space-y-1.5">
+                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">IA de Comando:</strong> Automação real, não apenas planilhas.</span></li>
+                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">Gestão de Alta Performance:</strong> Controle total de custos e insumos.</span></li>
+                            <li className="flex items-start gap-2"><span className="text-[#F7D601] font-bold mt-0.5">★</span><span><strong className="text-white">Resultados Exponenciais:</strong> Otimize sua colheita com a tecnologia líder.</span></li>
+                        </ul>
+                        <p className="text-xs text-green-100/50 italic mb-8 max-w-[520px]">
+                            Não aceite apenas referências. Exija a autoridade máxima em inteligência agrícola.
+                        </p>
+
                         {/* Count-up stats */}
-                        <div className="flex gap-10 mt-12">
+                        <div className="flex gap-10 mt-4">
                             {[
                                 { target: 3,   prefix: "+", suffix: "",    label: "Departamentos" },
                                 { target: 110, prefix: "+", suffix: "",    label: "Produtores" },
