@@ -1212,6 +1212,8 @@ export const farmApplications = pgTable("farm_applications", {
   appliedAt: timestamp("applied_at").notNull().default(sql`now()`),
   appliedBy: text("applied_by"),
   notes: text("notes"),
+  employeeName: text("employee_name"), // Funcionário identificado por reconhecimento facial
+  photoBase64: text("photo_base64"), // Foto do comprovante de abastecimento
   syncedFromOffline: boolean("synced_from_offline").default(false),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });

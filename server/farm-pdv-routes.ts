@@ -218,7 +218,7 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV withdraw: register application + update stock
     app.post("/api/pdv/withdraw", requirePdv, async (req, res) => {
         try {
-            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId, signatureBase64 } = req.body;
+            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId, signatureBase64, employeeName, photoBase64 } = req.body;
             if (!productId || !quantity || (!plotId && !equipmentId)) {
                 return res.status(400).json({ error: "Product, quantity, and objective (plot or equipment) required" });
             }
@@ -275,14 +275,22 @@ export function registerFarmPdvRoutes(app: Express) {
                 seasonId: seasonId || null,
             });
 
-            // Save signature if provided
-            if (signatureBase64 && application.id) {
+            // Save signature, employee name, and photo if provided
+            if (application.id) {
                 try {
                     const { db } = await import("./db");
                     const { sql } = await import("drizzle-orm");
-                    await db.execute(sql`UPDATE farm_applications SET signature_base64 = ${signatureBase64} WHERE id = ${application.id}`);
+                    if (signatureBase64) {
+                        await db.execute(sql`UPDATE farm_applications SET signature_base64 = ${signatureBase64} WHERE id = ${application.id}`);
+                    }
+                    if (employeeName) {
+                        await db.execute(sql`UPDATE farm_applications SET employee_name = ${employeeName} WHERE id = ${application.id}`);
+                    }
+                    if (photoBase64) {
+                        await db.execute(sql`UPDATE farm_applications SET photo_base64 = ${photoBase64} WHERE id = ${application.id}`);
+                    }
                 } catch (sigErr: any) {
-                    console.warn("[PDV_WITHDRAW] Could not save signature:", sigErr?.message);
+                    console.warn("[PDV_WITHDRAW] Could not save extra fields:", sigErr?.message);
                 }
             }
 

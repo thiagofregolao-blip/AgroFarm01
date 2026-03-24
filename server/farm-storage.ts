@@ -568,6 +568,8 @@ export class FarmStorage {
             propertyName: farmProperties.name,
             equipmentName: farmEquipment.name,
             equipmentTankCapacityL: farmEquipment.tankCapacityL,
+            employeeName: farmApplications.employeeName,
+            photoBase64: farmApplications.photoBase64,
         }).from(farmApplications)
             .innerJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
             .leftJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))

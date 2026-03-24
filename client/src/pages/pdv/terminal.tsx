@@ -924,7 +924,8 @@ export default function PdvTerminal() {
                 if (match) {
                     const emp = employeeEmbeddings.find((e: any) => e.id === match.matchedId);
                     setRecognizedEmployee({ name: match.matchedName, role: emp?.role, signatureBase64: emp?.signatureBase64 });
-                    if (emp?.signatureBase64) setSignatureData(emp.signatureBase64);
+                    // Use employee's signature if available, otherwise use "face-recognized" marker
+                    setSignatureData(emp?.signatureBase64 || "face-recognized");
                     toast({ title: `Funcionário identificado: ${match.matchedName}` });
                 } else {
                     toast({ title: "Funcionário não reconhecido", description: "Use a assinatura manual abaixo", variant: "destructive" });
@@ -953,7 +954,9 @@ export default function PdvTerminal() {
                         ? `Abastecimento ${dieselEquip.name} - ${parsedQty}L | Funcionário: ${recognizedEmployee.name}`
                         : (dieselNotes || `Abastecimento ${dieselEquip.name} - ${parsedQty}L`),
                     seasonId: selectedSeasonId || null,
-                    signatureBase64: signatureData,
+                    signatureBase64: signatureData === "face-recognized" ? null : signatureData,
+                    employeeName: recognizedEmployee?.name || null,
+                    photoBase64: capturedPhoto || null,
                 };
 
                 if (isOnline) {

@@ -658,7 +658,9 @@ app.use((req, res, next) => {
     )`);
     await empDb.execute(empSql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS signature_base64 text`);
     await empDb.execute(empSql`ALTER TABLE farm_employees ADD COLUMN IF NOT EXISTS face_embedding text`);
-    log("✅ Migration: farm_employees table + signature_base64 + face_embedding ensured");
+    await empDb.execute(empSql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS employee_name text`);
+    await empDb.execute(empSql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS photo_base64 text`);
+    log("✅ Migration: farm_employees table + signature_base64 + face_embedding + employee_name + photo_base64 ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration farm_employees: ${(migErr as Error).message}`);
   }
