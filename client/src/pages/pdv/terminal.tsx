@@ -117,11 +117,11 @@ function PDVTopBar({
                                 </button>
                             </SheetTrigger>
                             <SheetContent side="right" className="w-[340px] sm:w-[400px] p-0 flex flex-col">
-                                <SheetHeader className="p-5 border-b border-gray-100 bg-green-800 text-white">
+                                <SheetHeader className="p-5 border-b border-gray-100 bg-[#024177] text-white">
                                     <SheetTitle className="flex items-center gap-2 text-white">
                                         <FileText className="h-5 w-5" /> Receituários
                                     </SheetTitle>
-                                    <SheetDescription className="text-green-200 text-xs">
+                                    <SheetDescription className="text-blue-200 text-xs">
                                         Clique para abrir ou compartilhar
                                     </SheetDescription>
                                 </SheetHeader>
@@ -585,9 +585,20 @@ export default function PdvTerminal() {
         }
     };
 
+    // Get effective area per plot considering season percentage
+    const getEffectiveArea = useCallback((plot: any) => {
+        const totalHa = parseFloat(plot.areaHa) || 0;
+        if (!selectedSeasonId || !pdvData?.seasonPlots) return totalHa;
+        const sp = pdvData.seasonPlots.find((sp: any) => sp.seasonId === selectedSeasonId && sp.plotId === plot.id);
+        if (sp && parseFloat(sp.areaPercentage) > 0) {
+            return totalHa * parseFloat(sp.areaPercentage) / 100;
+        }
+        return totalHa;
+    }, [selectedSeasonId, pdvData?.seasonPlots]);
+
     const totalAreaSelected = useMemo(() => {
-        return selectedPlots.reduce((sum, p) => sum + (parseFloat(p.areaHa) || 0), 0);
-    }, [selectedPlots]);
+        return selectedPlots.reduce((sum, p) => sum + getEffectiveArea(p), 0);
+    }, [selectedPlots, getEffectiveArea]);
 
     const parseBR = (v: any) => {
         if (v === undefined || v === null || v === '') return NaN;
@@ -602,7 +613,7 @@ export default function PdvTerminal() {
         if (dose && !isNaN(dose) && selectedPlots.length > 0) {
             let totalIdeal = 0;
             const ideals = selectedPlots.map(plot => {
-                const area = parseFloat(plot.areaHa) || 0;
+                const area = getEffectiveArea(plot);
                 const ideal = area * dose;
                 totalIdeal += ideal;
                 return { plot, area, ideal };
@@ -631,7 +642,7 @@ export default function PdvTerminal() {
         } else {
             let allocated = 0;
             return selectedPlots.map((plot, idx) => {
-                const area = parseFloat(plot.areaHa) || 0;
+                const area = getEffectiveArea(plot);
                 let qty: number;
                 if (idx === selectedPlots.length - 1) {
                     qty = Math.round(totalQty - allocated);
@@ -1753,7 +1764,7 @@ export default function PdvTerminal() {
                                                                     {sel && <Check className="h-3 w-3 text-white" />}
                                                                 </div>
                                                             </div>
-                                                            <p className="text-xs text-gray-500 mt-0.5">{parseFloat(plot.areaHa).toFixed(1)} ha{plot.crop ? ` · ${plot.crop}` : ""}</p>
+                                                            <p className="text-xs text-gray-500 mt-0.5">{getEffectiveArea(plot).toFixed(1)} ha{plot.crop ? ` · ${plot.crop}` : ""}</p>
                                                         </div>
                                                     </button>
                                                 );

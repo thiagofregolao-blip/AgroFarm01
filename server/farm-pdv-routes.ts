@@ -141,6 +141,13 @@ export function registerFarmPdvRoutes(app: Express) {
             // Atrela o token à sessão tbm ou banco, pra validar no `/api/pdv/data`
             req.session.pdvToken = token;
 
+            // Fetch season_plots percentages
+            let seasonPlots: any[] = [];
+            try {
+                const spResult = await db.execute(sql`SELECT season_id AS "seasonId", plot_id AS "plotId", area_percentage AS "areaPercentage" FROM farm_season_plots WHERE farmer_id = ${terminal.farmerId}`);
+                seasonPlots = Array.isArray(spResult) ? spResult : (spResult.rows || []);
+            } catch (e) { /* table may not exist */ }
+
             res.json({
                 terminal: { id: terminal.id, name: terminal.name, propertyId: terminal.propertyId, type: terminal.type },
                 token,
@@ -149,6 +156,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 plots,
                 properties,
                 equipment,
+                seasonPlots,
             });
         } catch (error) {
             console.error("[PDV_LOGIN]", error);
@@ -202,6 +210,13 @@ export function registerFarmPdvRoutes(app: Express) {
             const properties = await farmStorage.getProperties(terminal.farmerId);
             const equipment = await farmStorage.getEquipment(terminal.farmerId);
 
+            // Fetch season_plots percentages
+            let seasonPlots: any[] = [];
+            try {
+                const spResult = await db.execute(sql`SELECT season_id AS "seasonId", plot_id AS "plotId", area_percentage AS "areaPercentage" FROM farm_season_plots WHERE farmer_id = ${terminal.farmerId}`);
+                seasonPlots = Array.isArray(spResult) ? spResult : (spResult.rows || []);
+            } catch (e) { /* table may not exist */ }
+
             res.json({
                 terminal: { id: terminal.id, name: terminal.name, propertyId: terminal.propertyId, type: terminal.type },
                 token,
@@ -210,6 +225,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 plots,
                 properties,
                 equipment,
+                seasonPlots,
             });
         } catch (error) {
             console.error("[PDV_AUTO_LOGIN]", error);
@@ -407,7 +423,14 @@ export function registerFarmPdvRoutes(app: Express) {
                 console.error("[PDV_SEASONS]", e);
             }
 
-            res.json({ products, stock, plots, properties, equipment, terminal, deposits, seasons });
+            // Fetch season_plots percentages
+            let seasonPlots: any[] = [];
+            try {
+                const spResult = await db.execute(sql`SELECT season_id AS "seasonId", plot_id AS "plotId", area_percentage AS "areaPercentage" FROM farm_season_plots WHERE farmer_id = ${farmerId}`);
+                seasonPlots = Array.isArray(spResult) ? spResult : (spResult.rows || []);
+            } catch (e) { /* table may not exist */ }
+
+            res.json({ products, stock, plots, properties, equipment, terminal, deposits, seasons, seasonPlots });
         } catch (error) {
             console.error("[PDV_DATA]", error);
             res.status(500).json({ error: "Failed to get data" });

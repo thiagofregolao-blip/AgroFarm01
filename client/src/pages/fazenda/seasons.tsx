@@ -75,6 +75,8 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
 
     // local state: map plotId -> percentage (0-100)
     const [pcts, setPcts] = useState<Record<string, number>>({});
+    // local state for ha input text (to allow free editing without recalculating)
+    const [haInputs, setHaInputs] = useState<Record<string, string>>({});
 
     // initialize from server data when loaded
     const [initialized, setInitialized] = useState(false);
@@ -87,7 +89,10 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
 
     function getPct(id: string) { return pcts[id] ?? 0; }
 
-    function setHaForPlot(id: string, ha: number) {
+    function setHaForPlot(id: string, haStr: string) {
+        setHaInputs(prev => ({ ...prev, [id]: haStr }));
+        const ha = parseFloat(haStr);
+        if (isNaN(ha)) return;
         const plot = plots.find(p => p.id === id);
         if (!plot) return;
         const totalHa = parseFloat(plot.areaHa) || 1;
@@ -103,6 +108,7 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
         const newHa = Math.max(0, Math.min(totalHa, currentHa + deltaHa));
         const pct = Math.round((newHa / totalHa) * 100);
         setPcts(prev => ({ ...prev, [id]: pct }));
+        setHaInputs(prev => ({ ...prev, [id]: newHa.toFixed(1) }));
     }
 
     function toggle(id: string) {
@@ -207,8 +213,14 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
                                                                 step="any"
                                                                 min="0"
                                                                 max={totalHa}
-                                                                value={plannedHa.toFixed(1)}
-                                                                onChange={(e) => setHaForPlot(plot.id, parseFloat(e.target.value) || 0)}
+                                                                value={haInputs[plot.id] !== undefined ? haInputs[plot.id] : plannedHa.toFixed(1)}
+                                                                onChange={(e) => setHaForPlot(plot.id, e.target.value)}
+                                                                onBlur={() => {
+                                                                    // On blur, sync display to calculated value
+                                                                    const currentPct = getPct(plot.id);
+                                                                    const ha = (totalHa * currentPct) / 100;
+                                                                    setHaInputs(prev => ({ ...prev, [plot.id]: ha.toFixed(1) }));
+                                                                }}
                                                                 className="w-full text-center text-lg font-extrabold bg-transparent border-none outline-none text-emerald-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                             />
                                                             <span className="text-[10px] text-gray-400 font-medium">ha</span>
