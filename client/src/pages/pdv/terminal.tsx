@@ -172,6 +172,130 @@ function PDVSidebar({
     );
 }
 
+// ── Header branco unificado (mobile + desktop) ──────────────────────────────
+function PDVTopBar({
+    step, title, onBack, rightBadge,
+    isOnline, withdrawalsHistory, handleRegenerateReceituario, handleLogout, toast,
+}: {
+    step: string; title: string; onBack?: () => void; rightBadge?: React.ReactNode;
+    isOnline: boolean; withdrawalsHistory: any;
+    handleRegenerateReceituario: (batch: any) => void;
+    handleLogout: () => void;
+    toast: (opts: any) => void;
+}) {
+    const STEPS = ["season", "plot", "product_select", "dose", "cart_review", "equipment", "confirm"];
+    const LABELS = ["Safra", "Talhões", "Produtos", "Doses", "Carrinho", "Pulverizador", "Confirmar"];
+    const idx = STEPS.indexOf(step);
+
+    return (
+        <header className="bg-white border-b border-gray-100 shadow-sm shrink-0" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+            {/* Logo row */}
+            <div className="flex items-center justify-between px-4 py-2.5">
+                <div className="flex items-center gap-2.5">
+                    {onBack && (
+                        <button onClick={onBack}
+                            className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-95 shrink-0">
+                            <ArrowLeft className="h-4 w-4 text-gray-600" />
+                        </button>
+                    )}
+                    <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                    {!isOnline && (
+                        <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full border border-red-200 font-medium">Offline</span>
+                    )}
+                    {rightBadge}
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <button className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 relative" aria-label="Ver receituários">
+                                <FileText className="h-4 w-4 text-gray-500" />
+                                {withdrawalsHistory?.length > 0 && (
+                                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-green-700 rounded-full text-[8px] font-bold text-white flex items-center justify-center">
+                                        {Math.min(withdrawalsHistory.length, 9)}
+                                    </span>
+                                )}
+                            </button>
+                        </SheetTrigger>
+                        <SheetContent side="right" className="w-[340px] sm:w-[400px] p-0 flex flex-col">
+                            <SheetHeader className="p-5 border-b border-gray-100 bg-green-800 text-white">
+                                <SheetTitle className="flex items-center gap-2 text-white">
+                                    <FileText className="h-5 w-5" /> Receituários
+                                </SheetTitle>
+                                <SheetDescription className="text-green-200 text-xs">
+                                    Clique para abrir ou compartilhar
+                                </SheetDescription>
+                            </SheetHeader>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                                {withdrawalsHistory?.length > 0 ? (
+                                    withdrawalsHistory.slice(0, 20).map((batch: any) => (
+                                        <div key={batch.batchId} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                                            <div className="mb-2">
+                                                <span className="text-[10px] text-gray-400 font-medium">
+                                                    {new Date(batch.appliedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                                </span>
+                                                <p className="text-sm font-bold text-gray-800 mt-0.5 line-clamp-1">{batch.propertyName || "Propriedade"}</p>
+                                                <p className="text-xs text-emerald-600 font-medium">{batch.applications.length} produto(s) aplicado(s)</p>
+                                                {batch.applications[0]?.seasonName && (
+                                                    <p className="text-[10px] text-gray-400 mt-0.5">🌱 {batch.applications[0].seasonName}</p>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button size="sm" variant="outline"
+                                                    className="flex-1 text-xs h-8 border-gray-200 hover:border-green-400 hover:text-green-700 hover:bg-green-50"
+                                                    onClick={() => handleRegenerateReceituario(batch)}>
+                                                    <FileText className="h-3 w-3 mr-1.5" /> Abrir PDF
+                                                </Button>
+                                                <Button size="sm" variant="outline"
+                                                    className="h-8 px-3 border-gray-200 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50"
+                                                    onClick={async () => {
+                                                        try {
+                                                            const productsByProduct = new Map<string, any>();
+                                                            batch.applications.forEach((app: any) => {
+                                                                if (!productsByProduct.has(app.productName)) productsByProduct.set(app.productName, { productName: app.productName, unit: app.unit || "L", plots: [] });
+                                                                productsByProduct.get(app.productName)!.plots.push({ plotName: app.plotName, quantity: parseFloat(app.quantity) });
+                                                            });
+                                                            const pdfBlob = generateReceituarioPDF({ propertyName: batch.propertyName || "Propriedade", appliedAt: new Date(batch.appliedAt), products: Array.from(productsByProduct.values()) });
+                                                            shareViaWhatsApp(pdfBlob, `receituario_${new Date(batch.appliedAt).toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`);
+                                                        } catch { toast({ title: "Erro ao compartilhar", variant: "destructive" }); }
+                                                    }}>
+                                                    <Share2 className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-16 text-gray-400">
+                                        <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                                        <p className="text-sm font-medium">Nenhum receituário</p>
+                                        <p className="text-xs mt-1">As saídas aparecerão aqui</p>
+                                    </div>
+                                )}
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+                    <button onClick={handleLogout}
+                        className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-95"
+                        aria-label="Sair">
+                        <LogOut className="h-4 w-4 text-gray-500" />
+                    </button>
+                </div>
+            </div>
+            {/* Progress bar */}
+            <div className="px-4 pb-2.5">
+                <div className="flex gap-0.5 mb-1.5">
+                    {STEPS.map((_, i) => (
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i < idx ? "bg-green-700" : i === idx ? "bg-green-500" : "bg-gray-100"}`} />
+                    ))}
+                </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-700">{title || LABELS[idx]}</span>
+                    <span className="text-[10px] text-gray-400 font-medium">{idx + 1} de {STEPS.length}</span>
+                </div>
+            </div>
+        </header>
+    );
+}
+
 interface CartItem {
     product: any;
     quantity: number | string;
@@ -1654,24 +1778,9 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
                 <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
-                {/* Header azul */}
-                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
-                    <div className="flex items-center justify-between px-4 py-3">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setStep("season")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
-                                <ArrowLeft className="h-5 w-5" />
-                            </button>
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain md:hidden" />
-                            <div>
-                                <span className="font-bold text-sm leading-tight block">Selecionar Talhões</span>
-                                <span className="text-[10px] text-green-200">Passo 2 de 5</span>
-                            </div>
-                        </div>
-                        <span className="bg-white/20 px-3 py-1 rounded-lg text-xs font-bold">
-                            {selectedPlots.length > 0 ? `${selectedPlots.length} sel. · ${totalAreaSelected.toFixed(1)} ha` : "Nenhum selecionado"}
-                        </span>
-                    </div>
-                </header>
+                <PDVTopBar step={step} title="Selecionar Talhões" onBack={() => setStep("season")}
+                    rightBadge={selectedPlots.length > 0 ? <span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">{selectedPlots.length} · {totalAreaSelected.toFixed(1)} ha</span> : undefined}
+                    isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
 
                 <div className="flex-1 overflow-y-auto p-4">
                     {properties.length === 0 && plots.length === 0 ? (
@@ -1762,106 +1871,7 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
                 <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
-                {/* Header azul com logo */}
-                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
-                    <div className="flex items-center justify-between px-4 py-3">
-                        <div className="flex items-center gap-3">
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain md:hidden" />
-                            <div className="w-px h-6 bg-white/30 md:hidden" />
-                            <div>
-                                <span className="font-bold text-sm leading-tight block">{pdvData?.terminal?.name || "Terminal"}</span>
-                                <span className="text-[10px] text-green-200">Passo 1 de 5 — Safra</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {!isOnline && <span className="text-[10px] bg-red-500/80 px-2 py-0.5 rounded-full">Offline</span>}
-                            {/* Receituários - visível só no mobile (desktop tem no sidebar) */}
-                            <span className="md:hidden"><Sheet>
-                                <SheetTrigger asChild>
-                                    <button className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25 relative" aria-label="Ver receituários">
-                                        <FileText className="h-4 w-4" />
-                                        {withdrawalsHistory && withdrawalsHistory.length > 0 && (
-                                            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-yellow-400 rounded-full text-[8px] font-bold text-green-900 flex items-center justify-center">
-                                                {Math.min(withdrawalsHistory.length, 9)}
-                                            </span>
-                                        )}
-                                    </button>
-                                </SheetTrigger>
-                                <SheetContent side="right" className="w-[340px] sm:w-[400px] p-0 flex flex-col">
-                                    <SheetHeader className="p-5 border-b border-gray-100 bg-green-800 text-white">
-                                        <SheetTitle className="flex items-center gap-2 text-white">
-                                            <FileText className="h-5 w-5" /> Receituários
-                                        </SheetTitle>
-                                        <SheetDescription className="text-green-200 text-xs">
-                                            Clique para abrir ou compartilhar
-                                        </SheetDescription>
-                                    </SheetHeader>
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                                        {withdrawalsHistory && withdrawalsHistory.length > 0 ? (
-                                            withdrawalsHistory.slice(0, 20).map((batch: any) => (
-                                                <div key={batch.batchId} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                                                    <div className="mb-2">
-                                                        <span className="text-[10px] text-gray-400 font-medium">
-                                                            {new Date(batch.appliedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                                                        </span>
-                                                        <p className="text-sm font-bold text-gray-800 mt-0.5 line-clamp-1">{batch.propertyName || "Propriedade"}</p>
-                                                        <p className="text-xs text-emerald-600 font-medium">{batch.applications.length} produto(s) aplicado(s)</p>
-                                                        {batch.applications[0]?.seasonName && (
-                                                            <p className="text-[10px] text-gray-400 mt-0.5">🌱 {batch.applications[0].seasonName}</p>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <Button size="sm" variant="outline"
-                                                            className="flex-1 text-xs h-8 border-gray-200 hover:border-green-400 hover:text-green-700 hover:bg-green-50"
-                                                            onClick={() => handleRegenerateReceituario(batch)}>
-                                                            <FileText className="h-3 w-3 mr-1.5" /> Abrir PDF
-                                                        </Button>
-                                                        <Button size="sm" variant="outline"
-                                                            className="h-8 px-3 border-gray-200 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50"
-                                                            onClick={async () => {
-                                                                try {
-                                                                    const properties = pdvData?.properties || [];
-                                                                    const firstProperty = properties.find((p: any) => batch.applications.some((a: any) => a.propertyId === p.id)) || properties[0];
-                                                                    const productsByProduct = new Map<string, any>();
-                                                                    batch.applications.forEach((app: any) => {
-                                                                        if (!productsByProduct.has(app.productName)) productsByProduct.set(app.productName, { productName: app.productName, unit: app.unit || "L", plots: [] });
-                                                                        productsByProduct.get(app.productName)!.plots.push({ plotName: app.plotName, quantity: parseFloat(app.quantity) });
-                                                                    });
-                                                                    const pdfBlob = generateReceituarioPDF({ propertyName: firstProperty?.name || "Propriedade", appliedAt: new Date(batch.appliedAt), products: Array.from(productsByProduct.values()) });
-                                                                    shareViaWhatsApp(pdfBlob, `receituario_${new Date(batch.appliedAt).toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`);
-                                                                } catch { toast({ title: "Erro ao compartilhar", variant: "destructive" }); }
-                                                            }}>
-                                                            <Share2 className="h-3 w-3" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center py-16 text-gray-400">
-                                                <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                                                <p className="text-sm font-medium">Nenhum receituário</p>
-                                                <p className="text-xs mt-1">As saídas aparecerão aqui</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </SheetContent>
-                            </Sheet></span>
-                            <button onClick={handleLogout} className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25 md:hidden">
-                                <LogOut className="h-4 w-4" />
-                            </button>
-                        </div>
-                    </div>
-                    {/* Stepper */}
-                    <div className="flex items-center px-4 pb-3 gap-1">
-                        {["Safra","Talhões","Produtos","Doses","Carrinho","Equip.","Confirmar"].map((lbl, i) => (
-                            <div key={i} className="flex items-center gap-1 flex-1 last:flex-none">
-                                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${i === 0 ? "bg-white text-green-700" : "bg-white/20 text-white/60"}`}>{i + 1}</div>
-                                {i < 6 && <div className="flex-1 h-0.5 bg-white/20 rounded-full min-w-[4px]" />}
-                            </div>
-                        ))}
-                    </div>
-                </header>
-
+                <PDVTopBar step={step} title="Selecionar Safra" isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4">
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Selecione a safra</p>
@@ -1928,37 +1938,25 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
                 <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
-                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
-                    <div className="flex items-center justify-between px-4 py-3">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setStep("plot")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
-                                <ArrowLeft className="h-5 w-5" />
-                            </button>
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain md:hidden" />
-                            <div>
-                                <span className="font-bold text-sm leading-tight block">Selecionar Produtos</span>
-                                <span className="text-[10px] text-green-200">Passo 3 de 5 · {totalAreaSelected.toFixed(1)} ha</span>
-                            </div>
-                        </div>
-                    </div>
-                    {/* Counter bar */}
-                    <div className={`mx-4 mb-3 px-4 py-2.5 rounded-xl flex items-center justify-between ${totalSel > 0 ? "bg-white/20" : "bg-white/10"}`}>
-                        <span className="text-sm font-bold">
+                <PDVTopBar step={step} title="Selecionar Produtos" onBack={() => setStep("plot")}
+                    rightBadge={<span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">{totalAreaSelected.toFixed(1)} ha</span>}
+                    isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
+                {/* Counter + Search bar (sub-header) */}
+                <div className="bg-white border-b border-gray-100 px-4 py-2 space-y-2 shrink-0">
+                    <div className={`px-4 py-2 rounded-xl flex items-center justify-between ${totalSel > 0 ? "bg-green-50" : "bg-gray-50"}`}>
+                        <span className="text-sm font-bold text-gray-800">
                             {totalSel === 0 ? "Nenhum produto selecionado" : `${totalSel} produto${totalSel > 1 ? "s" : ""} selecionado${totalSel > 1 ? "s" : ""}`}
                         </span>
-                        <span className="text-[10px] text-green-200 font-medium">
+                        <span className="text-[10px] text-gray-400 font-medium">
                             {alreadyInCart.length > 0 ? `${alreadyInCart.length} já no carrinho` : "Toque para selecionar"}
                         </span>
                     </div>
-                    {/* Search */}
-                    <div className="px-4 pb-3">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-300" />
-                            <Input className="pl-10 h-10 bg-white/15 border-transparent text-white placeholder:text-green-200 text-sm rounded-xl focus:bg-white focus:text-gray-800 focus:placeholder:text-gray-400"
-                                placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
-                        </div>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input className="pl-10 h-10 bg-gray-50 border-gray-200 text-gray-800 placeholder:text-gray-400 text-sm rounded-xl focus:border-green-400 focus:ring-green-100"
+                            placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
-                </header>
+                </div>
 
                 {/* ── Layout: mobile = coluna única | desktop = dois painéis ── */}
                 <div className="flex-1 flex overflow-hidden">
@@ -2116,27 +2114,10 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
                 <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
-                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
-                    <div className="flex items-center justify-between px-4 py-3">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => { if (doseIndex === 0) { setStep("product_select"); } else { setDoseIndex(doseIndex - 1); setCurrentDose(pendingProducts[doseIndex - 1].dosePerHa ? String(parseBR(pendingProducts[doseIndex - 1].dosePerHa)) : ""); } }} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
-                                <ArrowLeft className="h-5 w-5" />
-                            </button>
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain md:hidden" />
-                            <div>
-                                <span className="font-bold text-sm leading-tight block">Informar Dose</span>
-                                <span className="text-[10px] text-green-200">Passo 4 de 5</span>
-                            </div>
-                        </div>
-                        {/* Progress dots */}
-                        <div className="flex items-center gap-1.5 mr-1">
-                            {pendingProducts.map((_, i) => (
-                                <div key={i} className={`rounded-full transition-all ${i < doseIndex ? "w-2 h-2 bg-green-400" : i === doseIndex ? "w-5 h-2 bg-white" : "w-2 h-2 bg-white/30"}`} />
-                            ))}
-                            <span className="text-[10px] text-green-200 ml-1 font-bold">{doseIndex + 1}/{pendingProducts.length}</span>
-                        </div>
-                    </div>
-                </header>
+                <PDVTopBar step={step} title="Informar Dose"
+                    onBack={() => { if (doseIndex === 0) { setStep("product_select"); } else { setDoseIndex(doseIndex - 1); setCurrentDose(pendingProducts[doseIndex - 1].dosePerHa ? String(parseBR(pendingProducts[doseIndex - 1].dosePerHa)) : ""); } }}
+                    rightBadge={pendingProducts.length > 1 ? <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">{doseIndex + 1}/{pendingProducts.length}</span> : undefined}
+                    isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     <div className="max-w-xl mx-auto space-y-4">
@@ -2232,23 +2213,9 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
                 <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
-                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
-                    <div className="flex items-center justify-between px-4 py-3">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setStep("product_select")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
-                                <ArrowLeft className="h-5 w-5" />
-                            </button>
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain md:hidden" />
-                            <div>
-                                <span className="font-bold text-sm leading-tight block">Carrinho</span>
-                                <span className="text-[10px] text-green-200">Passo 5 de 5 · {cart.length} produto{cart.length !== 1 ? "s" : ""}</span>
-                            </div>
-                        </div>
-                        <div className="bg-white/20 px-3 py-1 rounded-lg text-xs font-bold">
-                            {totalAreaSelected.toFixed(1)} ha
-                        </div>
-                    </div>
-                </header>
+                <PDVTopBar step={step} title={`Carrinho · ${cart.length} produto${cart.length !== 1 ? "s" : ""}`} onBack={() => setStep("product_select")}
+                    rightBadge={<span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">{totalAreaSelected.toFixed(1)} ha</span>}
+                    isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                     <div className="max-w-2xl mx-auto space-y-3">
@@ -2338,21 +2305,9 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
                 <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
-                <header className="flex items-center justify-between px-5 py-3 bg-green-800 text-white shrink-0 shadow-md">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setStep("cart_review")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
-                            <ArrowLeft className="h-5 w-5 text-white" />
-                        </button>
-                        <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain md:hidden" />
-                        <div>
-                            <span className="font-bold text-base leading-tight block">Selecionar Pulverizador</span>
-                            <span className="text-green-200 text-xs">Passo 6 de 7 - Equipamento & Vazão</span>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                        <span className="bg-white/20 px-3 py-1 rounded-lg text-xs">{cart.length} produto(s) | {totalArea.toFixed(1)} ha</span>
-                    </div>
-                </header>
+                <PDVTopBar step={step} title="Pulverizador & Vazão" onBack={() => setStep("cart_review")}
+                    rightBadge={<span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">{cart.length} prod. · {totalArea.toFixed(1)} ha</span>}
+                    isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {sprayers.length > 0 ? (
@@ -2438,18 +2393,8 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
                 <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
-                <header className="flex items-center justify-between px-5 py-3 bg-green-800 text-white shrink-0 shadow-md">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setStep("equipment")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
-                            <ArrowLeft className="h-5 w-5 text-white" />
-                        </button>
-                        <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain md:hidden" />
-                        <div>
-                            <span className="font-bold text-base leading-tight block">Confirmar Saída</span>
-                            <span className="text-[10px] text-green-200">Passo 7 de 7</span>
-                        </div>
-                    </div>
-                </header>
+                <PDVTopBar step={step} title="Confirmar Saída" onBack={() => setStep("equipment")}
+                    isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-64 md:pb-32">
                     <div className="max-w-4xl mx-auto space-y-6">

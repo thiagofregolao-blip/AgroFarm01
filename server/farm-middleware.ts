@@ -30,7 +30,7 @@ export function requireFarmer(req: Request, res: Response, next: NextFunction) {
         return res.status(401).json({ error: "Autenticacao necessaria" });
     }
     const role = req.user?.role;
-    if (role !== 'agricultor' && role !== 'administrador') {
+    if (role !== 'agricultor' && role !== 'administrador' && role !== 'admin_agricultor') {
         return res.status(403).json({ error: "Acesso restrito a agricultores" });
     }
     next();
