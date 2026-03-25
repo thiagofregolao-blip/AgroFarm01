@@ -181,31 +181,29 @@ function PDVTopBar({
                     </div>
                 </div>
             </div>
-            {/* ── Horizontal step bar (green background) ── */}
-            <div className="bg-green-800 border-b border-green-900">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2">
-                    <div className="flex items-center gap-1">
+            {/* ── Horizontal step bar (blue background, labels below numbers) ── */}
+            <div className="bg-[#3B82F6] border-b border-blue-600">
+                <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3">
+                    <div className="flex items-start justify-between">
                         {STEPS.map((s, i) => {
                             const isPast = i < idx;
                             const isCurrent = i === idx;
                             return (
                                 <div key={s} className="flex items-center flex-1 min-w-0">
-                                    <div className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg transition-all w-full justify-center ${
-                                        isCurrent ? "bg-white/20 border border-white/30" : ""
-                                    }`}>
-                                        <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shrink-0 text-[9px] sm:text-[10px] font-bold transition-all ${
-                                            isCurrent ? "bg-white text-green-800" : isPast ? "bg-green-400 text-white" : "bg-green-700 text-green-300"
+                                    <div className="flex flex-col items-center w-full">
+                                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 text-[10px] sm:text-xs font-bold transition-all ${
+                                            isCurrent ? "bg-white text-blue-600 ring-2 ring-white/40 ring-offset-2 ring-offset-blue-500" : isPast ? "bg-emerald-400 text-white" : "bg-blue-400/50 text-blue-200"
                                         }`}>
-                                            {isPast ? <Check className="h-3 w-3" /> : i + 1}
+                                            {isPast ? <Check className="h-3.5 w-3.5" /> : i + 1}
                                         </div>
-                                        <span className={`text-[10px] sm:text-xs font-medium truncate hidden sm:inline ${
-                                            isCurrent ? "text-white font-semibold" : isPast ? "text-green-300" : "text-green-400"
+                                        <span className={`text-[9px] sm:text-[10px] font-medium mt-1 truncate text-center leading-tight ${
+                                            isCurrent ? "text-white font-semibold" : isPast ? "text-blue-100" : "text-blue-300"
                                         }`}>
                                             {LABELS[i]}
                                         </span>
                                     </div>
                                     {i < STEPS.length - 1 && (
-                                        <div className={`h-px flex-shrink-0 w-2 sm:w-4 mx-0.5 ${isPast ? "bg-green-400" : "bg-green-600"}`} />
+                                        <div className={`h-px flex-shrink-0 w-full max-w-[40px] mx-0 mt-3.5 sm:mt-4 ${isPast ? "bg-emerald-400" : "bg-blue-400/40"}`} />
                                     )}
                                 </div>
                             );
@@ -2311,33 +2309,137 @@ export default function PdvTerminal() {
 
     // ==================== STEP: CONFIRM (Distribution) ====================
     if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
+        // Build receituário table data
+        const tableRows = confirmationData.map((item) => {
+            const p = item.product;
+            const cartItem = cart.find(c => c.product.id === p.id);
+            const rawDose = cartItem?.dosePerHa !== undefined && cartItem?.dosePerHa !== '' ? parseBR(cartItem.dosePerHa) : parseBR(p.dosePerHa);
+            const hasDose = !isNaN(rawDose) && rawDose > 0;
+            const dose = hasDose ? rawDose : 0;
+            const totalQty = Number(Number(item.totalQty).toFixed(4));
+            const pkgSize = cartItem?.packageSize || p.packageSize || null;
+            const emb = pkgSize && totalQty > 0 ? Math.ceil(totalQty / pkgSize) : null;
+            const retirar = emb && pkgSize ? emb * pkgSize : totalQty;
+            return { p, dose, hasDose, totalQty, pkgSize, emb, retirar, item };
+        });
+
+        // Calda & equipment summary (only for non-diesel)
+        const totalCalda = !isDiesel && selectedEquipment ? (() => {
+            const vazao = parseBR(flowRateLha) || 0;
+            return vazao > 0 ? vazao * totalAreaSelected : 0;
+        })() : 0;
+        const tanques = selectedEquipment?.tankCapacityL && totalCalda > 0
+            ? (totalCalda / (parseBR(selectedEquipment.tankCapacityL) || 1)).toFixed(1)
+            : null;
+
+        const season = pdvData?.seasons?.find((s: any) => s.id === selectedSeasonId);
+        const seasonName = season?.name || "";
+        const plotNames = selectedPlots.map(p => p.name).join(", ");
+
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
 
-                <PDVTopBar step={step} title="Confirmar Saída" onBack={() => setStep("equipment")}
+                <PDVTopBar step={step} title="Receituário" onBack={() => setStep("equipment")}
                     isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-64 md:pb-32">
-                    <div className="max-w-4xl mx-auto space-y-6">
-                        {/* Summary Cards */}
-                        <div className={`grid ${isDiesel ? 'grid-cols-2' : 'grid-cols-3'} gap-4`}>
-                            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-                                <span className="text-2xl mb-1">📦</span>
-                                <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Produtos</p>
-                                <p className="text-xl font-bold text-gray-800">{cart.length}</p>
+                    <div className="max-w-4xl mx-auto space-y-4">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Receituário de Aplicação</p>
+
+                        {/* Receituário card */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            {/* Header info */}
+                            <div className="px-5 py-4 border-b border-gray-100">
+                                <h3 className="font-bold text-gray-800 text-base">Saída de Produtos</h3>
+                                <p className="text-sm text-gray-500 mt-0.5">
+                                    {seasonName && <>{seasonName} · </>}
+                                    {plotNames} · {totalAreaSelected.toFixed(1)} ha · {new Date().toLocaleDateString("pt-BR")}
+                                </p>
                             </div>
-                            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-                                <span className="text-2xl mb-1">{isDiesel ? "🚜" : "📍"}</span>
-                                <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">{isDiesel ? "Veículo" : "Talhões"}</p>
-                                <p className="text-xl font-bold text-gray-800 line-clamp-1 px-2 text-center">{isDiesel ? selectedEquipment?.name : selectedPlots.length}</p>
+
+                            {/* Table */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-gray-100 text-gray-500 text-xs uppercase tracking-wider">
+                                            <th className="text-left px-5 py-3 font-bold">Produto</th>
+                                            <th className="text-center px-3 py-3 font-bold">Dose</th>
+                                            <th className="text-center px-3 py-3 font-bold">Qtd Real</th>
+                                            <th className="text-center px-3 py-3 font-bold">Emb.</th>
+                                            <th className="text-center px-3 py-3 font-bold">Retirar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {tableRows.map(({ p, dose, hasDose, totalQty, pkgSize, emb, retirar }) => (
+                                            <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                                                <td className="px-5 py-3">
+                                                    <p className="font-bold text-gray-800 leading-tight">{p.name}</p>
+                                                    <p className="text-xs text-gray-400 capitalize">{p.category || "Geral"}</p>
+                                                </td>
+                                                <td className="text-center px-3 py-3 text-gray-600">
+                                                    {hasDose ? `${dose.toFixed(2)} ${p.unit}/ha` : "—"}
+                                                </td>
+                                                <td className="text-center px-3 py-3 font-semibold text-gray-800">
+                                                    {totalQty.toFixed(1)} {p.unit}
+                                                </td>
+                                                <td className="text-center px-3 py-3">
+                                                    {pkgSize ? (
+                                                        <span className="inline-block px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold">
+                                                            {pkgSize} {p.unit}
+                                                        </span>
+                                                    ) : "—"}
+                                                </td>
+                                                <td className="text-center px-3 py-3">
+                                                    {emb ? (
+                                                        <span className="inline-block px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                                                            {emb} emb.<br />{retirar} {p.unit}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="font-semibold text-gray-800">{totalQty.toFixed(1)} {p.unit}</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                            {!isDiesel && (
-                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-                                    <span className="text-2xl mb-1">📏</span>
-                                    <p className="text-gray-400 text-xs uppercase font-bold tracking-wide">Área Total</p>
-                                    <p className="text-xl font-bold text-gray-800">{totalAreaSelected.toFixed(1)} <span className="text-sm font-normal text-gray-400">ha</span></p>
+
+                            {/* Equipment & calda info */}
+                            {!isDiesel && selectedEquipment && (
+                                <div className="px-5 py-3 border-t border-gray-100 bg-emerald-50/50 text-sm text-emerald-800">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Tractor className="h-4 w-4 shrink-0" />
+                                        <span className="font-semibold">{selectedEquipment.name}</span>
+                                        {selectedEquipment.tankCapacityL && (
+                                            <span className="text-emerald-600">({parseBR(selectedEquipment.tankCapacityL)} L)</span>
+                                        )}
+                                        {totalCalda > 0 && (
+                                            <>
+                                                <span className="text-emerald-400">·</span>
+                                                <span>Calda: <strong>{totalCalda.toFixed(0)} L</strong></span>
+                                            </>
+                                        )}
+                                        {tanques && (
+                                            <>
+                                                <span className="text-emerald-400">·</span>
+                                                <span>{tanques} tanques</span>
+                                            </>
+                                        )}
+                                        {flowRateLha && (
+                                            <>
+                                                <span className="text-emerald-400">·</span>
+                                                <span>Vazão: {flowRateLha} L/ha</span>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             )}
+
+                            {/* Warning */}
+                            <div className="px-5 py-3 border-t border-amber-100 bg-amber-50 text-sm">
+                                <p className="font-semibold text-amber-800">Saída do estoque = quantidade real calculada</p>
+                                <p className="text-xs text-amber-600 mt-0.5">O receituário mostra embalagens arredondadas para facilitar a retirada física. O desconto no estoque usa o valor exato calculado (dose x área).</p>
+                            </div>
                         </div>
 
                         {/* Campo de Instruções */}
@@ -2354,139 +2456,23 @@ export default function PdvTerminal() {
                                 rows={3}
                             />
                         </div>
-
-                        {/* Per product distribution */}
-                        <div className="space-y-4">
-                            {confirmationData.map((item) => {
-                                const p = item.product;
-                                // Use the dose from the item (calculated in getDistribution using the overridden dose)
-                                // We need to find the cart item again to access the dosePerHa property if it wasn't preserved in confirmationData mapping
-                                // Actually, confirmationData items map `product` and `totalQty`. 
-                                const cartItem = cart.find(c => c.product.id === p.id);
-                                const rawDose = cartItem?.dosePerHa !== undefined && cartItem?.dosePerHa !== '' ? parseBR(cartItem.dosePerHa) : parseBR(p.dosePerHa);
-                                const hasDose = !isNaN(rawDose) && rawDose > 0;
-                                const dose = hasDose ? rawDose : 0;
-                                const diff = Number(item.totalQty) - Number(item.totalAllocated);
-
-                                return (
-                                    <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden transition-all hover:shadow-lg">
-                                        {/* Product header */}
-                                        <div className="flex items-center gap-4 p-4 border-b border-gray-100 bg-gray-50/30">
-                                            {p.imageUrl ? (
-                                                <img src={p.imageUrl} className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-100 shadow-sm" alt="" />
-                                            ) : (
-                                                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${CATEGORY_COLORS[p.category] || CATEGORY_COLORS.outro} flex items-center justify-center shadow-sm`}>
-                                                    <span className="text-2xl">{CATEGORY_EMOJI[p.category] || "📦"}</span>
-                                                </div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-bold text-lg text-gray-800 leading-tight">{p.name}</p>
-                                                <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                                                    <span className="px-2 py-0.5 bg-gray-100 rounded-full font-medium">{p.category || "Geral"}</span>
-                                                    {hasDose && (
-                                                        <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                                                            <Droplets className="h-3 w-3" />
-                                                            {dose.toFixed(1)} {p.unit}/ha
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-0.5">Total Saída</div>
-                                                <p className="font-bold text-[#16A249] text-2xl leading-none">{Number(Number(item.totalQty).toFixed(4))}</p>
-                                                <p className="text-xs text-gray-400">{p.unit}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Per-plot distribution */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:gap-px bg-gray-100">
-                                            {item.distribution.map((d) => (
-                                                <div key={d.plotId} className="flex items-center gap-3 p-4 bg-white">
-                                                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-green-700 flex items-center justify-center shrink-0">
-                                                        <span className="text-xs font-bold">PT</span>
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-bold text-gray-700 truncate">{d.plotName}</p>
-                                                        <p className="text-[10px] text-gray-400">
-                                                            {d.areaHa.toFixed(1)} ha
-                                                            {hasDose && <span className="text-blue-400 ml-1">• Ideal: {(d.areaHa * dose).toFixed(0)}</span>}
-                                                        </p>
-                                                    </div>
-                                                    {/* Quantity Input */}
-                                                    <div className="flex items-center gap-1 shrink-0 bg-gray-50 p-1 rounded-lg border border-gray-200">
-                                                        <button
-                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-green-700 border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
-                                                            onClick={() => setOverride(p.id, d.plotId, d.allocatedQty - 1)}
-                                                        >
-                                                            <Minus className="h-3 w-3" />
-                                                        </button>
-                                                        <Input
-                                                            type="number"
-                                                            step="any"
-                                                            value={d.allocatedQty}
-                                                            onChange={(e) => setOverride(p.id, d.plotId, e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
-                                                            className="text-center text-sm font-bold w-16 h-7 bg-transparent border-none p-0 focus-visible:ring-0 text-gray-800"
-                                                        />
-                                                        <button
-                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-green-700 border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
-                                                            onClick={() => setOverride(p.id, d.plotId, d.allocatedQty + 1)}
-                                                        >
-                                                            <Plus className="h-3 w-3" />
-                                                        </button>
-                                                    </div>
-                                                    <span className="text-xs text-gray-400 font-medium w-6 text-center">{p.unit}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {/* Total check footer */}
-                                        <div className={`flex items-center justify-between px-5 py-3 text-sm font-bold border-t ${Math.abs(diff) < 0.01 ? "bg-blue-50 border-blue-100 text-blue-700" : "bg-amber-50 border-amber-100 text-amber-700"}`}>
-                                            <div className="flex items-center gap-2">
-                                                <span className="uppercase text-[10px] tracking-wide opacity-70">Status da Distribuição:</span>
-                                                <span>{item.totalAllocated} {p.unit} alocados</span>
-                                            </div>
-                                            {Math.abs(diff) < 0.01 ? (
-                                                <span className="flex items-center gap-1.5 bg-white/50 px-2 py-0.5 rounded-full text-xs border border-blue-200/50">
-                                                    <Check className="h-3.5 w-3.5" />
-                                                    Perfeito
-                                                </span>
-                                            ) : (
-                                                <span className="flex items-center gap-1.5 bg-white/50 px-2 py-0.5 rounded-full text-xs border border-amber-200/50">
-                                                    {diff > 0 ? `Faltam ${diff.toFixed(0)} ${p.unit}` : `Excede ${Math.abs(diff).toFixed(0)} ${p.unit}`}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
                     </div>
                 </div>
 
                 {/* Bottom bar */}
                 <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
-                    <div className="max-w-4xl mx-auto flex flex-row items-center gap-2 mb-safe">
-                        <Button variant="outline" className="h-12 w-12 sm:w-auto sm:flex-1 py-0 sm:py-4 px-0 sm:px-4 text-sm border-gray-200 hover:bg-gray-50 text-gray-600 font-medium rounded-xl shrink-0 sm:shrink order-1" onClick={reset}>
-                            <X className="h-5 w-5 sm:mr-2" />
-                            <span className="hidden sm:inline">Cancelar</span>
+                    <div className="max-w-4xl mx-auto flex flex-row items-center gap-3 mb-safe">
+                        <Button variant="outline" className="h-12 flex-1 text-sm border-gray-200 hover:bg-gray-50 text-gray-600 font-medium rounded-xl" onClick={() => handleSubmit(true)} disabled={submitting}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            Gerar PDF
                         </Button>
                         <Button
-                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-lg shadow-yellow-200 transition-all active:scale-[0.98] order-2"
+                            className="flex-[2] h-12 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-[0.98]"
                             onClick={() => handleSubmit(false)}
                             disabled={submitting}
                         >
-                            {submitting ? <Loader2 className="mr-1 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <Check className="mr-1 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5" />}
-                            <span className="sm:hidden">Confirmar</span>
-                            <span className="hidden sm:inline">Confirmar Saída</span>
-                        </Button>
-                        <Button
-                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-green-700 hover:bg-green-800 text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all active:scale-[0.98] order-3"
-                            onClick={() => handleSubmit(true)}
-                            disabled={submitting}
-                        >
-                            {submitting ? <Loader2 className="mr-1 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <FileText className="mr-1 sm:mr-2 h-4 w-4 sm:h-5 sm:w-5" />}
-                            <span className="sm:hidden">Receituário</span>
-                            <span className="hidden sm:inline">Confirmar e Gerar Receituário</span>
+                            {submitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />}
+                            Confirmar Saída
                         </Button>
                     </div>
                 </div>

@@ -87,11 +87,22 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
 
     function getPct(id: string) { return pcts[id] ?? 0; }
 
-    function adjust(id: string, delta: number) {
-        setPcts(prev => {
-            const next = Math.max(0, Math.min(100, (prev[id] ?? 0) + delta));
-            return { ...prev, [id]: next };
-        });
+    function setHaForPlot(id: string, ha: number) {
+        const plot = plots.find(p => p.id === id);
+        if (!plot) return;
+        const totalHa = parseFloat(plot.areaHa) || 1;
+        const pct = Math.max(0, Math.min(100, Math.round((ha / totalHa) * 100)));
+        setPcts(prev => ({ ...prev, [id]: pct }));
+    }
+
+    function adjustHa(id: string, deltaHa: number) {
+        const plot = plots.find(p => p.id === id);
+        if (!plot) return;
+        const totalHa = parseFloat(plot.areaHa) || 1;
+        const currentHa = (totalHa * getPct(id)) / 100;
+        const newHa = Math.max(0, Math.min(totalHa, currentHa + deltaHa));
+        const pct = Math.round((newHa / totalHa) * 100);
+        setPcts(prev => ({ ...prev, [id]: pct }));
     }
 
     function toggle(id: string) {
@@ -133,7 +144,7 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
                         Talhões — {season.name}
                     </DialogTitle>
                     <p className="text-sm text-gray-500 mt-0.5">
-                        Defina qual porcentagem de cada talhão será plantada nesta safra.
+                        Defina a área de cada talhão que será plantada nesta safra.
                     </p>
                 </DialogHeader>
 
@@ -158,6 +169,7 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
                                         const totalHa = parseFloat(plot.areaHa) || 0;
                                         const plannedHa = (totalHa * pct) / 100;
                                         const active = pct > 0;
+                                        const step = totalHa >= 100 ? 10 : totalHa >= 10 ? 1 : 0.5;
 
                                         return (
                                             <div key={plot.id}
@@ -178,29 +190,31 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
                                                         </p>
                                                         <p className="text-xs text-gray-400 mt-0.5">
                                                             Área total: <strong>{totalHa.toFixed(1)} ha</strong>
-                                                            {active && (
-                                                                <span className="text-emerald-600 ml-2 font-semibold">
-                                                                    → {plannedHa.toFixed(1)} ha planejados
-                                                                </span>
-                                                            )}
                                                         </p>
                                                     </div>
 
-                                                    {/* % controls */}
+                                                    {/* Ha controls (editable input) */}
                                                     <div className={`flex items-center gap-1 transition-opacity ${active ? "opacity-100" : "opacity-30 pointer-events-none"}`}>
                                                         <button
-                                                            onClick={() => adjust(plot.id, -10)}
+                                                            onClick={() => adjustHa(plot.id, -step)}
                                                             className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 shadow-sm active:scale-95 transition-all"
                                                         >
                                                             <Minus className="h-3.5 w-3.5 text-gray-600" />
                                                         </button>
-                                                        <div className="w-16 text-center">
-                                                            <span className={`text-lg font-extrabold ${active ? "text-emerald-700" : "text-gray-400"}`}>
-                                                                {pct}%
-                                                            </span>
+                                                        <div className="w-20 text-center">
+                                                            <input
+                                                                type="number"
+                                                                step="any"
+                                                                min="0"
+                                                                max={totalHa}
+                                                                value={plannedHa.toFixed(1)}
+                                                                onChange={(e) => setHaForPlot(plot.id, parseFloat(e.target.value) || 0)}
+                                                                className="w-full text-center text-lg font-extrabold bg-transparent border-none outline-none text-emerald-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                            />
+                                                            <span className="text-[10px] text-gray-400 font-medium">ha</span>
                                                         </div>
                                                         <button
-                                                            onClick={() => adjust(plot.id, 10)}
+                                                            onClick={() => adjustHa(plot.id, step)}
                                                             className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 shadow-sm active:scale-95 transition-all"
                                                         >
                                                             <Plus className="h-3.5 w-3.5 text-gray-600" />
@@ -208,7 +222,7 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
                                                     </div>
                                                 </div>
 
-                                                {/* Progress bar */}
+                                                {/* Progress bar + percentage */}
                                                 {active && (
                                                     <div className="mt-3 ml-9">
                                                         <div className="h-1.5 bg-emerald-100 rounded-full overflow-hidden">
@@ -217,6 +231,7 @@ function PlotsModal({ season, open, onClose }: { season: Season; open: boolean; 
                                                                 style={{ width: `${pct}%` }}
                                                             />
                                                         </div>
+                                                        <p className="text-[10px] text-emerald-600 font-medium mt-1">{pct}% da área total</p>
                                                     </div>
                                                 )}
                                             </div>

@@ -127,10 +127,20 @@ export function registerFarmSeasonRoutes(app: Express) {
             const farmerId = req.user!.id;
             const seasonId = req.params.id;
             const plots: Array<{ plotId: string; areaPercentage: number }> = req.body.plots || [];
+            console.log(`[FARM_SEASONS_PLOTS PUT] seasonId=${seasonId} farmerId=${farmerId} plots=${plots.length}`);
             const seasons = await farmStorage.getSeasons(farmerId);
             if (!seasons.find((s: any) => s.id === seasonId)) {
                 return res.status(403).json({ error: "Forbidden" });
             }
+            // Ensure table exists
+            await db.execute(sql`CREATE TABLE IF NOT EXISTS farm_season_plots (
+                id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+                season_id varchar NOT NULL REFERENCES farm_seasons(id) ON DELETE CASCADE,
+                plot_id varchar NOT NULL REFERENCES farm_plots(id) ON DELETE CASCADE,
+                farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                area_percentage numeric(5,2) NOT NULL DEFAULT 100,
+                UNIQUE(season_id, plot_id)
+            )`);
             await db.execute(sql`DELETE FROM farm_season_plots WHERE season_id = ${seasonId} AND farmer_id = ${farmerId}`);
             for (const p of plots) {
                 if (p.areaPercentage > 0) {
@@ -141,6 +151,7 @@ export function registerFarmSeasonRoutes(app: Express) {
                     `);
                 }
             }
+            console.log(`[FARM_SEASONS_PLOTS PUT] Success`);
             res.json({ success: true });
         } catch (error) {
             console.error("[FARM_SEASONS_PLOTS PUT]", error);
