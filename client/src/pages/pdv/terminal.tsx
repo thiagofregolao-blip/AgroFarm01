@@ -1494,7 +1494,7 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
                 {/* Header azul */}
-                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
                             <button onClick={() => setStep("season")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
@@ -1503,7 +1503,7 @@ export default function PdvTerminal() {
                             <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">Selecionar Talhões</span>
-                                <span className="text-[10px] text-blue-200">Passo 2 de 5</span>
+                                <span className="text-[10px] text-green-200">Passo 2 de 5</span>
                             </div>
                         </div>
                         <span className="bg-white/20 px-3 py-1 rounded-lg text-xs font-bold">
@@ -1528,7 +1528,7 @@ export default function PdvTerminal() {
                                     <div key={prop.id} className="space-y-3">
                                         <div className="flex items-center justify-between">
                                             <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                                                <span className="w-1 h-4 rounded-full bg-[#1a56db] block" />
+                                                <span className="w-1 h-4 rounded-full bg-green-700 block" />
                                                 {prop.name}
                                                 <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{propPlots.length} talhões</span>
                                             </h3>
@@ -1540,7 +1540,7 @@ export default function PdvTerminal() {
                                                             ? selectedPlots.filter(p => !ids.includes(p.id))
                                                             : [...selectedPlots.filter(p => !ids.includes(p.id)), ...propPlots]);
                                                     }}
-                                                    className="text-xs font-medium text-[#1a56db] hover:underline"
+                                                    className="text-xs font-medium text-green-700 hover:underline"
                                                 >
                                                     {allSelected ? "Desmarcar todos" : "Selecionar todos"}
                                                 </button>
@@ -1551,16 +1551,16 @@ export default function PdvTerminal() {
                                                 const sel = isPlotSelected(plot.id);
                                                 return (
                                                     <button key={plot.id} onClick={() => togglePlot(plot)}
-                                                        className={`group p-4 rounded-2xl border-2 text-left transition-all ${sel ? "bg-blue-50 border-[#1a56db] shadow-md shadow-blue-100" : "bg-white border-gray-200 hover:border-blue-300 shadow-sm"}`}>
+                                                        className={`group p-4 rounded-2xl border-2 text-left transition-all ${sel ? "bg-green-50 border-green-600 shadow-md shadow-green-100" : "bg-white border-gray-200 hover:border-green-300 shadow-sm"}`}>
                                                         <div className="flex items-start justify-between mb-2">
-                                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${sel ? "bg-[#1a56db] text-white" : "bg-gray-100 text-gray-400"}`}>
+                                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${sel ? "bg-green-700 text-white" : "bg-gray-100 text-gray-400"}`}>
                                                                 <MapPin className="h-4 w-4" />
                                                             </div>
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${sel ? "bg-[#1a56db] border-[#1a56db]" : "border-gray-300"}`}>
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${sel ? "bg-green-700 border-green-700" : "border-gray-300"}`}>
                                                                 {sel && <Check className="h-3 w-3 text-white" />}
                                                             </div>
                                                         </div>
-                                                        <h4 className={`font-bold text-sm ${sel ? "text-[#1a56db]" : "text-gray-800"}`}>{plot.name}</h4>
+                                                        <h4 className={`font-bold text-sm ${sel ? "text-green-700" : "text-gray-800"}`}>{plot.name}</h4>
                                                         <p className="text-xs text-gray-500 mt-0.5">{plot.areaHa} ha{plot.crop ? ` · ${plot.crop}` : ""}</p>
                                                     </button>
                                                 );
@@ -1580,7 +1580,7 @@ export default function PdvTerminal() {
                 {/* Bottom bar */}
                 <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <Button
-                        className="w-full h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200 transition-all active:scale-[0.98]"
+                        className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200 transition-all active:scale-[0.98]"
                         onClick={handleGoFromPlot}
                         disabled={selectedPlots.length === 0}
                     >
@@ -1597,14 +1597,14 @@ export default function PdvTerminal() {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
                 {/* Header azul com logo */}
-                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
                             <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" />
                             <div className="w-px h-6 bg-white/30" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">{pdvData?.terminal?.name || "Terminal"}</span>
-                                <span className="text-[10px] text-blue-200">Passo 1 de 5 — Safra</span>
+                                <span className="text-[10px] text-green-200">Passo 1 de 5 — Safra</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1618,7 +1618,7 @@ export default function PdvTerminal() {
                     <div className="flex items-center px-4 pb-3 gap-1">
                         {["Safra","Talhões","Produtos","Doses","Carrinho","Equip.","Confirmar"].map((lbl, i) => (
                             <div key={i} className="flex items-center gap-1 flex-1 last:flex-none">
-                                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${i === 0 ? "bg-white text-[#1a56db]" : "bg-white/20 text-white/60"}`}>{i + 1}</div>
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${i === 0 ? "bg-white text-green-700" : "bg-white/20 text-white/60"}`}>{i + 1}</div>
                                 {i < 6 && <div className="flex-1 h-0.5 bg-white/20 rounded-full min-w-[4px]" />}
                             </div>
                         ))}
@@ -1641,11 +1641,11 @@ export default function PdvTerminal() {
                                     onClick={() => setSelectedSeasonId(season.id)}
                                     className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex items-center gap-4 ${
                                         selectedSeasonId === season.id
-                                            ? "border-[#1a56db] bg-blue-50 shadow-md shadow-blue-100"
-                                            : "border-gray-200 bg-white hover:border-blue-300"
+                                            ? "border-green-600 bg-blue-50 shadow-md shadow-green-100"
+                                            : "border-gray-200 bg-white hover:border-green-300"
                                     }`}
                                 >
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl ${selectedSeasonId === season.id ? "bg-[#1a56db]/10" : "bg-gray-50"}`}>🌱</div>
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl ${selectedSeasonId === season.id ? "bg-green-700/10" : "bg-gray-50"}`}>🌱</div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-gray-800">{season.name}</p>
                                         {season.crop && <p className="text-xs text-gray-500 mt-0.5">Cultura: {season.crop}</p>}
@@ -1656,7 +1656,7 @@ export default function PdvTerminal() {
                                             </p>
                                         )}
                                     </div>
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedSeasonId === season.id ? "bg-[#1a56db] border-[#1a56db]" : "border-gray-300"}`}>
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedSeasonId === season.id ? "bg-green-700 border-green-700" : "border-gray-300"}`}>
                                         {selectedSeasonId === season.id && <Check className="h-3.5 w-3.5 text-white" />}
                                     </div>
                                 </button>
@@ -1672,7 +1672,7 @@ export default function PdvTerminal() {
                             Pular
                         </Button>
                         <Button
-                            className="flex-1 h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200 transition-all active:scale-[0.98]"
+                            className="flex-1 h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200 transition-all active:scale-[0.98]"
                             onClick={handleGoFromSeason}
                             disabled={!selectedSeasonId}
                         >
@@ -1690,7 +1690,7 @@ export default function PdvTerminal() {
         const totalSel = pendingProducts.length + alreadyInCart.length;
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
-                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
                             <button onClick={() => setStep("plot")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
@@ -1699,7 +1699,7 @@ export default function PdvTerminal() {
                             <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">Selecionar Produtos</span>
-                                <span className="text-[10px] text-blue-200">Passo 3 de 5 · {totalAreaSelected.toFixed(1)} ha</span>
+                                <span className="text-[10px] text-green-200">Passo 3 de 5 · {totalAreaSelected.toFixed(1)} ha</span>
                             </div>
                         </div>
                     </div>
@@ -1708,73 +1708,153 @@ export default function PdvTerminal() {
                         <span className="text-sm font-bold">
                             {totalSel === 0 ? "Nenhum produto selecionado" : `${totalSel} produto${totalSel > 1 ? "s" : ""} selecionado${totalSel > 1 ? "s" : ""}`}
                         </span>
-                        <span className="text-[10px] text-blue-200 font-medium">
+                        <span className="text-[10px] text-green-200 font-medium">
                             {alreadyInCart.length > 0 ? `${alreadyInCart.length} já no carrinho` : "Toque para selecionar"}
                         </span>
                     </div>
                     {/* Search */}
                     <div className="px-4 pb-3">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-300" />
-                            <Input className="pl-10 h-10 bg-white/15 border-transparent text-white placeholder:text-blue-200 text-sm rounded-xl focus:bg-white focus:text-gray-800 focus:placeholder:text-gray-400"
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-300" />
+                            <Input className="pl-10 h-10 bg-white/15 border-transparent text-white placeholder:text-green-200 text-sm rounded-xl focus:bg-white focus:text-gray-800 focus:placeholder:text-gray-400"
                                 placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-                    {filtered.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                            <Search className="h-10 w-10 mb-3 opacity-30" />
-                            <p className="font-medium">Nenhum produto encontrado</p>
+                {/* ── Layout: mobile = coluna única | desktop = dois painéis ── */}
+                <div className="flex-1 flex overflow-hidden">
+
+                    {/* Painel esquerdo: lista de produtos */}
+                    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 md:border-r md:border-gray-100">
+                        {filtered.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                                <Search className="h-10 w-10 mb-3 opacity-30" />
+                                <p className="font-medium">Nenhum produto encontrado</p>
+                            </div>
+                        )}
+                        {filtered.map((p: any) => {
+                            const stockQty = getStockForProduct(p.id);
+                            const inCart = isProductInCart(p.id);
+                            const isPending = isProductPending(p.id);
+                            const isSelected = inCart || isPending;
+                            const lowStock = stockQty <= 0;
+                            return (
+                                <button key={p.id} disabled={lowStock}
+                                    onClick={() => togglePendingProduct(p)}
+                                    className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition-all ${lowStock ? "opacity-40 cursor-not-allowed bg-white border-gray-100" : isSelected ? "bg-green-50 border-green-600 shadow-sm shadow-green-100" : "bg-white border-gray-100 shadow-sm hover:border-green-200"}`}>
+                                    {/* Checkbox */}
+                                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${isSelected ? "bg-green-700 border-green-700" : "border-gray-300"}`}>
+                                        {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
+                                    </div>
+                                    {/* Thumb */}
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${inCart ? "bg-green-100" : "bg-gray-50"}`}>
+                                        {p.imageUrl ? <img src={p.imageUrl} className="w-full h-full object-contain p-1 rounded-xl" alt="" /> : <span className="text-xl">{CATEGORY_EMOJI[p.category] || "📦"}</span>}
+                                    </div>
+                                    {/* Info */}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-[14px] text-gray-900 line-clamp-1">{p.name}</p>
+                                        <p className="text-[11px] text-gray-400 mt-0.5">
+                                            {p.category ? p.category.charAt(0).toUpperCase() + p.category.slice(1) : "Geral"}
+                                            {p.packageSize ? ` · Emb: ${p.packageSize} ${p.unit}` : ""}
+                                            {inCart ? " · ✅ Já no carrinho" : ""}
+                                        </p>
+                                    </div>
+                                    {/* Stock */}
+                                    <div className="shrink-0 text-right">
+                                        {lowStock ? (
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-50 text-red-500 border border-red-200">Sem estoque</span>
+                                        ) : (
+                                            <>
+                                                <p className="text-lg font-extrabold text-emerald-600 leading-none">{stockQty.toFixed(0)}</p>
+                                                <p className="text-[10px] text-gray-400">{p.unit}</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Painel direito: SOMENTE DESKTOP — resumo da seleção + CTA */}
+                    <div className="hidden md:flex md:w-[360px] lg:w-[420px] flex-col bg-white border-l border-gray-100 shrink-0">
+                        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <div>
+                                <h3 className="font-bold text-base text-gray-900">Selecionados</h3>
+                                <p className="text-xs text-gray-400 mt-0.5">{totalAreaSelected.toFixed(1)} ha · {cart.length > 0 ? `${cart.length} já no carrinho` : "nenhum no carrinho"}</p>
+                            </div>
+                            {(pendingProducts.length + cart.length) > 0 && (
+                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                                    {pendingProducts.length + cart.length} produto{(pendingProducts.length + cart.length) !== 1 ? "s" : ""}
+                                </span>
+                            )}
                         </div>
-                    )}
-                    {filtered.map((p: any) => {
-                        const stockQty = getStockForProduct(p.id);
-                        const inCart = isProductInCart(p.id);
-                        const isPending = isProductPending(p.id);
-                        const isSelected = inCart || isPending;
-                        const lowStock = stockQty <= 0;
-                        return (
-                            <button key={p.id} disabled={lowStock}
-                                onClick={() => togglePendingProduct(p)}
-                                className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition-all ${lowStock ? "opacity-40 cursor-not-allowed bg-white border-gray-100" : isSelected ? "bg-blue-50 border-[#1a56db] shadow-sm shadow-blue-100" : "bg-white border-gray-100 shadow-sm hover:border-blue-200"}`}>
-                                {/* Checkbox */}
-                                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${isSelected ? "bg-[#1a56db] border-[#1a56db]" : "border-gray-300"}`}>
-                                    {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                            {pendingProducts.length === 0 && cart.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-gray-300 py-12">
+                                    <ShoppingCart className="h-12 w-12 mb-3 opacity-40" />
+                                    <p className="text-sm font-medium text-gray-400">Nenhum produto selecionado</p>
+                                    <p className="text-xs text-gray-300 mt-1 text-center">Clique nos produtos ao lado para selecionar</p>
                                 </div>
-                                {/* Thumb */}
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${inCart ? "bg-green-100" : "bg-gray-50"}`}>
-                                    {p.imageUrl ? <img src={p.imageUrl} className="w-full h-full object-contain p-1 rounded-xl" alt="" /> : <span className="text-xl">{CATEGORY_EMOJI[p.category] || "📦"}</span>}
-                                </div>
-                                {/* Info */}
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-[14px] text-gray-900 line-clamp-1">{p.name}</p>
-                                    <p className="text-[11px] text-gray-400 mt-0.5">
-                                        {p.category ? p.category.charAt(0).toUpperCase() + p.category.slice(1) : "Geral"}
-                                        {p.packageSize ? ` · Emb: ${p.packageSize} ${p.unit}` : ""}
-                                        {inCart ? " · ✅ Já no carrinho" : ""}
-                                    </p>
-                                </div>
-                                {/* Stock */}
-                                <div className="shrink-0 text-right">
-                                    {lowStock ? (
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-50 text-red-500 border border-red-200">Sem estoque</span>
-                                    ) : (
-                                        <>
-                                            <p className="text-lg font-extrabold text-emerald-600 leading-none">{stockQty.toFixed(0)}</p>
-                                            <p className="text-[10px] text-gray-400">{p.unit}</p>
-                                        </>
+                            ) : (
+                                <>
+                                    {cart.length > 0 && (
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">Já no carrinho</p>
                                     )}
-                                </div>
-                            </button>
-                        );
-                    })}
+                                    {cart.map((item) => (
+                                        <div key={item.product.id} className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-100">
+                                            <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+                                                <span className="text-base">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-sm text-gray-900 truncate">{item.product.name}</p>
+                                                <p className="text-[10px] text-green-600 font-medium">✅ Dose definida · {Number(item.dosePerHa).toFixed(1)} {item.product.unit}/ha</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {pendingProducts.length > 0 && (
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1 pt-2">Aguardando dose</p>
+                                    )}
+                                    {pendingProducts.map((p) => (
+                                        <div key={p.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                            <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                                                <span className="text-base">{CATEGORY_EMOJI[p.category] || "📦"}</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-sm text-gray-900 truncate">{p.name}</p>
+                                                <p className="text-[10px] text-gray-400">Informe a dose na próxima etapa</p>
+                                            </div>
+                                            <button onClick={() => togglePendingProduct(p)} className="w-6 h-6 rounded-full bg-gray-200 hover:bg-red-100 text-gray-400 hover:text-red-500 flex items-center justify-center transition-colors">
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </>
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-gray-100 space-y-2">
+                            <Button
+                                className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200 disabled:opacity-50"
+                                onClick={handleStartDoseEntry}
+                                disabled={pendingProducts.length === 0}
+                            >
+                                Informar Doses ({pendingProducts.length}) <ArrowRight className="ml-2 h-5 w-5" />
+                            </Button>
+                            {cart.length > 0 && pendingProducts.length === 0 && (
+                                <Button variant="outline" className="w-full h-10 text-sm border-gray-200 text-gray-600 rounded-xl" onClick={handleGoFromCartReview}>
+                                    Continuar sem adicionar <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
-                <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                {/* Botão CTA mobile (oculto no desktop) */}
+                <div className="md:hidden p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <Button
-                        className="w-full h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200 disabled:opacity-50"
+                        className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200 disabled:opacity-50"
                         onClick={handleStartDoseEntry}
                         disabled={pendingProducts.length === 0}
                     >
@@ -1797,7 +1877,7 @@ export default function PdvTerminal() {
         const isLast = doseIndex === pendingProducts.length - 1;
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
-                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
                             <button onClick={() => { if (doseIndex === 0) { setStep("product_select"); } else { setDoseIndex(doseIndex - 1); setCurrentDose(pendingProducts[doseIndex - 1].dosePerHa ? String(parseBR(pendingProducts[doseIndex - 1].dosePerHa)) : ""); } }} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
@@ -1806,7 +1886,7 @@ export default function PdvTerminal() {
                             <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">Informar Dose</span>
-                                <span className="text-[10px] text-blue-200">Passo 4 de 5</span>
+                                <span className="text-[10px] text-green-200">Passo 4 de 5</span>
                             </div>
                         </div>
                         {/* Progress dots */}
@@ -1814,7 +1894,7 @@ export default function PdvTerminal() {
                             {pendingProducts.map((_, i) => (
                                 <div key={i} className={`rounded-full transition-all ${i < doseIndex ? "w-2 h-2 bg-green-400" : i === doseIndex ? "w-5 h-2 bg-white" : "w-2 h-2 bg-white/30"}`} />
                             ))}
-                            <span className="text-[10px] text-blue-200 ml-1 font-bold">{doseIndex + 1}/{pendingProducts.length}</span>
+                            <span className="text-[10px] text-green-200 ml-1 font-bold">{doseIndex + 1}/{pendingProducts.length}</span>
                         </div>
                     </div>
                 </header>
@@ -1826,7 +1906,7 @@ export default function PdvTerminal() {
                             {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-contain p-1" alt="" /> : <span>{CATEGORY_EMOJI[product.category] || "📦"}</span>}
                         </div>
                         <div>
-                            <p className="font-extrabold text-[#1a56db] text-base leading-tight">{product.name}</p>
+                            <p className="font-extrabold text-green-700 text-base leading-tight">{product.name}</p>
                             <p className="text-xs text-blue-500 mt-1">
                                 {product.category?.charAt(0).toUpperCase() + product.category?.slice(1)}
                                 {product.packageSize ? ` · Emb: ${product.packageSize} ${product.unit}` : ""}
@@ -1845,7 +1925,7 @@ export default function PdvTerminal() {
                             value={currentDose}
                             onChange={e => setCurrentDose(e.target.value)}
                             onFocus={e => e.target.select()}
-                            className="h-16 text-3xl font-extrabold text-center border-2 rounded-2xl focus:border-[#1a56db] text-gray-800 bg-white"
+                            className="h-16 text-3xl font-extrabold text-center border-2 rounded-2xl focus:border-green-600 text-gray-800 bg-white"
                             placeholder="0.00"
                             autoFocus
                         />
@@ -1860,7 +1940,7 @@ export default function PdvTerminal() {
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase">Qtd calculada</p>
-                                <p className="text-xl font-extrabold text-[#1a56db] mt-1">{qty.toFixed(1)} <span className="text-sm text-blue-300">{product.unit}</span></p>
+                                <p className="text-xl font-extrabold text-green-700 mt-1">{qty.toFixed(1)} <span className="text-sm text-green-300">{product.unit}</span></p>
                             </div>
                             {pkgSize && (
                                 <>
@@ -1893,7 +1973,7 @@ export default function PdvTerminal() {
 
                 <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <Button
-                        className="w-full h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200"
+                        className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200"
                         onClick={handleConfirmDose}
                         disabled={isNaN(dose) || dose <= 0}
                     >
@@ -1908,7 +1988,7 @@ export default function PdvTerminal() {
     if (step === "cart_review") {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
-                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
                             <button onClick={() => setStep("product_select")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
@@ -1917,7 +1997,7 @@ export default function PdvTerminal() {
                             <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">Carrinho</span>
-                                <span className="text-[10px] text-blue-200">Passo 5 de 5 · {cart.length} produto{cart.length !== 1 ? "s" : ""}</span>
+                                <span className="text-[10px] text-green-200">Passo 5 de 5 · {cart.length} produto{cart.length !== 1 ? "s" : ""}</span>
                             </div>
                         </div>
                         <div className="bg-white/20 px-3 py-1 rounded-lg text-xs font-bold">
@@ -1957,7 +2037,7 @@ export default function PdvTerminal() {
                                     <div className="bg-gray-50 rounded-xl p-3 grid grid-cols-3 gap-2 text-center">
                                         <div>
                                             <p className="text-[9px] font-bold text-gray-400 uppercase">Qtd real</p>
-                                            <p className="font-bold text-[#1a56db] text-sm mt-0.5">{qty.toFixed(1)} {item.product.unit}</p>
+                                            <p className="font-bold text-green-700 text-sm mt-0.5">{qty.toFixed(1)} {item.product.unit}</p>
                                         </div>
                                         {pkgSize ? (
                                             <>
@@ -1984,14 +2064,14 @@ export default function PdvTerminal() {
 
                     {/* Adicionar mais produtos */}
                     <button onClick={() => { setPendingProducts([]); setStep("product_select"); }}
-                        className="w-full border-2 border-dashed border-blue-200 rounded-2xl p-4 text-[#1a56db] font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
+                        className="w-full border-2 border-dashed border-blue-200 rounded-2xl p-4 text-green-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
                         <span className="text-xl">＋</span> Adicionar mais produtos
                     </button>
                 </div>
 
                 <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <Button
-                        className="w-full h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200"
+                        className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200"
                         onClick={handleGoFromCartReview}
                         disabled={cart.length === 0}
                     >
@@ -2009,7 +2089,7 @@ export default function PdvTerminal() {
 
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
-                <header className="flex items-center justify-between px-5 py-3 bg-[#1a56db] text-white shrink-0 shadow-md">
+                <header className="flex items-center justify-between px-5 py-3 bg-green-800 text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setStep("cart_review")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
@@ -2017,7 +2097,7 @@ export default function PdvTerminal() {
                         <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain" />
                         <div>
                             <span className="font-bold text-base leading-tight block">Selecionar Pulverizador</span>
-                            <span className="text-blue-200 text-xs">Passo 6 de 7 - Equipamento & Vazão</span>
+                            <span className="text-green-200 text-xs">Passo 6 de 7 - Equipamento & Vazão</span>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
@@ -2035,12 +2115,12 @@ export default function PdvTerminal() {
                                         key={equip.id}
                                         onClick={() => setSelectedEquipment(selectedEquipment?.id === equip.id ? null : equip)}
                                         className={`p-4 rounded-xl border-2 text-left transition-all ${selectedEquipment?.id === equip.id
-                                            ? "border-[#1a56db] bg-blue-50 shadow-md"
-                                            : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm"
+                                            ? "border-green-600 bg-blue-50 shadow-md"
+                                            : "border-gray-200 bg-white hover:border-green-300 hover:shadow-sm"
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedEquipment?.id === equip.id ? "bg-[#1a56db] text-white" : "bg-gray-100 text-gray-500"}`}>
+                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedEquipment?.id === equip.id ? "bg-green-700 text-white" : "bg-gray-100 text-gray-500"}`}>
                                                 <Tractor className="h-6 w-6" />
                                             </div>
                                             <div>
@@ -2050,7 +2130,7 @@ export default function PdvTerminal() {
                                                 )}
                                             </div>
                                             {selectedEquipment?.id === equip.id && (
-                                                <Check className="h-5 w-5 text-[#1a56db] ml-auto" />
+                                                <Check className="h-5 w-5 text-green-700 ml-auto" />
                                             )}
                                         </div>
                                     </button>
@@ -2093,7 +2173,7 @@ export default function PdvTerminal() {
                         Pular
                     </Button>
                     <Button
-                        className="flex-1 h-12 bg-[#1a56db] hover:bg-blue-700 text-white"
+                        className="flex-1 h-12 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold"
                         onClick={handleGoFromEquipment}
                         disabled={selectedEquipment && !flowRateLha}
                     >
@@ -2108,7 +2188,7 @@ export default function PdvTerminal() {
     if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
         return (
             <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
-                <header className="flex items-center justify-between px-5 py-3 bg-[#1a56db] text-white shrink-0 shadow-md">
+                <header className="flex items-center justify-between px-5 py-3 bg-green-800 text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setStep("equipment")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
@@ -2116,7 +2196,7 @@ export default function PdvTerminal() {
                         <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain" />
                         <div>
                             <span className="font-bold text-base leading-tight block">Confirmar Saída</span>
-                            <span className="text-[10px] text-blue-200">Passo 7 de 7</span>
+                            <span className="text-[10px] text-green-200">Passo 7 de 7</span>
                         </div>
                     </div>
                 </header>
@@ -2206,7 +2286,7 @@ export default function PdvTerminal() {
                                         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:gap-px bg-gray-100">
                                             {item.distribution.map((d) => (
                                                 <div key={d.plotId} className="flex items-center gap-3 p-4 bg-white">
-                                                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1a56db] flex items-center justify-center shrink-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-green-700 flex items-center justify-center shrink-0">
                                                         <span className="text-xs font-bold">PT</span>
                                                     </div>
                                                     <div className="flex-1 min-w-0">
@@ -2219,7 +2299,7 @@ export default function PdvTerminal() {
                                                     {/* Quantity Input */}
                                                     <div className="flex items-center gap-1 shrink-0 bg-gray-50 p-1 rounded-lg border border-gray-200">
                                                         <button
-                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-[#1a56db] border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-green-700 border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
                                                             onClick={() => setOverride(p.id, d.plotId, d.allocatedQty - 1)}
                                                         >
                                                             <Minus className="h-3 w-3" />
@@ -2232,7 +2312,7 @@ export default function PdvTerminal() {
                                                             className="text-center text-sm font-bold w-16 h-7 bg-transparent border-none p-0 focus-visible:ring-0 text-gray-800"
                                                         />
                                                         <button
-                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-[#1a56db] border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-green-700 border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
                                                             onClick={() => setOverride(p.id, d.plotId, d.allocatedQty + 1)}
                                                         >
                                                             <Plus className="h-3 w-3" />
@@ -2275,7 +2355,7 @@ export default function PdvTerminal() {
                             <span className="hidden sm:inline">Cancelar</span>
                         </Button>
                         <Button
-                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-[#1a56db] hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] order-2"
+                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-lg shadow-yellow-200 transition-all active:scale-[0.98] order-2"
                             onClick={() => handleSubmit(false)}
                             disabled={submitting}
                         >
@@ -2284,7 +2364,7 @@ export default function PdvTerminal() {
                             <span className="hidden sm:inline">Confirmar Saída</span>
                         </Button>
                         <Button
-                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] order-3"
+                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-green-700 hover:bg-green-800 text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all active:scale-[0.98] order-3"
                             onClick={() => handleSubmit(true)}
                             disabled={submitting}
                         >
