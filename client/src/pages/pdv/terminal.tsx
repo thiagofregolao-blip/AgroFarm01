@@ -1806,7 +1806,12 @@ export default function PdvTerminal() {
                 <div className="flex-1 overflow-y-auto p-4">
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Selecione a safra</p>
                     <div className="space-y-3">
-                        {seasons.length === 0 ? (
+                        {(pdvLoading || (!pdvData?.seasons && !pdvError)) && seasons.length === 0 ? (
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="h-6 w-6 animate-spin text-gray-400 mr-2" />
+                                <span className="text-gray-400">Carregando safras...</span>
+                            </div>
+                        ) : seasons.length === 0 ? (
                             <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">
                                 <p className="text-gray-500 font-medium">Nenhuma safra cadastrada</p>
                                 <p className="text-gray-400 text-sm mt-1">Cadastre em Produção → Safras</p>
