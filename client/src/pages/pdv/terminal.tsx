@@ -748,7 +748,7 @@ export default function PdvTerminal() {
             toast({ title: "Informe uma dose válida", variant: "destructive" });
             return;
         }
-        const qty = dose * totalAreaSelected;
+        const qty = Math.round(dose * totalAreaSelected * 10000) / 10000;
         setCart(prev => {
             const exists = prev.findIndex(c => c.product.id === product.id);
             const cartItem: CartItem = {
@@ -2027,7 +2027,7 @@ export default function PdvTerminal() {
         const product = pendingProducts[doseIndex];
         if (!product) { setStep("cart_review"); return null; }
         const dose = parseBR(currentDose);
-        const qty = !isNaN(dose) && dose > 0 ? dose * totalAreaSelected : 0;
+        const qty = !isNaN(dose) && dose > 0 ? Math.round(dose * totalAreaSelected * 10000) / 10000 : 0;
         const pkgSize = product.packageSize || null;
         const embs = pkgSize && qty > 0 ? Math.ceil(qty / pkgSize) : null;
         const totalPkg = embs && pkgSize ? embs * pkgSize : null;
@@ -2393,7 +2393,7 @@ export default function PdvTerminal() {
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-xs text-gray-400 font-bold uppercase tracking-wide mb-0.5">Total Saída</div>
-                                                <p className="font-bold text-[#16A249] text-2xl leading-none">{item.totalQty}</p>
+                                                <p className="font-bold text-[#16A249] text-2xl leading-none">{Number(Number(item.totalQty).toFixed(4))}</p>
                                                 <p className="text-xs text-gray-400">{p.unit}</p>
                                             </div>
                                         </div>
