@@ -182,6 +182,7 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
         fontStyle: "bold",
         fontSize: 8,
         cellPadding: 3,
+        halign: "center",
       },
       bodyStyles: {
         fontSize: 9,
@@ -189,13 +190,14 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
         textColor: [0, 0, 0],
       },
       columnStyles: {
-        0: { cellWidth: 14, halign: "center" },
-        1: { cellWidth: 32 },
-        2: { cellWidth: 28 },
-        3: { cellWidth: 28, halign: "right" },
-        4: { cellWidth: 28, halign: "right" },
-        5: { cellWidth: 28, halign: "right" },
+        0: { cellWidth: 15, halign: "center" },
+        1: { cellWidth: 40, halign: "left" },
+        2: { cellWidth: 27, halign: "center" },
+        3: { cellWidth: 28, halign: "center" },
+        4: { cellWidth: 28, halign: "center" },
+        5: { cellWidth: 28, halign: "center" },
       },
+      tableWidth: contentWidth,
       didDrawCell: (hookData: any) => {
         // Draw horizontal lines only (no vertical borders in body)
         const { cell, row, section } = hookData;
@@ -235,6 +237,7 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
         fontStyle: "bold",
         fontSize: 9,
         cellPadding: 3,
+        halign: "center",
       },
       bodyStyles: {
         fontSize: 9,
@@ -243,10 +246,11 @@ export function generateReceituarioPDF(data: ReceituarioData): Blob {
       },
       columnStyles: {
         0: { cellWidth: 18, halign: "center" },
-        1: { cellWidth: 60 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 42, halign: "right" },
+        1: { cellWidth: 60, halign: "left" },
+        2: { cellWidth: 40, halign: "center" },
+        3: { cellWidth: 42, halign: "center" },
       },
+      tableWidth: contentWidth,
       didDrawCell: (hookData: any) => {
         const { cell, section } = hookData;
         if (section === "head") {
