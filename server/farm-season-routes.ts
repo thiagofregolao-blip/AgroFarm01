@@ -68,8 +68,10 @@ export function registerFarmSeasonRoutes(app: Express) {
         try {
             const farmerId = req.user!.id;
             const seasonId = req.params.id;
+            console.log(`[FARM_SEASONS_PLOTS] GET seasonId=${seasonId} farmerId=${farmerId}`);
             const seasons = await farmStorage.getSeasons(farmerId);
             if (!seasons.find((s: any) => s.id === seasonId)) {
+                console.log(`[FARM_SEASONS_PLOTS] 403 — season not found for farmer`);
                 return res.status(403).json({ error: "Forbidden" });
             }
             // Try with LEFT JOIN on farm_season_plots first; fallback without if table doesn't exist
@@ -91,6 +93,7 @@ export function registerFarmSeasonRoutes(app: Express) {
                     ORDER BY fpr.name, fp.name
                 `);
                 const rows = Array.isArray(result) ? result : (result.rows || []);
+                console.log(`[FARM_SEASONS_PLOTS] Returning ${rows.length} plots`);
                 return res.json(rows);
             } catch (joinErr: any) {
                 console.warn("[FARM_SEASONS_PLOTS] farm_season_plots join failed, falling back:", joinErr.message);
