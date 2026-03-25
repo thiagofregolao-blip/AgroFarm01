@@ -369,6 +369,7 @@ app.use((req, res, next) => {
 
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS receipt_id varchar`);
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS cheque_id varchar`);
+    await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS payable_id varchar`);
 
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS is_remission boolean DEFAULT false`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS remission_id varchar`);

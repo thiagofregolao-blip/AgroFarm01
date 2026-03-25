@@ -44,6 +44,45 @@ export function registerFarmFinancialRoutes(app: Express) {
     // CONTAS A PAGAR
     // ============================================================================
 
+    // Payment history: returns individual payment transactions linked to APs
+    app.get("/api/farm/accounts-payable/payment-history", requireFarmer, async (req, res) => {
+        try {
+            const { sql: sqlFn } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = req.user!.id;
+
+            const result = await db.execute(sqlFn`
+                SELECT
+                    t.id,
+                    t.amount,
+                    t.currency,
+                    t.payment_method AS "paymentMethod",
+                    t.account_id AS "accountId",
+                    t.receipt_id AS "receiptNumber",
+                    t.payable_id AS "payableId",
+                    t.transaction_date AS "paidDate",
+                    t.description,
+                    ap.supplier,
+                    ap.description AS "apDescription",
+                    ap.total_amount AS "totalAmount",
+                    ap.installment_number AS "installmentNumber",
+                    ap.total_installments AS "totalInstallments",
+                    ap.receipt_file_url AS "receiptFileUrl",
+                    ap.invoice_id AS "invoiceId"
+                FROM farm_cash_transactions t
+                LEFT JOIN farm_accounts_payable ap ON ap.id = t.payable_id
+                WHERE t.farmer_id = ${farmerId}
+                  AND t.reference_type = 'pagamento_conta'
+                  AND t.type = 'saida'
+                ORDER BY t.transaction_date DESC
+            `);
+            res.json((result as any).rows || result);
+        } catch (error) {
+            console.error("[PAYMENT_HISTORY_GET]", error);
+            res.status(500).json({ error: "Failed to get payment history" });
+        }
+    });
+
     app.get("/api/farm/accounts-payable", requireFarmer, async (req, res) => {
         try {
             const { farmAccountsPayable } = await import("../shared/schema");
@@ -268,6 +307,14 @@ export function registerFarmFinancialRoutes(app: Express) {
                     .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
             }
 
+            // Save payable_id and receipt number to cash transaction
+            if (firstTxId) {
+                await db.execute(sqlFn`UPDATE farm_cash_transactions SET payable_id = ${req.params.id} WHERE id = ${firstTxId}`);
+                if (receiptNumber) {
+                    await db.execute(sqlFn`UPDATE farm_cash_transactions SET receipt_id = ${receiptNumber} WHERE id = ${firstTxId}`);
+                }
+            }
+
             // Update account payable status
             const newStatus = newPaidTotal >= totalDue ? "pago" : "parcial";
             const updatePayload: any = {
@@ -327,6 +374,63 @@ export function registerFarmFinancialRoutes(app: Express) {
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_PAY]", error);
             res.status(500).json({ error: "Failed to pay account" });
+        }
+    });
+
+    // Reverse a payment: revert cash flow, reset AP to open
+    app.post("/api/farm/accounts-payable/:id/reverse", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { sql: sqlFn } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = req.user!.id;
+
+            const [ap] = await db.select().from(farmAccountsPayable).where(
+                and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+            );
+            if (!ap) return res.status(404).json({ error: "Not found" });
+
+            // Find and reverse the cash transaction
+            if (ap.cashTransactionId) {
+                const [tx] = await db.select().from(farmCashTransactions).where(
+                    eq(farmCashTransactions.id, ap.cashTransactionId)
+                );
+                if (tx) {
+                    const txAmount = parseFloat(tx.amount);
+                    // Restore balance to the account
+                    await db.update(farmCashAccounts)
+                        .set({ currentBalance: sqlFn`current_balance + ${txAmount}` })
+                        .where(and(eq(farmCashAccounts.id, tx.accountId), eq(farmCashAccounts.farmerId, farmerId)));
+                    // Delete the cash transaction
+                    await db.delete(farmCashTransactions).where(eq(farmCashTransactions.id, ap.cashTransactionId));
+                }
+            }
+
+            // Reset AP to open with zero paid
+            await db.update(farmAccountsPayable).set({
+                paidAmount: "0",
+                paidDate: null,
+                status: "aberto",
+                cashTransactionId: null,
+                receiptNumber: null,
+                receiptFileUrl: null,
+                paymentMethod: null,
+            } as any).where(eq(farmAccountsPayable.id, req.params.id));
+
+            // Sync farmExpenses if linked
+            if (ap.expenseId) {
+                const { farmExpenses } = await import("../shared/schema");
+                await db.update(farmExpenses).set({
+                    paymentStatus: "pendente",
+                    paidAmount: "0",
+                } as any).where(eq(farmExpenses.id, ap.expenseId));
+            }
+
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[ACCOUNTS_PAYABLE_REVERSE]", error);
+            res.status(500).json({ error: "Failed to reverse payment" });
         }
     });
 

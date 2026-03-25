@@ -126,13 +126,31 @@ export default function AccountsPayable() {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable/payment-history"] });
             toast({ title: "Pagamento registrado no Fluxo de Caixa!" });
         },
     });
 
     const del = useMutation({
         mutationFn: async (id: string) => apiRequest("DELETE", `/api/farm/accounts-payable/${id}`),
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] }); toast({ title: "Removido" }); },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable/payment-history"] });
+            toast({ title: "Removido" });
+        },
+    });
+
+    const reversePayment = useMutation({
+        mutationFn: async (id: string) => apiRequest("POST", `/api/farm/accounts-payable/${id}/reverse`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable/payment-history"] });
+            toast({ title: "Pagamento revertido com sucesso!" });
+        },
+        onError: () => toast({ title: "Erro ao reverter pagamento", variant: "destructive" }),
     });
 
     const editMutation = useMutation({
@@ -190,12 +208,12 @@ export default function AccountsPayable() {
                     ))}
                 </div>
 
-                {/* Tabs: Contas / Pagamento / Historico */}
+                {/* Tabs: Contas / Pagamento / Recibo de Provedores */}
                 <Tabs defaultValue="contas">
                     <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
                         <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Contas</TabsTrigger>
                         <TabsTrigger value="pagamento" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Pagamento</TabsTrigger>
-                        <TabsTrigger value="historico" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Historico</TabsTrigger>
+                        <TabsTrigger value="historico" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Recibo de Provedores</TabsTrigger>
                     </TabsList>
 
                     {/* ── CONTAS TAB ─────────────────────────────────────────── */}
@@ -336,6 +354,12 @@ export default function AccountsPayable() {
                             seasons={seasons as any[]}
                             onPay={(id, data) => pay.mutate({ id, data })}
                             paying={pay.isPending}
+                            onReverse={(id) => {
+                                if (confirm("Tem certeza que deseja reverter este pagamento? O valor sera devolvido ao saldo da conta.")) {
+                                    reversePayment.mutate(id);
+                                }
+                            }}
+                            reversing={reversePayment.isPending}
                         />
                     </TabsContent>
                 </Tabs>
@@ -429,6 +453,12 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
     };
 
     function openPayModal() {
+        // Validate: all selected items must be from the same supplier
+        const suppliers = new Set(checkedItems.map((i: any) => i.supplier));
+        if (suppliers.size > 1) {
+            alert("Nao e possivel pagar faturas de fornecedores diferentes na mesma operacao. Selecione apenas faturas do mesmo fornecedor.");
+            return;
+        }
         setPaymentRows([{ accountId: "", amount: totalChecked.toFixed(2), paymentMethod: "transferencia" }]);
         setChequeBanco(""); setChequeNumero(""); setChequeTipo("proprio"); setSelectedChequeId("");
         setReceiptNumber(""); setReceiptFile(null); setReceiptFileUrl("");
@@ -778,9 +808,10 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
 }
 
 // ─── Historico Tab ────────────────────────────────────────────────────────────
-function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
+function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reversing }: {
     items: any[]; accounts: any[]; seasons: any[];
     onPay: (id: string, data: any) => void; paying: boolean;
+    onReverse: (id: string) => void; reversing: boolean;
 }) {
     const [searchTerm, setSearchTerm] = useState("");
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -806,8 +837,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
     const emitidoCheques = (availableCheques as any[]).filter((ch: any) => ch.status === "emitido");
 
     function openEditModal(item: any) {
-        const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
-        const paidAmt = parseFloat(item.paidAmount || item.totalAmount || 0);
+        const paidAmt = parseFloat(item.amount || item.paidAmount || item.totalAmount || 0);
         setEditPaymentRows([{
             accountId: item.accountId || item.account_id || "",
             amount: String(paidAmt),
@@ -848,32 +878,58 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
         }
         if (editReceiptNumber) payload.receiptNumber = editReceiptNumber;
         if (editReceiptFileUrl) payload.receiptFileUrl = editReceiptFileUrl;
-        onPay(editingHistItem.id, payload);
+        onPay(editingHistItem.payableId || editingHistItem.id, payload);
         setEditingHistItem(null);
     }
 
-    const paidItems = items
-        .filter((i: any) => i.status === "pago" || i.status === "parcial")
-        .sort((a: any, b: any) => new Date(b.paidDate || b.updatedAt || b.dueDate).getTime() - new Date(a.paidDate || a.updatedAt || a.dueDate).getTime());
+    // Fetch individual payment transactions (each payment = separate entry)
+    const { data: paymentHistory = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/accounts-payable/payment-history"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/accounts-payable/payment-history"); return r.json(); },
+    });
 
-    const filteredPaid = paidItems.filter((i: any) =>
-        !searchTerm || i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) || i.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    // Fallback: also show AP records that are pago/parcial but have no payable_id in transactions (legacy)
+    const txPayableIds = new Set(paymentHistory.map((p: any) => p.payableId).filter(Boolean));
+    const legacyPaid = items
+        .filter((i: any) => (i.status === "pago" || i.status === "parcial") && !txPayableIds.has(i.id))
+        .map((i: any) => ({
+            id: i.id,
+            amount: i.paidAmount || i.totalAmount,
+            currency: i.currency || "USD",
+            paymentMethod: i.paymentMethod || i.payment_method,
+            accountId: i.accountId || i.account_id,
+            receiptNumber: i.receiptNumber || i.receipt_number,
+            payableId: i.id,
+            paidDate: i.paidDate || i.updatedAt || i.dueDate,
+            supplier: i.supplier,
+            apDescription: i.description,
+            totalAmount: i.totalAmount,
+            installmentNumber: i.installmentNumber,
+            totalInstallments: i.totalInstallments,
+            receiptFileUrl: i.receiptFileUrl || i.receipt_file_url,
+        }));
+
+    const allPayments = [...paymentHistory, ...legacyPaid]
+        .sort((a: any, b: any) => new Date(b.paidDate).getTime() - new Date(a.paidDate).getTime());
+
+    const filteredPaid = allPayments.filter((i: any) =>
+        !searchTerm || i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) || i.apDescription?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Group by date + supplier (same-batch payments)
-    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string }[] = [];
-    const groupMap = new Map<string, typeof groups[0]>();
+    // Each payment is its own entry (no grouping that merges partial + final)
+    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string }[] = [];
     for (const item of filteredPaid) {
-        const dateStr = (item.paidDate || item.updatedAt || item.dueDate) ? new Date(item.paidDate || item.updatedAt || item.dueDate).toLocaleDateString("pt-BR") : "—";
-        const key = `${dateStr}|${item.supplier}`;
-        if (!groupMap.has(key)) {
-            const g = { key, date: dateStr, supplier: item.supplier, items: [], total: 0, currency: item.currency || "USD" };
-            groupMap.set(key, g);
-            groups.push(g);
-        }
-        const g = groupMap.get(key)!;
-        g.items.push(item);
-        g.total += parseFloat(item.paidAmount || item.totalAmount || 0);
+        const dateStr = item.paidDate ? new Date(item.paidDate).toLocaleDateString("pt-BR") : "—";
+        const key = item.id; // unique per payment transaction
+        groups.push({
+            key,
+            date: dateStr,
+            supplier: item.supplier || "—",
+            items: [item],
+            total: parseFloat(item.amount || 0),
+            currency: item.currency || "USD",
+            receiptNumber: item.receiptNumber || "",
+        });
     }
 
     const toggleGroup = (key: string) => setExpandedGroups(prev => {
@@ -918,14 +974,18 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
                                     <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
                                     <div>
                                         <p className="font-semibold text-gray-800">
-                                            {(group.items[0]?.receiptNumber || group.items[0]?.receipt_number) && (
+                                            {group.receiptNumber && (
                                                 <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono mr-2">
-                                                    #{group.items[0].receiptNumber || group.items[0].receipt_number}
+                                                    #{group.receiptNumber}
                                                 </span>
                                             )}
                                             {group.supplier}
                                         </p>
-                                        <p className="text-xs text-gray-500">{group.date} · {group.items.length} titulo(s)</p>
+                                        <p className="text-xs text-gray-500">
+                                            {group.date}
+                                            {group.items[0]?.apDescription && ` · ${group.items[0].apDescription}`}
+                                            {group.items[0]?.installmentNumber && ` (${group.items[0].installmentNumber}/${group.items[0].totalInstallments})`}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
@@ -937,46 +997,47 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
                                     >
                                         <Pencil className="h-3 w-3 mr-1" />Editar
                                     </Button>
+                                    <Button
+                                        variant="outline" size="sm"
+                                        className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50"
+                                        disabled={reversing}
+                                        onClick={() => onReverse(group.items[0].payableId || group.items[0].id)}
+                                    >
+                                        <Trash2 className="h-3 w-3 mr-1" />Excluir
+                                    </Button>
                                     <span className="text-xs text-gray-400">{expandedGroups.has(group.key) ? "▲" : "▼"}</span>
                                 </div>
                             </div>
                             {expandedGroups.has(group.key) && (
-                                <div className="border-t border-gray-100">
-                                    <table className="w-full text-sm">
-                                        <tbody>
-                                            {group.items.map((item: any) => (
-                                                <tr key={item.id} className="border-t border-gray-50">
-                                                    <td className="px-4 py-2 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
-                                                    <td className="px-4 py-2 text-gray-500">{item.installmentNumber}/{item.totalInstallments}</td>
-                                                    <td className="px-4 py-2">
-                                                        {(item.receiptNumber || item.receipt_number) && (
-                                                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono">
-                                                                Recibo: {item.receiptNumber || item.receipt_number}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-2">
-                                                        {(item.receiptFileUrl || item.receipt_file_url) && (
-                                                            <a
-                                                                href={item.receiptFileUrl || item.receipt_file_url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-1"
-                                                            >
-                                                                <Receipt className="h-3 w-3" /> Ver recibo
-                                                            </a>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-2">
-                                                        {(item.status === "parcial") && (
-                                                            <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded">Parcial</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="text-right px-4 py-2 font-mono text-green-600">{formatCurrency(item.paidAmount || item.totalAmount, item.currency || "USD")}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="border-t border-gray-100 px-4 py-3 space-y-2 bg-gray-50">
+                                    {group.items.map((item: any) => (
+                                        <div key={item.id} className="flex flex-wrap items-center gap-3 text-sm">
+                                            {item.paymentMethod && (
+                                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                                    {item.paymentMethod === "transferencia" ? "Transferencia" : item.paymentMethod === "dinheiro" ? "Dinheiro" : item.paymentMethod === "cheque" ? "Cheque" : item.paymentMethod}
+                                                </span>
+                                            )}
+                                            {item.receiptNumber && (
+                                                <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono">
+                                                    Recibo: {item.receiptNumber}
+                                                </span>
+                                            )}
+                                            {item.receiptFileUrl && (
+                                                <a href={item.receiptFileUrl} target="_blank" rel="noopener noreferrer"
+                                                    className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                                    <Receipt className="h-3 w-3" /> Ver recibo
+                                                </a>
+                                            )}
+                                            {item.totalAmount && (
+                                                <span className="text-xs text-gray-500">
+                                                    Valor da conta: {formatCurrency(parseFloat(item.totalAmount), item.currency || "USD")}
+                                                </span>
+                                            )}
+                                            <span className="text-right font-mono font-semibold text-green-600 ml-auto">
+                                                Pago: {formatCurrency(parseFloat(item.amount), item.currency || "USD")}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </Card>
