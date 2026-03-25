@@ -16,6 +16,7 @@ interface CartItem {
     product: any;
     quantity: number | string;
     dosePerHa?: number | string;
+    packageSize?: number;
 }
 
 // ==================== SIGNATURE CANVAS COMPONENT ====================
@@ -159,7 +160,7 @@ export default function PdvTerminal() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
-    const [step, setStep] = useState<"product" | "plot" | "season" | "equipment" | "confirm">("product");
+    const [step, setStep] = useState<"season" | "plot" | "product_select" | "dose" | "cart_review" | "equipment" | "confirm">("season");
     const [search, setSearch] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
     const [selectedPlots, setSelectedPlots] = useState<any[]>([]);
@@ -177,6 +178,11 @@ export default function PdvTerminal() {
     const [odometer, setOdometer] = useState<string>("");
     const [flowRateLha, setFlowRateLha] = useState<string>("");
     const [depositFilter, setDepositFilter] = useState<string>("");
+
+    // Novo fluxo PDV: seleção múltipla + dose por produto
+    const [pendingProducts, setPendingProducts] = useState<any[]>([]); // produtos selecionados aguardando dose
+    const [doseIndex, setDoseIndex] = useState<number>(0);
+    const [currentDose, setCurrentDose] = useState<string>("");
 
     // Load offline queue on mount
     useEffect(() => {
@@ -250,7 +256,7 @@ export default function PdvTerminal() {
             if (!res.ok) throw new Error("Failed to fetch withdrawals");
             return res.json();
         },
-        enabled: step === "product",
+        enabled: step === "season" || step === "product_select",
         refetchInterval: 30000,
     });
 
@@ -263,13 +269,12 @@ export default function PdvTerminal() {
             if (!res.ok) throw new Error("Failed to fetch embeddings");
             const data = await res.json();
             console.log("[PDV] Employee embeddings loaded:", data?.length || 0, "employees");
-            // Cache in localStorage for offline use
             if (data?.length > 0) {
                 try { localStorage.setItem("pdv_employee_embeddings", JSON.stringify(data)); } catch {}
             }
             return data;
         },
-        staleTime: 60 * 1000, // refresh every 1 minute
+        staleTime: 60 * 1000,
         refetchOnMount: "always",
         placeholderData: () => {
             try {
@@ -503,17 +508,87 @@ export default function PdvTerminal() {
         }
     };
 
-    const handleGoFromSeason = () => {
-        if (isDiesel) {
-            setStep("confirm");
-        } else {
-            setStep("equipment");
-        }
-    };
-
     const handleGoFromEquipment = () => {
         setDistOverrides({});
         setStep("confirm");
+    };
+
+    // ── Novo fluxo: produto_select → dose → cart_review ──
+    const handleGoFromSeason = () => setStep("plot");
+
+    const handleGoFromPlot = () => {
+        if (selectedPlots.length === 0) {
+            toast({ title: "Selecione pelo menos um talhão", variant: "destructive" });
+            return;
+        }
+        setStep("product_select");
+    };
+
+    const handleStartDoseEntry = () => {
+        if (pendingProducts.length === 0) {
+            toast({ title: "Selecione pelo menos um produto", variant: "destructive" });
+            return;
+        }
+        setDoseIndex(0);
+        const first = pendingProducts[0];
+        const defaultDose = first.dosePerHa ? String(parseBR(first.dosePerHa)) : "";
+        setCurrentDose(defaultDose);
+        setStep("dose");
+    };
+
+    const handleConfirmDose = () => {
+        const product = pendingProducts[doseIndex];
+        const dose = parseBR(currentDose);
+        if (isNaN(dose) || dose <= 0) {
+            toast({ title: "Informe uma dose válida", variant: "destructive" });
+            return;
+        }
+        const qty = dose * totalAreaSelected;
+        setCart(prev => {
+            const exists = prev.findIndex(c => c.product.id === product.id);
+            const cartItem: CartItem = {
+                product,
+                quantity: qty,
+                dosePerHa: dose,
+                packageSize: product.packageSize || null,
+            };
+            if (exists >= 0) return prev.map((c, i) => i === exists ? cartItem : c);
+            return [...prev, cartItem];
+        });
+        const nextIdx = doseIndex + 1;
+        if (nextIdx < pendingProducts.length) {
+            setDoseIndex(nextIdx);
+            const next = pendingProducts[nextIdx];
+            setCurrentDose(next.dosePerHa ? String(parseBR(next.dosePerHa)) : "");
+        } else {
+            setPendingProducts([]);
+            setStep("cart_review");
+        }
+    };
+
+    const handleGoFromCartReview = () => {
+        if (cart.length === 0) {
+            toast({ title: "Adicione pelo menos um produto", variant: "destructive" });
+            return;
+        }
+        const sprayers = (pdvData?.equipment || []).filter((e: any) => e.type === "Pulverizador" && (e.status === "Ativo" || !e.status));
+        setStep(sprayers.length > 0 ? "equipment" : "confirm");
+    };
+
+    const isProductInCart = (productId: string) => cart.some(c => c.product.id === productId);
+    const isProductPending = (productId: string) => pendingProducts.some(p => p.id === productId);
+
+    const togglePendingProduct = (product: any) => {
+        if (isProductInCart(product.id)) {
+            // Remove from cart when tapped again
+            setCart(prev => prev.filter(c => c.product.id !== product.id));
+            return;
+        }
+        setPendingProducts(prev => {
+            const exists = prev.findIndex(p => p.id === product.id);
+            if (exists >= 0) return prev.filter(p => p.id !== product.id);
+            return [...prev, product];
+        });
     };
 
     // Helper to generate PDF from application list (shared between online/offline)
@@ -721,9 +796,13 @@ export default function PdvTerminal() {
     };
 
     const reset = () => {
-        setStep("product");
+        setStep("season");
         setCart([]);
+        setPendingProducts([]);
+        setDoseIndex(0);
+        setCurrentDose("");
         setSelectedPlots([]);
+        setSelectedSeasonId(null);
         setSearch("");
         setCategoryFilter("");
         setDistOverrides({});
@@ -1403,7 +1482,7 @@ export default function PdvTerminal() {
         );
     }
 
-    // ==================== STEP: PLOT SELECTION ====================
+    // ==================== STEP: PLOT SELECTION (Passo 2) ====================
     if (step === "plot") {
         const properties = pdvData?.properties || [];
         const plotsByProp: Record<string, any[]> = {};
@@ -1413,272 +1492,172 @@ export default function PdvTerminal() {
         });
 
         return (
-            <div className="h-screen bg-gradient-to-br from-gray-50 to-[#16A249]/5 text-gray-800 flex flex-col">
-                {/* Header with gradient */}
-                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 text-white shrink-0 shadow-md">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setStep("product")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
-                            <ArrowLeft className="h-5 w-5 text-white" />
-                        </button>
-                        <div>
-                            <span className="font-bold text-base leading-tight block">Selecionar Talhões</span>
-                            <span className="text-[10px] text-emerald-200">Passo 2 de 3</span>
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+                {/* Header azul */}
+                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                    <div className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setStep("season")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
+                                <ArrowLeft className="h-5 w-5" />
+                            </button>
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
+                            <div>
+                                <span className="font-bold text-sm leading-tight block">Selecionar Talhões</span>
+                                <span className="text-[10px] text-blue-200">Passo 2 de 5</span>
+                            </div>
                         </div>
+                        <span className="bg-white/20 px-3 py-1 rounded-lg text-xs font-bold">
+                            {selectedPlots.length > 0 ? `${selectedPlots.length} sel. · ${totalAreaSelected.toFixed(1)} ha` : "Nenhum selecionado"}
+                        </span>
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-hidden flex flex-col-reverse md:flex-row">
-                    {/* LEFT: Cart Summary (Sidebar on desktop, Bottom on mobile) */}
-                    <div className="w-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-100 flex flex-col shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:shadow-lg z-10 shrink-0 h-64 md:h-auto">
-                        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Resumo do Pedido</p>
-                            <div className="flex items-baseline gap-1">
-                                <span className={`text-2xl font-bold ${isDiesel ? "text-amber-600" : "text-[#16A249]"}`}>{cart.length}</span>
-                                <span className="text-sm text-gray-500">produtos selecionados</span>
-                            </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                    {properties.length === 0 && plots.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
+                            <span className="text-4xl mb-3">🌾</span>
+                            <p className="text-lg font-medium">Nenhum talhão encontrado</p>
+                            <p className="text-sm">Cadastre propriedades e talhões para continuar</p>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                            {cart.map(item => (
-                                <div key={item.product.id} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50 border border-gray-100">
-                                    {item.product.imageUrl ? (
-                                        <img src={item.product.imageUrl} className="w-10 h-10 rounded-md object-contain bg-white shrink-0" alt="" />
-                                    ) : (
-                                        <div className={`w-10 h-10 rounded-md bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro} flex items-center justify-center shrink-0`}>
-                                            <span className="text-lg">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
+                    ) : (
+                        <div className="space-y-6">
+                            {properties.map((prop: any) => {
+                                const propPlots = plotsByProp[prop.id] || [];
+                                const allSelected = propPlots.length > 0 && propPlots.every((p: any) => isPlotSelected(p.id));
+                                return (
+                                    <div key={prop.id} className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                                                <span className="w-1 h-4 rounded-full bg-[#1a56db] block" />
+                                                {prop.name}
+                                                <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{propPlots.length} talhões</span>
+                                            </h3>
+                                            {propPlots.length > 0 && (
+                                                <button
+                                                    onClick={() => {
+                                                        const ids = propPlots.map((p: any) => p.id);
+                                                        setSelectedPlots(allSelected
+                                                            ? selectedPlots.filter(p => !ids.includes(p.id))
+                                                            : [...selectedPlots.filter(p => !ids.includes(p.id)), ...propPlots]);
+                                                    }}
+                                                    className="text-xs font-medium text-[#1a56db] hover:underline"
+                                                >
+                                                    {allSelected ? "Desmarcar todos" : "Selecionar todos"}
+                                                </button>
+                                            )}
                                         </div>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-sm truncate text-gray-800">{item.product.name}</p>
-                                        <p className="text-xs text-gray-500">{item.quantity} {item.product.unit}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* RIGHT: View Area (Equipment or Plot Grid) */}
-                    <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/50">
-                        {isDiesel ? (
-                            <div className="space-y-6">
-                                <div className="flex items-center justify-between px-1 mb-2">
-                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                                        <Tractor className="h-5 w-5 text-amber-600" />
-                                        MÁQUINAS E VEÍCULOS
-                                    </h3>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                    {pdvData?.equipment?.map((eq: any) => {
-                                        const sel = selectedEquipment?.id === eq.id;
-                                        return (
-                                            <button
-                                                key={eq.id}
-                                                onClick={() => setSelectedEquipment(sel ? null : eq)}
-                                                className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? "bg-amber-50 border-amber-500 shadow-md shadow-amber-100" : "bg-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5"}`}
-                                            >
-                                                <div className="flex items-start justify-between mb-2">
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sel ? "bg-amber-500 text-white" : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"}`}>
-                                                        <Tractor className="h-4 w-4" />
-                                                    </div>
-                                                    {sel && <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center shadow-sm"><Check className="h-3 w-3 text-white" /></div>}
-                                                </div>
-                                                <h4 className={`font-bold text-sm mb-0.5 line-clamp-2 ${sel ? "text-amber-900" : "text-gray-800"}`}>{eq.name}</h4>
-                                                <p className="text-xs text-gray-500">{eq.type}</p>
-                                            </button>
-                                        );
-                                    })}
-                                    {(!pdvData?.equipment || pdvData.equipment.length === 0) && (
-                                        <div className="col-span-full py-8 text-center text-gray-400 text-sm italic bg-white rounded-xl border border-dashed border-gray-200">
-                                            Nenhum equipamento cadastrado na frota
-                                        </div>
-                                    )}
-                                </div>
-
-                                {selectedEquipment && (
-                                    <div className="mt-8 p-5 bg-white rounded-xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-2">
-                                        <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                            <Gauge className="h-5 w-5 text-gray-400" />
-                                            Informações de Telemetria <span className="text-xs font-normal text-gray-400 ml-2">(Opcional)</span>
-                                        </h4>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                                <Label className="text-xs font-bold text-gray-600 mb-1.5 block">Horímetro</Label>
-                                                <div className="relative">
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="0"
-                                                        value={horimeter}
-                                                        onChange={e => setHorimeter(e.target.value)}
-                                                        className="pl-3 pr-10 bg-gray-50 border-gray-200 focus:bg-white"
-                                                    />
-                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">HR</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <Label className="text-xs font-bold text-gray-600 mb-1.5 block">Hodômetro</Label>
-                                                <div className="relative">
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="0"
-                                                        value={odometer}
-                                                        onChange={e => setOdometer(e.target.value)}
-                                                        className="pl-3 pr-10 bg-gray-50 border-gray-200 focus:bg-white"
-                                                    />
-                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">KM</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            properties.length === 0 && plots.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center">
-                                    <span className="text-4xl mb-3">🌾</span>
-                                    <p className="text-lg font-medium">Nenhum talhão encontrado</p>
-                                    <p className="text-sm">Cadastre propriedades e talhões para continuar</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-6">
-                                    {properties.map((prop: any) => {
-                                        const propPlots = plotsByProp[prop.id] || [];
-                                        const allSelected = propPlots.every((p: any) => isPlotSelected(p.id));
-
-                                        return (
-                                            <div key={prop.id} className="space-y-3">
-                                                <div className="flex items-center justify-between px-1">
-                                                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                                                        <span className="w-1 h-4 rounded-full bg-[#16A249] block"></span>
-                                                        {prop.name}
-                                                        <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{propPlots.length} talhões</span>
-                                                    </h3>
-                                                    {propPlots.length > 0 && (
-                                                        <button
-                                                            onClick={() => {
-                                                                const ids = propPlots.map((p: any) => p.id);
-                                                                const newPlots = allSelected
-                                                                    ? selectedPlots.filter(p => !ids.includes(p.id))
-                                                                    : [...selectedPlots.filter(p => !ids.includes(p.id)), ...propPlots];
-                                                                setSelectedPlots(newPlots);
-                                                            }}
-                                                            className="text-xs font-medium text-[#16A249] hover:text-[#15803d] hover:underline"
-                                                        >
-                                                            {allSelected ? "Desmarcar todos" : "Selecionar todos"}
-                                                        </button>
-                                                    )}
-                                                </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                                    {propPlots.length > 0 ? (
-                                                        propPlots.map((plot: any) => {
-                                                            const sel = isPlotSelected(plot.id);
-                                                            return (
-                                                                <button
-                                                                    key={plot.id}
-                                                                    onClick={() => togglePlot(plot)}
-                                                                    className={`group relative p-4 rounded-xl border-2 text-left transition-all duration-200 ${sel ? "bg-[#16A249]/10 border-[#16A249] shadow-md shadow-green-100" : "bg-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5"}`}
-                                                                >
-                                                                    <div className="flex items-start justify-between mb-2">
-                                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sel ? "bg-[#16A249] text-white" : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"}`}>
-                                                                            <MapPin className="h-4 w-4" />
-                                                                        </div>
-                                                                        {sel && <div className="w-5 h-5 rounded-full bg-[#16A249] flex items-center justify-center shadow-sm"><Check className="h-3 w-3 text-white" /></div>}
-                                                                    </div>
-                                                                    <h4 className={`font-bold text-sm mb-0.5 ${sel ? "text-[#064e3b]" : "text-gray-800"}`}>{plot.name}</h4>
-                                                                    <p className="text-xs text-gray-500">{plot.areaHa} hectares</p>
-                                                                    {plot.crop && <span className="absolute bottom-4 right-4 text-[10px] font-medium px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{plot.crop}</span>}
-                                                                </button>
-                                                            );
-                                                        })
-                                                    ) : (
-                                                        <div className="col-span-full py-4 text-center text-gray-400 text-sm italic bg-white rounded-xl border border-dashed border-gray-200">
-                                                            Nenhum talhão cadastrado nesta propriedade
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            {propPlots.length > 0 ? propPlots.map((plot: any) => {
+                                                const sel = isPlotSelected(plot.id);
+                                                return (
+                                                    <button key={plot.id} onClick={() => togglePlot(plot)}
+                                                        className={`group p-4 rounded-2xl border-2 text-left transition-all ${sel ? "bg-blue-50 border-[#1a56db] shadow-md shadow-blue-100" : "bg-white border-gray-200 hover:border-blue-300 shadow-sm"}`}>
+                                                        <div className="flex items-start justify-between mb-2">
+                                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${sel ? "bg-[#1a56db] text-white" : "bg-gray-100 text-gray-400"}`}>
+                                                                <MapPin className="h-4 w-4" />
+                                                            </div>
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${sel ? "bg-[#1a56db] border-[#1a56db]" : "border-gray-300"}`}>
+                                                                {sel && <Check className="h-3 w-3 text-white" />}
+                                                            </div>
                                                         </div>
-                                                    )}
+                                                        <h4 className={`font-bold text-sm ${sel ? "text-[#1a56db]" : "text-gray-800"}`}>{plot.name}</h4>
+                                                        <p className="text-xs text-gray-500 mt-0.5">{plot.areaHa} ha{plot.crop ? ` · ${plot.crop}` : ""}</p>
+                                                    </button>
+                                                );
+                                            }) : (
+                                                <div className="col-span-full py-4 text-center text-gray-400 text-sm italic bg-white rounded-xl border border-dashed border-gray-200">
+                                                    Nenhum talhão cadastrado
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-                    </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 {/* Bottom bar */}
-                <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
-                    <div className="max-w-4xl mx-auto flex items-center justify-between gap-6">
-                        <div className="hidden sm:block">
-                            <p className="text-gray-500 text-sm">Próximo passo: <strong>Confirmar Distribuição</strong></p>
-                            <p className="text-xs text-gray-400">Total de área selecionada: {totalAreaSelected.toFixed(1)} ha</p>
-                        </div>
-                        <div className="flex items-center gap-4 flex-1 sm:flex-none justify-end">
-                            <span className="font-bold text-[#16A249] text-lg mr-2 sm:hidden">{selectedPlots.length} talhões</span>
-                            <Button
-                                className="w-full sm:w-auto px-8 py-6 text-base bg-[#16A249] hover:bg-[#15803d] text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all active:scale-[0.98]"
-                                onClick={handleGoToConfirm}
-                                disabled={selectedPlots.length === 0}
-
-                            >
-                                Avançar
-                                <ArrowRight className="ml-2 h-5 w-5" />
-                            </Button>
-                        </div>
-                    </div>
+                <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <Button
+                        className="w-full h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200 transition-all active:scale-[0.98]"
+                        onClick={handleGoFromPlot}
+                        disabled={selectedPlots.length === 0}
+                    >
+                        Selecionar Produtos <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
                 </div>
             </div>
         );
     }
 
-    // ==================== STEP: SEASON (Seleção de Safra) ====================
+    // ==================== STEP: SEASON (Passo 1 — Selecionar Safra) ====================
     if (step === "season") {
         const seasons = pdvData?.seasons || [];
         return (
-            <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
-                {/* Header */}
-                <header className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 shrink-0 shadow-sm">
-                    <button onClick={() => setStep(isDiesel ? "product" : "plot")} className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
-                        <ArrowLeft className="h-4 w-4 text-gray-600" />
-                    </button>
-                    <div>
-                        <span className="font-bold text-base leading-tight block">Selecionar Safra</span>
-                        <span className="text-xs text-gray-500">Passo {isDiesel ? "2 de 2" : "3 de 4"} - Safra da Aplicação</span>
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+                {/* Header azul com logo */}
+                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                    <div className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" />
+                            <div className="w-px h-6 bg-white/30" />
+                            <div>
+                                <span className="font-bold text-sm leading-tight block">{pdvData?.terminal?.name || "Terminal"}</span>
+                                <span className="text-[10px] text-blue-200">Passo 1 de 5 — Safra</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {!isOnline && <span className="text-[10px] bg-red-500/80 px-2 py-0.5 rounded-full">Offline</span>}
+                            <button onClick={handleLogout} className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
+                                <LogOut className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                    {/* Stepper */}
+                    <div className="flex items-center px-4 pb-3 gap-1">
+                        {["Safra","Talhões","Produtos","Doses","Carrinho","Equip.","Confirmar"].map((lbl, i) => (
+                            <div key={i} className="flex items-center gap-1 flex-1 last:flex-none">
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${i === 0 ? "bg-white text-[#1a56db]" : "bg-white/20 text-white/60"}`}>{i + 1}</div>
+                                {i < 6 && <div className="flex-1 h-0.5 bg-white/20 rounded-full min-w-[4px]" />}
+                            </div>
+                        ))}
                     </div>
                 </header>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4">
-                    <div className="max-w-2xl mx-auto space-y-3">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Selecione a safra</p>
+                    <div className="space-y-3">
                         {seasons.length === 0 ? (
-                            <div className="text-center py-12">
-                                <p className="text-gray-500 text-lg">Nenhuma safra ativa cadastrada</p>
-                                <p className="text-gray-400 text-sm mt-2">Cadastre safras em Produção → Safras</p>
+                            <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">
+                                <p className="text-gray-500 font-medium">Nenhuma safra cadastrada</p>
+                                <p className="text-gray-400 text-sm mt-1">Cadastre em Produção → Safras</p>
                             </div>
                         ) : (
                             seasons.map((season: any) => (
                                 <button
                                     key={season.id}
                                     onClick={() => setSelectedSeasonId(season.id)}
-                                    className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+                                    className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex items-center gap-4 ${
                                         selectedSeasonId === season.id
-                                            ? "border-emerald-500 bg-emerald-50 shadow-md"
-                                            : "border-gray-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50"
+                                            ? "border-[#1a56db] bg-blue-50 shadow-md shadow-blue-100"
+                                            : "border-gray-200 bg-white hover:border-blue-300"
                                     }`}
                                 >
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-bold text-gray-800">{season.name}</p>
-                                            {season.crop && <p className="text-sm text-gray-500">Cultura: {season.crop}</p>}
-                                            {season.startDate && (
-                                                <p className="text-xs text-gray-400 mt-1">
-                                                    {new Date(season.startDate).toLocaleDateString("pt-BR")}
-                                                    {season.endDate ? ` — ${new Date(season.endDate).toLocaleDateString("pt-BR")}` : ""}
-                                                </p>
-                                            )}
-                                        </div>
-                                        {selectedSeasonId === season.id && (
-                                            <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
-                                                <Check className="h-4 w-4 text-white" />
-                                            </div>
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl ${selectedSeasonId === season.id ? "bg-[#1a56db]/10" : "bg-gray-50"}`}>🌱</div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-gray-800">{season.name}</p>
+                                        {season.crop && <p className="text-xs text-gray-500 mt-0.5">Cultura: {season.crop}</p>}
+                                        {season.startDate && (
+                                            <p className="text-[10px] text-gray-400 mt-0.5">
+                                                {new Date(season.startDate).toLocaleDateString("pt-BR")}
+                                                {season.endDate ? ` — ${new Date(season.endDate).toLocaleDateString("pt-BR")}` : ""}
+                                            </p>
                                         )}
+                                    </div>
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedSeasonId === season.id ? "bg-[#1a56db] border-[#1a56db]" : "border-gray-300"}`}>
+                                        {selectedSeasonId === season.id && <Check className="h-3.5 w-3.5 text-white" />}
                                     </div>
                                 </button>
                             ))
@@ -1687,22 +1666,17 @@ export default function PdvTerminal() {
                 </div>
 
                 {/* Bottom bar */}
-                <div className="p-4 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
-                    <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-                        <Button
-                            variant="outline"
-                            className="px-6 py-6 rounded-xl"
-                            onClick={handleGoFromSeason}
-                        >
+                <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <div className="flex gap-3">
+                        <Button variant="outline" className="px-6 h-12 rounded-xl border-gray-200" onClick={handleGoFromSeason}>
                             Pular
                         </Button>
                         <Button
-                            className="flex-1 sm:flex-none px-8 py-6 text-base bg-[#16A249] hover:bg-[#15803d] text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all active:scale-[0.98]"
+                            className="flex-1 h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200 transition-all active:scale-[0.98]"
                             onClick={handleGoFromSeason}
                             disabled={!selectedSeasonId}
                         >
-                            Avançar
-                            <ArrowRight className="ml-2 h-5 w-5" />
+                            Continuar <ArrowRight className="ml-2 h-5 w-5" />
                         </Button>
                     </div>
                 </div>
@@ -1710,21 +1684,340 @@ export default function PdvTerminal() {
         );
     }
 
+    // ==================== STEP: PRODUCT_SELECT (Passo 3 — Multi-seleção) ====================
+    if (step === "product_select") {
+        const alreadyInCart = cart.map(c => c.product.id);
+        const totalSel = pendingProducts.length + alreadyInCart.length;
+        return (
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                    <div className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setStep("plot")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
+                                <ArrowLeft className="h-5 w-5" />
+                            </button>
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
+                            <div>
+                                <span className="font-bold text-sm leading-tight block">Selecionar Produtos</span>
+                                <span className="text-[10px] text-blue-200">Passo 3 de 5 · {totalAreaSelected.toFixed(1)} ha</span>
+                            </div>
+                        </div>
+                    </div>
+                    {/* Counter bar */}
+                    <div className={`mx-4 mb-3 px-4 py-2.5 rounded-xl flex items-center justify-between ${totalSel > 0 ? "bg-white/20" : "bg-white/10"}`}>
+                        <span className="text-sm font-bold">
+                            {totalSel === 0 ? "Nenhum produto selecionado" : `${totalSel} produto${totalSel > 1 ? "s" : ""} selecionado${totalSel > 1 ? "s" : ""}`}
+                        </span>
+                        <span className="text-[10px] text-blue-200 font-medium">
+                            {alreadyInCart.length > 0 ? `${alreadyInCart.length} já no carrinho` : "Toque para selecionar"}
+                        </span>
+                    </div>
+                    {/* Search */}
+                    <div className="px-4 pb-3">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-300" />
+                            <Input className="pl-10 h-10 bg-white/15 border-transparent text-white placeholder:text-blue-200 text-sm rounded-xl focus:bg-white focus:text-gray-800 focus:placeholder:text-gray-400"
+                                placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
+                        </div>
+                    </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                    {filtered.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                            <Search className="h-10 w-10 mb-3 opacity-30" />
+                            <p className="font-medium">Nenhum produto encontrado</p>
+                        </div>
+                    )}
+                    {filtered.map((p: any) => {
+                        const stockQty = getStockForProduct(p.id);
+                        const inCart = isProductInCart(p.id);
+                        const isPending = isProductPending(p.id);
+                        const isSelected = inCart || isPending;
+                        const lowStock = stockQty <= 0;
+                        return (
+                            <button key={p.id} disabled={lowStock}
+                                onClick={() => togglePendingProduct(p)}
+                                className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition-all ${lowStock ? "opacity-40 cursor-not-allowed bg-white border-gray-100" : isSelected ? "bg-blue-50 border-[#1a56db] shadow-sm shadow-blue-100" : "bg-white border-gray-100 shadow-sm hover:border-blue-200"}`}>
+                                {/* Checkbox */}
+                                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${isSelected ? "bg-[#1a56db] border-[#1a56db]" : "border-gray-300"}`}>
+                                    {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
+                                </div>
+                                {/* Thumb */}
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${inCart ? "bg-green-100" : "bg-gray-50"}`}>
+                                    {p.imageUrl ? <img src={p.imageUrl} className="w-full h-full object-contain p-1 rounded-xl" alt="" /> : <span className="text-xl">{CATEGORY_EMOJI[p.category] || "📦"}</span>}
+                                </div>
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-[14px] text-gray-900 line-clamp-1">{p.name}</p>
+                                    <p className="text-[11px] text-gray-400 mt-0.5">
+                                        {p.category ? p.category.charAt(0).toUpperCase() + p.category.slice(1) : "Geral"}
+                                        {p.packageSize ? ` · Emb: ${p.packageSize} ${p.unit}` : ""}
+                                        {inCart ? " · ✅ Já no carrinho" : ""}
+                                    </p>
+                                </div>
+                                {/* Stock */}
+                                <div className="shrink-0 text-right">
+                                    {lowStock ? (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-50 text-red-500 border border-red-200">Sem estoque</span>
+                                    ) : (
+                                        <>
+                                            <p className="text-lg font-extrabold text-emerald-600 leading-none">{stockQty.toFixed(0)}</p>
+                                            <p className="text-[10px] text-gray-400">{p.unit}</p>
+                                        </>
+                                    )}
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <Button
+                        className="w-full h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200 disabled:opacity-50"
+                        onClick={handleStartDoseEntry}
+                        disabled={pendingProducts.length === 0}
+                    >
+                        Informar Doses ({pendingProducts.length}) <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    // ==================== STEP: DOSE (Passo 4 — Dose por produto) ====================
+    if (step === "dose") {
+        const product = pendingProducts[doseIndex];
+        if (!product) { setStep("cart_review"); return null; }
+        const dose = parseBR(currentDose);
+        const qty = !isNaN(dose) && dose > 0 ? dose * totalAreaSelected : 0;
+        const pkgSize = product.packageSize || null;
+        const embs = pkgSize && qty > 0 ? Math.ceil(qty / pkgSize) : null;
+        const totalPkg = embs && pkgSize ? embs * pkgSize : null;
+        const isLast = doseIndex === pendingProducts.length - 1;
+        return (
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                    <div className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => { if (doseIndex === 0) { setStep("product_select"); } else { setDoseIndex(doseIndex - 1); setCurrentDose(pendingProducts[doseIndex - 1].dosePerHa ? String(parseBR(pendingProducts[doseIndex - 1].dosePerHa)) : ""); } }} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
+                                <ArrowLeft className="h-5 w-5" />
+                            </button>
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
+                            <div>
+                                <span className="font-bold text-sm leading-tight block">Informar Dose</span>
+                                <span className="text-[10px] text-blue-200">Passo 4 de 5</span>
+                            </div>
+                        </div>
+                        {/* Progress dots */}
+                        <div className="flex items-center gap-1.5 mr-1">
+                            {pendingProducts.map((_, i) => (
+                                <div key={i} className={`rounded-full transition-all ${i < doseIndex ? "w-2 h-2 bg-green-400" : i === doseIndex ? "w-5 h-2 bg-white" : "w-2 h-2 bg-white/30"}`} />
+                            ))}
+                            <span className="text-[10px] text-blue-200 ml-1 font-bold">{doseIndex + 1}/{pendingProducts.length}</span>
+                        </div>
+                    </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {/* Produto em foco */}
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-2xl shrink-0 shadow-sm">
+                            {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-contain p-1" alt="" /> : <span>{CATEGORY_EMOJI[product.category] || "📦"}</span>}
+                        </div>
+                        <div>
+                            <p className="font-extrabold text-[#1a56db] text-base leading-tight">{product.name}</p>
+                            <p className="text-xs text-blue-500 mt-1">
+                                {product.category?.charAt(0).toUpperCase() + product.category?.slice(1)}
+                                {product.packageSize ? ` · Emb: ${product.packageSize} ${product.unit}` : ""}
+                                {" · Área: "}{totalAreaSelected.toFixed(1)} ha
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Dose input */}
+                    <div>
+                        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-2">Dose por hectare ({product.unit}/ha)</p>
+                        <Input
+                            type="number"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={currentDose}
+                            onChange={e => setCurrentDose(e.target.value)}
+                            onFocus={e => e.target.select()}
+                            className="h-16 text-3xl font-extrabold text-center border-2 rounded-2xl focus:border-[#1a56db] text-gray-800 bg-white"
+                            placeholder="0.00"
+                            autoFocus
+                        />
+                    </div>
+
+                    {/* Resultado calculado */}
+                    {qty > 0 && (
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 grid grid-cols-2 gap-4">
+                            <div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase">Área</p>
+                                <p className="text-xl font-extrabold text-gray-800 mt-1">{totalAreaSelected.toFixed(1)} <span className="text-sm text-gray-400">ha</span></p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase">Qtd calculada</p>
+                                <p className="text-xl font-extrabold text-[#1a56db] mt-1">{qty.toFixed(1)} <span className="text-sm text-blue-300">{product.unit}</span></p>
+                            </div>
+                            {pkgSize && (
+                                <>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">Embalagem</p>
+                                        <p className="text-xl font-extrabold text-emerald-600 mt-1">{pkgSize} <span className="text-sm text-emerald-300">{product.unit}</span></p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">Emb. a retirar</p>
+                                        <p className="text-xl font-extrabold text-emerald-600 mt-1">{embs} <span className="text-sm text-emerald-300">emb.</span></p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Banner arredondamento */}
+                    {pkgSize && embs && totalPkg && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide mb-2">📦 Arredondamento de embalagem</p>
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-amber-700">
+                                    {qty.toFixed(1)} {product.unit} → ceil({qty.toFixed(1)} ÷ {pkgSize}) = {embs} emb.
+                                </p>
+                                <span className="font-extrabold text-amber-800 bg-amber-200 px-3 py-1 rounded-lg text-sm">{totalPkg} {product.unit}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <Button
+                        className="w-full h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200"
+                        onClick={handleConfirmDose}
+                        disabled={isNaN(dose) || dose <= 0}
+                    >
+                        {isLast ? "Ver Carrinho" : `Próximo Produto →`}
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    // ==================== STEP: CART_REVIEW (Passo 5 — Carrinho) ====================
+    if (step === "cart_review") {
+        return (
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+                <header className="bg-[#1a56db] text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+                    <div className="flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setStep("product_select")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
+                                <ArrowLeft className="h-5 w-5" />
+                            </button>
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
+                            <div>
+                                <span className="font-bold text-sm leading-tight block">Carrinho</span>
+                                <span className="text-[10px] text-blue-200">Passo 5 de 5 · {cart.length} produto{cart.length !== 1 ? "s" : ""}</span>
+                            </div>
+                        </div>
+                        <div className="bg-white/20 px-3 py-1 rounded-lg text-xs font-bold">
+                            {totalAreaSelected.toFixed(1)} ha
+                        </div>
+                    </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {cart.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                            <ShoppingCart className="h-12 w-12 mb-3 opacity-20" />
+                            <p className="font-medium">Carrinho vazio</p>
+                        </div>
+                    ) : (
+                        cart.map(item => {
+                            const dose = parseBR(item.dosePerHa);
+                            const qty = Number(item.quantity);
+                            const pkgSize = item.packageSize || item.product.packageSize || null;
+                            const embs = pkgSize && qty > 0 ? Math.ceil(qty / pkgSize) : null;
+                            const totalPkg = embs && pkgSize ? embs * pkgSize : null;
+                            return (
+                                <div key={item.product.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${CATEGORY_COLORS[item.product.category] || CATEGORY_COLORS.outro}`}>
+                                            <span className="text-xl">{CATEGORY_EMOJI[item.product.category] || "📦"}</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-sm text-gray-800 line-clamp-1">{item.product.name}</p>
+                                            <p className="text-[11px] text-gray-400 mt-0.5">{item.product.category} · Dose: {!isNaN(dose) ? dose.toFixed(2) : "—"} {item.product.unit}/ha</p>
+                                        </div>
+                                        <button onClick={() => removeFromCart(item.product.id)}
+                                            className="w-8 h-8 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors shrink-0">
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-xl p-3 grid grid-cols-3 gap-2 text-center">
+                                        <div>
+                                            <p className="text-[9px] font-bold text-gray-400 uppercase">Qtd real</p>
+                                            <p className="font-bold text-[#1a56db] text-sm mt-0.5">{qty.toFixed(1)} {item.product.unit}</p>
+                                        </div>
+                                        {pkgSize ? (
+                                            <>
+                                                <div>
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase">Emb.</p>
+                                                    <p className="font-bold text-gray-700 text-sm mt-0.5">{pkgSize} {item.product.unit}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-bold text-amber-600 uppercase">Retirar</p>
+                                                    <p className="font-extrabold text-amber-700 text-sm mt-0.5 bg-amber-100 rounded-lg px-1">{embs} emb. ({totalPkg})</p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="col-span-2">
+                                                <p className="text-[9px] font-bold text-gray-400 uppercase">Embalagem</p>
+                                                <p className="font-medium text-gray-400 text-xs mt-0.5">Não informada</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+
+                    {/* Adicionar mais produtos */}
+                    <button onClick={() => { setPendingProducts([]); setStep("product_select"); }}
+                        className="w-full border-2 border-dashed border-blue-200 rounded-2xl p-4 text-[#1a56db] font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
+                        <span className="text-xl">＋</span> Adicionar mais produtos
+                    </button>
+                </div>
+
+                <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <Button
+                        className="w-full h-12 text-base bg-[#1a56db] hover:bg-[#1648c5] text-white font-bold rounded-xl shadow-md shadow-blue-200"
+                        onClick={handleGoFromCartReview}
+                        disabled={cart.length === 0}
+                    >
+                        Continuar → Pulverizador <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     // ==================== STEP: EQUIPMENT (Pulverizador + Vazão) ====================
-    if (step === "equipment" && !isDiesel && selectedPlots.length > 0 && cart.length > 0) {
+    if (step === "equipment" && !isDiesel) {
         const sprayers = (pdvData?.equipment || []).filter((e: any) => e.type === "Pulverizador" && (e.status === "Ativo" || !e.status));
         const totalArea = selectedPlots.reduce((sum: number, p: any) => sum + (parseFloat(p.areaHa) || 0), 0);
 
         return (
-            <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
-                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 text-white shrink-0 shadow-md">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+                <header className="flex items-center justify-between px-5 py-3 bg-[#1a56db] text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setStep("plot")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
+                        <button onClick={() => setStep("cart_review")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
                         </button>
+                        <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain" />
                         <div>
                             <span className="font-bold text-base leading-tight block">Selecionar Pulverizador</span>
-                            <span className="text-emerald-200 text-xs">Passo 3 de 4 - Equipamento & Vazão</span>
+                            <span className="text-blue-200 text-xs">Passo 6 de 7 - Equipamento & Vazão</span>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
@@ -1742,22 +2035,22 @@ export default function PdvTerminal() {
                                         key={equip.id}
                                         onClick={() => setSelectedEquipment(selectedEquipment?.id === equip.id ? null : equip)}
                                         className={`p-4 rounded-xl border-2 text-left transition-all ${selectedEquipment?.id === equip.id
-                                            ? "border-emerald-500 bg-emerald-50 shadow-md"
-                                            : "border-gray-200 bg-white hover:border-emerald-300 hover:shadow-sm"
+                                            ? "border-[#1a56db] bg-blue-50 shadow-md"
+                                            : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm"
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedEquipment?.id === equip.id ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${selectedEquipment?.id === equip.id ? "bg-[#1a56db] text-white" : "bg-gray-100 text-gray-500"}`}>
                                                 <Tractor className="h-6 w-6" />
                                             </div>
                                             <div>
                                                 <p className="font-semibold text-gray-900">{equip.name}</p>
                                                 {equip.tankCapacityL && (
-                                                    <p className="text-sm text-emerald-600 font-medium">Tanque: {parseFloat(equip.tankCapacityL).toLocaleString("pt-BR")} L</p>
+                                                    <p className="text-sm text-blue-600 font-medium">Tanque: {parseFloat(equip.tankCapacityL).toLocaleString("pt-BR")} L</p>
                                                 )}
                                             </div>
                                             {selectedEquipment?.id === equip.id && (
-                                                <Check className="h-5 w-5 text-emerald-600 ml-auto" />
+                                                <Check className="h-5 w-5 text-[#1a56db] ml-auto" />
                                             )}
                                         </div>
                                     </button>
@@ -1786,7 +2079,7 @@ export default function PdvTerminal() {
                                 />
                             </div>
                             {flowRateLha && selectedEquipment.tankCapacityL && (
-                                <div className="bg-emerald-50 rounded-lg p-3 text-sm space-y-1">
+                                <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
                                     <p><span className="text-gray-500">Calda total:</span> <strong>{(parseFloat(flowRateLha) * totalArea).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L</strong></p>
                                     <p><span className="text-gray-500">Tanques necessários:</span> <strong>{((parseFloat(flowRateLha) * totalArea) / parseFloat(selectedEquipment.tankCapacityL)).toFixed(2)}</strong></p>
                                 </div>
@@ -1800,7 +2093,7 @@ export default function PdvTerminal() {
                         Pular
                     </Button>
                     <Button
-                        className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        className="flex-1 h-12 bg-[#1a56db] hover:bg-blue-700 text-white"
                         onClick={handleGoFromEquipment}
                         disabled={selectedEquipment && !flowRateLha}
                     >
@@ -1814,15 +2107,16 @@ export default function PdvTerminal() {
     // ==================== STEP: CONFIRM (Distribution) ====================
     if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
         return (
-            <div className="h-screen bg-gradient-to-br from-gray-50 to-emerald-50/30 text-gray-800 flex flex-col">
-                <header className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-emerald-800 via-emerald-900 to-emerald-700 text-white shrink-0 shadow-md">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+                <header className="flex items-center justify-between px-5 py-3 bg-[#1a56db] text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setStep("equipment")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
                         </button>
+                        <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain" />
                         <div>
                             <span className="font-bold text-base leading-tight block">Confirmar Saída</span>
-                            <span className="text-[10px] text-emerald-200">Passo 4 de 4</span>
+                            <span className="text-[10px] text-blue-200">Passo 7 de 7</span>
                         </div>
                     </div>
                 </header>
@@ -1912,7 +2206,7 @@ export default function PdvTerminal() {
                                         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:gap-px bg-gray-100">
                                             {item.distribution.map((d) => (
                                                 <div key={d.plotId} className="flex items-center gap-3 p-4 bg-white">
-                                                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1a56db] flex items-center justify-center shrink-0">
                                                         <span className="text-xs font-bold">PT</span>
                                                     </div>
                                                     <div className="flex-1 min-w-0">
@@ -1925,7 +2219,7 @@ export default function PdvTerminal() {
                                                     {/* Quantity Input */}
                                                     <div className="flex items-center gap-1 shrink-0 bg-gray-50 p-1 rounded-lg border border-gray-200">
                                                         <button
-                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-emerald-600 border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-[#1a56db] border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
                                                             onClick={() => setOverride(p.id, d.plotId, d.allocatedQty - 1)}
                                                         >
                                                             <Minus className="h-3 w-3" />
@@ -1938,7 +2232,7 @@ export default function PdvTerminal() {
                                                             className="text-center text-sm font-bold w-16 h-7 bg-transparent border-none p-0 focus-visible:ring-0 text-gray-800"
                                                         />
                                                         <button
-                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-emerald-600 border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                                                            className="w-7 h-7 rounded bg-white hover:bg-gray-100 text-[#1a56db] border border-gray-200 flex items-center justify-center shadow-sm transition-all active:scale-95"
                                                             onClick={() => setOverride(p.id, d.plotId, d.allocatedQty + 1)}
                                                         >
                                                             <Plus className="h-3 w-3" />
@@ -1950,13 +2244,13 @@ export default function PdvTerminal() {
                                         </div>
 
                                         {/* Total check footer */}
-                                        <div className={`flex items-center justify-between px-5 py-3 text-sm font-bold border-t ${Math.abs(diff) < 0.01 ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-amber-50 border-amber-100 text-amber-700"}`}>
+                                        <div className={`flex items-center justify-between px-5 py-3 text-sm font-bold border-t ${Math.abs(diff) < 0.01 ? "bg-blue-50 border-blue-100 text-blue-700" : "bg-amber-50 border-amber-100 text-amber-700"}`}>
                                             <div className="flex items-center gap-2">
                                                 <span className="uppercase text-[10px] tracking-wide opacity-70">Status da Distribuição:</span>
                                                 <span>{item.totalAllocated} {p.unit} alocados</span>
                                             </div>
                                             {Math.abs(diff) < 0.01 ? (
-                                                <span className="flex items-center gap-1.5 bg-white/50 px-2 py-0.5 rounded-full text-xs border border-emerald-200/50">
+                                                <span className="flex items-center gap-1.5 bg-white/50 px-2 py-0.5 rounded-full text-xs border border-blue-200/50">
                                                     <Check className="h-3.5 w-3.5" />
                                                     Perfeito
                                                 </span>
@@ -1981,7 +2275,7 @@ export default function PdvTerminal() {
                             <span className="hidden sm:inline">Cancelar</span>
                         </Button>
                         <Button
-                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-[#16A249] hover:bg-[#15803d] text-white font-bold rounded-xl shadow-lg shadow-green-200 transition-all active:scale-[0.98] order-2"
+                            className="flex-1 h-12 py-0 sm:py-4 text-xs sm:text-sm bg-[#1a56db] hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] order-2"
                             onClick={() => handleSubmit(false)}
                             disabled={submitting}
                         >
@@ -2282,9 +2576,9 @@ export default function PdvTerminal() {
                 style={{ paddingBottom: "max(env(safe-area-inset-bottom), 4px)" }}>
                 <div className="flex items-center justify-around px-2 pt-1.5 pb-1">
                     {/* Produtos */}
-                    <button onClick={() => setStep("product")}
-                        className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all ${step === "product" ? "text-emerald-600" : "text-gray-400"}`}>
-                        <div className={`p-1.5 rounded-xl transition-all ${step === "product" ? "bg-emerald-100" : ""}`}>
+                    <button onClick={() => setStep("product_select")}
+                        className="flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all text-gray-400">
+                        <div className="p-1.5 rounded-xl">
                             <ShoppingCart className="h-5 w-5" />
                         </div>
                         <span className="text-[10px] font-semibold">Produtos</span>

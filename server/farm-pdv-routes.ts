@@ -127,6 +127,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 unit: s.productUnit,
                 imageUrl: s.productImageUrl || null,
                 dosePerHa: s.productDosePerHa || null,
+                packageSize: s.packageSize ? parseFloat(s.packageSize) : null,
             }));
             const plots = await farmStorage.getPlotsByFarmer(terminal.farmerId);
             const properties = await farmStorage.getProperties(terminal.farmerId);
@@ -195,6 +196,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 unit: s.productUnit,
                 imageUrl: s.productImageUrl || null,
                 dosePerHa: s.productDosePerHa || null,
+                packageSize: s.packageSize ? parseFloat(s.packageSize) : null,
             }));
             const plots = await farmStorage.getPlotsByFarmer(terminal.farmerId);
             const properties = await farmStorage.getProperties(terminal.farmerId);
@@ -376,6 +378,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 unit: s.productUnit,
                 imageUrl: s.productImageUrl || null,
                 dosePerHa: s.productDosePerHa || null,
+                packageSize: s.packageSize ? parseFloat(s.packageSize) : null,
             }));
 
             const plots = await farmStorage.getPlotsByFarmer(farmerId);
