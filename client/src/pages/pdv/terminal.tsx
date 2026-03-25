@@ -58,121 +58,7 @@ function PlotMiniMap({ coordinates, selected }: { coordinates: string | null; se
     }
 }
 
-// ── Sidebar desktop permanente (oculta no mobile) ──────────────────────────
-function PDVSidebar({
-    step, terminalName, isOnline,
-    selectedSeasonId, pdvData, selectedPlots, cart, totalAreaSelected,
-    withdrawalsHistory, handleRegenerateReceituario, handleLogout,
-}: {
-    step: string; terminalName: string; isOnline: boolean;
-    selectedSeasonId: string | null; pdvData: any;
-    selectedPlots: any[]; cart: any[]; totalAreaSelected: number;
-    withdrawalsHistory: any;
-    handleRegenerateReceituario: (batch: any) => void;
-    handleLogout: () => void;
-}) {
-    const STEPS = [
-        { key: "season", label: "Safra", emoji: "🌱" },
-        { key: "plot", label: "Talhões", emoji: "📍" },
-        { key: "product_select", label: "Produtos", emoji: "📦" },
-        { key: "dose", label: "Doses", emoji: "💧" },
-        { key: "cart_review", label: "Carrinho", emoji: "🛒" },
-        { key: "equipment", label: "Pulverizador", emoji: "🚜" },
-        { key: "confirm", label: "Confirmar", emoji: "✅" },
-    ];
-    const currentIdx = STEPS.findIndex(s => s.key === step);
-    const selectedSeason = pdvData?.seasons?.find((s: any) => s.id === selectedSeasonId);
-
-    return (
-        <aside className="hidden md:flex fixed inset-y-0 left-0 w-64 bg-green-900 text-white z-40 flex-col shadow-xl">
-            {/* Logo + terminal */}
-            <div className="px-5 pt-5 pb-4 border-b border-white/10 shrink-0">
-                <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" />
-                <div className="flex items-center gap-2 mt-2.5">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-green-400" : "bg-red-400"}`} />
-                    <span className="text-xs text-green-300 font-medium truncate">{terminalName}</span>
-                </div>
-            </div>
-
-            {/* Stepper */}
-            <div className="px-3 py-4 border-b border-white/10 shrink-0">
-                <p className="text-[9px] font-bold text-green-400/80 uppercase tracking-widest mb-2.5 px-2">Etapas</p>
-                <div className="space-y-0.5">
-                    {STEPS.map((s, i) => {
-                        const isPast = i < currentIdx;
-                        const isCurrent = i === currentIdx;
-                        return (
-                            <div key={s.key} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-all ${isCurrent ? "bg-white/20" : ""}`}>
-                                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold transition-all ${
-                                    isCurrent ? "bg-[#F7D601] text-green-900" : isPast ? "bg-green-500/80 text-white" : "bg-white/10 text-white/35"
-                                }`}>
-                                    {isPast ? <Check className="h-3 w-3" /> : i + 1}
-                                </div>
-                                <span className={`text-xs transition-all ${isCurrent ? "text-white font-semibold" : isPast ? "text-green-300" : "text-white/35"}`}>
-                                    {s.emoji} {s.label}
-                                </span>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Context cards */}
-            <div className="px-3 py-4 space-y-2 flex-1 overflow-y-auto">
-                {selectedSeason && (
-                    <div className="bg-white/10 rounded-xl px-3 py-2.5">
-                        <p className="text-[9px] font-bold text-green-400 uppercase tracking-wide">Safra</p>
-                        <p className="text-sm font-bold text-white mt-0.5 truncate">{selectedSeason.name}</p>
-                        {selectedSeason.crop && <p className="text-[10px] text-green-300 mt-0.5">{selectedSeason.crop}</p>}
-                    </div>
-                )}
-                {selectedPlots.length > 0 && (
-                    <div className="bg-white/10 rounded-xl px-3 py-2.5">
-                        <p className="text-[9px] font-bold text-green-400 uppercase tracking-wide">Talhões selecionados</p>
-                        <p className="text-base font-extrabold text-white leading-tight mt-0.5">
-                            {selectedPlots.length} <span className="text-xs font-normal text-green-300">talhão(ões) · {totalAreaSelected.toFixed(1)} ha</span>
-                        </p>
-                    </div>
-                )}
-                {cart.length > 0 && (
-                    <div className="bg-white/10 rounded-xl px-3 py-2.5">
-                        <p className="text-[9px] font-bold text-green-400 uppercase tracking-wide mb-1.5">Carrinho</p>
-                        {cart.map((item: any) => (
-                            <p key={item.product.id} className="text-xs text-green-200 truncate leading-5">• {item.product.name}</p>
-                        ))}
-                    </div>
-                )}
-                {withdrawalsHistory && withdrawalsHistory.length > 0 && (
-                    <div>
-                        <p className="text-[9px] font-bold text-green-400/80 uppercase tracking-widest mb-1.5 px-1 mt-1">Receituários recentes</p>
-                        {withdrawalsHistory.slice(0, 3).map((batch: any) => (
-                            <button key={batch.batchId}
-                                onClick={() => handleRegenerateReceituario(batch)}
-                                className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10 transition-colors mb-1 group">
-                                <p className="text-[9px] text-green-400 group-hover:text-green-300">
-                                    {new Date(batch.appliedAt).toLocaleDateString("pt-BR")}
-                                </p>
-                                <p className="text-xs text-white font-medium truncate">{batch.propertyName || "Propriedade"}</p>
-                                <p className="text-[9px] text-green-400">{batch.applications.length} prod. · <span className="text-yellow-400">Abrir PDF</span></p>
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* Logout */}
-            <div className="px-3 pb-5 border-t border-white/10 pt-3 shrink-0">
-                <button onClick={handleLogout}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 text-green-300 hover:text-white transition-colors text-sm">
-                    <LogOut className="h-4 w-4 shrink-0" />
-                    Sair
-                </button>
-            </div>
-        </aside>
-    );
-}
-
-// ── Header branco unificado (mobile + desktop) ──────────────────────────────
+// ── Header branco unificado (estilo landing page) ──────────────────────────────
 function PDVTopBar({
     step, title, onBack, rightBadge,
     isOnline, withdrawalsHistory, handleRegenerateReceituario, handleLogout, toast,
@@ -185,111 +71,147 @@ function PDVTopBar({
 }) {
     const STEPS = ["season", "plot", "product_select", "dose", "cart_review", "equipment", "confirm"];
     const LABELS = ["Safra", "Talhões", "Produtos", "Doses", "Carrinho", "Pulverizador", "Confirmar"];
+    const ICONS = ["🌱", "📍", "📦", "💧", "🛒", "🚜", "✅"];
     const idx = STEPS.indexOf(step);
 
     return (
-        <header className="bg-white border-b border-gray-100 shadow-sm shrink-0" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
-            {/* Logo row */}
-            <div className="flex items-center justify-between px-4 py-2.5">
-                <div className="flex items-center gap-2.5">
-                    {onBack && (
-                        <button onClick={onBack}
-                            className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-95 shrink-0">
-                            <ArrowLeft className="h-4 w-4 text-gray-600" />
-                        </button>
-                    )}
-                    <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" />
-                </div>
-                <div className="flex items-center gap-1.5">
-                    {!isOnline && (
-                        <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full border border-red-200 font-medium">Offline</span>
-                    )}
-                    {rightBadge}
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <button className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 relative" aria-label="Ver receituários">
-                                <FileText className="h-4 w-4 text-gray-500" />
-                                {withdrawalsHistory?.length > 0 && (
-                                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-green-700 rounded-full text-[8px] font-bold text-white flex items-center justify-center">
-                                        {Math.min(withdrawalsHistory.length, 9)}
-                                    </span>
-                                )}
+        <header className="shrink-0" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
+            {/* ── White navbar (igual landing page) ── */}
+            <div className="bg-white/95 backdrop-blur-md shadow-[0_2px_20px_rgba(0,0,0,0.07)]">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-[64px] md:h-[76px]">
+                    {/* Left: back + logo */}
+                    <div className="flex items-center gap-3">
+                        {onBack && (
+                            <button onClick={onBack}
+                                className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-95 shrink-0">
+                                <ArrowLeft className="h-4 w-4 text-gray-600" />
                             </button>
-                        </SheetTrigger>
-                        <SheetContent side="right" className="w-[340px] sm:w-[400px] p-0 flex flex-col">
-                            <SheetHeader className="p-5 border-b border-gray-100 bg-green-800 text-white">
-                                <SheetTitle className="flex items-center gap-2 text-white">
-                                    <FileText className="h-5 w-5" /> Receituários
-                                </SheetTitle>
-                                <SheetDescription className="text-green-200 text-xs">
-                                    Clique para abrir ou compartilhar
-                                </SheetDescription>
-                            </SheetHeader>
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                                {withdrawalsHistory?.length > 0 ? (
-                                    withdrawalsHistory.slice(0, 20).map((batch: any) => (
-                                        <div key={batch.batchId} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                                            <div className="mb-2">
-                                                <span className="text-[10px] text-gray-400 font-medium">
-                                                    {new Date(batch.appliedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                                                </span>
-                                                <p className="text-sm font-bold text-gray-800 mt-0.5 line-clamp-1">{batch.propertyName || "Propriedade"}</p>
-                                                <p className="text-xs text-emerald-600 font-medium">{batch.applications.length} produto(s) aplicado(s)</p>
-                                                {batch.applications[0]?.seasonName && (
-                                                    <p className="text-[10px] text-gray-400 mt-0.5">🌱 {batch.applications[0].seasonName}</p>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Button size="sm" variant="outline"
-                                                    className="flex-1 text-xs h-8 border-gray-200 hover:border-green-400 hover:text-green-700 hover:bg-green-50"
-                                                    onClick={() => handleRegenerateReceituario(batch)}>
-                                                    <FileText className="h-3 w-3 mr-1.5" /> Abrir PDF
-                                                </Button>
-                                                <Button size="sm" variant="outline"
-                                                    className="h-8 px-3 border-gray-200 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50"
-                                                    onClick={async () => {
-                                                        try {
-                                                            const productsByProduct = new Map<string, any>();
-                                                            batch.applications.forEach((app: any) => {
-                                                                if (!productsByProduct.has(app.productName)) productsByProduct.set(app.productName, { productName: app.productName, unit: app.unit || "L", plots: [] });
-                                                                productsByProduct.get(app.productName)!.plots.push({ plotName: app.plotName, quantity: parseFloat(app.quantity) });
-                                                            });
-                                                            const pdfBlob = generateReceituarioPDF({ propertyName: batch.propertyName || "Propriedade", appliedAt: new Date(batch.appliedAt), products: Array.from(productsByProduct.values()) });
-                                                            shareViaWhatsApp(pdfBlob, `receituario_${new Date(batch.appliedAt).toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`);
-                                                        } catch { toast({ title: "Erro ao compartilhar", variant: "destructive" }); }
-                                                    }}>
-                                                    <Share2 className="h-3 w-3" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-16 text-gray-400">
-                                        <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                                        <p className="text-sm font-medium">Nenhum receituário</p>
-                                        <p className="text-xs mt-1">As saídas aparecerão aqui</p>
-                                    </div>
-                                )}
+                        )}
+                        <div className="flex items-center gap-2.5">
+                            <img src="/icon-datagrow.png" alt="" className="h-10 md:h-12 w-auto object-contain" />
+                            <div className="flex flex-col leading-none">
+                                <span className="font-black tracking-tight text-xl md:text-2xl" style={{ lineHeight: 1.05 }}>
+                                    <span style={{ color: "#024177" }}>Data</span><span style={{ color: "#215F30" }}>Grow</span>
+                                </span>
+                                <span className="font-semibold tracking-widest uppercase hidden sm:block" style={{ fontSize: "0.5rem", color: "#555", letterSpacing: "0.14em" }}>
+                                    Seus dados. Seu crescimento.
+                                </span>
                             </div>
-                        </SheetContent>
-                    </Sheet>
-                    <button onClick={handleLogout}
-                        className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-95"
-                        aria-label="Sair">
-                        <LogOut className="h-4 w-4 text-gray-500" />
-                    </button>
+                        </div>
+                    </div>
+                    {/* Right: online status + receituários + logout */}
+                    <div className="flex items-center gap-2">
+                        {!isOnline && (
+                            <span className="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full border border-red-200 font-medium">Offline</span>
+                        )}
+                        {rightBadge}
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <button className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 relative" aria-label="Ver receituários">
+                                    <FileText className="h-4 w-4 text-gray-500" />
+                                    {withdrawalsHistory?.length > 0 && (
+                                        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-green-700 rounded-full text-[8px] font-bold text-white flex items-center justify-center">
+                                            {Math.min(withdrawalsHistory.length, 9)}
+                                        </span>
+                                    )}
+                                </button>
+                            </SheetTrigger>
+                            <SheetContent side="right" className="w-[340px] sm:w-[400px] p-0 flex flex-col">
+                                <SheetHeader className="p-5 border-b border-gray-100 bg-green-800 text-white">
+                                    <SheetTitle className="flex items-center gap-2 text-white">
+                                        <FileText className="h-5 w-5" /> Receituários
+                                    </SheetTitle>
+                                    <SheetDescription className="text-green-200 text-xs">
+                                        Clique para abrir ou compartilhar
+                                    </SheetDescription>
+                                </SheetHeader>
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                                    {withdrawalsHistory?.length > 0 ? (
+                                        withdrawalsHistory.slice(0, 20).map((batch: any) => (
+                                            <div key={batch.batchId} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                                                <div className="mb-2">
+                                                    <span className="text-[10px] text-gray-400 font-medium">
+                                                        {new Date(batch.appliedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                                    </span>
+                                                    <p className="text-sm font-bold text-gray-800 mt-0.5 line-clamp-1">{batch.propertyName || "Propriedade"}</p>
+                                                    <p className="text-xs text-emerald-600 font-medium">{batch.applications.length} produto(s) aplicado(s)</p>
+                                                    {batch.applications[0]?.seasonName && (
+                                                        <p className="text-[10px] text-gray-400 mt-0.5">🌱 {batch.applications[0].seasonName}</p>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" variant="outline"
+                                                        className="flex-1 text-xs h-8 border-gray-200 hover:border-green-400 hover:text-green-700 hover:bg-green-50"
+                                                        onClick={() => handleRegenerateReceituario(batch)}>
+                                                        <FileText className="h-3 w-3 mr-1.5" /> Abrir PDF
+                                                    </Button>
+                                                    <Button size="sm" variant="outline"
+                                                        className="h-8 px-3 border-gray-200 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50"
+                                                        onClick={async () => {
+                                                            try {
+                                                                const productsByProduct = new Map<string, any>();
+                                                                batch.applications.forEach((app: any) => {
+                                                                    if (!productsByProduct.has(app.productName)) productsByProduct.set(app.productName, { productName: app.productName, unit: app.unit || "L", plots: [] });
+                                                                    productsByProduct.get(app.productName)!.plots.push({ plotName: app.plotName, quantity: parseFloat(app.quantity) });
+                                                                });
+                                                                const pdfBlob = generateReceituarioPDF({ propertyName: batch.propertyName || "Propriedade", appliedAt: new Date(batch.appliedAt), products: Array.from(productsByProduct.values()) });
+                                                                shareViaWhatsApp(pdfBlob, `receituario_${new Date(batch.appliedAt).toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`);
+                                                            } catch { toast({ title: "Erro ao compartilhar", variant: "destructive" }); }
+                                                        }}>
+                                                        <Share2 className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-16 text-gray-400">
+                                            <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                                            <p className="text-sm font-medium">Nenhum receituário</p>
+                                            <p className="text-xs mt-1">As saídas aparecerão aqui</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </SheetContent>
+                        </Sheet>
+                        <button onClick={handleLogout}
+                            className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-95"
+                            aria-label="Sair">
+                            <LogOut className="h-4 w-4 text-gray-500" />
+                        </button>
+                    </div>
                 </div>
             </div>
-            {/* Progress bar */}
-            <div className="px-4 pb-2.5">
-                <div className="flex gap-0.5 mb-1.5">
-                    {STEPS.map((_, i) => (
-                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i < idx ? "bg-green-700" : i === idx ? "bg-green-500" : "bg-gray-100"}`} />
-                    ))}
-                </div>
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-700">{title || LABELS[idx]}</span>
-                    <span className="text-[10px] text-gray-400 font-medium">{idx + 1} de {STEPS.length}</span>
+            {/* ── Horizontal step bar (thin, green) ── */}
+            <div className="bg-white border-b border-gray-100">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2">
+                    <div className="flex items-center gap-1">
+                        {STEPS.map((s, i) => {
+                            const isPast = i < idx;
+                            const isCurrent = i === idx;
+                            const isFuture = i > idx;
+                            return (
+                                <div key={s} className="flex items-center flex-1 min-w-0">
+                                    <div className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg transition-all w-full justify-center ${
+                                        isCurrent ? "bg-green-50 border border-green-200" : ""
+                                    }`}>
+                                        <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shrink-0 text-[9px] sm:text-[10px] font-bold transition-all ${
+                                            isCurrent ? "bg-green-700 text-white" : isPast ? "bg-green-600 text-white" : "bg-gray-100 text-gray-400"
+                                        }`}>
+                                            {isPast ? <Check className="h-3 w-3" /> : i + 1}
+                                        </div>
+                                        <span className={`text-[10px] sm:text-xs font-medium truncate hidden sm:inline ${
+                                            isCurrent ? "text-green-800 font-semibold" : isPast ? "text-green-600" : "text-gray-400"
+                                        }`}>
+                                            {LABELS[i]}
+                                        </span>
+                                    </div>
+                                    {i < STEPS.length - 1 && (
+                                        <div className={`h-px flex-shrink-0 w-2 sm:w-4 mx-0.5 ${isPast ? "bg-green-400" : "bg-gray-200"}`} />
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
         </header>
@@ -1776,8 +1698,8 @@ export default function PdvTerminal() {
         });
 
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
-                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+
                 <PDVTopBar step={step} title="Selecionar Talhões" onBack={() => setStep("season")}
                     rightBadge={selectedPlots.length > 0 ? <span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">{selectedPlots.length} · {totalAreaSelected.toFixed(1)} ha</span> : undefined}
                     isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
@@ -1869,8 +1791,8 @@ export default function PdvTerminal() {
     if (step === "season") {
         const seasons = pdvData?.seasons || [];
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
-                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+
                 <PDVTopBar step={step} title="Selecionar Safra" isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4">
@@ -1936,8 +1858,8 @@ export default function PdvTerminal() {
         const alreadyInCart = cart.map(c => c.product.id);
         const totalSel = pendingProducts.length + alreadyInCart.length;
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
-                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+
                 <PDVTopBar step={step} title="Selecionar Produtos" onBack={() => setStep("plot")}
                     rightBadge={<span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">{totalAreaSelected.toFixed(1)} ha</span>}
                     isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
@@ -2112,8 +2034,8 @@ export default function PdvTerminal() {
         const totalPkg = embs && pkgSize ? embs * pkgSize : null;
         const isLast = doseIndex === pendingProducts.length - 1;
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
-                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+
                 <PDVTopBar step={step} title="Informar Dose"
                     onBack={() => { if (doseIndex === 0) { setStep("product_select"); } else { setDoseIndex(doseIndex - 1); setCurrentDose(pendingProducts[doseIndex - 1].dosePerHa ? String(parseBR(pendingProducts[doseIndex - 1].dosePerHa)) : ""); } }}
                     rightBadge={pendingProducts.length > 1 ? <span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">{doseIndex + 1}/{pendingProducts.length}</span> : undefined}
@@ -2211,8 +2133,8 @@ export default function PdvTerminal() {
     // ==================== STEP: CART_REVIEW (Passo 5 — Carrinho) ====================
     if (step === "cart_review") {
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
-                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+
                 <PDVTopBar step={step} title={`Carrinho · ${cart.length} produto${cart.length !== 1 ? "s" : ""}`} onBack={() => setStep("product_select")}
                     rightBadge={<span className="text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">{totalAreaSelected.toFixed(1)} ha</span>}
                     isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
@@ -2303,8 +2225,8 @@ export default function PdvTerminal() {
         const totalArea = selectedPlots.reduce((sum: number, p: any) => sum + (parseFloat(p.areaHa) || 0), 0);
 
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
-                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+
                 <PDVTopBar step={step} title="Pulverizador & Vazão" onBack={() => setStep("cart_review")}
                     rightBadge={<span className="text-xs font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">{cart.length} prod. · {totalArea.toFixed(1)} ha</span>}
                     isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
@@ -2391,8 +2313,8 @@ export default function PdvTerminal() {
     // ==================== STEP: CONFIRM (Distribution) ====================
     if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
-                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+
                 <PDVTopBar step={step} title="Confirmar Saída" onBack={() => setStep("equipment")}
                     isOnline={isOnline} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} toast={toast} />
 
