@@ -452,7 +452,23 @@ export function registerFarmPdvRoutes(app: Express) {
                 seasonPlots = Array.isArray(spResult) ? spResult : (spResult.rows || []);
             } catch (e) { /* table may not exist */ }
 
-            res.json({ products, stock, plots, properties, equipment, terminal, deposits, seasons, seasonPlots });
+            // Fetch last odometer/horimeter per equipment (for validation)
+            let lastTelemetry: any[] = [];
+            try {
+                const telResult = await db.execute(sql`
+                    SELECT DISTINCT ON (equipment_id)
+                        equipment_id AS "equipmentId",
+                        odometer,
+                        horimeter,
+                        created_at AS "createdAt"
+                    FROM farm_applications
+                    WHERE farmer_id = ${farmerId} AND equipment_id IS NOT NULL
+                    ORDER BY equipment_id, created_at DESC
+                `);
+                lastTelemetry = Array.isArray(telResult) ? telResult : (telResult.rows || []);
+            } catch (e) { /* ignore */ }
+
+            res.json({ products, stock, plots, properties, equipment, terminal, deposits, seasons, seasonPlots, lastTelemetry });
         } catch (error) {
             console.error("[PDV_DATA]", error);
             res.status(500).json({ error: "Failed to get data" });

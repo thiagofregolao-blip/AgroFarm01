@@ -1153,7 +1153,16 @@ export default function PdvTerminal() {
 
         const parsedQty = parseFloat(dieselQty) || 0;
         const stockAfter = dieselStock - parsedQty;
-        const stockPercent = dieselProduct ? Math.max(0, Math.min(100, (dieselStock / Math.max(dieselStock, 1)) * 100)) : 0;
+
+        // Last telemetry per equipment for validation
+        const lastTelemetry = pdvData?.lastTelemetry || [];
+        const lastTelemetryForEquip = dieselEquip ? lastTelemetry.find((t: any) => t.equipmentId === dieselEquip.id) : null;
+        const lastOdometer = lastTelemetryForEquip?.odometer ? parseInt(lastTelemetryForEquip.odometer, 10) : null;
+        const lastHorimeter = lastTelemetryForEquip?.horimeter ? parseInt(lastTelemetryForEquip.horimeter, 10) : null;
+        const parsedKm = parseInt(dieselKm, 10);
+        const parsedHours = parseInt(dieselHours, 10);
+        const kmInvalid = !isNaN(parsedKm) && lastOdometer !== null && parsedKm < lastOdometer;
+        const hoursInvalid = !isNaN(parsedHours) && lastHorimeter !== null && parsedHours < lastHorimeter;
 
         // Open receipt modal for signature
         const handleOpenReceipt = () => {
@@ -1161,6 +1170,8 @@ export default function PdvTerminal() {
             if (parsedQty <= 0) { toast({ title: "Informe a quantidade de diesel", variant: "destructive" }); return; }
             if (parsedQty > dieselStock) { toast({ title: "Quantidade excede o estoque disponível", variant: "destructive" }); return; }
             if (!dieselProduct) { toast({ title: "Nenhum produto diesel encontrado no estoque", variant: "destructive" }); return; }
+            if (kmInvalid) { toast({ title: "Km inferior ao último registro", description: `Último: ${lastOdometer?.toLocaleString("pt-BR")} km`, variant: "destructive" }); return; }
+            if (hoursInvalid) { toast({ title: "Horímetro inferior ao último registro", description: `Último: ${lastHorimeter?.toLocaleString("pt-BR")} h`, variant: "destructive" }); return; }
             setSignatureData(null);
             setRecognizedEmployee(null);
             setCapturedPhoto(null);
@@ -1376,23 +1387,30 @@ export default function PdvTerminal() {
                             </p>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label className="text-gray-400 text-xs mb-1 block">Hodômetro (Km)</Label>
+                                    <Label className="text-gray-400 text-xs mb-1 block">
+                                        Hodômetro (Km)
+                                        {lastOdometer !== null && <span className="text-amber-400/70 ml-2">Último: {lastOdometer.toLocaleString("pt-BR")} km</span>}
+                                    </Label>
                                     <Input
                                         type="number"
                                         value={dieselKm}
                                         onChange={(e) => setDieselKm(e.target.value)}
-                                        placeholder="Ex: 125000"
-                                        className="h-12 bg-gray-700/50 border-gray-600/50 text-white rounded-xl focus:border-amber-400 placeholder:text-gray-600"
+                                        placeholder={lastOdometer !== null ? `Mín: ${lastOdometer.toLocaleString("pt-BR")}` : "Ex: 125000"}
+                                        className={`h-12 bg-gray-700/50 border-gray-600/50 text-white rounded-xl focus:border-amber-400 placeholder:text-gray-600 ${kmInvalid ? "border-red-500 focus:border-red-500" : ""}`}
                                     />
+                                    {kmInvalid && <p className="text-red-400 text-[10px] mt-1">Valor menor que o último registro ({lastOdometer?.toLocaleString("pt-BR")} km)</p>}
                                 </div>
                                 <div>
-                                    <Label className="text-gray-400 text-xs mb-1 block">Horímetro (Horas)</Label>
+                                    <Label className="text-gray-400 text-xs mb-1 block">
+                                        Horímetro (Horas)
+                                        {lastHorimeter !== null && <span className="text-amber-400/70 ml-2">Último: {lastHorimeter.toLocaleString("pt-BR")} h</span>}
+                                    </Label>
                                     <Input
                                         type="number"
                                         value={dieselHours}
                                         onChange={(e) => setDieselHours(e.target.value)}
-                                        placeholder="Ex: 4500"
-                                        className="h-12 bg-gray-700/50 border-gray-600/50 text-white rounded-xl focus:border-amber-400 placeholder:text-gray-600"
+                                        placeholder={lastHorimeter !== null ? `Mín: ${lastHorimeter.toLocaleString("pt-BR")}` : "Ex: 4500"}
+                                        className={`h-12 bg-gray-700/50 border-gray-600/50 text-white rounded-xl focus:border-amber-400 placeholder:text-gray-600 ${hoursInvalid ? "border-red-500 focus:border-red-500" : ""}`}
                                     />
                                 </div>
                             </div>
@@ -1410,7 +1428,7 @@ export default function PdvTerminal() {
                         {/* === SUBMIT BUTTON (opens receipt modal) === */}
                         <Button
                             onClick={handleOpenReceipt}
-                            disabled={dieselSubmitting || parsedQty <= 0 || !dieselEquip || !dieselProduct}
+                            disabled={dieselSubmitting || parsedQty <= 0 || !dieselEquip || !dieselProduct || kmInvalid || hoursInvalid}
                             className="w-full py-7 text-lg font-black rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-gray-900 shadow-lg shadow-amber-500/20 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <>⛽ Confirmar Abastecimento — {parsedQty > 0 ? `${parsedQty}L` : "..."}</>
