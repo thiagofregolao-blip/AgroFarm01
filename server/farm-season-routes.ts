@@ -72,23 +72,45 @@ export function registerFarmSeasonRoutes(app: Express) {
             if (!seasons.find((s: any) => s.id === seasonId)) {
                 return res.status(403).json({ error: "Forbidden" });
             }
-            const result = await db.execute(sql`
-                SELECT
-                    fp.id,
-                    fp.name,
-                    fp.area_ha AS "areaHa",
-                    fp.crop,
-                    fp.coordinates,
-                    fp.property_id AS "propertyId",
-                    fpr.name AS "propertyName",
-                    COALESCE(fsp.area_percentage, 0) AS "areaPercentage"
-                FROM farm_plots fp
-                INNER JOIN farm_properties fpr ON fpr.id = fp.property_id
-                LEFT JOIN farm_season_plots fsp ON fsp.plot_id = fp.id AND fsp.season_id = ${seasonId}
-                WHERE fpr.farmer_id = ${farmerId}
-                ORDER BY fpr.name, fp.name
-            `);
-            res.json(result.rows);
+            // Try with LEFT JOIN on farm_season_plots first; fallback without if table doesn't exist
+            try {
+                const result = await db.execute(sql`
+                    SELECT
+                        fp.id,
+                        fp.name,
+                        fp.area_ha AS "areaHa",
+                        fp.crop,
+                        fp.coordinates,
+                        fp.property_id AS "propertyId",
+                        fpr.name AS "propertyName",
+                        COALESCE(fsp.area_percentage, 0) AS "areaPercentage"
+                    FROM farm_plots fp
+                    INNER JOIN farm_properties fpr ON fpr.id = fp.property_id
+                    LEFT JOIN farm_season_plots fsp ON fsp.plot_id = fp.id AND fsp.season_id = ${seasonId}
+                    WHERE fpr.farmer_id = ${farmerId}
+                    ORDER BY fpr.name, fp.name
+                `);
+                return res.json(result.rows);
+            } catch (joinErr: any) {
+                console.warn("[FARM_SEASONS_PLOTS] farm_season_plots join failed, falling back:", joinErr.message);
+                // Fallback: return plots without season percentage
+                const result = await db.execute(sql`
+                    SELECT
+                        fp.id,
+                        fp.name,
+                        fp.area_ha AS "areaHa",
+                        fp.crop,
+                        fp.coordinates,
+                        fp.property_id AS "propertyId",
+                        fpr.name AS "propertyName",
+                        0 AS "areaPercentage"
+                    FROM farm_plots fp
+                    INNER JOIN farm_properties fpr ON fpr.id = fp.property_id
+                    WHERE fpr.farmer_id = ${farmerId}
+                    ORDER BY fpr.name, fp.name
+                `);
+                return res.json(result.rows);
+            }
         } catch (error) {
             console.error("[FARM_SEASONS_PLOTS GET]", error);
             res.status(500).json({ error: "Failed to get season plots" });

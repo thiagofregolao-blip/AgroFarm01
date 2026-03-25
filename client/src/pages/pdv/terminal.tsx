@@ -181,32 +181,31 @@ function PDVTopBar({
                     </div>
                 </div>
             </div>
-            {/* ── Horizontal step bar (thin, green) ── */}
-            <div className="bg-white border-b border-gray-100">
+            {/* ── Horizontal step bar (green background) ── */}
+            <div className="bg-green-800 border-b border-green-900">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2">
                     <div className="flex items-center gap-1">
                         {STEPS.map((s, i) => {
                             const isPast = i < idx;
                             const isCurrent = i === idx;
-                            const isFuture = i > idx;
                             return (
                                 <div key={s} className="flex items-center flex-1 min-w-0">
                                     <div className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg transition-all w-full justify-center ${
-                                        isCurrent ? "bg-green-50 border border-green-200" : ""
+                                        isCurrent ? "bg-white/20 border border-white/30" : ""
                                     }`}>
                                         <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shrink-0 text-[9px] sm:text-[10px] font-bold transition-all ${
-                                            isCurrent ? "bg-green-700 text-white" : isPast ? "bg-green-600 text-white" : "bg-gray-100 text-gray-400"
+                                            isCurrent ? "bg-white text-green-800" : isPast ? "bg-green-400 text-white" : "bg-green-700 text-green-300"
                                         }`}>
                                             {isPast ? <Check className="h-3 w-3" /> : i + 1}
                                         </div>
                                         <span className={`text-[10px] sm:text-xs font-medium truncate hidden sm:inline ${
-                                            isCurrent ? "text-green-800 font-semibold" : isPast ? "text-green-600" : "text-gray-400"
+                                            isCurrent ? "text-white font-semibold" : isPast ? "text-green-300" : "text-green-400"
                                         }`}>
                                             {LABELS[i]}
                                         </span>
                                     </div>
                                     {i < STEPS.length - 1 && (
-                                        <div className={`h-px flex-shrink-0 w-2 sm:w-4 mx-0.5 ${isPast ? "bg-green-400" : "bg-gray-200"}`} />
+                                        <div className={`h-px flex-shrink-0 w-2 sm:w-4 mx-0.5 ${isPast ? "bg-green-400" : "bg-green-600"}`} />
                                     )}
                                 </div>
                             );
