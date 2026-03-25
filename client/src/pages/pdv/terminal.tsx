@@ -844,7 +844,7 @@ export default function PdvTerminal() {
             products: Array.from(productsByProduct.values()),
             plots: selectedPlots.map((p: any) => ({
                 plotName: p.name,
-                areaHa: parseFloat(p.areaHa) || 0,
+                areaHa: getEffectiveArea(p),
                 crop: p.crop || undefined,
                 coordinates: p.coordinates || undefined,
             })),

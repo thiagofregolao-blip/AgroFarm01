@@ -141,6 +141,16 @@ export function registerFarmPdvRoutes(app: Express) {
             // Atrela o token à sessão tbm ou banco, pra validar no `/api/pdv/data`
             req.session.pdvToken = token;
 
+            // Fetch active seasons
+            let seasons: any[] = [];
+            try {
+                const { farmSeasons } = await import("../shared/schema");
+                const { and: andOp, eq: eqOp } = await import("drizzle-orm");
+                seasons = await db.select().from(farmSeasons).where(
+                    andOp(eqOp(farmSeasons.farmerId, terminal.farmerId), eqOp(farmSeasons.isActive, true))
+                );
+            } catch (e) { /* table may not exist */ }
+
             // Fetch season_plots percentages
             let seasonPlots: any[] = [];
             try {
@@ -156,6 +166,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 plots,
                 properties,
                 equipment,
+                seasons,
                 seasonPlots,
             });
         } catch (error) {
@@ -210,6 +221,16 @@ export function registerFarmPdvRoutes(app: Express) {
             const properties = await farmStorage.getProperties(terminal.farmerId);
             const equipment = await farmStorage.getEquipment(terminal.farmerId);
 
+            // Fetch active seasons
+            let seasons: any[] = [];
+            try {
+                const { farmSeasons } = await import("../shared/schema");
+                const { and: andOp, eq: eqOp } = await import("drizzle-orm");
+                seasons = await db.select().from(farmSeasons).where(
+                    andOp(eqOp(farmSeasons.farmerId, terminal.farmerId), eqOp(farmSeasons.isActive, true))
+                );
+            } catch (e) { /* table may not exist */ }
+
             // Fetch season_plots percentages
             let seasonPlots: any[] = [];
             try {
@@ -225,6 +246,7 @@ export function registerFarmPdvRoutes(app: Express) {
                 plots,
                 properties,
                 equipment,
+                seasons,
                 seasonPlots,
             });
         } catch (error) {
