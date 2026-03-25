@@ -58,6 +58,120 @@ function PlotMiniMap({ coordinates, selected }: { coordinates: string | null; se
     }
 }
 
+// ── Sidebar desktop permanente (oculta no mobile) ──────────────────────────
+function PDVSidebar({
+    step, terminalName, isOnline,
+    selectedSeasonId, pdvData, selectedPlots, cart, totalAreaSelected,
+    withdrawalsHistory, handleRegenerateReceituario, handleLogout,
+}: {
+    step: string; terminalName: string; isOnline: boolean;
+    selectedSeasonId: string | null; pdvData: any;
+    selectedPlots: any[]; cart: any[]; totalAreaSelected: number;
+    withdrawalsHistory: any;
+    handleRegenerateReceituario: (batch: any) => void;
+    handleLogout: () => void;
+}) {
+    const STEPS = [
+        { key: "season", label: "Safra", emoji: "🌱" },
+        { key: "plot", label: "Talhões", emoji: "📍" },
+        { key: "product_select", label: "Produtos", emoji: "📦" },
+        { key: "dose", label: "Doses", emoji: "💧" },
+        { key: "cart_review", label: "Carrinho", emoji: "🛒" },
+        { key: "equipment", label: "Pulverizador", emoji: "🚜" },
+        { key: "confirm", label: "Confirmar", emoji: "✅" },
+    ];
+    const currentIdx = STEPS.findIndex(s => s.key === step);
+    const selectedSeason = pdvData?.seasons?.find((s: any) => s.id === selectedSeasonId);
+
+    return (
+        <aside className="hidden md:flex fixed inset-y-0 left-0 w-64 bg-green-900 text-white z-40 flex-col shadow-xl">
+            {/* Logo + terminal */}
+            <div className="px-5 pt-5 pb-4 border-b border-white/10 shrink-0">
+                <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" />
+                <div className="flex items-center gap-2 mt-2.5">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-green-400" : "bg-red-400"}`} />
+                    <span className="text-xs text-green-300 font-medium truncate">{terminalName}</span>
+                </div>
+            </div>
+
+            {/* Stepper */}
+            <div className="px-3 py-4 border-b border-white/10 shrink-0">
+                <p className="text-[9px] font-bold text-green-400/80 uppercase tracking-widest mb-2.5 px-2">Etapas</p>
+                <div className="space-y-0.5">
+                    {STEPS.map((s, i) => {
+                        const isPast = i < currentIdx;
+                        const isCurrent = i === currentIdx;
+                        return (
+                            <div key={s.key} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-all ${isCurrent ? "bg-white/20" : ""}`}>
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold transition-all ${
+                                    isCurrent ? "bg-[#F7D601] text-green-900" : isPast ? "bg-green-500/80 text-white" : "bg-white/10 text-white/35"
+                                }`}>
+                                    {isPast ? <Check className="h-3 w-3" /> : i + 1}
+                                </div>
+                                <span className={`text-xs transition-all ${isCurrent ? "text-white font-semibold" : isPast ? "text-green-300" : "text-white/35"}`}>
+                                    {s.emoji} {s.label}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Context cards */}
+            <div className="px-3 py-4 space-y-2 flex-1 overflow-y-auto">
+                {selectedSeason && (
+                    <div className="bg-white/10 rounded-xl px-3 py-2.5">
+                        <p className="text-[9px] font-bold text-green-400 uppercase tracking-wide">Safra</p>
+                        <p className="text-sm font-bold text-white mt-0.5 truncate">{selectedSeason.name}</p>
+                        {selectedSeason.crop && <p className="text-[10px] text-green-300 mt-0.5">{selectedSeason.crop}</p>}
+                    </div>
+                )}
+                {selectedPlots.length > 0 && (
+                    <div className="bg-white/10 rounded-xl px-3 py-2.5">
+                        <p className="text-[9px] font-bold text-green-400 uppercase tracking-wide">Talhões selecionados</p>
+                        <p className="text-base font-extrabold text-white leading-tight mt-0.5">
+                            {selectedPlots.length} <span className="text-xs font-normal text-green-300">talhão(ões) · {totalAreaSelected.toFixed(1)} ha</span>
+                        </p>
+                    </div>
+                )}
+                {cart.length > 0 && (
+                    <div className="bg-white/10 rounded-xl px-3 py-2.5">
+                        <p className="text-[9px] font-bold text-green-400 uppercase tracking-wide mb-1.5">Carrinho</p>
+                        {cart.map((item: any) => (
+                            <p key={item.product.id} className="text-xs text-green-200 truncate leading-5">• {item.product.name}</p>
+                        ))}
+                    </div>
+                )}
+                {withdrawalsHistory && withdrawalsHistory.length > 0 && (
+                    <div>
+                        <p className="text-[9px] font-bold text-green-400/80 uppercase tracking-widest mb-1.5 px-1 mt-1">Receituários recentes</p>
+                        {withdrawalsHistory.slice(0, 3).map((batch: any) => (
+                            <button key={batch.batchId}
+                                onClick={() => handleRegenerateReceituario(batch)}
+                                className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10 transition-colors mb-1 group">
+                                <p className="text-[9px] text-green-400 group-hover:text-green-300">
+                                    {new Date(batch.appliedAt).toLocaleDateString("pt-BR")}
+                                </p>
+                                <p className="text-xs text-white font-medium truncate">{batch.propertyName || "Propriedade"}</p>
+                                <p className="text-[9px] text-green-400">{batch.applications.length} prod. · <span className="text-yellow-400">Abrir PDF</span></p>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Logout */}
+            <div className="px-3 pb-5 border-t border-white/10 pt-3 shrink-0">
+                <button onClick={handleLogout}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-white/10 text-green-300 hover:text-white transition-colors text-sm">
+                    <LogOut className="h-4 w-4 shrink-0" />
+                    Sair
+                </button>
+            </div>
+        </aside>
+    );
+}
+
 interface CartItem {
     product: any;
     quantity: number | string;
@@ -1538,7 +1652,8 @@ export default function PdvTerminal() {
         });
 
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
+                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
                 {/* Header azul */}
                 <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
@@ -1546,7 +1661,7 @@ export default function PdvTerminal() {
                             <button onClick={() => setStep("season")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
                                 <ArrowLeft className="h-5 w-5" />
                             </button>
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain md:hidden" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">Selecionar Talhões</span>
                                 <span className="text-[10px] text-green-200">Passo 2 de 5</span>
@@ -1645,13 +1760,14 @@ export default function PdvTerminal() {
     if (step === "season") {
         const seasons = pdvData?.seasons || [];
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
+                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
                 {/* Header azul com logo */}
                 <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain" />
-                            <div className="w-px h-6 bg-white/30" />
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-8 w-auto object-contain md:hidden" />
+                            <div className="w-px h-6 bg-white/30 md:hidden" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">{pdvData?.terminal?.name || "Terminal"}</span>
                                 <span className="text-[10px] text-green-200">Passo 1 de 5 — Safra</span>
@@ -1659,8 +1775,8 @@ export default function PdvTerminal() {
                         </div>
                         <div className="flex items-center gap-2">
                             {!isOnline && <span className="text-[10px] bg-red-500/80 px-2 py-0.5 rounded-full">Offline</span>}
-                            {/* Receituários */}
-                            <Sheet>
+                            {/* Receituários - visível só no mobile (desktop tem no sidebar) */}
+                            <span className="md:hidden"><Sheet>
                                 <SheetTrigger asChild>
                                     <button className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25 relative" aria-label="Ver receituários">
                                         <FileText className="h-4 w-4" />
@@ -1729,8 +1845,8 @@ export default function PdvTerminal() {
                                         )}
                                     </div>
                                 </SheetContent>
-                            </Sheet>
-                            <button onClick={handleLogout} className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
+                            </Sheet></span>
+                            <button onClick={handleLogout} className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25 md:hidden">
                                 <LogOut className="h-4 w-4" />
                             </button>
                         </div>
@@ -1810,14 +1926,15 @@ export default function PdvTerminal() {
         const alreadyInCart = cart.map(c => c.product.id);
         const totalSel = pendingProducts.length + alreadyInCart.length;
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
+                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
                 <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
                             <button onClick={() => setStep("plot")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
                                 <ArrowLeft className="h-5 w-5" />
                             </button>
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain md:hidden" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">Selecionar Produtos</span>
                                 <span className="text-[10px] text-green-200">Passo 3 de 5 · {totalAreaSelected.toFixed(1)} ha</span>
@@ -1997,14 +2114,15 @@ export default function PdvTerminal() {
         const totalPkg = embs && pkgSize ? embs * pkgSize : null;
         const isLast = doseIndex === pendingProducts.length - 1;
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
+                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
                 <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
                             <button onClick={() => { if (doseIndex === 0) { setStep("product_select"); } else { setDoseIndex(doseIndex - 1); setCurrentDose(pendingProducts[doseIndex - 1].dosePerHa ? String(parseBR(pendingProducts[doseIndex - 1].dosePerHa)) : ""); } }} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
                                 <ArrowLeft className="h-5 w-5" />
                             </button>
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain md:hidden" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">Informar Dose</span>
                                 <span className="text-[10px] text-green-200">Passo 4 de 5</span>
@@ -2021,6 +2139,7 @@ export default function PdvTerminal() {
                 </header>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div className="max-w-xl mx-auto space-y-4">
                     {/* Produto em foco */}
                     <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 flex items-center gap-4">
                         <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center text-2xl shrink-0 shadow-sm">
@@ -2090,9 +2209,11 @@ export default function PdvTerminal() {
                             </div>
                         </div>
                     )}
+                    </div>{/* end max-w-xl */}
                 </div>
 
                 <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <div className="max-w-xl mx-auto">
                     <Button
                         className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200"
                         onClick={handleConfirmDose}
@@ -2100,6 +2221,7 @@ export default function PdvTerminal() {
                     >
                         {isLast ? "Ver Carrinho" : `Próximo Produto →`}
                     </Button>
+                    </div>
                 </div>
             </div>
         );
@@ -2108,14 +2230,15 @@ export default function PdvTerminal() {
     // ==================== STEP: CART_REVIEW (Passo 5 — Carrinho) ====================
     if (step === "cart_review") {
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
+                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
                 <header className="bg-green-800 text-white shrink-0 shadow-lg" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
                     <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-3">
                             <button onClick={() => setStep("product_select")} className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
                                 <ArrowLeft className="h-5 w-5" />
                             </button>
-                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain" />
+                            <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 w-auto object-contain md:hidden" />
                             <div>
                                 <span className="font-bold text-sm leading-tight block">Carrinho</span>
                                 <span className="text-[10px] text-green-200">Passo 5 de 5 · {cart.length} produto{cart.length !== 1 ? "s" : ""}</span>
@@ -2128,6 +2251,7 @@ export default function PdvTerminal() {
                 </header>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    <div className="max-w-2xl mx-auto space-y-3">
                     {cart.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                             <ShoppingCart className="h-12 w-12 mb-3 opacity-20" />
@@ -2188,9 +2312,11 @@ export default function PdvTerminal() {
                         className="w-full border-2 border-dashed border-blue-200 rounded-2xl p-4 text-green-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
                         <span className="text-xl">＋</span> Adicionar mais produtos
                     </button>
+                    </div>{/* end max-w-2xl */}
                 </div>
 
                 <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <div className="max-w-2xl mx-auto">
                     <Button
                         className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200"
                         onClick={handleGoFromCartReview}
@@ -2198,6 +2324,7 @@ export default function PdvTerminal() {
                     >
                         Continuar → Pulverizador <ArrowRight className="ml-2 h-5 w-5" />
                     </Button>
+                    </div>
                 </div>
             </div>
         );
@@ -2209,13 +2336,14 @@ export default function PdvTerminal() {
         const totalArea = selectedPlots.reduce((sum: number, p: any) => sum + (parseFloat(p.areaHa) || 0), 0);
 
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
+                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
                 <header className="flex items-center justify-between px-5 py-3 bg-green-800 text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setStep("cart_review")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
                         </button>
-                        <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain" />
+                        <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain md:hidden" />
                         <div>
                             <span className="font-bold text-base leading-tight block">Selecionar Pulverizador</span>
                             <span className="text-green-200 text-xs">Passo 6 de 7 - Equipamento & Vazão</span>
@@ -2308,13 +2436,14 @@ export default function PdvTerminal() {
     // ==================== STEP: CONFIRM (Distribution) ====================
     if (step === "confirm" && selectedPlots.length > 0 && cart.length > 0) {
         return (
-            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col">
+            <div className="h-screen bg-gray-50 text-gray-800 flex flex-col md:pl-64">
+                <PDVSidebar step={step} terminalName={pdvData?.terminal?.name || "Terminal"} isOnline={isOnline} selectedSeasonId={selectedSeasonId} pdvData={pdvData} selectedPlots={selectedPlots} cart={cart} totalAreaSelected={totalAreaSelected} withdrawalsHistory={withdrawalsHistory} handleRegenerateReceituario={handleRegenerateReceituario} handleLogout={handleLogout} />
                 <header className="flex items-center justify-between px-5 py-3 bg-green-800 text-white shrink-0 shadow-md">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setStep("equipment")} className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors">
                             <ArrowLeft className="h-5 w-5 text-white" />
                         </button>
-                        <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain" />
+                        <img src="/logo-datagrow.png" alt="DataGrow" className="h-7 object-contain md:hidden" />
                         <div>
                             <span className="font-bold text-base leading-tight block">Confirmar Saída</span>
                             <span className="text-[10px] text-green-200">Passo 7 de 7</span>
