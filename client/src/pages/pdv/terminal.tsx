@@ -1773,7 +1773,7 @@ export default function PdvTerminal() {
                 {/* Bottom bar */}
                 <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <Button
-                        className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200 transition-all active:scale-[0.98]"
+                        className="w-full h-12 text-base bg-[#024177] hover:bg-[#01325a] text-white font-bold rounded-xl shadow-md shadow-blue-200 transition-all active:scale-[0.98]"
                         onClick={handleGoFromPlot}
                         disabled={selectedPlots.length === 0}
                     >
@@ -1838,7 +1838,7 @@ export default function PdvTerminal() {
                             Pular
                         </Button>
                         <Button
-                            className="flex-1 h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200 transition-all active:scale-[0.98]"
+                            className="flex-1 h-12 text-base bg-[#024177] hover:bg-[#01325a] text-white font-bold rounded-xl shadow-md shadow-blue-200 transition-all active:scale-[0.98]"
                             onClick={handleGoFromSeason}
                             disabled={!selectedSeasonId}
                         >
@@ -1991,7 +1991,7 @@ export default function PdvTerminal() {
 
                         <div className="p-4 border-t border-gray-100 space-y-2">
                             <Button
-                                className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200 disabled:opacity-50"
+                                className="w-full h-12 text-base bg-[#024177] hover:bg-[#01325a] text-white font-bold rounded-xl shadow-md shadow-blue-200 disabled:opacity-50"
                                 onClick={handleStartDoseEntry}
                                 disabled={pendingProducts.length === 0}
                             >
@@ -2009,7 +2009,7 @@ export default function PdvTerminal() {
                 {/* Botão CTA mobile (oculto no desktop) */}
                 <div className="md:hidden p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <Button
-                        className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200 disabled:opacity-50"
+                        className="w-full h-12 text-base bg-[#024177] hover:bg-[#01325a] text-white font-bold rounded-xl shadow-md shadow-blue-200 disabled:opacity-50"
                         onClick={handleStartDoseEntry}
                         disabled={pendingProducts.length === 0}
                     >
@@ -2115,7 +2115,7 @@ export default function PdvTerminal() {
                 <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <div className="max-w-xl mx-auto">
                     <Button
-                        className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200"
+                        className="w-full h-12 text-base bg-[#024177] hover:bg-[#01325a] text-white font-bold rounded-xl shadow-md shadow-blue-200"
                         onClick={handleConfirmDose}
                         disabled={isNaN(dose) || dose <= 0}
                     >
@@ -2204,7 +2204,7 @@ export default function PdvTerminal() {
                 <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <div className="max-w-2xl mx-auto">
                     <Button
-                        className="w-full h-12 text-base bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold rounded-xl shadow-md shadow-yellow-200"
+                        className="w-full h-12 text-base bg-[#024177] hover:bg-[#01325a] text-white font-bold rounded-xl shadow-md shadow-blue-200"
                         onClick={handleGoFromCartReview}
                         disabled={cart.length === 0}
                     >
@@ -2296,7 +2296,7 @@ export default function PdvTerminal() {
                         Pular
                     </Button>
                     <Button
-                        className="flex-1 h-12 bg-[#F7D601] hover:bg-yellow-400 text-green-800 font-bold"
+                        className="flex-1 h-12 bg-[#024177] hover:bg-[#01325a] text-white font-bold"
                         onClick={handleGoFromEquipment}
                         disabled={selectedEquipment && !flowRateLha}
                     >
