@@ -145,7 +145,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = req.user!.id;
-            const { accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl } = req.body;
+            const { accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl, _editOnly } = req.body;
 
             // Get the account payable
             const [ap] = await db.select().from(farmAccountsPayable).where(
@@ -154,10 +154,75 @@ export function registerFarmFinancialRoutes(app: Express) {
             if (!ap) return res.status(404).json({ error: "Not found" });
 
             const payAmount = parseFloat(amount || ap.totalAmount);
-            const previousPaid = parseFloat(ap.paidAmount || "0");
-            const newPaidTotal = previousPaid + payAmount;
             const totalDue = parseFloat(ap.totalAmount);
             const txDesc = `Pgto: ${ap.supplier} - ${ap.description || ''}`.trim();
+
+            // ─── EDIT MODE: update existing payment instead of creating new ───
+            if (_editOnly && ap.cashTransactionId) {
+                // 1. Find old transaction to get old amount and accountId
+                const [oldTx] = await db.select().from(farmCashTransactions).where(
+                    eq(farmCashTransactions.id, ap.cashTransactionId)
+                );
+                const oldAmount = oldTx ? parseFloat(oldTx.amount) : 0;
+                const oldAccountId = oldTx?.accountId;
+                const diff = payAmount - oldAmount; // positive = paying more, negative = paying less
+
+                // 2. Update the existing cash transaction (amount, method, account)
+                const newAccountId = accountId || oldAccountId;
+                if (oldTx) {
+                    await db.update(farmCashTransactions).set({
+                        amount: String(payAmount),
+                        paymentMethod: paymentMethod || oldTx.paymentMethod || "transferencia",
+                        accountId: newAccountId,
+                    }).where(eq(farmCashTransactions.id, ap.cashTransactionId));
+                }
+
+                // 3. Adjust cash account balances
+                if (oldAccountId === newAccountId) {
+                    // Same account: just adjust by difference
+                    if (Math.abs(diff) > 0.001) {
+                        await db.update(farmCashAccounts)
+                            .set({ currentBalance: sqlFn`current_balance - ${diff}` })
+                            .where(and(eq(farmCashAccounts.id, newAccountId), eq(farmCashAccounts.farmerId, farmerId)));
+                    }
+                } else {
+                    // Different account: reverse old, apply new
+                    if (oldAccountId) {
+                        await db.update(farmCashAccounts)
+                            .set({ currentBalance: sqlFn`current_balance + ${oldAmount}` })
+                            .where(and(eq(farmCashAccounts.id, oldAccountId), eq(farmCashAccounts.farmerId, farmerId)));
+                    }
+                    await db.update(farmCashAccounts)
+                        .set({ currentBalance: sqlFn`current_balance - ${payAmount}` })
+                        .where(and(eq(farmCashAccounts.id, newAccountId), eq(farmCashAccounts.farmerId, farmerId)));
+                }
+
+                // 4. Update accounts payable with new paid amount (replace, not sum)
+                const newStatus = payAmount >= totalDue ? "pago" : "parcial";
+                const updatePayload: any = {
+                    paidAmount: String(payAmount),
+                    status: newStatus,
+                };
+                if (paymentMethod) updatePayload.paymentMethod = paymentMethod;
+                // receiptFileUrl can be updated but receiptNumber is locked on edit
+                if (receiptFileUrl) updatePayload.receiptFileUrl = receiptFileUrl;
+                await db.update(farmAccountsPayable).set(updatePayload).where(eq(farmAccountsPayable.id, req.params.id));
+
+                // 5. Sync farmExpenses if linked
+                if (ap.expenseId) {
+                    const { farmExpenses } = await import("../shared/schema");
+                    await db.update(farmExpenses).set({
+                        paymentStatus: newStatus === "pago" ? "pago" : "parcial",
+                        paidAmount: String(payAmount),
+                    }).where(eq(farmExpenses.id, ap.expenseId));
+                }
+
+                return res.json({ success: true, status: newStatus, edited: true });
+            }
+
+            // ─── NEW PAYMENT MODE (original flow) ───
+            const previousPaid = parseFloat(ap.paidAmount || "0");
+            const newPaidTotal = previousPaid + payAmount;
 
             let firstTxId: string | null = null;
 

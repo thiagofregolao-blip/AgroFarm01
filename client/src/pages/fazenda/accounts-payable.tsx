@@ -1116,8 +1116,10 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
                                         <Input
                                             placeholder="Ex: 001-001-0000123"
                                             value={editReceiptNumber}
-                                            onChange={e => setEditReceiptNumber(e.target.value)}
+                                            disabled
+                                            className="bg-gray-100 cursor-not-allowed"
                                         />
+                                        <p className="text-xs text-gray-400 mt-1">Numero do recibo nao pode ser alterado</p>
                                     </div>
                                     <div>
                                         <Label className="text-xs text-gray-500">Importar Recibo (PDF/imagem)</Label>
