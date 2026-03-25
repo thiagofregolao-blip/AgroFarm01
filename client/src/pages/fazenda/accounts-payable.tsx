@@ -786,6 +786,72 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [editingHistItem, setEditingHistItem] = useState<any>(null);
 
+    // Payment-style edit modal state
+    const [editPaymentRows, setEditPaymentRows] = useState<{ accountId: string; amount: string; paymentMethod: string }[]>([
+        { accountId: "", amount: "", paymentMethod: "transferencia" },
+    ]);
+    const [editChequeBanco, setEditChequeBanco] = useState("");
+    const [editChequeNumero, setEditChequeNumero] = useState("");
+    const [editChequeTipo, setEditChequeTipo] = useState("proprio");
+    const [editSelectedChequeId, setEditSelectedChequeId] = useState("");
+    const [editReceiptNumber, setEditReceiptNumber] = useState("");
+    const [editReceiptFile, setEditReceiptFile] = useState<File | null>(null);
+    const [editReceiptFileUrl, setEditReceiptFileUrl] = useState("");
+
+    const { data: availableCheques = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/cheques"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/cheques"); return r.json(); },
+        enabled: !!editingHistItem,
+    });
+    const emitidoCheques = (availableCheques as any[]).filter((ch: any) => ch.status === "emitido");
+
+    function openEditModal(item: any) {
+        const remaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
+        const paidAmt = parseFloat(item.paidAmount || item.totalAmount || 0);
+        setEditPaymentRows([{
+            accountId: item.accountId || item.account_id || "",
+            amount: String(paidAmt),
+            paymentMethod: item.paymentMethod || item.payment_method || "transferencia",
+        }]);
+        setEditReceiptNumber(item.receiptNumber || item.receipt_number || "");
+        setEditReceiptFileUrl(item.receiptFileUrl || item.receipt_file_url || "");
+        setEditReceiptFile(null);
+        setEditChequeBanco(""); setEditChequeNumero(""); setEditChequeTipo("proprio"); setEditSelectedChequeId("");
+        setEditingHistItem(item);
+    }
+
+    const editTotalAllocated = editPaymentRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    const editAllRowsValid = editPaymentRows.every(r => r.accountId && parseFloat(r.amount) > 0);
+    const editHasChequeMethod = editPaymentRows.some(r => r.paymentMethod === "cheque");
+
+    const addEditRow = () => setEditPaymentRows(prev => [...prev, { accountId: "", amount: "", paymentMethod: "transferencia" }]);
+    const removeEditRow = (idx: number) => { if (editPaymentRows.length > 1) setEditPaymentRows(prev => prev.filter((_, i) => i !== idx)); };
+    const updateEditRow = (idx: number, field: string, value: string) => {
+        setEditPaymentRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    };
+
+    function handleConfirmEdit() {
+        if (!editingHistItem || !editAllRowsValid) return;
+        const payload: any = {
+            accountId: editPaymentRows[0].accountId,
+            amount: editTotalAllocated.toFixed(2),
+            paymentMethod: editPaymentRows[0].paymentMethod,
+            supplier: editingHistItem.supplier,
+            _editOnly: true,
+            accountRows: editPaymentRows.length > 1 ? editPaymentRows.map(r => ({
+                accountId: r.accountId,
+                amount: r.amount,
+            })) : undefined,
+        };
+        if (editHasChequeMethod && editChequeBanco && editChequeNumero) {
+            payload.cheque = { banco: editChequeBanco, numero: editChequeNumero, tipo: editChequeTipo };
+        }
+        if (editReceiptNumber) payload.receiptNumber = editReceiptNumber;
+        if (editReceiptFileUrl) payload.receiptFileUrl = editReceiptFileUrl;
+        onPay(editingHistItem.id, payload);
+        setEditingHistItem(null);
+    }
+
     const paidItems = items
         .filter((i: any) => i.status === "pago" || i.status === "parcial")
         .sort((a: any, b: any) => new Date(b.paidDate || b.updatedAt || b.dueDate).getTime() - new Date(a.paidDate || a.updatedAt || a.dueDate).getTime());
@@ -867,7 +933,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
                                     <Button
                                         variant="outline" size="sm"
                                         className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-                                        onClick={() => setEditingHistItem(group.items[0])}
+                                        onClick={() => openEditModal(group.items[0])}
                                     >
                                         <Pencil className="h-3 w-3 mr-1" />Editar
                                     </Button>
@@ -920,18 +986,173 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying }: {
 
             {/* Dialog de edição do histórico — mesmo modal de pagamento */}
             <Dialog open={!!editingHistItem} onOpenChange={o => !o && setEditingHistItem(null)}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader><DialogTitle>Editar Lançamento</DialogTitle></DialogHeader>
+                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+                    <DialogHeader className="px-6 pt-5 pb-3 border-b">
+                        <DialogTitle>Editar Pagamento</DialogTitle>
+                    </DialogHeader>
                     {editingHistItem && (
-                        <EditAPForm
-                            item={editingHistItem}
-                            seasons={seasons}
-                            onSave={(data: any) => {
-                                onPay(editingHistItem.id, { ...data, _editOnly: true });
-                                setEditingHistItem(null);
-                            }}
-                            saving={paying}
-                        />
+                        <>
+                            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                                {/* Resumo da conta */}
+                                <div className="bg-gray-50 rounded-lg border p-3">
+                                    <p className="text-xs font-semibold text-gray-500 mb-2">Conta selecionada</p>
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-700">{editingHistItem.supplier} - {editingHistItem.description || "Sem descricao"} ({editingHistItem.installmentNumber}/{editingHistItem.totalInstallments})</span>
+                                        <span className="font-mono font-semibold text-red-600">{formatCurrency(parseFloat(editingHistItem.totalAmount), editingHistItem.currency || "USD")}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
+                                        <span className="text-sm font-bold text-gray-800">Total da conta</span>
+                                        <span className="text-lg font-bold text-red-600">{formatCurrency(parseFloat(editingHistItem.totalAmount), editingHistItem.currency || "USD")}</span>
+                                    </div>
+                                </div>
+
+                                {/* Forma de pagamento */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="font-semibold text-emerald-800">Forma de Pagamento</Label>
+                                        <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700" onClick={addEditRow}>
+                                            <PlusCircle className="mr-1 h-3 w-3" /> Adicionar metodo
+                                        </Button>
+                                    </div>
+                                    {editPaymentRows.map((row, idx) => (
+                                        <div key={idx} className="grid grid-cols-3 gap-3 items-end">
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Conta Bancaria *</Label>
+                                                <Select value={row.accountId} onValueChange={v => updateEditRow(idx, "accountId", v)}>
+                                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {accounts.map((a: any) => (
+                                                            <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <Label className="text-xs text-gray-500">Valor * (parcial ou total)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0.01"
+                                                    placeholder="0.00"
+                                                    value={row.amount}
+                                                    onChange={e => updateEditRow(idx, "amount", e.target.value)}
+                                                    className="font-mono"
+                                                />
+                                            </div>
+                                            <div className="flex gap-2 items-end">
+                                                <div className="flex-1">
+                                                    <Label className="text-xs text-gray-500">Metodo</Label>
+                                                    <Select value={row.paymentMethod} onValueChange={v => updateEditRow(idx, "paymentMethod", v)}>
+                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="transferencia">Transferencia</SelectItem>
+                                                            <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                                                            <SelectItem value="cheque">Cheque</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                {editPaymentRows.length > 1 && (
+                                                    <Button type="button" variant="ghost" size="sm" className="text-red-400 hover:text-red-600 h-10" onClick={() => removeEditRow(idx)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Cheque fields */}
+                                {editHasChequeMethod && (
+                                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
+                                        {emitidoCheques.length > 0 && (
+                                            <div>
+                                                <Label className="text-xs text-blue-700">Selecionar Cheque Existente</Label>
+                                                <Select value={editSelectedChequeId} onValueChange={(id) => {
+                                                    setEditSelectedChequeId(id);
+                                                    const ch = emitidoCheques.find((c: any) => String(c.id) === id);
+                                                    if (ch) {
+                                                        setEditChequeBanco(ch.bank || "");
+                                                        setEditChequeNumero(ch.cheque_number || ch.chequeNumber || "");
+                                                        setEditChequeTipo(ch.type || "proprio");
+                                                    }
+                                                }}>
+                                                    <SelectTrigger><SelectValue placeholder="Selecionar cheque emitido..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {emitidoCheques.map((ch: any) => (
+                                                            <SelectItem key={ch.id} value={String(ch.id)}>
+                                                                #{ch.cheque_number || ch.chequeNumber} — {ch.bank} — {ch.holder} — {formatCurrency(parseFloat(ch.amount), ch.currency)}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div><Label className="text-xs text-blue-700">Banco *</Label><Input value={editChequeBanco} onChange={e => setEditChequeBanco(e.target.value)} placeholder="Nome do banco" /></div>
+                                            <div><Label className="text-xs text-blue-700">Numero *</Label><Input value={editChequeNumero} onChange={e => setEditChequeNumero(e.target.value)} placeholder="000000" /></div>
+                                            <div><Label className="text-xs text-blue-700">Tipo</Label>
+                                                <Select value={editChequeTipo} onValueChange={setEditChequeTipo}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="proprio">Proprio</SelectItem>
+                                                        <SelectItem value="terceiro">Terceiro</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {editPaymentRows.length > 1 && (
+                                    <p className={`text-xs font-medium ${Math.abs(editTotalAllocated - parseFloat(editingHistItem.totalAmount)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
+                                        Total alocado: {formatCurrency(editTotalAllocated)} / Total da conta: {formatCurrency(parseFloat(editingHistItem.totalAmount))}
+                                    </p>
+                                )}
+
+                                {/* Recibo do fornecedor */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Nº Recibo do Fornecedor</Label>
+                                        <Input
+                                            placeholder="Ex: 001-001-0000123"
+                                            value={editReceiptNumber}
+                                            onChange={e => setEditReceiptNumber(e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Importar Recibo (PDF/imagem)</Label>
+                                        <input
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 border border-gray-200 rounded-md px-2 py-1.5 cursor-pointer"
+                                            onChange={e => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                setEditReceiptFile(file);
+                                                const reader = new FileReader();
+                                                reader.onload = ev => setEditReceiptFileUrl(ev.target?.result as string);
+                                                reader.readAsDataURL(file);
+                                            }}
+                                        />
+                                        {editReceiptFile && <p className="text-xs text-emerald-600 mt-1">✓ {editReceiptFile.name}</p>}
+                                        {!editReceiptFile && editReceiptFileUrl && <p className="text-xs text-emerald-600 mt-1">✓ Recibo existente</p>}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Footer fixo */}
+                            <div className="px-6 py-3 border-t bg-gray-50 flex items-center justify-end gap-3">
+                                <Button variant="outline" onClick={() => setEditingHistItem(null)}>Cancelar</Button>
+                                <Button
+                                    className="bg-green-600 hover:bg-green-700"
+                                    disabled={paying || !editAllRowsValid || (editHasChequeMethod && (!editChequeBanco || !editChequeNumero))}
+                                    onClick={handleConfirmEdit}
+                                >
+                                    {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+                                    Salvar Alteracoes
+                                </Button>
+                            </div>
+                        </>
                     )}
                 </DialogContent>
             </Dialog>
