@@ -90,10 +90,10 @@ export function registerFarmSeasonRoutes(app: Express) {
                     WHERE fpr.farmer_id = ${farmerId}
                     ORDER BY fpr.name, fp.name
                 `);
-                return res.json(result.rows);
+                const rows = Array.isArray(result) ? result : (result.rows || []);
+                return res.json(rows);
             } catch (joinErr: any) {
                 console.warn("[FARM_SEASONS_PLOTS] farm_season_plots join failed, falling back:", joinErr.message);
-                // Fallback: return plots without season percentage
                 const result = await db.execute(sql`
                     SELECT
                         fp.id,
@@ -109,7 +109,8 @@ export function registerFarmSeasonRoutes(app: Express) {
                     WHERE fpr.farmer_id = ${farmerId}
                     ORDER BY fpr.name, fp.name
                 `);
-                return res.json(result.rows);
+                const rows = Array.isArray(result) ? result : (result.rows || []);
+                return res.json(rows);
             }
         } catch (error) {
             console.error("[FARM_SEASONS_PLOTS GET]", error);
