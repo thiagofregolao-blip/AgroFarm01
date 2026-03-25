@@ -12,11 +12,12 @@ import { Plus, Edit2, Trash2, Loader2, Users, Camera, Image, Phone, Search, X, C
 import { loadFaceModels, generateFaceEmbedding } from "@/lib/face-recognition";
 
 const ROLES = ["Gerente", "Operador", "Tratorista", "Motorista", "Mecânico", "Auxiliar", "Encarregado", "Outro"];
+const FORM_STORAGE_KEY = "employee_form_state";
 
-function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmit: (data: any) => void; isPending: boolean }) {
-    const [name, setName] = useState(initial?.name || "");
-    const [role, setRole] = useState(initial?.role || "Operador");
-    const [phone, setPhone] = useState(initial?.phone || "");
+function EmployeeForm({ initial, onSubmit, isPending, restoredState }: { initial?: any; onSubmit: (data: any) => void; isPending: boolean; restoredState?: { name: string; role: string; phone: string } | null }) {
+    const [name, setName] = useState(restoredState?.name || initial?.name || "");
+    const [role, setRole] = useState(restoredState?.role || initial?.role || "Operador");
+    const [phone, setPhone] = useState(restoredState?.phone || initial?.phone || "");
     const [photoPreview, setPhotoPreview] = useState<string>(initial?.photoBase64 || "");
     const [signaturePreview, setSignaturePreview] = useState<string>(initial?.signatureBase64 || "");
     const [faceEmbedding, setFaceEmbedding] = useState<number[] | null>(initial?.faceEmbedding ? JSON.parse(initial.faceEmbedding) : null);
@@ -24,6 +25,17 @@ function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmi
     const photoInputRef = useRef<HTMLInputElement>(null);
     const sigInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
+
+    // Save form state to sessionStorage before camera opens (Android kills tab)
+    const saveFormBeforeCamera = useCallback(() => {
+        try {
+            sessionStorage.setItem(FORM_STORAGE_KEY, JSON.stringify({
+                name, role, phone,
+                editId: initial?.id || null,
+                timestamp: Date.now()
+            }));
+        } catch {}
+    }, [name, role, phone, initial?.id]);
 
     // Auto-generate face embedding when photo changes
     const processPhoto = useCallback(async (base64: string) => {
@@ -140,11 +152,11 @@ function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmi
                     )}
                     <div className="flex flex-col gap-2">
                         <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="user" onChange={e => handleImageUpload(e, setPhotoPreview, true)} />
-                        <Button type="button" variant="outline" size="sm" onClick={() => cameraInputRef.current?.click()} className="text-xs">
+                        <Button type="button" variant="outline" size="sm" onClick={() => { saveFormBeforeCamera(); cameraInputRef.current?.click(); }} className="text-xs">
                             <Camera className="h-3.5 w-3.5 mr-1.5" /> Tirar Foto
                         </Button>
                         <input type="file" ref={photoInputRef} className="hidden" accept="image/*" onChange={e => handleImageUpload(e, setPhotoPreview, true)} />
-                        <Button type="button" variant="outline" size="sm" onClick={() => photoInputRef.current?.click()} className="text-xs">
+                        <Button type="button" variant="outline" size="sm" onClick={() => { saveFormBeforeCamera(); photoInputRef.current?.click(); }} className="text-xs">
                             <Image className="h-3.5 w-3.5 mr-1.5" /> Galeria
                         </Button>
                     </div>
@@ -169,7 +181,7 @@ function EmployeeForm({ initial, onSubmit, isPending }: { initial?: any; onSubmi
                     )}
                     <div className="flex flex-col gap-2">
                         <input type="file" ref={sigInputRef} className="hidden" accept="image/*" capture="environment" onChange={e => handleImageUpload(e, setSignaturePreview)} />
-                        <Button type="button" variant="outline" size="sm" onClick={() => sigInputRef.current?.click()} className="text-xs">
+                        <Button type="button" variant="outline" size="sm" onClick={() => { saveFormBeforeCamera(); sigInputRef.current?.click(); }} className="text-xs">
                             <Camera className="h-3.5 w-3.5 mr-1.5" /> Fotografar
                         </Button>
                     </div>
@@ -190,21 +202,55 @@ export default function FarmEmployees() {
     const [openNew, setOpenNew] = useState(false);
     const [editItem, setEditItem] = useState<any>(null);
     const [search, setSearch] = useState("");
+    const [restoredFormState, setRestoredFormState] = useState<{ name: string; role: string; phone: string; editId: string | null } | null>(null);
+
+    // Restore form state after Android camera kills the browser tab
+    useEffect(() => {
+        try {
+            const saved = sessionStorage.getItem(FORM_STORAGE_KEY);
+            if (!saved) return;
+            const state = JSON.parse(saved);
+            // Only restore if saved less than 5 minutes ago
+            if (state.timestamp && Date.now() - state.timestamp < 5 * 60 * 1000) {
+                setRestoredFormState({ name: state.name, role: state.role, phone: state.phone, editId: state.editId });
+                if (state.editId) {
+                    // Will set editItem once employees load
+                } else {
+                    setOpenNew(true);
+                }
+                toast({ title: "Formulário restaurado", description: "Continue de onde parou" });
+            }
+            sessionStorage.removeItem(FORM_STORAGE_KEY);
+        } catch {}
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const { data: employees = [], isLoading } = useQuery({
         queryKey: ["/api/farm/employees"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/employees"); return r.json(); },
     });
 
+    // Restore edit mode once employees load
+    useEffect(() => {
+        if (restoredFormState?.editId && employees.length > 0 && !editItem) {
+            const emp = employees.find((e: any) => e.id === restoredFormState.editId);
+            if (emp) setEditItem(emp);
+        }
+    }, [employees, restoredFormState]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const clearRestoredState = useCallback(() => {
+        setRestoredFormState(null);
+        try { sessionStorage.removeItem(FORM_STORAGE_KEY); } catch {}
+    }, []);
+
     const createMut = useMutation({
         mutationFn: async (data: any) => { const r = await apiRequest("POST", "/api/farm/employees", data); return r.json(); },
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/employees"] }); setOpenNew(false); toast({ title: "Funcionário cadastrado!" }); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/employees"] }); setOpenNew(false); clearRestoredState(); toast({ title: "Funcionário cadastrado!" }); },
         onError: () => { toast({ title: "Erro ao cadastrar", variant: "destructive" }); },
     });
 
     const updateMut = useMutation({
         mutationFn: async ({ id, data }: { id: string; data: any }) => { const r = await apiRequest("PUT", `/api/farm/employees/${id}`, data); return r.json(); },
-        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/employees"] }); setEditItem(null); toast({ title: "Funcionário atualizado!" }); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/employees"] }); setEditItem(null); clearRestoredState(); toast({ title: "Funcionário atualizado!" }); },
         onError: () => { toast({ title: "Erro ao atualizar", variant: "destructive" }); },
     });
 
@@ -312,22 +358,22 @@ export default function FarmEmployees() {
                 )}
 
                 {/* New Dialog */}
-                <Dialog open={openNew} onOpenChange={setOpenNew}>
+                <Dialog open={openNew} onOpenChange={open => { setOpenNew(open); if (!open) clearRestoredState(); }}>
                     <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Novo Funcionário</DialogTitle>
                         </DialogHeader>
-                        <EmployeeForm onSubmit={data => createMut.mutate(data)} isPending={createMut.isPending} />
+                        <EmployeeForm onSubmit={data => createMut.mutate(data)} isPending={createMut.isPending} restoredState={!restoredFormState?.editId ? restoredFormState : null} />
                     </DialogContent>
                 </Dialog>
 
                 {/* Edit Dialog */}
-                <Dialog open={!!editItem} onOpenChange={open => { if (!open) setEditItem(null); }}>
+                <Dialog open={!!editItem} onOpenChange={open => { if (!open) { setEditItem(null); clearRestoredState(); } }}>
                     <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Editar Funcionário</DialogTitle>
                         </DialogHeader>
-                        {editItem && <EmployeeForm initial={editItem} onSubmit={data => updateMut.mutate({ id: editItem.id, data })} isPending={updateMut.isPending} />}
+                        {editItem && <EmployeeForm initial={editItem} onSubmit={data => updateMut.mutate({ id: editItem.id, data })} isPending={updateMut.isPending} restoredState={restoredFormState?.editId ? restoredFormState : null} />}
                     </DialogContent>
                 </Dialog>
             </div>
