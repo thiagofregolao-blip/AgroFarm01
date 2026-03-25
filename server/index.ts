@@ -640,6 +640,21 @@ app.use((req, res, next) => {
     log(`⚠️  Migration receituário: ${(migErr as Error).message}`);
   }
 
+  // Inline migration: farm_season_plots table
+  try {
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS farm_season_plots (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      season_id varchar NOT NULL REFERENCES farm_seasons(id) ON DELETE CASCADE,
+      plot_id varchar NOT NULL REFERENCES farm_plots(id) ON DELETE CASCADE,
+      farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      area_percentage numeric(5,2) NOT NULL DEFAULT 100,
+      UNIQUE(season_id, plot_id)
+    )`);
+    log("✅ Migration: farm_season_plots table ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_season_plots: ${(migErr as Error).message}`);
+  }
+
   // Inline migration: farm_employees table + signature column
   try {
     const { db: empDb, dbReady: empReady } = await import("./db");

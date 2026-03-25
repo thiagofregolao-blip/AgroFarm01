@@ -105,6 +105,8 @@ export class FarmStorage {
             name: farmPlots.name,
             areaHa: farmPlots.areaHa,
             crop: farmPlots.crop,
+            coordinates: farmPlots.coordinates,
+            centroid: farmPlots.centroid,
             createdAt: farmPlots.createdAt,
             propertyName: farmProperties.name,
         }).from(farmPlots)

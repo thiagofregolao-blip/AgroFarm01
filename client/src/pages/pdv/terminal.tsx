@@ -12,6 +12,52 @@ import { Search, Check, ArrowLeft, ArrowRight, Minus, Plus, Loader2, LogOut, Wif
 import { generateReceituarioPDF, shareViaWhatsApp, downloadPDF, openPDF, type ReceituarioData } from "@/lib/pdf-receituario";
 import { loadFaceModels, generateFaceEmbedding, findBestMatch } from "@/lib/face-recognition";
 
+// ── Mini-mapa SVG gerado a partir das coordenadas do polígono do talhão ──────
+function PlotMiniMap({ coordinates, selected }: { coordinates: string | null; selected: boolean }) {
+    if (!coordinates) return (
+        <div className={`w-full h-full flex items-center justify-center ${selected ? "bg-green-600/20" : "bg-gray-100"}`}>
+            <MapPin className={`h-6 w-6 ${selected ? "text-green-600" : "text-gray-300"}`} />
+        </div>
+    );
+
+    try {
+        const pts: Array<{ lat: number; lng: number }> = JSON.parse(coordinates);
+        if (!pts.length) throw new Error("empty");
+
+        const lats = pts.map(p => p.lat);
+        const lngs = pts.map(p => p.lng);
+        const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+        const ranLat = maxLat - minLat || 0.0001;
+        const ranLng = maxLng - minLng || 0.0001;
+
+        const pad = 4;
+        const W = 100, H = 100;
+        const toX = (lng: number) => pad + ((lng - minLng) / ranLng) * (W - pad * 2);
+        const toY = (lat: number) => pad + ((maxLat - lat) / ranLat) * (H - pad * 2);
+
+        const points = pts.map(p => `${toX(p.lng).toFixed(1)},${toY(p.lat).toFixed(1)}`).join(" ");
+
+        return (
+            <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+                <polygon
+                    points={points}
+                    fill={selected ? "rgba(22,163,74,0.35)" : "rgba(156,163,175,0.25)"}
+                    stroke={selected ? "#16a34a" : "#9ca3af"}
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                />
+            </svg>
+        );
+    } catch {
+        return (
+            <div className={`w-full h-full flex items-center justify-center ${selected ? "bg-green-600/20" : "bg-gray-100"}`}>
+                <MapPin className={`h-6 w-6 ${selected ? "text-green-600" : "text-gray-300"}`} />
+            </div>
+        );
+    }
+}
+
 interface CartItem {
     product: any;
     quantity: number | string;
@@ -1551,17 +1597,21 @@ export default function PdvTerminal() {
                                                 const sel = isPlotSelected(plot.id);
                                                 return (
                                                     <button key={plot.id} onClick={() => togglePlot(plot)}
-                                                        className={`group p-4 rounded-2xl border-2 text-left transition-all ${sel ? "bg-green-50 border-green-600 shadow-md shadow-green-100" : "bg-white border-gray-200 hover:border-green-300 shadow-sm"}`}>
-                                                        <div className="flex items-start justify-between mb-2">
-                                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${sel ? "bg-green-700 text-white" : "bg-gray-100 text-gray-400"}`}>
-                                                                <MapPin className="h-4 w-4" />
-                                                            </div>
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${sel ? "bg-green-700 border-green-700" : "border-gray-300"}`}>
-                                                                {sel && <Check className="h-3 w-3 text-white" />}
-                                                            </div>
+                                                        className={`group relative rounded-2xl border-2 text-left transition-all overflow-hidden ${sel ? "border-green-600 shadow-md shadow-green-100" : "border-gray-200 hover:border-green-300 shadow-sm bg-white"}`}>
+                                                        {/* Mapa do talhão */}
+                                                        <div className={`w-full h-28 ${sel ? "bg-green-50" : "bg-gray-50"}`}>
+                                                            <PlotMiniMap coordinates={plot.coordinates || null} selected={sel} />
                                                         </div>
-                                                        <h4 className={`font-bold text-sm ${sel ? "text-green-700" : "text-gray-800"}`}>{plot.name}</h4>
-                                                        <p className="text-xs text-gray-500 mt-0.5">{plot.areaHa} ha{plot.crop ? ` · ${plot.crop}` : ""}</p>
+                                                        {/* Info */}
+                                                        <div className={`p-3 ${sel ? "bg-green-50" : "bg-white"}`}>
+                                                            <div className="flex items-center justify-between">
+                                                                <h4 className={`font-bold text-sm leading-tight ${sel ? "text-green-800" : "text-gray-800"}`}>{plot.name}</h4>
+                                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${sel ? "bg-green-700 border-green-700" : "border-gray-300"}`}>
+                                                                    {sel && <Check className="h-3 w-3 text-white" />}
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 mt-0.5">{parseFloat(plot.areaHa).toFixed(1)} ha{plot.crop ? ` · ${plot.crop}` : ""}</p>
+                                                        </div>
                                                     </button>
                                                 );
                                             }) : (
@@ -1609,6 +1659,77 @@ export default function PdvTerminal() {
                         </div>
                         <div className="flex items-center gap-2">
                             {!isOnline && <span className="text-[10px] bg-red-500/80 px-2 py-0.5 rounded-full">Offline</span>}
+                            {/* Receituários */}
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <button className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25 relative" aria-label="Ver receituários">
+                                        <FileText className="h-4 w-4" />
+                                        {withdrawalsHistory && withdrawalsHistory.length > 0 && (
+                                            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-yellow-400 rounded-full text-[8px] font-bold text-green-900 flex items-center justify-center">
+                                                {Math.min(withdrawalsHistory.length, 9)}
+                                            </span>
+                                        )}
+                                    </button>
+                                </SheetTrigger>
+                                <SheetContent side="right" className="w-[340px] sm:w-[400px] p-0 flex flex-col">
+                                    <SheetHeader className="p-5 border-b border-gray-100 bg-green-800 text-white">
+                                        <SheetTitle className="flex items-center gap-2 text-white">
+                                            <FileText className="h-5 w-5" /> Receituários
+                                        </SheetTitle>
+                                        <SheetDescription className="text-green-200 text-xs">
+                                            Clique para abrir ou compartilhar
+                                        </SheetDescription>
+                                    </SheetHeader>
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                                        {withdrawalsHistory && withdrawalsHistory.length > 0 ? (
+                                            withdrawalsHistory.slice(0, 20).map((batch: any) => (
+                                                <div key={batch.batchId} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                                                    <div className="mb-2">
+                                                        <span className="text-[10px] text-gray-400 font-medium">
+                                                            {new Date(batch.appliedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                                        </span>
+                                                        <p className="text-sm font-bold text-gray-800 mt-0.5 line-clamp-1">{batch.propertyName || "Propriedade"}</p>
+                                                        <p className="text-xs text-emerald-600 font-medium">{batch.applications.length} produto(s) aplicado(s)</p>
+                                                        {batch.applications[0]?.seasonName && (
+                                                            <p className="text-[10px] text-gray-400 mt-0.5">🌱 {batch.applications[0].seasonName}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <Button size="sm" variant="outline"
+                                                            className="flex-1 text-xs h-8 border-gray-200 hover:border-green-400 hover:text-green-700 hover:bg-green-50"
+                                                            onClick={() => handleRegenerateReceituario(batch)}>
+                                                            <FileText className="h-3 w-3 mr-1.5" /> Abrir PDF
+                                                        </Button>
+                                                        <Button size="sm" variant="outline"
+                                                            className="h-8 px-3 border-gray-200 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50"
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const properties = pdvData?.properties || [];
+                                                                    const firstProperty = properties.find((p: any) => batch.applications.some((a: any) => a.propertyId === p.id)) || properties[0];
+                                                                    const productsByProduct = new Map<string, any>();
+                                                                    batch.applications.forEach((app: any) => {
+                                                                        if (!productsByProduct.has(app.productName)) productsByProduct.set(app.productName, { productName: app.productName, unit: app.unit || "L", plots: [] });
+                                                                        productsByProduct.get(app.productName)!.plots.push({ plotName: app.plotName, quantity: parseFloat(app.quantity) });
+                                                                    });
+                                                                    const pdfBlob = generateReceituarioPDF({ propertyName: firstProperty?.name || "Propriedade", appliedAt: new Date(batch.appliedAt), products: Array.from(productsByProduct.values()) });
+                                                                    shareViaWhatsApp(pdfBlob, `receituario_${new Date(batch.appliedAt).toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`);
+                                                                } catch { toast({ title: "Erro ao compartilhar", variant: "destructive" }); }
+                                                            }}>
+                                                            <Share2 className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-16 text-gray-400">
+                                                <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                                                <p className="text-sm font-medium">Nenhum receituário</p>
+                                                <p className="text-xs mt-1">As saídas aparecerão aqui</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </SheetContent>
+                            </Sheet>
                             <button onClick={handleLogout} className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25">
                                 <LogOut className="h-4 w-4" />
                             </button>

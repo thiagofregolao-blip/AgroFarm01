@@ -62,4 +62,63 @@ export function registerFarmSeasonRoutes(app: Express) {
             res.status(500).json({ error: "Failed to delete season" });
         }
     });
+
+    // GET /api/farm/seasons/:id/plots — todos os talhões do agricultor com % planejada para esta safra
+    app.get("/api/farm/seasons/:id/plots", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = req.user!.id;
+            const seasonId = req.params.id;
+            const seasons = await farmStorage.getSeasons(farmerId);
+            if (!seasons.find((s: any) => s.id === seasonId)) {
+                return res.status(403).json({ error: "Forbidden" });
+            }
+            const result = await db.execute(sql`
+                SELECT
+                    fp.id,
+                    fp.name,
+                    fp.area_ha AS "areaHa",
+                    fp.crop,
+                    fp.coordinates,
+                    fp.property_id AS "propertyId",
+                    fpr.name AS "propertyName",
+                    COALESCE(fsp.area_percentage, 0) AS "areaPercentage"
+                FROM farm_plots fp
+                INNER JOIN farm_properties fpr ON fpr.id = fp.property_id
+                LEFT JOIN farm_season_plots fsp ON fsp.plot_id = fp.id AND fsp.season_id = ${seasonId}
+                WHERE fpr.farmer_id = ${farmerId}
+                ORDER BY fpr.name, fp.name
+            `);
+            res.json(result.rows);
+        } catch (error) {
+            console.error("[FARM_SEASONS_PLOTS GET]", error);
+            res.status(500).json({ error: "Failed to get season plots" });
+        }
+    });
+
+    // PUT /api/farm/seasons/:id/plots — salva % de cada talhão nesta safra
+    app.put("/api/farm/seasons/:id/plots", requireFarmer, async (req, res) => {
+        try {
+            const farmerId = req.user!.id;
+            const seasonId = req.params.id;
+            const plots: Array<{ plotId: string; areaPercentage: number }> = req.body.plots || [];
+            const seasons = await farmStorage.getSeasons(farmerId);
+            if (!seasons.find((s: any) => s.id === seasonId)) {
+                return res.status(403).json({ error: "Forbidden" });
+            }
+            await db.execute(sql`DELETE FROM farm_season_plots WHERE season_id = ${seasonId} AND farmer_id = ${farmerId}`);
+            for (const p of plots) {
+                if (p.areaPercentage > 0) {
+                    await db.execute(sql`
+                        INSERT INTO farm_season_plots (season_id, plot_id, farmer_id, area_percentage)
+                        VALUES (${seasonId}, ${p.plotId}, ${farmerId}, ${p.areaPercentage})
+                        ON CONFLICT (season_id, plot_id) DO UPDATE SET area_percentage = ${p.areaPercentage}
+                    `);
+                }
+            }
+            res.json({ success: true });
+        } catch (error) {
+            console.error("[FARM_SEASONS_PLOTS PUT]", error);
+            res.status(500).json({ error: "Failed to save season plots" });
+        }
+    });
 }
