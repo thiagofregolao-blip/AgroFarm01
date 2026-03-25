@@ -182,7 +182,7 @@ function PDVTopBar({
                 </div>
             </div>
             {/* ── Horizontal step bar (blue background, labels below numbers) ── */}
-            <div className="bg-[#3B82F6] border-b border-blue-600">
+            <div className="bg-[#024177] border-b border-[#01325a]">
                 <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3">
                     <div className="flex items-start justify-between">
                         {STEPS.map((s, i) => {
@@ -192,18 +192,18 @@ function PDVTopBar({
                                 <div key={s} className="flex items-center flex-1 min-w-0">
                                     <div className="flex flex-col items-center w-full">
                                         <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 text-[10px] sm:text-xs font-bold transition-all ${
-                                            isCurrent ? "bg-white text-blue-600 ring-2 ring-white/40 ring-offset-2 ring-offset-blue-500" : isPast ? "bg-emerald-400 text-white" : "bg-blue-400/50 text-blue-200"
+                                            isCurrent ? "bg-white text-[#024177] ring-2 ring-white/40 ring-offset-2 ring-offset-[#024177]" : isPast ? "bg-emerald-400 text-white" : "bg-white/20 text-white/60"
                                         }`}>
                                             {isPast ? <Check className="h-3.5 w-3.5" /> : i + 1}
                                         </div>
                                         <span className={`text-[9px] sm:text-[10px] font-medium mt-1 truncate text-center leading-tight ${
-                                            isCurrent ? "text-white font-semibold" : isPast ? "text-blue-100" : "text-blue-300"
+                                            isCurrent ? "text-white font-semibold" : isPast ? "text-white/80" : "text-white/40"
                                         }`}>
                                             {LABELS[i]}
                                         </span>
                                     </div>
                                     {i < STEPS.length - 1 && (
-                                        <div className={`h-px flex-shrink-0 w-full max-w-[40px] mx-0 mt-3.5 sm:mt-4 ${isPast ? "bg-emerald-400" : "bg-blue-400/40"}`} />
+                                        <div className={`h-px flex-shrink-0 w-full max-w-[40px] mx-0 mt-3.5 sm:mt-4 ${isPast ? "bg-emerald-400" : "bg-white/20"}`} />
                                     )}
                                 </div>
                             );
