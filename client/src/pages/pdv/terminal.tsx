@@ -1308,21 +1308,36 @@ export default function PdvTerminal() {
                 <div className="flex-1 overflow-y-auto p-4 md:p-8">
                     <div className="max-w-2xl mx-auto space-y-6">
 
-                        {/* === DIESEL GAUGE === */}
+                        {/* === FUEL INPUT (moved to top) === */}
                         <div className="bg-gray-800/60 backdrop-blur-sm rounded-3xl border border-amber-500/20 p-6 text-center">
-                            <p className="text-xs uppercase font-bold tracking-widest text-amber-400/80 mb-2">Estoque Diesel Disponível</p>
-                            <div className="flex items-baseline justify-center gap-2 mb-4">
-                                <span className="text-6xl md:text-8xl font-black text-amber-400 tabular-nums leading-none">
-                                    {dieselStock.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
-                                </span>
-                                <span className="text-2xl font-semibold text-amber-400/60">{dieselUnit}</span>
-                            </div>
-                            {/* Gauge bar */}
-                            <div className="w-full h-3 bg-gray-700/50 rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full rounded-full transition-all duration-500 ${stockPercent > 30 ? "bg-gradient-to-r from-amber-500 to-amber-400" : stockPercent > 10 ? "bg-gradient-to-r from-orange-500 to-orange-400" : "bg-gradient-to-r from-red-500 to-red-400"}`}
-                                    style={{ width: `${stockPercent}%` }}
-                                />
+                            <p className="text-xs uppercase font-bold tracking-widest text-amber-400/80 mb-3 flex items-center justify-center gap-2">
+                                <Droplets className="h-4 w-4 text-amber-400" /> Quantidade Abastecida
+                            </p>
+                            <div className="flex items-center gap-3 max-w-md mx-auto">
+                                <button
+                                    onClick={() => setDieselQty(String(Math.max(0, parsedQty - 10)))}
+                                    className="w-14 h-14 rounded-xl bg-gray-700/50 border border-gray-600/50 text-amber-400 flex items-center justify-center text-2xl font-bold active:scale-95"
+                                >
+                                    −
+                                </button>
+                                <div className="flex-1 relative">
+                                    <Input
+                                        type="number"
+                                        step="1"
+                                        value={dieselQty}
+                                        onChange={(e) => setDieselQty(e.target.value)}
+                                        onFocus={(e) => e.target.select()}
+                                        placeholder="0"
+                                        className="text-center text-5xl md:text-6xl font-black h-20 bg-gray-700/50 border-gray-600/50 text-amber-400 rounded-xl focus:border-amber-400 focus:ring-amber-400/30 placeholder:text-gray-600"
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-gray-500">litros</span>
+                                </div>
+                                <button
+                                    onClick={() => setDieselQty(String(parsedQty + 10))}
+                                    className="w-14 h-14 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-2xl font-bold active:scale-95"
+                                >
+                                    +
+                                </button>
                             </div>
                             {!dieselProduct && (
                                 <p className="text-red-400 text-xs mt-3">⚠️ Nenhum produto "diesel" ou "combustível" encontrado no estoque. Lance uma fatura com diesel primeiro.</p>
@@ -1351,45 +1366,6 @@ export default function PdvTerminal() {
                                         </button>
                                     ))}
                                 </div>
-                            )}
-                        </div>
-
-                        {/* === FUEL INPUT === */}
-                        <div className="bg-gray-800/60 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-5">
-                            <p className="text-xs uppercase font-bold tracking-widest text-gray-400 mb-3 flex items-center gap-2">
-                                <Droplets className="h-4 w-4 text-amber-400" /> Quantidade Abastecida
-                            </p>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => setDieselQty(String(Math.max(0, parsedQty - 10)))}
-                                    className="w-12 h-12 rounded-xl bg-gray-700/50 border border-gray-600/50 text-amber-400 flex items-center justify-center text-xl font-bold active:scale-95"
-                                >
-                                    −
-                                </button>
-                                <div className="flex-1 relative">
-                                    <Input
-                                        type="number"
-                                        step="1"
-                                        value={dieselQty}
-                                        onChange={(e) => setDieselQty(e.target.value)}
-                                        onFocus={(e) => e.target.select()}
-                                        placeholder="0"
-                                        className="text-center text-3xl font-black h-16 bg-gray-700/50 border-gray-600/50 text-amber-400 rounded-xl focus:border-amber-400 focus:ring-amber-400/30 placeholder:text-gray-600"
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">litros</span>
-                                </div>
-                                <button
-                                    onClick={() => setDieselQty(String(parsedQty + 10))}
-                                    className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xl font-bold active:scale-95"
-                                >
-                                    +
-                                </button>
-                            </div>
-                            {parsedQty > 0 && (
-                                <p className={`text-xs mt-2 text-center ${stockAfter < 0 ? "text-red-400" : "text-gray-500"}`}>
-                                    Estoque após: {stockAfter.toLocaleString("pt-BR")} {dieselUnit}
-                                    {stockAfter < 0 && " ⚠️ Excede o disponível!"}
-                                </p>
                             )}
                         </div>
 
