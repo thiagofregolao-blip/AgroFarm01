@@ -282,6 +282,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
             // Create invoice record — store full file as base64
             const skipStockEntry = req.body?.skipStockEntry === "true";
+            console.log(`[INVOICE_IMPORT_DEBUG] skipStockEntry raw="${req.body?.skipStockEntry}" parsed=${skipStockEntry}`);
             const invoice = await farmStorage.createInvoice({
                 farmerId,
                 seasonId,
@@ -394,6 +395,8 @@ export function registerFarmInvoiceRoutes(app: Express) {
             if (invoiceItems.length > 0) {
                 await farmStorage.createInvoiceItems(invoiceItems);
             }
+            console.log(`[INVOICE_IMPORT_DEBUG] Created invoice id=${invoice.id} skipStockEntry=${skipStockEntry} items=${invoiceItems.length}`);
+            console.log(`[INVOICE_IMPORT_DEBUG] Items: ${invoiceItems.map(i => `${i.productName}(pid=${i.productId},qty=${i.quantity})`).join(", ")}`);
 
             // Return parsed data for review
             const items = await farmStorage.getInvoiceItems(invoice.id);
@@ -437,6 +440,13 @@ export function registerFarmInvoiceRoutes(app: Express) {
             }
 
             const farmerId = req.user!.id;
+            console.log(`[CONFIRM_DEBUG] invoiceId=${req.params.id} body.skipStockEntry=${req.body.skipStockEntry} invoice.skipStockEntry=${invoice.skipStockEntry} invoice.status=${invoice.status} invoice.documentType=${(invoice as any).documentType}`);
+
+            // If body sends skipStockEntry, update the invoice record BEFORE confirming
+            if (req.body.skipStockEntry === true || req.body.skipStockEntry === "true") {
+                await db.execute(sql`UPDATE farm_invoices SET skip_stock_entry = true WHERE id = ${req.params.id}`);
+                console.log(`[CONFIRM_DEBUG] Updated skip_stock_entry=true on invoice ${req.params.id} from confirm body`);
+            }
 
             // Update seasonId if provided during confirmation
             if (req.body.seasonId) {

@@ -305,6 +305,8 @@ export class FarmStorage {
         const propId = propertyId || null;
         const coalesced = propId || '__none__';
 
+        console.log(`[UPSERT_STOCK] pid=${productId} qtyChange=${quantityChange} cost=${unitCost} deposit=${propId}`);
+
         const existingRows = await db.execute(sql`
             SELECT * FROM farm_stock
             WHERE farmer_id = ${farmerId} AND product_id = ${productId}
@@ -314,6 +316,7 @@ export class FarmStorage {
         const existing = ((existingRows as any).rows ?? existingRows)[0];
 
         if (existing) {
+            console.log(`[UPSERT_STOCK] EXISTING: id=${existing.id} oldQty=${existing.quantity} oldCost=${existing.average_cost} → newQty=${parseFloat(existing.quantity) + quantityChange}`);
             const oldQty = parseFloat(existing.quantity);
             const oldCost = parseFloat(existing.average_cost);
             const newQty = oldQty + quantityChange;
@@ -330,6 +333,7 @@ export class FarmStorage {
             `);
             return ((updatedRows as any).rows ?? updatedRows)[0];
         } else {
+            console.log(`[UPSERT_STOCK] NEW STOCK ENTRY: pid=${productId} qty=${quantityChange} cost=${unitCost}`);
             const createdRows = await db.execute(sql`
                 INSERT INTO farm_stock (farmer_id, product_id, quantity, average_cost, property_id)
                 VALUES (${farmerId}, ${productId}, ${String(quantityChange)}, ${String(unitCost)}, ${propId})
@@ -399,7 +403,14 @@ export class FarmStorage {
         const skipStock = invoice?.skipStockEntry === true;
         const isRemision = (invoice as any).documentType === "remision";
         const items = await this.getInvoiceItems(invoiceId);
-        console.log(`[FARM_CONFIRM] id=${invoiceId} type=${isRemision ? "remision" : "factura"} skipStock=${skipStock} items=${items.length} itemsWithProduct=${items.filter(i => i.productId).length}`);
+        console.log(`[FARM_CONFIRM] ========== CONFIRM INVOICE START ==========`);
+        console.log(`[FARM_CONFIRM] id=${invoiceId} supplier="${invoice.supplier}" number="${invoice.invoiceNumber}"`);
+        console.log(`[FARM_CONFIRM] skipStockEntry=${invoice.skipStockEntry} (typeof=${typeof invoice.skipStockEntry}) → skipStock=${skipStock}`);
+        console.log(`[FARM_CONFIRM] documentType=${(invoice as any).documentType} isRemision=${isRemision}`);
+        console.log(`[FARM_CONFIRM] items=${items.length} itemsWithProduct=${items.filter(i => i.productId).length}`);
+        for (const item of items) {
+            console.log(`[FARM_CONFIRM]   → item: "${item.productName}" pid=${item.productId} qty=${item.quantity} price=${item.unitPrice}`);
+        }
 
         // Always save price history regardless of stock entry
         for (const item of items) {
@@ -429,11 +440,14 @@ export class FarmStorage {
         }
 
         if (!skipStock) {
+            console.log(`[FARM_CONFIRM] ⚠️  ADDING TO STOCK (skipStock=false)`);
             for (const item of items) {
                 if (!item.productId) continue;
 
                 const qty = parseFloat(item.quantity);
                 const cost = parseFloat(item.unitPrice);
+
+                console.log(`[FARM_CONFIRM]   📦 STOCK ENTRY: "${item.productName}" pid=${item.productId} qty=${qty} cost=${cost}`);
 
                 // Update stock
                 await this.upsertStock(farmerId, item.productId, qty, cost);
@@ -450,10 +464,11 @@ export class FarmStorage {
                     notes: isRemision ? `Remissao item: ${item.productName}` : `Fatura item: ${item.productName}`,
                 });
             }
-            console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITH stock entry and price history.`);
+            console.log(`[FARM_CONFIRM] ✅ Invoice ${invoiceId} confirmed WITH stock entry and price history.`);
         } else {
-            console.log(`[FARM_INVOICE_CONFIRM] Invoice ${invoiceId} confirmed WITHOUT stock entry, but price history saved.`);
+            console.log(`[FARM_CONFIRM] 🚫 SKIPPING STOCK (skipStock=true) — only price history saved`);
         }
+        console.log(`[FARM_CONFIRM] ========== CONFIRM INVOICE END ==========`);
 
         await this.updateInvoiceStatus(invoiceId, "confirmed");
     }
