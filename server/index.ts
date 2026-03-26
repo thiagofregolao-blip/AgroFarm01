@@ -717,7 +717,22 @@ app.use((req, res, next) => {
         )
     `);
 
-    // 2. Dropar coluna deposit_id (sempre NULL, substituída por property_id)
+    // 2. Deletar registros fantasmas: quantidade negativa + sem depósito,
+    //    quando existe outro registro do mesmo produto COM depósito (o real)
+    await fixDb.execute(fixSql`
+      DELETE FROM farm_stock
+      WHERE property_id IS NULL
+        AND CAST(quantity AS numeric) < 0
+        AND EXISTS (
+          SELECT 1 FROM farm_stock fs2
+          WHERE fs2.farmer_id = farm_stock.farmer_id
+            AND fs2.product_id = farm_stock.product_id
+            AND fs2.property_id IS NOT NULL
+            AND CAST(fs2.quantity AS numeric) > 0
+        )
+    `);
+
+    // 3. Dropar coluna deposit_id (sempre NULL, substituída por property_id)
     await fixDb.execute(fixSql`ALTER TABLE farm_stock DROP COLUMN IF EXISTS deposit_id`);
 
     // 3. Garantir unique index correto
