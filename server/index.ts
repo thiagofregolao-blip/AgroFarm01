@@ -569,18 +569,9 @@ app.use((req, res, next) => {
         created_at timestamp NOT NULL DEFAULT now()
       )
     `);
-    await depDb.execute(depSql`ALTER TABLE farm_stock ADD COLUMN IF NOT EXISTS deposit_id varchar`);
-    await depDb.execute(depSql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS deposit_id varchar`);
-    // Replace old unique constraint (farmer_id, product_id) with (farmer_id, product_id, property_id)
-    // This allows the same product in multiple deposits
-    await depDb.execute(depSql`
-      ALTER TABLE farm_stock DROP CONSTRAINT IF EXISTS farm_stock_farmer_id_product_id_key
-    `);
-    await depDb.execute(depSql`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_stock_farmer_product_deposit
-      ON farm_stock (farmer_id, product_id, COALESCE(property_id, '__none__'))
-    `);
-    log("✅ Migration: farm_deposits + deposit_id + unique constraint ensured");
+    // deposit_id columns removed — property_id is the canonical column for deposits
+    // Unique constraint handled in farm_stock cleanup migration below
+    log("✅ Migration: farm_deposits table ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration farm_deposits: ${migErr.message}`);
   }
@@ -679,6 +670,63 @@ app.use((req, res, next) => {
     log("✅ Migration: farm_employees table + signature_base64 + face_embedding + employee_name + photo_base64 ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration farm_employees: ${(migErr as Error).message}`);
+  }
+
+  // ─── Migration: consolidar registros duplicados em farm_stock e dropar deposit_id ───
+  try {
+    const { db: fixDb, dbReady: fixReady } = await import("./db");
+    const { sql: fixSql } = await import("drizzle-orm");
+    await fixReady;
+
+    // 1. Consolidar duplicados: para cada (farmer_id, product_id, property_id) com mais de 1 registro,
+    //    somar quantidades e manter o maior average_cost, deletar registros extras
+    await fixDb.execute(fixSql`
+      WITH duplicates AS (
+        SELECT farmer_id, product_id, COALESCE(property_id, '__none__') AS prop,
+               SUM(CAST(quantity AS numeric)) AS total_qty,
+               MAX(CAST(average_cost AS numeric)) AS max_cost,
+               MIN(id) AS keep_id,
+               COUNT(*) AS cnt
+        FROM farm_stock
+        GROUP BY farmer_id, product_id, COALESCE(property_id, '__none__')
+        HAVING COUNT(*) > 1
+      )
+      UPDATE farm_stock SET
+        quantity = d.total_qty::text,
+        average_cost = d.max_cost::text,
+        updated_at = now()
+      FROM duplicates d
+      WHERE farm_stock.id = d.keep_id
+    `);
+    await fixDb.execute(fixSql`
+      WITH duplicates AS (
+        SELECT farmer_id, product_id, COALESCE(property_id, '__none__') AS prop,
+               MIN(id) AS keep_id
+        FROM farm_stock
+        GROUP BY farmer_id, product_id, COALESCE(property_id, '__none__')
+        HAVING COUNT(*) > 1
+      )
+      DELETE FROM farm_stock
+      WHERE id NOT IN (SELECT keep_id FROM duplicates)
+        AND EXISTS (
+          SELECT 1 FROM duplicates d
+          WHERE d.farmer_id = farm_stock.farmer_id
+            AND d.product_id = farm_stock.product_id
+            AND d.prop = COALESCE(farm_stock.property_id, '__none__')
+            AND farm_stock.id != d.keep_id
+        )
+    `);
+
+    // 2. Dropar coluna deposit_id (sempre NULL, substituída por property_id)
+    await fixDb.execute(fixSql`ALTER TABLE farm_stock DROP COLUMN IF EXISTS deposit_id`);
+
+    // 3. Garantir unique index correto
+    await fixDb.execute(fixSql`DROP INDEX IF EXISTS idx_farm_stock_farmer_product_deposit`);
+    await fixDb.execute(fixSql`CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_stock_farmer_product_property ON farm_stock (farmer_id, product_id, COALESCE(property_id, '__none__'))`);
+
+    log("✅ Migration: farm_stock duplicados consolidados + deposit_id removido");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_stock cleanup: ${(migErr as Error).message}`);
   }
 
   const server = await registerRoutes(app);

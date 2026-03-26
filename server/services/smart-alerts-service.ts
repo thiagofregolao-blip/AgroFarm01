@@ -4,7 +4,7 @@
  */
 
 import { db } from "../db";
-import { farmStock, farmProductsCatalog, farmInvoices, farmPriceHistory } from "../../shared/schema";
+import { farmInvoices, farmPriceHistory } from "../../shared/schema";
 import { eq, and, lte, gte, sql, desc } from "drizzle-orm";
 
 // ===========================
@@ -14,17 +14,18 @@ export async function checkLowStock(farmerId: string): Promise<string[]> {
     const alerts: string[] = [];
 
     try {
-        const stockItems = await db.select({
-            productName: farmProductsCatalog.name,
-            quantity: farmStock.quantity,
-            unit: farmProductsCatalog.unit,
-        })
-            .from(farmStock)
-            .innerJoin(farmProductsCatalog, eq(farmStock.productId, farmProductsCatalog.id))
-            .where(eq(farmStock.farmerId, farmerId));
+        // Group by product and SUM quantities across all deposits to get true total stock
+        const stockItems = await db.execute(sql`
+            SELECT p.name AS "productName", p.unit, SUM(CAST(s.quantity AS numeric)) AS "totalQty"
+            FROM farm_stock s
+            INNER JOIN farm_products_catalog p ON s.product_id = p.id
+            WHERE s.farmer_id = ${farmerId}
+            GROUP BY p.id, p.name, p.unit
+        `);
 
-        for (const item of stockItems) {
-            const qty = parseFloat(item.quantity || "0");
+        const rows = (stockItems as any).rows ?? stockItems;
+        for (const item of rows) {
+            const qty = parseFloat(item.totalQty || "0");
             // Alert if quantity is 0 or very low (< 1 unit)
             if (qty <= 0) {
                 alerts.push(`🔴 *${item.productName}* — Estoque ZERADO!`);

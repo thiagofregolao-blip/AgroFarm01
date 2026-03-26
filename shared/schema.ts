@@ -1102,7 +1102,7 @@ export const farmStock = pgTable("farm_stock", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   farmerId: varchar("farmer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productId: varchar("product_id").notNull().references(() => farmProductsCatalog.id),
-  depositId: varchar("deposit_id"), // FK -> farm_deposits (null = deposito padrao/fazenda)
+  depositId: varchar("property_id"), // FK -> farm_deposits (null = deposito padrao/fazenda)
   quantity: decimal("quantity", { precision: 15, scale: 4 }).notNull().default("0"),
   averageCost: decimal("average_cost", { precision: 15, scale: 4 }).notNull().default("0"), // Custo médio ponderado
   lote: text("lote"), // Número do lote (último lote recebido)
