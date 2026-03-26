@@ -138,6 +138,12 @@ export default function FarmInvoices() {
         enabled: !!user,
     });
 
+    const { data: deposits = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/deposits"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/deposits"); return r.json(); },
+        enabled: !!user,
+    });
+
     const whatsappExpenses = (expenses as any[]).filter((e) =>
         e.equipmentId &&
         (e.description?.startsWith("[Via WhatsApp]") ?? false)
@@ -1108,8 +1114,8 @@ export default function FarmInvoices() {
                                                             <SelectValue placeholder="Selecione o deposito..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {(properties as any[]).map((p: any) => (
-                                                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                            {(deposits as any[]).map((d: any) => (
+                                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                                                             ))}
                                                         </SelectContent>
                                                     </Select>

@@ -393,7 +393,7 @@ export class FarmStorage {
     }
 
     // Confirm invoice: create stock entries + movements (unless skipStockEntry is set), and save price history
-    async confirmInvoice(invoiceId: string, farmerId: string): Promise<void> {
+    async confirmInvoice(invoiceId: string, farmerId: string, warehouseId?: string): Promise<void> {
         await dbReady;
 
         // Fetch invoice details for price history
@@ -449,8 +449,8 @@ export class FarmStorage {
 
                 console.log(`[FARM_CONFIRM]   📦 STOCK ENTRY: "${item.productName}" pid=${item.productId} qty=${qty} cost=${cost}`);
 
-                // Update stock
-                await this.upsertStock(farmerId, item.productId, qty, cost);
+                // Update stock (warehouseId = deposit destino)
+                await this.upsertStock(farmerId, item.productId, qty, cost, warehouseId || null);
 
                 // Record movement
                 await db.insert(farmStockMovements).values({
