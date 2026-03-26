@@ -70,7 +70,7 @@ export async function sendDailyBulletins(): Promise<void> {
         const { eq, and, isNotNull, sql } = await import("drizzle-orm");
         const { db } = await import("../db");
 
-        // Get all users with bulletin enabled and a WhatsApp number
+        // Get all ACTIVE users with bulletin EXPLICITLY enabled and a WhatsApp number
         const farmers = await db.select({
             id: users.id,
             username: users.username,
@@ -84,7 +84,8 @@ export async function sendDailyBulletins(): Promise<void> {
             .where(
                 and(
                     isNotNull(users.whatsapp_number),
-                    sql`bulletin_enabled = true OR bulletin_enabled IS NULL`
+                    sql`bulletin_enabled = true`,
+                    eq(users.isActive, true)
                 )
             );
 
