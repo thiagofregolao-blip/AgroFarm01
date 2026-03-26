@@ -319,9 +319,10 @@ export function registerFarmInvoiceRoutes(app: Express) {
                           )
                         LIMIT 1
                     `);
+                    const existingRows = Array.isArray(existing) ? existing : (existing.rows || []);
                     let supplierId: string | null = null;
-                    if (existing.rows.length > 0) {
-                        supplierId = (existing.rows[0] as any).id;
+                    if (existingRows.length > 0) {
+                        supplierId = (existingRows[0] as any).id;
                         console.log(`[INVOICE_IMPORT] Linked existing supplier id=${supplierId} for "${supplierName}"`);
                     } else {
                         const supplierPhone = parsed.supplierPhone || null;
@@ -332,7 +333,8 @@ export function registerFarmInvoiceRoutes(app: Express) {
                             VALUES (${farmerId}, ${supplierName}, ${supplierRuc || null}, ${supplierPhone}, ${supplierEmail}, ${supplierAddress}, 'provedor', 'juridica')
                             RETURNING id
                         `);
-                        supplierId = (created.rows[0] as any).id;
+                        const createdRows = Array.isArray(created) ? created : (created.rows || []);
+                        supplierId = (createdRows[0] as any)?.id || null;
                         console.log(`[INVOICE_IMPORT] Auto-created supplier id=${supplierId} for "${supplierName}" RUC: ${supplierRuc}`);
                     }
                     if (supplierId) {
