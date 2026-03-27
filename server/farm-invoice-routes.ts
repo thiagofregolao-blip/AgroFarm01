@@ -874,10 +874,18 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 console.log(`[INVOICE_DELETE] Reversed stock entries for confirmed invoice ${invoiceId}`);
             }
 
-            // Delete related records to avoid FK constraint errors
+            // Delete related records in correct order to avoid FK constraint errors
             await db.execute(sql`DELETE FROM farm_invoice_items WHERE invoice_id = ${invoiceId}`);
+            // Cash transactions reference both invoices and expenses
+            await db.execute(sql`DELETE FROM farm_cash_transactions WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
+            await db.execute(sql`DELETE FROM farm_whatsapp_pending_context WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
             await db.execute(sql`DELETE FROM farm_accounts_payable WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
-            // Delete expense items before expenses (FK constraint)
+            // Delete expense items → cash transactions for expenses → expenses (FK chain)
+            await db.execute(sql`
+                DELETE FROM farm_cash_transactions WHERE expense_id IN (
+                    SELECT id FROM farm_expenses WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}
+                )
+            `);
             await db.execute(sql`
                 DELETE FROM farm_expense_items WHERE expense_id IN (
                     SELECT id FROM farm_expenses WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}
