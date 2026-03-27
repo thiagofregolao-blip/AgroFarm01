@@ -52,27 +52,35 @@ export default function FarmApplications() {
         });
     }, [applications, dateFrom, dateTo, selectedProduct]);
 
-    // Group filtered applications by batch
+    // Group filtered applications by batch (same property, within 5 min window)
     const grouped = useMemo(() => {
-        const groups = new Map<string, { date: string; propertyName: string; propertyId: string; appliedBy: string; items: any[] }>();
+        const BATCH_WINDOW = 5 * 60 * 1000; // 5 minutos
+        const groups: { date: string; propertyName: string; propertyId: string; appliedBy: string; items: any[] }[] = [];
 
         for (const app of filtered) {
-            const dateKey = new Date(app.appliedAt).toISOString().slice(0, 19);
-            const batchKey = `${dateKey}__${app.propertyId}`;
+            const appTime = new Date(app.appliedAt).getTime();
 
-            if (!groups.has(batchKey)) {
-                groups.set(batchKey, {
+            // Find existing group with same property within time window
+            const existing = groups.find(g => {
+                if (g.propertyId !== app.propertyId) return false;
+                const groupTime = new Date(g.date).getTime();
+                return Math.abs(appTime - groupTime) <= BATCH_WINDOW;
+            });
+
+            if (existing) {
+                existing.items.push(app);
+            } else {
+                groups.push({
                     date: app.appliedAt,
                     propertyName: app.propertyName,
                     propertyId: app.propertyId,
                     appliedBy: app.appliedBy || "—",
-                    items: [],
+                    items: [app],
                 });
             }
-            groups.get(batchKey)!.items.push(app);
         }
 
-        return Array.from(groups.values()).sort(
+        return groups.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
         );
     }, [filtered]);

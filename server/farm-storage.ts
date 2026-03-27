@@ -566,15 +566,29 @@ export class FarmStorage {
     // ==================== Applications (PDV) ====================
     async createApplication(data: InsertFarmApplication): Promise<FarmApplication> {
         await dbReady;
-        // 1. Create application record
-        const [app] = await db.insert(farmApplications).values(data).returning();
 
-        // 2. Subtract from stock — pass propertyId to deduct from correct deposit
+        // 1. Check stock BEFORE creating application — block if insufficient
         const qty = parseFloat(data.quantity);
         const depositId = (data as any).propertyId || null;
 
-        // Try to deduct from the specific deposit first
-        // If no stock found there, try finding ANY deposit with enough stock for this product
+        // Check total available stock across ALL deposits for this product
+        const totalStockRows = await db.execute(sql`
+            SELECT COALESCE(SUM(CAST(quantity AS NUMERIC)), 0) AS total
+            FROM farm_stock
+            WHERE farmer_id = ${data.farmerId} AND product_id = ${data.productId}
+              AND CAST(quantity AS NUMERIC) > 0
+        `);
+        const totalAvailable = parseFloat(((totalStockRows as any).rows ?? totalStockRows)[0]?.total || "0");
+
+        if (totalAvailable < qty) {
+            throw new Error(`Estoque insuficiente: disponível ${totalAvailable.toFixed(2)}, solicitado ${qty.toFixed(2)}`);
+        }
+
+        // 2. Create application record
+        const [app] = await db.insert(farmApplications).values(data).returning();
+
+        // 3. Subtract from stock — pass propertyId to deduct from correct deposit
+        // Try specific deposit first, fallback to any deposit with enough stock
         const propCoalesced = depositId || '__none__';
         const specificRows = await db.execute(sql`
             SELECT id, quantity FROM farm_stock
@@ -585,10 +599,9 @@ export class FarmStorage {
         const specificEntry = ((specificRows as any).rows ?? specificRows)[0];
 
         if (specificEntry && parseFloat(specificEntry.quantity) >= qty) {
-            // Specific deposit has enough stock → deduct from it
             await this.upsertStock(data.farmerId, data.productId, -qty, 0, depositId);
         } else {
-            // Fallback: find ANY deposit with enough stock for this product
+            // Fallback: find ANY deposit with enough stock
             const anyRows = await db.execute(sql`
                 SELECT id, property_id, quantity FROM farm_stock
                 WHERE farmer_id = ${data.farmerId} AND product_id = ${data.productId}
@@ -600,9 +613,18 @@ export class FarmStorage {
             if (anyEntry) {
                 await this.upsertStock(data.farmerId, data.productId, -qty, 0, anyEntry.property_id || null);
             } else {
-                // No deposit has enough — deduct from specified deposit (may go negative, but log warning)
-                console.warn(`[PDV_WITHDRAW] Estoque insuficiente para produto ${data.productId} — qty=${qty}, deducting from deposit=${depositId}`);
-                await this.upsertStock(data.farmerId, data.productId, -qty, 0, depositId);
+                // Stock exists but split across deposits — deduct from largest
+                const largestRows = await db.execute(sql`
+                    SELECT id, property_id, quantity FROM farm_stock
+                    WHERE farmer_id = ${data.farmerId} AND product_id = ${data.productId}
+                      AND CAST(quantity AS NUMERIC) > 0
+                    ORDER BY CAST(quantity AS NUMERIC) DESC
+                    LIMIT 1
+                `);
+                const largest = ((largestRows as any).rows ?? largestRows)[0];
+                if (largest) {
+                    await this.upsertStock(data.farmerId, data.productId, -qty, 0, largest.property_id || null);
+                }
             }
         }
 
