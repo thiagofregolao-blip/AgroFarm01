@@ -3,6 +3,7 @@
  * GET /api/farm/reports/:type
  */
 import { Express, Request, Response, NextFunction } from "express";
+import { getEffectiveFarmerId } from "./farm-middleware";
 import { db, dbReady } from "./db";
 import { eq, and, desc, gte, lte, sql, like, ilike } from "drizzle-orm";
 import {
@@ -12,13 +13,13 @@ import {
     farmEquipment, farmPriceHistory, farmSeasons,
 } from "../shared/schema";
 
-// Middleware: require authenticated farmer
+// Middleware: require authenticated farmer (includes funcionario_fazenda)
 function requireFarmer(req: Request, res: Response, next: NextFunction) {
     if (!req.isAuthenticated || !req.isAuthenticated()) {
         return res.status(401).json({ error: "Auth required" });
     }
     const role = req.user?.role;
-    if (role !== "agricultor" && role !== "administrador") {
+    if (role !== "agricultor" && role !== "administrador" && role !== "admin_agricultor" && role !== "funcionario_fazenda") {
         return res.status(403).json({ error: "Acesso restrito" });
     }
     next();
@@ -29,7 +30,8 @@ export function registerReportRoutes(app: Express) {
     // ===== FILTER OPTIONS — dropdown data for frontend =====
     app.get("/api/farm/reports/options/filters", requireFarmer, async (req, res) => {
         await dbReady;
-        const farmerId = req.user!.id;
+        const farmerId = await getEffectiveFarmerId(req);
+        if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
         try {
             // Categories from stock products
@@ -89,7 +91,8 @@ export function registerReportRoutes(app: Express) {
     // ===== REPORT DATA =====
     app.get("/api/farm/reports/:type", requireFarmer, async (req, res) => {
         await dbReady;
-        const farmerId = req.user!.id;
+        const farmerId = await getEffectiveFarmerId(req);
+        if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
         const type = req.params.type;
         const startDate = req.query.startDate ? new Date(String(req.query.startDate)) : undefined;
         const endDate = req.query.endDate ? new Date(String(req.query.endDate)) : undefined;

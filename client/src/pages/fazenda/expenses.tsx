@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { Plus, DollarSign, Loader2, Repeat, Download, Pencil, Trash2, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/format-currency";
+import { useAccessLevel } from "@/hooks/use-access-level";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
 function exportToCSV(data: any[], filename: string) {
@@ -59,6 +60,7 @@ export default function FarmExpenses() {
     const [editingExpense, setEditingExpense] = useState<any>(null);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<any>(null);
+    const { canEdit } = useAccessLevel("expenses");
 
     const { data: expenses = [], isLoading } = useQuery({
         queryKey: ["/api/farm/expenses"],
@@ -144,7 +146,7 @@ export default function FarmExpenses() {
                         <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportToCSV(filtered, "despesas.csv")}>
                             <Download className="mr-2 h-4 w-4" /> Exportar CSV
                         </Button>
-                        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                        {canEdit && <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                             <DialogTrigger asChild>
                                 <Button className="bg-emerald-600 hover:bg-emerald-700"><Plus className="mr-2 h-4 w-4" /> Nova Despesa</Button>
                             </DialogTrigger>
@@ -152,7 +154,7 @@ export default function FarmExpenses() {
                                 <DialogHeader><DialogTitle>Nova Despesa</DialogTitle></DialogHeader>
                                 <ExpenseForm properties={properties} seasons={seasons} suppliers={suppliers} invoices={invoices} cashAccounts={cashAccounts} onSave={(data: any) => save.mutate(data)} saving={save.isPending} />
                             </DialogContent>
-                        </Dialog>
+                        </Dialog>}
                     </div>
                 </div>
 
@@ -190,7 +192,7 @@ export default function FarmExpenses() {
                                     <th className="text-left p-3 font-semibold text-emerald-800">Descrição</th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
                                     <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
-                                    <th className="text-center p-3 font-semibold text-emerald-800 w-24">Acoes</th>
+                                    {canEdit && <th className="text-center p-3 font-semibold text-emerald-800 w-24">Acoes</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -205,6 +207,7 @@ export default function FarmExpenses() {
                                         <td className="p-3 text-gray-600 max-w-[200px] truncate">{e.description || "—"}</td>
                                         <td className="p-3 text-gray-500">{e.supplier || "—"}</td>
                                         <td className="text-right p-3 font-mono font-semibold">{formatCurrency(e.amount)}</td>
+                                        {canEdit && (
                                         <td className="p-3 text-center">
                                             <div className="flex items-center justify-center gap-1">
                                                 <Button
@@ -227,6 +230,7 @@ export default function FarmExpenses() {
                                                 </Button>
                                             </div>
                                         </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

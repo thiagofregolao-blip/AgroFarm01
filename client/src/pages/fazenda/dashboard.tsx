@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -62,6 +62,21 @@ export default function FarmDashboard() {
             setPullDistance(0);
         }
     }, [pullDistance, refreshing, handleRefresh]);
+
+    const isEmployee = user?.role === 'funcionario_fazenda';
+    const { data: myModules = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/my-modules"],
+        enabled: !!user && isEmployee,
+    });
+    const enabledModules = useMemo(() => {
+        if (!isEmployee) return null; // null = show everything
+        const set = new Set<string>();
+        for (const m of myModules) {
+            if (m.enabled) set.add(m.moduleKey);
+        }
+        return set;
+    }, [isEmployee, myModules]);
+    const hasModule = (key: string) => enabledModules === null || enabledModules.has(key);
 
     const { data: stock = [] } = useQuery({
         queryKey: ["/api/farm/stock"],
@@ -181,76 +196,84 @@ export default function FarmDashboard() {
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card
-                        className="cursor-pointer hover:shadow-lg transition-shadow border-emerald-100"
-                        onClick={() => setLocation("/fazenda/estoque")}
-                    >
-                        <CardContent className="p-5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500">Itens em Estoque</p>
-                                    <p className="text-2xl font-bold text-emerald-800">{stock.length}</p>
+                    {hasModule("stock") && (
+                        <Card
+                            className="cursor-pointer hover:shadow-lg transition-shadow border-emerald-100"
+                            onClick={() => setLocation("/fazenda/estoque")}
+                        >
+                            <CardContent className="p-5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm text-gray-500">Itens em Estoque</p>
+                                        <p className="text-2xl font-bold text-emerald-800">{stock.length}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
+                                        <Warehouse className="h-6 w-6 text-emerald-600" />
+                                    </div>
                                 </div>
-                                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
-                                    <Warehouse className="h-6 w-6 text-emerald-600" />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    )}
 
-                    <Card
-                        className="cursor-pointer hover:shadow-lg transition-shadow border-emerald-100"
-                        onClick={() => setLocation("/fazenda/propriedades")}
-                    >
-                        <CardContent className="p-5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500">Propriedades</p>
-                                    <p className="text-2xl font-bold text-emerald-800">{properties.length}</p>
+                    {hasModule("properties") && (
+                        <Card
+                            className="cursor-pointer hover:shadow-lg transition-shadow border-emerald-100"
+                            onClick={() => setLocation("/fazenda/propriedades")}
+                        >
+                            <CardContent className="p-5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm text-gray-500">Propriedades</p>
+                                        <p className="text-2xl font-bold text-emerald-800">{properties.length}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                                        <Map className="h-6 w-6 text-blue-600" />
+                                    </div>
                                 </div>
-                                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                                    <Map className="h-6 w-6 text-blue-600" />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    )}
 
-                    <Card className="border-emerald-100">
-                        <CardContent className="p-5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500">Valor em Estoque</p>
-                                    <p className="text-2xl font-bold text-emerald-800">
-                                        ${totalStockValue.toLocaleString("en", { minimumFractionDigits: 2 })}
-                                    </p>
+                    {hasModule("stock") && (
+                        <Card className="border-emerald-100">
+                            <CardContent className="p-5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm text-gray-500">Valor em Estoque</p>
+                                        <p className="text-2xl font-bold text-emerald-800">
+                                            ${totalStockValue.toLocaleString("en", { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+                                        <Package className="h-6 w-6 text-amber-600" />
+                                    </div>
                                 </div>
-                                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-                                    <Package className="h-6 w-6 text-amber-600" />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    )}
 
-                    <Card
-                        className="cursor-pointer hover:shadow-lg transition-shadow border-emerald-100"
-                        onClick={() => setLocation("/fazenda/faturas")}
-                    >
-                        <CardContent className="p-5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500">Faturas Pendentes</p>
-                                    <p className="text-2xl font-bold text-orange-600">{pendingInvoices}</p>
+                    {hasModule("invoices") && (
+                        <Card
+                            className="cursor-pointer hover:shadow-lg transition-shadow border-emerald-100"
+                            onClick={() => setLocation("/fazenda/faturas")}
+                        >
+                            <CardContent className="p-5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm text-gray-500">Faturas Pendentes</p>
+                                        <p className="text-2xl font-bold text-orange-600">{pendingInvoices}</p>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
+                                        <FileText className="h-6 w-6 text-orange-600" />
+                                    </div>
                                 </div>
-                                <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
-                                    <FileText className="h-6 w-6 text-orange-600" />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
 
-                {/* Supplier Summary Cards */}
-                {supplierSummary.length > 0 && (
+                {/* Supplier Summary Cards — hidden for employees without invoices module */}
+                {supplierSummary.length > 0 && hasModule("invoices") && (
                     <div>
                         <h2 className="text-lg font-bold text-emerald-800 mb-4 flex items-center gap-2">
                             <Building2 className="h-5 w-5" />
@@ -362,8 +385,8 @@ export default function FarmDashboard() {
                     </div>
                 )}
 
-                {/* Recent Movements */}
-                <Card className="border-emerald-100">
+                {/* Recent Movements — only for users with stock module */}
+                {hasModule("stock") && <Card className="border-emerald-100">
                     <CardHeader>
                         <CardTitle className="text-emerald-800">Últimas Movimentações</CardTitle>
                     </CardHeader>
@@ -400,7 +423,7 @@ export default function FarmDashboard() {
                             </div>
                         )}
                     </CardContent>
-                </Card>
+                </Card>}
             </div>
         </FarmLayout>
     );

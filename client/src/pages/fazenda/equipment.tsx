@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessLevel } from "@/hooks/use-access-level";
 
 const EQUIPMENT_TYPES = ["Trator", "Colheitadeira", "Caminhão", "Implemento", "Pulverizador", "Outros"];
 const STATUS_OPTIONS = [
@@ -26,6 +27,7 @@ export default function FarmEquipment() {
     const [selectedEquipId, setSelectedEquipId] = useState<string | null>(null);
     const [expenseDetailId, setExpenseDetailId] = useState<string | null>(null);
     const [editingEquip, setEditingEquip] = useState<any>(null);
+    const { canEdit } = useAccessLevel("fleet");
 
     const { data: equipment = [], isLoading } = useQuery({
         queryKey: ["/api/farm/equipment"],
@@ -75,7 +77,7 @@ export default function FarmEquipment() {
                             {equipment.length} equipamentos cadastrados
                         </p>
                     </div>
-                    <EquipmentFormDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/equipment"] })} />
+                    {canEdit && <EquipmentFormDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/equipment"] })} />}
                 </div>
 
                 {isLoading ? (
@@ -103,6 +105,7 @@ export default function FarmEquipment() {
                                     className="overflow-hidden border-emerald-100 hover:shadow-md transition-shadow relative group cursor-pointer"
                                     onClick={() => setSelectedEquipId(e.id)}
                                 >
+                                    {canEdit && (
                                     <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-1">
                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50" onClick={(ev) => { ev.stopPropagation(); setEditingEquip(e); }}>
                                             <Pencil className="h-4 w-4" />
@@ -111,6 +114,7 @@ export default function FarmEquipment() {
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </div>
+                                    )}
                                     <CardContent className="p-6">
                                         <div className="flex items-start gap-4">
                                             <div className="h-12 w-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
@@ -156,9 +160,11 @@ export default function FarmEquipment() {
                         <DialogTitle className="flex items-center gap-2 text-emerald-800">
                             <Tractor className="h-5 w-5" />
                             {selectedEquip?.name || "Equipamento"}
+                            {canEdit && (
                             <Button variant="ghost" size="icon" className="h-8 w-8 ml-2 text-emerald-600 hover:bg-emerald-50" onClick={() => { setSelectedEquipId(null); setEditingEquip(selectedEquip); }}>
                                 <Pencil className="h-4 w-4" />
                             </Button>
+                            )}
                         </DialogTitle>
                     </DialogHeader>
 

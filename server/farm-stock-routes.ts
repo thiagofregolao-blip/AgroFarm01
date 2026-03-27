@@ -1,5 +1,5 @@
 import { Express, Request, Response } from "express";
-import { requireFarmer, upload } from "./farm-middleware";
+import { requireFarmer, getEffectiveFarmerId, upload } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql, eq, and } from "drizzle-orm";
@@ -9,7 +9,9 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.get("/api/farm/stock", requireFarmer, async (req, res) => {
         try {
-            const stock = await farmStorage.getStock(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const stock = await farmStorage.getStock(farmerId);
             res.json(stock);
         } catch (error) {
             console.error("[FARM_STOCK_GET]", error);
@@ -20,7 +22,9 @@ export function registerFarmStockRoutes(app: Express) {
     app.get("/api/farm/stock/movements", requireFarmer, async (req, res) => {
         try {
             const limit = req.query.limit ? parseInt(String(req.query.limit)) : 50;
-            const movements = await farmStorage.getStockMovements(req.user!.id, limit);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const movements = await farmStorage.getStockMovements(farmerId, limit);
             res.json(movements);
         } catch (error) {
             console.error("[FARM_MOVEMENTS_GET]", error);
@@ -31,13 +35,15 @@ export function registerFarmStockRoutes(app: Express) {
     // Receipt/signature for diesel movement (accessible from stock page)
     app.get("/api/farm/stock/receipt/:id", requireFarmer, async (req, res) => {
         try {
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const rows = await db.execute(sql`
                 SELECT a.id, a.quantity, a.notes, a.applied_at AS "appliedAt",
                        a.horimeter, a.odometer, a.signature_base64 AS "signatureBase64",
                        e.name AS "equipmentName", e.type AS "equipmentType"
                 FROM farm_applications a
                 LEFT JOIN farm_equipment e ON a.equipment_id = e.id
-                WHERE a.id = ${req.params.id} AND a.farmer_id = ${req.user!.id}
+                WHERE a.id = ${req.params.id} AND a.farmer_id = ${farmerId}
             `);
             const result = (rows as any).rows ?? rows;
             if (!result.length) return res.status(404).json({ error: "Comprovante não encontrado" });
@@ -55,9 +61,11 @@ export function registerFarmStockRoutes(app: Express) {
                 return res.status(400).json({ error: "Quantity, averageCost, and reason are required" });
             }
 
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const updatedStock = await farmStorage.updateStockManual(
                 req.params.id,
-                req.user!.id,
+                farmerId,
                 { quantity: Number(quantity), averageCost: Number(averageCost), reason }
             );
 
@@ -107,7 +115,8 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.post("/api/farm/stock", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const { name, activeIngredient, category, unit, quantity, unitCost, depositId, lote, expiryDate, packageSize } = req.body;
 
             if (!name || isNaN(parseFloat(quantity)) || isNaN(parseFloat(unitCost))) {
@@ -187,7 +196,9 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.delete("/api/farm/stock/:id", requireFarmer, async (req, res) => {
         try {
-            await farmStorage.deleteStock(req.params.id, req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            await farmStorage.deleteStock(req.params.id, farmerId);
             res.sendStatus(204);
         } catch (error) {
             console.error("[FARM_STOCK_DELETE]", error);
@@ -198,7 +209,8 @@ export function registerFarmStockRoutes(app: Express) {
     app.post("/api/farm/stock/transfer", requireFarmer, async (req: Request, res: Response) => {
         try {
             const { productId, fromWarehouseId: rawFrom, toWarehouseId: rawTo, quantity, notes } = req.body;
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const qty = parseFloat(quantity);
             if (!productId || !qty || qty <= 0) {
                 return res.status(400).json({ error: "productId and positive quantity are required" });
@@ -258,7 +270,8 @@ export function registerFarmStockRoutes(app: Express) {
     // ─── Depositos CRUD ──────────────────────────────────────────────────────
     app.get("/api/farm/deposits", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const rows = await db.select().from(farmDeposits).where(eq(farmDeposits.farmerId, farmerId));
             res.json(rows);
         } catch (error) {
@@ -269,7 +282,8 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.post("/api/farm/deposits", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const { name, depositType, location } = req.body;
             if (!name) return res.status(400).json({ error: "Nome e obrigatorio" });
 
@@ -301,7 +315,8 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.put("/api/farm/deposits/:id", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const { name, depositType, location, isActive } = req.body;
             const [updated] = await db.execute(sql`
                 UPDATE farm_deposits SET
@@ -321,7 +336,8 @@ export function registerFarmStockRoutes(app: Express) {
 
     app.delete("/api/farm/deposits/:id", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             await db.delete(farmDeposits).where(
                 and(eq(farmDeposits.id, req.params.id), eq(farmDeposits.farmerId, farmerId))
             );
@@ -335,7 +351,8 @@ export function registerFarmStockRoutes(app: Express) {
     // ─── Stock by deposit (for AR product selection) ─────────────────────────
     app.get("/api/farm/stock/by-deposit", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const depositType = req.query.depositType as string || null;
             let rows;
             if (depositType) {
@@ -368,7 +385,8 @@ export function registerFarmStockRoutes(app: Express) {
     // ─── Import stock via Excel ──────────────────────────────────────────────
     app.post("/api/farm/stock/import-excel", requireFarmer, upload.single("file"), async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const depositId = req.body.depositId || null;
             if (!req.file) return res.status(400).json({ error: "Arquivo e obrigatorio" });
 

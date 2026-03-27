@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { requireFarmer, parseLocalDate } from "./farm-middleware";
+import { requireFarmer, getEffectiveFarmerId, parseLocalDate } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -8,7 +8,9 @@ export function registerFarmSeasonRoutes(app: Express) {
     // ==================== Seasons (Safras) ====================
     app.get("/api/farm/seasons", requireFarmer, async (req, res) => {
         try {
-            const seasons = await farmStorage.getSeasons(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const seasons = await farmStorage.getSeasons(farmerId);
             res.json(seasons);
         } catch (error) {
             console.error("[FARM_SEASONS]", error);
@@ -18,8 +20,10 @@ export function registerFarmSeasonRoutes(app: Express) {
 
     app.post("/api/farm/seasons", requireFarmer, async (req, res) => {
         try {
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const season = await farmStorage.createSeason({
-                farmerId: req.user!.id,
+                farmerId,
                 name: req.body.name,
                 crop: req.body.crop || null,
                 startDate: parseLocalDate(req.body.startDate),
@@ -66,7 +70,8 @@ export function registerFarmSeasonRoutes(app: Express) {
     // GET /api/farm/seasons/:id/plots — todos os talhões do agricultor com % planejada para esta safra
     app.get("/api/farm/seasons/:id/plots", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const seasonId = req.params.id;
             console.log(`[FARM_SEASONS_PLOTS] GET seasonId=${seasonId} farmerId=${farmerId}`);
             const seasons = await farmStorage.getSeasons(farmerId);
@@ -124,7 +129,8 @@ export function registerFarmSeasonRoutes(app: Express) {
     // PUT /api/farm/seasons/:id/plots — salva % de cada talhão nesta safra
     app.put("/api/farm/seasons/:id/plots", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const seasonId = req.params.id;
             const plots: Array<{ plotId: string; areaPercentage: number }> = req.body.plots || [];
             console.log(`[FARM_SEASONS_PLOTS PUT] seasonId=${seasonId} farmerId=${farmerId} plots=${plots.length}`);

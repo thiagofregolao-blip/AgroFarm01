@@ -311,7 +311,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
     });
 
     function isEnabled(item: NavItem) {
-        if (item.alwaysOn) return true;
+        if (item.alwaysOn && user?.role !== 'funcionario_fazenda') return true;
         const m = myModules.find((m: any) => m.moduleKey === item.moduleKey);
         // For funcionario_fazenda, if no modules configured, hide everything (except alwaysOn)
         if (user?.role === 'funcionario_fazenda') {

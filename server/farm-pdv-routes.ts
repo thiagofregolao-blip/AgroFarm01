@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { requireFarmer, requirePdv, hashPassword, comparePasswords } from "./farm-middleware";
+import { requireFarmer, getEffectiveFarmerId, requirePdv, hashPassword, comparePasswords } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -9,7 +9,9 @@ export function registerFarmPdvRoutes(app: Express) {
 
     app.get("/api/farm/pdv-terminals", requireFarmer, async (req, res) => {
         try {
-            const terminals = await farmStorage.getPdvTerminals(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const terminals = await farmStorage.getPdvTerminals(farmerId);
             // Don't return passwords
             const safe = terminals.map(({ password, ...t }) => t);
             res.json(safe);
@@ -21,13 +23,15 @@ export function registerFarmPdvRoutes(app: Express) {
 
     app.post("/api/farm/pdv-terminals", requireFarmer, async (req, res) => {
         try {
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const { name, username, password, propertyId, type } = req.body;
             if (!name || !username || !password) {
                 return res.status(400).json({ error: "Name, username and password required" });
             }
 
             const terminal = await farmStorage.createPdvTerminal({
-                farmerId: req.user!.id,
+                farmerId,
                 name,
                 username,
                 password: await hashPassword(password),
@@ -49,7 +53,8 @@ export function registerFarmPdvRoutes(app: Express) {
         try {
             const { id } = req.params;
             const { name, username, password, propertyId, type } = req.body;
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const { farmPdvTerminals } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
@@ -78,7 +83,8 @@ export function registerFarmPdvRoutes(app: Express) {
     app.delete("/api/farm/pdv-terminals/:id", requireFarmer, async (req, res) => {
         try {
             const { id } = req.params;
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const { farmPdvTerminals } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");

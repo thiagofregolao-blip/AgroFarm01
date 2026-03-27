@@ -21,6 +21,7 @@ import {
     CheckCircle, XCircle, Clock, Pencil,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
+import { useAccessLevel } from "@/hooks/use-access-level";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const ACCOUNT_TYPES = [

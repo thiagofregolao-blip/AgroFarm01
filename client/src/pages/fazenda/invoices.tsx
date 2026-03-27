@@ -15,6 +15,7 @@ import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, 
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useAccessLevel } from "@/hooks/use-access-level";
 
 /** Detecta tamanho de embalagem no nome do produto (ex: "20LTS" → 20, "5LT" → 5, "10KG" → 10) */
 function detectPackageSize(productName: string): number | null {
@@ -104,6 +105,7 @@ export default function FarmInvoices() {
     const [editExpData, setEditExpData] = useState<any>({});
     const [editingExpItemId, setEditingExpItemId] = useState<string | null>(null);
     const [editExpItemData, setEditExpItemData] = useState<any>({});
+    const { canEdit } = useAccessLevel("invoices");
     const [isRemission, setIsRemission] = useState(false);
     const [remissionMatch, setRemissionMatch] = useState<any>(null);
     const [matchedRemissionId, setMatchedRemissionId] = useState<string | null>(null);
@@ -544,6 +546,7 @@ export default function FarmInvoices() {
                         <h1 className="text-2xl font-bold text-emerald-800">Importação de Faturas</h1>
                         <p className="text-emerald-600 text-sm">Importe faturas PDF para registrar entrada no estoque</p>
                     </div>
+                    {canEdit && (
                     <div className="flex gap-2">
                         <Button
                             className="bg-emerald-600 hover:bg-emerald-700"
@@ -561,6 +564,7 @@ export default function FarmInvoices() {
                             Nova Despesa
                         </Button>
                     </div>
+                    )}
                 </div>
 
                 {/* Import Modal */}
@@ -858,7 +862,7 @@ export default function FarmInvoices() {
                                             </Badge>
                                         </CardTitle>
                                         <div className="flex items-center gap-2">
-                                            {!editingInvoice && (
+                                            {canEdit && !editingInvoice && (
                                                 <Button variant="outline" size="sm" onClick={() => {
                                                     setEditingInvoice(true);
                                                     setEditInvData({

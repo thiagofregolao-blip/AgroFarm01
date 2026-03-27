@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessLevel } from "@/hooks/use-access-level";
 
 export default function FarmStock() {
     const [, setLocation] = useLocation();
@@ -25,6 +26,7 @@ export default function FarmStock() {
     const { toast } = useToast();
 
     const { user } = useAuth();
+    const { canEdit } = useAccessLevel("stock");
 
     const { data: stock = [], isLoading } = useQuery({
         queryKey: ["/api/farm/stock"],
@@ -198,11 +200,13 @@ export default function FarmStock() {
                             {stock.length} itens — Valor total: <strong>{formatCurrency(totalValue)}</strong>
                         </p>
                     </div>
+                    {canEdit && (
                     <div className="flex gap-2 flex-wrap">
                         <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/deposits"] })} />
                         <DieselEntryDialog onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] }); queryClient.invalidateQueries({ queryKey: ["/api/farm/stock/movements"] }); }} />
                         <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
                     </div>
+                    )}
                 </div>
 
                 <Tabs defaultValue="stock">
@@ -273,12 +277,12 @@ export default function FarmStock() {
                                                     <td className="text-right p-3 font-mono">{formatCurrency(cost)}</td>
                                                     <td className="text-right p-3 font-mono font-semibold">{formatCurrency(qty * cost)}</td>
                                                     <td className="text-right p-3">
-                                                        <div className="flex justify-end gap-2">
+                                                        {canEdit && <div className="flex justify-end gap-2">
                                                             <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
                                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
                                                                 {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                                             </Button>
-                                                        </div>
+                                                        </div>}
                                                     </td>
                                                 </tr>
                                             );
@@ -301,12 +305,14 @@ export default function FarmStock() {
                                                         <div className="text-[11px] text-gray-500">{s.activeIngredient}</div>
                                                     )}
                                                 </div>
+                                                {canEdit && (
                                                 <div className="flex gap-1.5 flex-shrink-0">
                                                     <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
                                                         {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                                     </Button>
                                                 </div>
+                                                )}
                                             </div>
                                             <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 text-emerald-700 mb-3">
                                                 {s.productCategory || "—"}
