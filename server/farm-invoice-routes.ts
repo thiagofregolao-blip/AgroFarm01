@@ -515,15 +515,51 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 }
             }
 
+            // Create equipment expense if equipmentId provided (parts/maintenance invoice)
+            const equipmentId = req.body.equipmentId;
+            if (equipmentId) {
+                try {
+                    const expAmount = invoice.totalAmount || "0";
+                    await db.execute(sql`
+                        INSERT INTO farm_expenses (farmer_id, equipment_id, category, amount, currency, description, expense_date, invoice_id, supplier)
+                        VALUES (${farmerId}, ${equipmentId}, 'pecas', ${String(expAmount)}, ${invoice.currency || 'USD'},
+                            ${'Pecas/Manutencao — Fatura #' + (invoice.invoiceNumber || req.params.id.slice(0, 8))},
+                            ${invoice.issueDate ? new Date(invoice.issueDate) : new Date()},
+                            ${req.params.id},
+                            ${invoice.supplier || null})
+                    `);
+
+                    // Also create individual expense items from invoice items
+                    const items = await farmStorage.getInvoiceItems(req.params.id);
+                    for (const item of items) {
+                        if (!item.productName) continue;
+                        await db.execute(sql`
+                            INSERT INTO farm_expense_items (expense_id, item_name, quantity, unit, unit_price, total_price)
+                            SELECT id, ${item.productName}, ${item.quantity}, ${item.unit || 'UN'},
+                                   ${item.unitPrice}, ${item.totalPrice}
+                            FROM farm_expenses
+                            WHERE invoice_id = ${req.params.id} AND equipment_id = ${equipmentId}
+                            ORDER BY created_at DESC LIMIT 1
+                        `);
+                    }
+
+                    console.log(`[INVOICE_CONFIRM] Created equipment expense for vehicle ${equipmentId}, invoice ${req.params.id}`);
+                } catch (eqErr) {
+                    console.error("[INVOICE_CONFIRM_EQUIPMENT]", eqErr);
+                }
+            }
+
             // Check if this invoice should skip stock entry
             const updatedInvoice = await farmStorage.getInvoiceById(req.params.id);
             const skipped = updatedInvoice?.skipStockEntry;
             res.json({
-                message: isRemisionDoc
-                    ? "Remissao confirmada. Produtos entraram no estoque (custo pendente). Quando a fatura chegar, o sistema concilia automaticamente."
-                    : skipped
-                        ? "Fatura confirmada. Estoque NAO atualizado (apenas financeiro)."
-                        : "Fatura confirmada. Estoque atualizado."
+                message: equipmentId
+                    ? "Fatura confirmada. Despesa vinculada ao veiculo."
+                    : isRemisionDoc
+                        ? "Remissao confirmada. Produtos entraram no estoque (custo pendente). Quando a fatura chegar, o sistema concilia automaticamente."
+                        : skipped
+                            ? "Fatura confirmada. Estoque NAO atualizado (apenas financeiro)."
+                            : "Fatura confirmada. Estoque atualizado."
             });
         } catch (error) {
             console.error("[FARM_INVOICE_CONFIRM]", error);

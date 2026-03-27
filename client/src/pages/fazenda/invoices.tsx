@@ -60,6 +60,7 @@ export default function FarmInvoices() {
     const [confirmWarehouseId, setConfirmWarehouseId] = useState<string>("");
     const [confirmSeasonId, setConfirmSeasonId] = useState<string>("");
     const [confirmFrotaAmount, setConfirmFrotaAmount] = useState<string>("");
+    const [confirmEquipmentId, setConfirmEquipmentId] = useState<string>("");
 
     // Nova Despesa dialog state
     const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
@@ -153,6 +154,8 @@ export default function FarmInvoices() {
         enabled: !!user,
     });
 
+
+
     const whatsappExpenses = (expenses as any[]).filter((e) =>
         e.equipmentId &&
         (e.description?.startsWith("[Via WhatsApp]") ?? false)
@@ -169,22 +172,29 @@ export default function FarmInvoices() {
     };
 
     const confirmMutation = useMutation({
-        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, frotaAmount, itemConversions }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; frotaAmount?: string; itemConversions?: Record<string, number> }) =>
+        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, frotaAmount, itemConversions, equipmentId }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; frotaAmount?: string; itemConversions?: Record<string, number>; equipmentId?: string }) =>
             apiRequest("POST", `/api/farm/invoices/${id}/confirm`, {
                 ...(skipStockEntry ? { skipStockEntry: true } : {}),
                 ...(warehouseId ? { warehouseId } : {}),
                 ...(seasonId ? { seasonId } : {}),
                 ...(frotaAmount && parseFloat(frotaAmount) > 0 ? { frotaAmount } : {}),
                 ...(itemConversions && Object.keys(itemConversions).length > 0 ? { itemConversions } : {}),
+                ...(equipmentId ? { equipmentId } : {}),
             }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
-            toast({ title: confirmSkipStock ? "Fatura confirmada (somente valor, sem estoque)." : "Confirmado! Estoque atualizado." });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            toast({ title: confirmEquipmentId && confirmEquipmentId !== "__none__"
+                ? "Fatura confirmada. Despesa vinculada ao veiculo."
+                : confirmSkipStock ? "Fatura confirmada (somente valor, sem estoque)."
+                : "Confirmado! Estoque atualizado."
+            });
             setSelectedInvoice(null);
             setConfirmSkipStock(false);
             setConfirmWarehouseId("");
             setConfirmSeasonId("");
+            setConfirmEquipmentId("");
         },
         onError: (err: any) => toast({ title: `Erro ao confirmar: ${err?.message || "Falha desconhecida"}`, variant: "destructive" }),
     });
@@ -1214,6 +1224,30 @@ export default function FarmInvoices() {
                                                 </Select>
                                             </div>
 
+                                            {/* Vincular a veículo da frota */}
+                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                    Vincular a veiculo (opcional)
+                                                </Label>
+                                                <Select value={confirmEquipmentId} onValueChange={setConfirmEquipmentId}>
+                                                    <SelectTrigger className="mt-1">
+                                                        <SelectValue placeholder="Selecione o veiculo..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="__none__">Nenhum (entrada no estoque)</SelectItem>
+                                                        {(equipment as any[]).filter((e: any) => e.status === "Ativo").map((e: any) => (
+                                                            <SelectItem key={e.id} value={e.id}>{e.name} ({e.type})</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    {confirmEquipmentId && confirmEquipmentId !== "__none__"
+                                                        ? "A fatura sera registrada como despesa do veiculo (nao entra no estoque)"
+                                                        : "Produtos entrarao no estoque normalmente"
+                                                    }
+                                                </p>
+                                            </div>
+
                                             {/* Despesa de Frota */}
                                             <div className="p-3 rounded-lg border border-gray-200 bg-white">
                                                 <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
@@ -1242,13 +1276,15 @@ export default function FarmInvoices() {
                                                                 }
                                                             }
                                                         }
+                                                        const hasEquipment = confirmEquipmentId && confirmEquipmentId !== "__none__";
                                                         confirmMutation.mutate({
                                                             id: selectedInvoice!,
-                                                            skipStockEntry: confirmSkipStock || undefined,
-                                                            warehouseId: !confirmSkipStock && confirmWarehouseId ? confirmWarehouseId : undefined,
+                                                            skipStockEntry: confirmSkipStock || hasEquipment || undefined,
+                                                            warehouseId: !confirmSkipStock && !hasEquipment && confirmWarehouseId ? confirmWarehouseId : undefined,
                                                             seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
                                                             frotaAmount: confirmFrotaAmount || undefined,
                                                             itemConversions: Object.keys(conversions).length > 0 ? conversions : undefined,
+                                                            equipmentId: hasEquipment ? confirmEquipmentId : undefined,
                                                         });
                                                     }}
                                                     disabled={confirmMutation.isPending}
