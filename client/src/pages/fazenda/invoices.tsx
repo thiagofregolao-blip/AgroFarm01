@@ -25,6 +25,26 @@ function detectPackageSize(productName: string): number | null {
     return size > 1 ? size : null;
 }
 
+/**
+ * Verifica se um item precisa de conversão embalagem → litros/kg.
+ * Regra: qty × pkgSize × price ≈ totalPrice → qty são embalagens → converter.
+ * Se não bate → qty já está na unidade correta → não converter.
+ */
+function shouldConvertPackage(item: { productName: string; quantity: string | number; unitPrice: string | number; totalPrice: string | number }): number | null {
+    const pkgSize = detectPackageSize(item.productName);
+    if (!pkgSize) return null;
+    const qty = parseFloat(String(item.quantity));
+    const price = parseFloat(String(item.unitPrice));
+    const total = parseFloat(String(item.totalPrice));
+    if (!qty || !price || !total) return null;
+    const convertedTotal = qty * pkgSize * price;
+    const tolerance = total * 0.02; // 2% tolerância para arredondamento
+    if (Math.abs(convertedTotal - total) <= tolerance) {
+        return pkgSize; // Converter: qty são embalagens, preço é por unidade
+    }
+    return null; // Não converter: qty já está correto
+}
+
 export default function FarmInvoices() {
     const [, setLocation] = useLocation();
     const queryClient = useQueryClient();
@@ -200,11 +220,13 @@ export default function FarmInvoices() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/invoices/${id}`),
-        onSuccess: () => {
+        mutationFn: async (id: string) => { const r = await apiRequest("DELETE", `/api/farm/invoices/${id}`); return r.json(); },
+        onSuccess: (data: any) => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices", "remision"] });
-            toast({ title: "Excluido com sucesso." });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            toast({ title: data?.message || "Excluido com sucesso." });
             setSelectedInvoice(null);
         },
         onError: () => toast({ title: "Erro ao excluir", variant: "destructive" }),
@@ -1050,7 +1072,7 @@ export default function FarmInvoices() {
                                                                 </td>
                                                                 <td className="text-center p-2">{item.unit}</td>
                                                                 {(() => {
-                                                                    const pkgSize = detectPackageSize(item.productName);
+                                                                    const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice });
                                                                     const qty = parseFloat(item.quantity);
                                                                     const price = parseFloat(item.unitPrice);
                                                                     const realQty = pkgSize ? qty * pkgSize : qty;
@@ -1121,7 +1143,7 @@ export default function FarmInvoices() {
 
                                     {/* Conversão embalagem → litros/kg (informativo) */}
                                     {invoiceDetail.status === "pending" && invoiceDetail.items?.length > 0 && (() => {
-                                        const itemsWithPkg = invoiceDetail.items.filter((item: any) => detectPackageSize(item.productName));
+                                        const itemsWithPkg = invoiceDetail.items.filter((item: any) => shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice }));
                                         if (itemsWithPkg.length === 0) return null;
                                         return (
                                             <div className="mt-4 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
@@ -1136,7 +1158,7 @@ export default function FarmInvoices() {
                                                 </p>
                                                 <div className="space-y-1">
                                                     {itemsWithPkg.map((item: any) => {
-                                                        const pkgSize = detectPackageSize(item.productName)!;
+                                                        const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice })!;
                                                         const qty = parseFloat(item.quantity);
                                                         const price = parseFloat(item.unitPrice);
                                                         return (
@@ -1266,11 +1288,11 @@ export default function FarmInvoices() {
                                                 <Button
                                                     className="bg-emerald-600 hover:bg-emerald-700"
                                                     onClick={() => {
-                                                        // Build item conversions map: itemId → packageSize (automatic)
+                                                        // Build item conversions map: itemId → packageSize (only when math test passes)
                                                         const conversions: Record<string, number> = {};
                                                         if (invoiceDetail.items) {
                                                             for (const item of invoiceDetail.items) {
-                                                                const pkgSize = detectPackageSize(item.productName);
+                                                                const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice });
                                                                 if (pkgSize) {
                                                                     conversions[item.id] = pkgSize;
                                                                 }

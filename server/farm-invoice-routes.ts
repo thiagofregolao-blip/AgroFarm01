@@ -817,16 +817,70 @@ export function registerFarmInvoiceRoutes(app: Express) {
         }
     });
 
-    // Delete invoice
+    // Delete invoice (reverses stock if invoice was confirmed)
     app.delete("/api/farm/invoices/:id", requireFarmer, async (req, res) => {
         try {
             const farmerId = req.user!.id;
-            // Delete related records first to avoid FK constraint errors
-            await db.execute(sql`DELETE FROM farm_invoice_items WHERE invoice_id = ${req.params.id}`);
-            await db.execute(sql`DELETE FROM farm_accounts_payable WHERE invoice_id = ${req.params.id} AND farmer_id = ${farmerId}`);
-            await db.execute(sql`UPDATE farm_remissions SET reconciled_invoice_id = NULL WHERE reconciled_invoice_id = ${req.params.id} AND farmer_id = ${farmerId}`);
-            await db.execute(sql`DELETE FROM farm_invoices WHERE id = ${req.params.id} AND farmer_id = ${farmerId}`);
-            res.json({ message: "Fatura excluida com sucesso." });
+            const invoiceId = req.params.id;
+
+            // Check if invoice was confirmed — if so, reverse stock entries
+            const invoice = await farmStorage.getInvoiceById(invoiceId);
+            if (invoice && invoice.status === "confirmed" && !invoice.skipStockEntry) {
+                // Find all stock movements created by this invoice
+                const movementsResult = await db.execute(sql`
+                    SELECT product_id, quantity, unit_cost
+                    FROM farm_stock_movements
+                    WHERE farmer_id = ${farmerId}
+                      AND reference_id = ${invoiceId}
+                      AND reference_type IN ('invoice', 'remision')
+                      AND type = 'entry'
+                `);
+                const movements = (movementsResult as any).rows ?? movementsResult;
+
+                // Reverse each stock entry by deducting the quantity
+                for (const mov of movements) {
+                    const qty = parseFloat(mov.quantity || "0");
+                    if (qty > 0 && mov.product_id) {
+                        // Find the deposit (property_id) for this stock entry
+                        const stockResult = await db.execute(sql`
+                            SELECT property_id FROM farm_stock
+                            WHERE farmer_id = ${farmerId} AND product_id = ${mov.product_id}
+                            LIMIT 1
+                        `);
+                        const stockRow = ((stockResult as any).rows ?? stockResult)[0];
+                        const propId = stockRow?.property_id || null;
+
+                        await farmStorage.upsertStock(farmerId, mov.product_id, -qty, 0, propId);
+                        console.log(`[INVOICE_DELETE] Reversed stock: product=${mov.product_id} qty=-${qty}`);
+                    }
+                }
+
+                // Delete the stock movements for this invoice
+                await db.execute(sql`
+                    DELETE FROM farm_stock_movements
+                    WHERE farmer_id = ${farmerId} AND reference_id = ${invoiceId}
+                `);
+
+                // Delete price history entries for this invoice date+supplier
+                if (invoice.supplier && invoice.issueDate) {
+                    await db.execute(sql`
+                        DELETE FROM farm_price_history
+                        WHERE farmer_id = ${farmerId}
+                          AND supplier = ${invoice.supplier}
+                          AND purchase_date = ${invoice.issueDate}
+                    `);
+                }
+
+                console.log(`[INVOICE_DELETE] Reversed stock entries for confirmed invoice ${invoiceId}`);
+            }
+
+            // Delete related records to avoid FK constraint errors
+            await db.execute(sql`DELETE FROM farm_invoice_items WHERE invoice_id = ${invoiceId}`);
+            await db.execute(sql`DELETE FROM farm_accounts_payable WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
+            await db.execute(sql`DELETE FROM farm_expenses WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
+            await db.execute(sql`UPDATE farm_remissions SET reconciled_invoice_id = NULL WHERE reconciled_invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
+            await db.execute(sql`DELETE FROM farm_invoices WHERE id = ${invoiceId} AND farmer_id = ${farmerId}`);
+            res.json({ message: invoice?.status === "confirmed" ? "Fatura excluida. Estoque e financeiro revertidos." : "Fatura excluida com sucesso." });
         } catch (error) {
             console.error("[FARM_INVOICE_DELETE]", error);
             res.status(500).json({ error: "Failed to delete invoice" });
