@@ -16,6 +16,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
+/** Detecta tamanho de embalagem no nome do produto (ex: "20LTS" → 20, "5LT" → 5, "10KG" → 10) */
+function detectPackageSize(productName: string): number | null {
+    if (!productName) return null;
+    // Match patterns like "20LTS", "5LT", "5 LTS", "10KG", "1LT", "20 LT", "5 LTS."
+    const match = productName.match(/[\s\-x](\d+(?:[.,]\d+)?)\s*(?:LTS?|KGS?|LITROS?)\.?(?:\s|$|\)|-)/i);
+    if (!match) return null;
+    const size = parseFloat(match[1].replace(",", "."));
+    return size > 1 ? size : null; // Ignora 1LT (não precisa converter)
+}
+
 export default function FarmInvoices() {
     const [, setLocation] = useLocation();
     const queryClient = useQueryClient();
@@ -51,6 +61,8 @@ export default function FarmInvoices() {
     const [confirmWarehouseId, setConfirmWarehouseId] = useState<string>("");
     const [confirmSeasonId, setConfirmSeasonId] = useState<string>("");
     const [confirmFrotaAmount, setConfirmFrotaAmount] = useState<string>("");
+    // Conversão de embalagem → litros/kg
+    const [packageConversions, setPackageConversions] = useState<Record<string, boolean>>({});
 
     // Nova Despesa dialog state
     const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
@@ -160,12 +172,13 @@ export default function FarmInvoices() {
     };
 
     const confirmMutation = useMutation({
-        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, frotaAmount }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; frotaAmount?: string }) =>
+        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, frotaAmount, itemConversions }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; frotaAmount?: string; itemConversions?: Record<string, number> }) =>
             apiRequest("POST", `/api/farm/invoices/${id}/confirm`, {
                 ...(skipStockEntry ? { skipStockEntry: true } : {}),
                 ...(warehouseId ? { warehouseId } : {}),
                 ...(seasonId ? { seasonId } : {}),
                 ...(frotaAmount && parseFloat(frotaAmount) > 0 ? { frotaAmount } : {}),
+                ...(itemConversions && Object.keys(itemConversions).length > 0 ? { itemConversions } : {}),
             }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
@@ -175,6 +188,7 @@ export default function FarmInvoices() {
             setConfirmSkipStock(false);
             setConfirmWarehouseId("");
             setConfirmSeasonId("");
+            setPackageConversions({});
         },
         onError: (err: any) => toast({ title: `Erro ao confirmar: ${err?.message || "Falha desconhecida"}`, variant: "destructive" }),
     });
@@ -1029,9 +1043,45 @@ export default function FarmInvoices() {
                                                                     </Select>
                                                                 </td>
                                                                 <td className="text-center p-2">{item.unit}</td>
-                                                                <td className="text-right p-2 font-mono">{parseFloat(item.quantity).toFixed(2)}</td>
-                                                                <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
-                                                                <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                                {(() => {
+                                                                    const pkgSize = detectPackageSize(item.productName);
+                                                                    const isConverting = pkgSize && packageConversions[item.id] !== false;
+                                                                    const qty = parseFloat(item.quantity);
+                                                                    const price = parseFloat(item.unitPrice);
+                                                                    const realQty = isConverting && pkgSize ? qty * pkgSize : qty;
+                                                                    const realPrice = isConverting && pkgSize ? price / pkgSize : price;
+                                                                    return (
+                                                                        <>
+                                                                            <td className="text-right p-2 font-mono">
+                                                                                {pkgSize ? (
+                                                                                    <div className="flex flex-col items-end gap-0.5">
+                                                                                        {isConverting ? (
+                                                                                            <>
+                                                                                                <span className="text-emerald-700 font-semibold">{realQty.toFixed(2)}</span>
+                                                                                                <span className="text-[10px] text-gray-400 line-through">{qty.toFixed(2)} emb</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <span>{qty.toFixed(2)}</span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <span>{qty.toFixed(2)}</span>
+                                                                                )}
+                                                                            </td>
+                                                                            <td className="text-right p-2 font-mono">
+                                                                                {pkgSize && isConverting ? (
+                                                                                    <div className="flex flex-col items-end gap-0.5">
+                                                                                        <span className="text-emerald-700 font-semibold">${realPrice.toFixed(2)}</span>
+                                                                                        <span className="text-[10px] text-gray-400 line-through">${price.toFixed(2)}/emb</span>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <span>${price.toFixed(2)}</span>
+                                                                                )}
+                                                                            </td>
+                                                                            <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                                        </>
+                                                                    );
+                                                                })()}
                                                                 {invoiceDetail.status === "pending" && (
                                                                     <td className="text-center p-2">
                                                                         <button className="p-1 rounded hover:bg-amber-100" title="Editar item"
@@ -1069,6 +1119,50 @@ export default function FarmInvoices() {
                                             </p>
                                         </div>
                                     )}
+
+                                    {/* Conversão embalagem → litros/kg */}
+                                    {invoiceDetail.status === "pending" && invoiceDetail.items?.length > 0 && (() => {
+                                        const itemsWithPkg = invoiceDetail.items.filter((item: any) => detectPackageSize(item.productName));
+                                        if (itemsWithPkg.length === 0) return null;
+                                        return (
+                                            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <Package className="h-4 w-4 text-blue-600" />
+                                                    <span className="text-sm font-semibold text-blue-800">
+                                                        Conversao de embalagem detectada ({itemsWithPkg.length} {itemsWithPkg.length === 1 ? "item" : "itens"})
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-blue-700 mb-2">
+                                                    Estes produtos parecem ter quantidade em embalagens. A conversao multiplica a quantidade pelo tamanho da embalagem e ajusta o preco unitario. Desmarque se a fatura ja veio com a quantidade correta.
+                                                </p>
+                                                <div className="space-y-1.5">
+                                                    {itemsWithPkg.map((item: any) => {
+                                                        const pkgSize = detectPackageSize(item.productName)!;
+                                                        const qty = parseFloat(item.quantity);
+                                                        const price = parseFloat(item.unitPrice);
+                                                        const isOn = packageConversions[item.id] !== false;
+                                                        return (
+                                                            <div key={item.id}
+                                                                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${isOn ? 'bg-emerald-50 border border-emerald-200' : 'bg-white border border-gray-200'}`}
+                                                                onClick={() => setPackageConversions(prev => ({ ...prev, [item.id]: !isOn }))}
+                                                            >
+                                                                <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${isOn ? 'bg-emerald-500 text-white' : 'border border-gray-300'}`}>
+                                                                    {isOn && <Check className="h-3 w-3" />}
+                                                                </div>
+                                                                <span className="text-xs font-medium flex-1 truncate">{item.productName}</span>
+                                                                <span className="text-xs text-gray-500 flex-shrink-0">
+                                                                    {isOn
+                                                                        ? `${qty} × ${pkgSize} = ${(qty * pkgSize).toFixed(0)} | $${(price / pkgSize).toFixed(2)}/un`
+                                                                        : `${qty.toFixed(0)} un × $${price.toFixed(2)}`
+                                                                    }
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {invoiceDetail.status === "pending" && (
                                         <div className="mt-4 space-y-3">
@@ -1157,13 +1251,26 @@ export default function FarmInvoices() {
                                             <div className="flex justify-end">
                                                 <Button
                                                     className="bg-emerald-600 hover:bg-emerald-700"
-                                                    onClick={() => confirmMutation.mutate({
-                                                        id: selectedInvoice!,
-                                                        skipStockEntry: confirmSkipStock || undefined,
-                                                        warehouseId: !confirmSkipStock && confirmWarehouseId ? confirmWarehouseId : undefined,
-                                                        seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
-                                                        frotaAmount: confirmFrotaAmount || undefined,
-                                                    })}
+                                                    onClick={() => {
+                                                        // Build item conversions map: itemId → packageSize (only for enabled conversions)
+                                                        const conversions: Record<string, number> = {};
+                                                        if (invoiceDetail.items) {
+                                                            for (const item of invoiceDetail.items) {
+                                                                const pkgSize = detectPackageSize(item.productName);
+                                                                if (pkgSize && packageConversions[item.id] !== false) {
+                                                                    conversions[item.id] = pkgSize;
+                                                                }
+                                                            }
+                                                        }
+                                                        confirmMutation.mutate({
+                                                            id: selectedInvoice!,
+                                                            skipStockEntry: confirmSkipStock || undefined,
+                                                            warehouseId: !confirmSkipStock && confirmWarehouseId ? confirmWarehouseId : undefined,
+                                                            seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
+                                                            frotaAmount: confirmFrotaAmount || undefined,
+                                                            itemConversions: Object.keys(conversions).length > 0 ? conversions : undefined,
+                                                        });
+                                                    }}
                                                     disabled={confirmMutation.isPending}
                                                 >
                                                     {confirmMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}

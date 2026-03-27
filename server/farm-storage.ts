@@ -393,7 +393,7 @@ export class FarmStorage {
     }
 
     // Confirm invoice: create stock entries + movements (unless skipStockEntry is set), and save price history
-    async confirmInvoice(invoiceId: string, farmerId: string, warehouseId?: string): Promise<void> {
+    async confirmInvoice(invoiceId: string, farmerId: string, warehouseId?: string, itemConversions?: Record<string, number>): Promise<void> {
         await dbReady;
 
         // Fetch invoice details for price history
@@ -416,8 +416,15 @@ export class FarmStorage {
         for (const item of items) {
             if (!item.productId) continue;
 
-            const qty = parseFloat(item.quantity);
-            const cost = parseFloat(item.unitPrice);
+            let qty = parseFloat(item.quantity);
+            let cost = parseFloat(item.unitPrice);
+
+            // Aplicar conversão de embalagem no histórico de preços também
+            const pkgSize = itemConversions?.[item.id];
+            if (pkgSize && pkgSize > 1) {
+                qty = qty * pkgSize;
+                cost = cost / pkgSize;
+            }
 
             if (qty > 0 && cost > 0) {
                 try {
@@ -444,8 +451,16 @@ export class FarmStorage {
             for (const item of items) {
                 if (!item.productId) continue;
 
-                const qty = parseFloat(item.quantity);
-                const cost = parseFloat(item.unitPrice);
+                let qty = parseFloat(item.quantity);
+                let cost = parseFloat(item.unitPrice);
+
+                // Aplicar conversão de embalagem → litros/kg se solicitado
+                const pkgSize = itemConversions?.[item.id];
+                if (pkgSize && pkgSize > 1) {
+                    console.log(`[FARM_CONFIRM]   🔄 PKG CONVERSION: "${item.productName}" ${qty} emb × ${pkgSize} = ${qty * pkgSize} | $${cost} ÷ ${pkgSize} = $${(cost / pkgSize).toFixed(4)}`);
+                    qty = qty * pkgSize;
+                    cost = cost / pkgSize;
+                }
 
                 console.log(`[FARM_CONFIRM]   📦 STOCK ENTRY: "${item.productName}" pid=${item.productId} qty=${qty} cost=${cost}`);
 

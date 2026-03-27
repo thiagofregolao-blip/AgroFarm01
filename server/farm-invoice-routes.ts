@@ -455,7 +455,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 await db.execute(sql`UPDATE farm_invoices SET season_id = ${req.body.seasonId} WHERE id = ${req.params.id}`);
             }
 
-            await farmStorage.confirmInvoice(req.params.id, farmerId, req.body.warehouseId);
+            await farmStorage.confirmInvoice(req.params.id, farmerId, req.body.warehouseId, req.body.itemConversions);
 
             // Auto-create accounts payable entry (only for faturas, NOT remissoes)
             const isRemisionDoc = (invoice as any).documentType === "remision";
