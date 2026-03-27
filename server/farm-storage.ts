@@ -569,9 +569,42 @@ export class FarmStorage {
         // 1. Create application record
         const [app] = await db.insert(farmApplications).values(data).returning();
 
-        // 2. Subtract from stock
+        // 2. Subtract from stock — pass propertyId to deduct from correct deposit
         const qty = parseFloat(data.quantity);
-        await this.upsertStock(data.farmerId, data.productId, -qty, 0);
+        const depositId = (data as any).propertyId || null;
+
+        // Try to deduct from the specific deposit first
+        // If no stock found there, try finding ANY deposit with enough stock for this product
+        const propCoalesced = depositId || '__none__';
+        const specificRows = await db.execute(sql`
+            SELECT id, quantity FROM farm_stock
+            WHERE farmer_id = ${data.farmerId} AND product_id = ${data.productId}
+              AND COALESCE(property_id, '__none__') = ${propCoalesced}
+            LIMIT 1
+        `);
+        const specificEntry = ((specificRows as any).rows ?? specificRows)[0];
+
+        if (specificEntry && parseFloat(specificEntry.quantity) >= qty) {
+            // Specific deposit has enough stock → deduct from it
+            await this.upsertStock(data.farmerId, data.productId, -qty, 0, depositId);
+        } else {
+            // Fallback: find ANY deposit with enough stock for this product
+            const anyRows = await db.execute(sql`
+                SELECT id, property_id, quantity FROM farm_stock
+                WHERE farmer_id = ${data.farmerId} AND product_id = ${data.productId}
+                  AND CAST(quantity AS NUMERIC) >= ${qty}
+                ORDER BY CAST(quantity AS NUMERIC) DESC
+                LIMIT 1
+            `);
+            const anyEntry = ((anyRows as any).rows ?? anyRows)[0];
+            if (anyEntry) {
+                await this.upsertStock(data.farmerId, data.productId, -qty, 0, anyEntry.property_id || null);
+            } else {
+                // No deposit has enough — deduct from specified deposit (may go negative, but log warning)
+                console.warn(`[PDV_WITHDRAW] Estoque insuficiente para produto ${data.productId} — qty=${qty}, deducting from deposit=${depositId}`);
+                await this.upsertStock(data.farmerId, data.productId, -qty, 0, depositId);
+            }
+        }
 
         // 3. Record stock movement (fetch plot or equipment name for notes)
         let noteStr = "";

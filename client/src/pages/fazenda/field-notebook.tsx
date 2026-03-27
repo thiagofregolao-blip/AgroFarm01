@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import FarmLayout from "@/components/fazenda/layout";
-import { BookOpen, Calendar, Sprout, MapPin, Filter, FileDown, Clock } from "lucide-react";
+import { BookOpen, Calendar, Sprout, MapPin, Filter, FileDown, Clock, Package } from "lucide-react";
 
 export default function FieldNotebook() {
     const [seasonId, setSeasonId] = useState<string>("");
@@ -20,6 +20,40 @@ export default function FieldNotebook() {
     const entries = data?.entries || [];
     const summary = data?.summary || {};
     const seasons = data?.seasons || [];
+
+    // Agrupar aplicações que aconteceram juntas (mesmo talhão, dentro de 5 min)
+    const groupedEntries = useMemo(() => {
+        if (!entries.length) return [];
+        const groups: { key: string; date: string; plotName: string; plotArea: string; propertyName: string; appliedBy: string; products: any[] }[] = [];
+        const BATCH_WINDOW = 5 * 60 * 1000; // 5 minutos
+
+        for (const entry of entries) {
+            const entryTime = entry.date ? new Date(entry.date).getTime() : 0;
+            const plotKey = entry.plotName || "__none__";
+
+            // Tentar encontrar grupo existente compatível
+            const existing = groups.find(g => {
+                if (g.plotName !== (entry.plotName || "")) return false;
+                const groupTime = new Date(g.date).getTime();
+                return Math.abs(entryTime - groupTime) <= BATCH_WINDOW;
+            });
+
+            if (existing) {
+                existing.products.push(entry);
+            } else {
+                groups.push({
+                    key: `${entryTime}-${plotKey}`,
+                    date: entry.date,
+                    plotName: entry.plotName || "",
+                    plotArea: entry.plotArea || "",
+                    propertyName: entry.propertyName || "",
+                    appliedBy: entry.appliedBy || "",
+                    products: [entry],
+                });
+            }
+        }
+        return groups;
+    }, [entries]);
 
     return (
         <FarmLayout>
@@ -94,10 +128,10 @@ export default function FieldNotebook() {
                         {/* Vertical line */}
                         <div style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: 2, background: "#E5E7EB" }} />
 
-                        {entries.map((entry: any, i: number) => {
-                            const date = entry.date ? new Date(entry.date) : null;
+                        {groupedEntries.map((group, i) => {
+                            const date = group.date ? new Date(group.date) : null;
                             return (
-                                <div key={entry.id || i} style={{ position: "relative", marginBottom: 20 }}>
+                                <div key={group.key} style={{ position: "relative", marginBottom: 20 }}>
                                     {/* Dot */}
                                     <div style={{
                                         position: "absolute", left: -23, top: 8,
@@ -111,9 +145,18 @@ export default function FieldNotebook() {
                                         background: "#fff", borderRadius: 12, padding: 16,
                                         border: "1px solid #E5E7EB",
                                     }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-                                            <div style={{ fontWeight: 600, fontSize: 15, color: "#111827" }}>
-                                                {entry.productName || "Produto"}
+                                        {/* Header: data + local */}
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13, color: "#374151" }}>
+                                                {group.plotName && (
+                                                    <span style={{ fontWeight: 600 }}>📍 {group.plotName} {group.plotArea ? `(${group.plotArea} ha)` : ""}</span>
+                                                )}
+                                                {group.propertyName && (
+                                                    <span>🏡 {group.propertyName}</span>
+                                                )}
+                                                {group.appliedBy && (
+                                                    <span>👤 {group.appliedBy}</span>
+                                                )}
                                             </div>
                                             <div style={{ fontSize: 12, color: "#6B7280", display: "flex", alignItems: "center", gap: 4 }}>
                                                 <Clock size={12} />
@@ -121,36 +164,40 @@ export default function FieldNotebook() {
                                             </div>
                                         </div>
 
-                                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13, color: "#374151" }}>
-                                            {entry.quantity && (
-                                                <span>📦 {parseFloat(entry.quantity).toFixed(2)} {entry.productUnit || ""}</span>
-                                            )}
-                                            {entry.plotName && (
-                                                <span>📍 {entry.plotName} {entry.plotArea ? `(${entry.plotArea} ha)` : ""}</span>
-                                            )}
-                                            {entry.propertyName && (
-                                                <span>🏡 {entry.propertyName}</span>
-                                            )}
-                                            {entry.appliedBy && (
-                                                <span>👤 {entry.appliedBy}</span>
-                                            )}
+                                        {/* Produtos da aplicação */}
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                            {group.products.map((p: any) => (
+                                                <div key={p.id} style={{
+                                                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                                                    background: "#F9FAFB", borderRadius: 8, padding: "8px 12px",
+                                                }}>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>
+                                                            {p.productName || "Produto"}
+                                                        </div>
+                                                        {p.productCategory && (
+                                                            <span style={{
+                                                                display: "inline-block", marginTop: 4,
+                                                                background: "#367C2B15", color: "#367C2B",
+                                                                padding: "1px 8px", borderRadius: 10, fontSize: 11, fontWeight: 600,
+                                                            }}>
+                                                                {p.productCategory}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {p.quantity && (
+                                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#367C2B", whiteSpace: "nowrap", marginLeft: 12 }}>
+                                                            {parseFloat(p.quantity).toFixed(2)} {p.productUnit || ""}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
 
-                                        {entry.productCategory && (
-                                            <span style={{
-                                                display: "inline-block", marginTop: 8,
-                                                background: "#367C2B15", color: "#367C2B",
-                                                padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600,
-                                            }}>
-                                                {entry.productCategory}
-                                            </span>
-                                        )}
-
-                                        {entry.notes && (
-                                            <div style={{ marginTop: 8, fontSize: 12, color: "#6B7280", fontStyle: "italic" }}>
-                                                📝 {entry.notes}
-                                            </div>
-                                        )}
+                                        {/* Rodapé: total de produtos */}
+                                        <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 12, color: "#9CA3AF" }}>
+                                            <span>{group.products.length} produto{group.products.length > 1 ? "s" : ""}</span>
+                                        </div>
                                     </div>
                                 </div>
                             );

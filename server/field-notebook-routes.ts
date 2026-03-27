@@ -8,13 +8,10 @@ import { farmApplications, farmProductsCatalog, farmPlots, farmProperties, farmS
 import { eq, and, desc, sql } from "drizzle-orm";
 
 export function registerFieldNotebookRoutes(app: Express) {
-    const getFarmerId = (req: any) => {
-        return req.session?.passport?.user?.toString() || req.user?.id?.toString();
-    };
-
     // GET /api/farm/field-notebook — consolidated field notebook data
     app.get("/api/farm/field-notebook", async (req: any, res) => {
-        const farmerId = getFarmerId(req);
+        const { getEffectiveFarmerId } = await import("./farm-middleware");
+        const farmerId = await getEffectiveFarmerId(req);
         if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
 
         try {
