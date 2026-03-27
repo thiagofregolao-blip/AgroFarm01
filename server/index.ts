@@ -756,6 +756,36 @@ app.use((req, res, next) => {
     log(`⚠️  Migration employee access: ${(migErr as Error).message}`);
   }
 
+  // Inline migration: farm_activity_logs table for audit trail
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_activity_logs (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id VARCHAR NOT NULL,
+        user_id VARCHAR NOT NULL,
+        user_name VARCHAR,
+        action VARCHAR NOT NULL,
+        entity VARCHAR NOT NULL,
+        entity_id VARCHAR,
+        details JSONB,
+        ip_address VARCHAR,
+        created_at TIMESTAMP DEFAULT now()
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_farm_activity_logs_farmer ON farm_activity_logs(farmer_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_farm_activity_logs_created ON farm_activity_logs(created_at)`);
+    log("✅ Migration: farm_activity_logs table + indexes ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_activity_logs: ${(migErr as Error).message}`);
+  }
+
+  // Register activity log middleware before routes
+  const { activityLogMiddleware } = await import("./lib/activity-logger");
+  app.use(activityLogMiddleware);
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes

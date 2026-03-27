@@ -2084,6 +2084,22 @@ export const farmDeposits = pgTable("farm_deposits", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// ==================== ACTIVITY LOGS ====================
+export const farmActivityLogs = pgTable("farm_activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  farmerId: varchar("farmer_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  userName: varchar("user_name"),
+  action: varchar("action").notNull(),
+  entity: varchar("entity").notNull(),
+  entityId: varchar("entity_id"),
+  details: jsonb("details"),
+  ipAddress: varchar("ip_address"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export type FarmActivityLog = typeof farmActivityLogs.$inferSelect;
+
 // ---- Types for new tables ----
 export type FarmSupplier = typeof farmSuppliers.$inferSelect;
 export type FarmCheque = typeof farmCheques.$inferSelect;

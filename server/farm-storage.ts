@@ -509,6 +509,12 @@ export class FarmStorage {
                 console.log(`[FARM_CONFIRM] SKIPPING STOCK (skipStock=true) — only price history saved`);
             }
             console.log(`[FARM_CONFIRM] ========== CONFIRM INVOICE END ==========`);
+
+            // Activity log for invoice confirmation
+            try {
+                const { logActivity } = await import("./lib/activity-logger");
+                await logActivity({ farmerId, userId: farmerId, action: 'confirm', entity: 'invoice', entityId: invoiceId, details: { itemCount: items.length, skipStock } });
+            } catch (_) { /* logging should not break flow */ }
         } catch (error) {
             // If anything fails after we set status to confirmed, revert status so user can retry
             console.error(`[FARM_CONFIRM] Error during confirmation of invoice ${invoiceId}, reverting status`, error);

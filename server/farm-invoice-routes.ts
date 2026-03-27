@@ -895,6 +895,13 @@ export function registerFarmInvoiceRoutes(app: Express) {
             await db.execute(sql`DELETE FROM farm_expenses WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
             await db.execute(sql`UPDATE farm_remissions SET reconciled_invoice_id = NULL WHERE reconciled_invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
             await db.execute(sql`DELETE FROM farm_invoices WHERE id = ${invoiceId} AND farmer_id = ${farmerId}`);
+
+            // Activity log for invoice deletion
+            try {
+                const { logActivity } = await import("./lib/activity-logger");
+                await logActivity({ farmerId: req.user!.id, userId: req.user!.id, userName: (req.user as any).name, action: 'delete', entity: 'invoice', entityId: invoiceId, details: { wasConfirmed: invoice?.status === 'confirmed', supplier: invoice?.supplier } });
+            } catch (_) { /* logging should not break flow */ }
+
             res.json({ message: invoice?.status === "confirmed" ? "Fatura excluida. Estoque e financeiro revertidos." : "Fatura excluida com sucesso." });
         } catch (error) {
             console.error("[FARM_INVOICE_DELETE]", error);

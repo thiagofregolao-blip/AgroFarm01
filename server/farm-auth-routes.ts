@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { requireFarmer, getEffectiveFarmerId } from "./farm-middleware";
+import { requireFarmAdmin } from "./auth";
 import { farmStorage } from "./farm-storage";
 import { ZApiClient } from "./whatsapp/zapi-client";
 import { db } from "./db";
@@ -282,6 +283,50 @@ export function registerFarmAuthRoutes(app: Express) {
         } catch (error) {
             console.error("[FARM_ME_UPDATE]", error);
             res.status(500).json({ error: "Failed to update profile" });
+        }
+    });
+
+    // GET /api/farm/admin/activity-logs — for admin_agricultor / administrador only
+    app.get("/api/farm/admin/activity-logs", requireFarmAdmin, async (req, res) => {
+        try {
+            const { userId, entity, action, startDate, endDate, page = '1', limit = '50' } = req.query;
+
+            const conditions: any[] = [];
+            const lim = Math.min(parseInt(limit as string) || 50, 200);
+            const pageNum = parseInt(page as string) || 1;
+            const offset = (pageNum - 1) * lim;
+
+            // Build WHERE conditions dynamically using sql template
+            let whereClause = sql`1=1`;
+            if (userId) whereClause = sql`${whereClause} AND user_id = ${userId as string}`;
+            if (entity) whereClause = sql`${whereClause} AND entity = ${entity as string}`;
+            if (action) whereClause = sql`${whereClause} AND action = ${action as string}`;
+            if (startDate) whereClause = sql`${whereClause} AND created_at >= ${startDate as string}::date`;
+            if (endDate) whereClause = sql`${whereClause} AND created_at <= (${endDate as string}::date + interval '1 day')`;
+
+            // Count total
+            const countResult = await db.execute(sql`SELECT COUNT(*) as total FROM farm_activity_logs WHERE ${whereClause}`);
+            const totalRows = ((countResult as any).rows ?? countResult);
+            const total = parseInt(totalRows[0]?.total || '0');
+
+            // Fetch paginated logs
+            const logsResult = await db.execute(sql`
+                SELECT * FROM farm_activity_logs
+                WHERE ${whereClause}
+                ORDER BY created_at DESC
+                LIMIT ${lim} OFFSET ${offset}
+            `);
+            const logs = (logsResult as any).rows ?? logsResult;
+
+            res.json({
+                logs,
+                total,
+                page: pageNum,
+                totalPages: Math.ceil(total / lim),
+            });
+        } catch (error) {
+            console.error("[ACTIVITY_LOGS_API]", error);
+            res.status(500).json({ error: "Failed to fetch activity logs" });
         }
     });
 

@@ -303,6 +303,12 @@ export function registerFarmPropertyRoutes(app: Express) {
                     isActive: true,
                 }).where(eq(users.id, emp.userId));
 
+                // Activity log for re-enabling access
+                try {
+                    const { logActivity } = await import("./lib/activity-logger");
+                    await logActivity({ farmerId, userId: req.user!.id, action: 'enable', entity: 'employee_access', entityId: employeeId, details: { employeeName: emp.name, username } });
+                } catch (_) { /* logging should not break flow */ }
+
                 res.json({ message: "Acesso reativado com sucesso", userId: emp.userId });
             } else {
                 // Create new user record
@@ -316,6 +322,12 @@ export function registerFarmPropertyRoutes(app: Express) {
 
                 // Link user to employee
                 await db.execute(sql`UPDATE farm_employees SET user_id = ${newUser.id} WHERE id = ${employeeId}`);
+
+                // Activity log for enabling new access
+                try {
+                    const { logActivity } = await import("./lib/activity-logger");
+                    await logActivity({ farmerId, userId: req.user!.id, action: 'enable', entity: 'employee_access', entityId: employeeId, details: { employeeName: emp.name, username } });
+                } catch (_) { /* logging should not break flow */ }
 
                 res.json({ message: "Acesso habilitado com sucesso", userId: newUser.id });
             }
@@ -337,6 +349,12 @@ export function registerFarmPropertyRoutes(app: Express) {
             if (!emp.userId) return res.status(400).json({ error: "Funcionário não possui acesso ao sistema" });
 
             await db.update(users).set({ isActive: false }).where(eq(users.id, emp.userId));
+
+            // Activity log for disabling access
+            try {
+                const { logActivity } = await import("./lib/activity-logger");
+                await logActivity({ farmerId, userId: req.user!.id, action: 'disable', entity: 'employee_access', entityId: employeeId, details: { employeeName: emp.name } });
+            } catch (_) { /* logging should not break flow */ }
 
             res.json({ message: "Acesso desabilitado com sucesso" });
         } catch (error) {

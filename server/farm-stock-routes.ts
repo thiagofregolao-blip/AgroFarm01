@@ -171,6 +171,12 @@ export function registerFarmStockRoutes(app: Express) {
                 notes: `Entrada manual avulsa${depId ? ' (deposito: ' + depId + ')' : ''}`,
             });
 
+            // Activity log for manual stock entry
+            try {
+                const { logActivity } = await import("./lib/activity-logger");
+                await logActivity({ farmerId, userId: farmerId, userName: (req.user as any).name, action: 'create', entity: 'stock', entityId: productId, details: { productName: name, quantity: parsedQty, unitCost: parsedCost, depositId: depId } });
+            } catch (_) { /* logging should not break flow */ }
+
             res.status(201).json(updatedStock);
         } catch (error) {
             console.error("[FARM_STOCK_POST]", error);

@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import React, { useState, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -30,8 +30,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers, Map, MapPin, PowerOff, Power } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, Search, Sprout, LogOut, BarChart3, Users, TrendingUp, DollarSign, Layers, Map, MapPin, PowerOff, Power, Activity, Filter, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { ProductsManagement } from "./admin-products";
 import { ManualsManagement } from "./admin-manuals";
 import { GlobalSilosManagement } from "@/components/admin/global-silos-management";
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
     { value: "manuals", icon: FileText, label: "Manuais" },
     { value: "modules", icon: Layers, label: "Módulos" },
     { value: "silos", icon: MapPin, label: "Silos Globais" },
+    { value: "logs", icon: Activity, label: "Logs" },
 ];
 
 export default function AdminFarmersPage() {
@@ -123,6 +125,7 @@ export default function AdminFarmersPage() {
                     {activeTab === "manuals" && <ManualsManagement />}
                     {activeTab === "modules" && <ModulesManagement />}
                     {activeTab === "silos" && <GlobalSilosManagement />}
+                    {activeTab === "logs" && <ActivityLogsManagement />}
                 </main>
             )}
         </div>
@@ -1043,6 +1046,273 @@ function ModulesManagement() {
                             );
                         })}
                     </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+// ==================== ACTIVITY LOGS ====================
+
+const ENTITY_LABELS: Record<string, string> = {
+    invoices: "Faturas",
+    stock: "Estoque",
+    expenses: "Despesas",
+    employees: "Funcionarios",
+    equipment: "Equipamentos",
+    properties: "Propriedades",
+    cash: "Caixa",
+    employee_access: "Acesso Func.",
+    accounts: "Contas",
+    invoice: "Faturas",
+    romaneios: "Romaneios",
+    applications: "Aplicacoes",
+};
+
+const ACTION_CONFIG: Record<string, { label: string; color: string }> = {
+    create: { label: "Criar", color: "bg-green-100 text-green-800 border-green-200" },
+    update: { label: "Editar", color: "bg-blue-100 text-blue-800 border-blue-200" },
+    delete: { label: "Excluir", color: "bg-red-100 text-red-800 border-red-200" },
+    confirm: { label: "Confirmar", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    login: { label: "Login", color: "bg-purple-100 text-purple-800 border-purple-200" },
+    enable: { label: "Habilitar", color: "bg-green-100 text-green-800 border-green-200" },
+    disable: { label: "Desabilitar", color: "bg-orange-100 text-orange-800 border-orange-200" },
+    POST: { label: "POST", color: "bg-green-100 text-green-800 border-green-200" },
+    PUT: { label: "PUT", color: "bg-blue-100 text-blue-800 border-blue-200" },
+    DELETE: { label: "DELETE", color: "bg-red-100 text-red-800 border-red-200" },
+};
+
+function ActivityLogsManagement() {
+    const [filterUserId, setFilterUserId] = useState("");
+    const [filterEntity, setFilterEntity] = useState("");
+    const [filterAction, setFilterAction] = useState("");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
+    const [page, setPage] = useState(1);
+    const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+    const queryParams = new URLSearchParams();
+    queryParams.set("page", String(page));
+    queryParams.set("limit", "50");
+    if (filterUserId) queryParams.set("userId", filterUserId);
+    if (filterEntity) queryParams.set("entity", filterEntity);
+    if (filterAction) queryParams.set("action", filterAction);
+    if (startDate) queryParams.set("startDate", startDate);
+    if (endDate) queryParams.set("endDate", endDate);
+
+    const { data, isLoading } = useQuery<{ logs: any[]; total: number; page: number; totalPages: number }>({
+        queryKey: [`/api/farm/admin/activity-logs?${queryParams.toString()}`],
+    });
+
+    const handleSearch = () => {
+        setPage(1);
+    };
+
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return "-";
+        const d = new Date(dateStr);
+        return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+    };
+
+    return (
+        <Card className="border-0 shadow-md">
+            <CardHeader className="bg-white border-b">
+                <CardTitle className="text-2xl text-green-900 flex items-center gap-2">
+                    <Activity className="h-6 w-6" />
+                    Logs de Atividade
+                </CardTitle>
+                <CardDescription>Registro de todas as acoes realizadas no sistema</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4">
+                {/* Filter bar */}
+                <div className="flex flex-wrap gap-3 items-end p-4 bg-gray-50 rounded-xl border">
+                    <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-600">Filtros:</span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <Label className="text-xs text-gray-500">Modulo</Label>
+                        <Select value={filterEntity} onValueChange={(v) => setFilterEntity(v === "__all__" ? "" : v)}>
+                            <SelectTrigger className="w-[160px] h-10">
+                                <SelectValue placeholder="Todos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all__">Todos</SelectItem>
+                                <SelectItem value="invoices">Faturas</SelectItem>
+                                <SelectItem value="invoice">Faturas (confirm)</SelectItem>
+                                <SelectItem value="stock">Estoque</SelectItem>
+                                <SelectItem value="expenses">Despesas</SelectItem>
+                                <SelectItem value="employees">Funcionarios</SelectItem>
+                                <SelectItem value="employee_access">Acesso Func.</SelectItem>
+                                <SelectItem value="equipment">Equipamentos</SelectItem>
+                                <SelectItem value="properties">Propriedades</SelectItem>
+                                <SelectItem value="cash">Caixa</SelectItem>
+                                <SelectItem value="romaneios">Romaneios</SelectItem>
+                                <SelectItem value="applications">Aplicacoes</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <Label className="text-xs text-gray-500">Acao</Label>
+                        <Select value={filterAction} onValueChange={(v) => setFilterAction(v === "__all__" ? "" : v)}>
+                            <SelectTrigger className="w-[140px] h-10">
+                                <SelectValue placeholder="Todas" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all__">Todas</SelectItem>
+                                <SelectItem value="create">Criar</SelectItem>
+                                <SelectItem value="update">Editar</SelectItem>
+                                <SelectItem value="delete">Excluir</SelectItem>
+                                <SelectItem value="confirm">Confirmar</SelectItem>
+                                <SelectItem value="enable">Habilitar</SelectItem>
+                                <SelectItem value="disable">Desabilitar</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <Label className="text-xs text-gray-500">Data Inicio</Label>
+                        <Input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="w-[150px] h-10"
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <Label className="text-xs text-gray-500">Data Fim</Label>
+                        <Input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="w-[150px] h-10"
+                        />
+                    </div>
+
+                    <Button
+                        onClick={handleSearch}
+                        className="h-10 min-w-[44px] bg-green-700 hover:bg-green-800"
+                    >
+                        <Search className="h-4 w-4 mr-2" />
+                        Buscar
+                    </Button>
+                </div>
+
+                {/* Results */}
+                {isLoading ? (
+                    <div className="flex justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+                    </div>
+                ) : !data?.logs?.length ? (
+                    <div className="text-center py-12 text-gray-500">
+                        Nenhum registro encontrado.
+                    </div>
+                ) : (
+                    <>
+                        <div className="text-sm text-gray-500 px-1">
+                            {data.total} registro{data.total !== 1 ? "s" : ""} encontrado{data.total !== 1 ? "s" : ""}
+                        </div>
+                        <div className="rounded-xl border overflow-hidden">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50">
+                                        <TableHead className="w-[150px]">Data/Hora</TableHead>
+                                        <TableHead>Usuario</TableHead>
+                                        <TableHead className="w-[120px]">Acao</TableHead>
+                                        <TableHead className="w-[130px]">Modulo</TableHead>
+                                        <TableHead>Detalhes</TableHead>
+                                        <TableHead className="w-[120px]">IP</TableHead>
+                                        <TableHead className="w-[50px]"></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {data.logs.map((log: any) => {
+                                        const actionCfg = ACTION_CONFIG[log.action] || { label: log.action, color: "bg-gray-100 text-gray-800 border-gray-200" };
+                                        const entityLabel = ENTITY_LABELS[log.entity] || log.entity;
+                                        const isExpanded = expandedRow === log.id;
+
+                                        return (
+                                            <React.Fragment key={log.id}>
+                                                <TableRow
+                                                    className="cursor-pointer hover:bg-gray-50 transition-colors"
+                                                    onClick={() => setExpandedRow(isExpanded ? null : log.id)}
+                                                >
+                                                    <TableCell className="text-xs font-mono text-gray-600">
+                                                        {formatDate(log.created_at)}
+                                                    </TableCell>
+                                                    <TableCell className="text-sm font-medium">
+                                                        {log.user_name || log.user_id?.substring(0, 8)}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline" className={`text-xs ${actionCfg.color}`}>
+                                                            {actionCfg.label}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-sm">{entityLabel}</TableCell>
+                                                    <TableCell className="text-xs text-gray-500 max-w-[200px] truncate">
+                                                        {log.entity_id ? `ID: ${log.entity_id.substring(0, 8)}...` : "-"}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs font-mono text-gray-400">
+                                                        {log.ip_address || "-"}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Eye className="h-4 w-4 text-gray-400" />
+                                                    </TableCell>
+                                                </TableRow>
+                                                {isExpanded && (
+                                                    <TableRow key={`${log.id}-details`}>
+                                                        <TableCell colSpan={7} className="bg-gray-50 p-4">
+                                                            <div className="space-y-2">
+                                                                <p className="text-xs font-semibold text-gray-600">Detalhes completos:</p>
+                                                                <pre className="text-xs bg-white p-3 rounded-lg border overflow-x-auto max-h-48 text-gray-700 font-mono">
+                                                                    {JSON.stringify(log.details, null, 2) || "Sem detalhes"}
+                                                                </pre>
+                                                                <div className="flex gap-4 text-xs text-gray-500">
+                                                                    <span><b>Farmer ID:</b> {log.farmer_id}</span>
+                                                                    <span><b>User ID:</b> {log.user_id}</span>
+                                                                    {log.entity_id && <span><b>Entity ID:</b> {log.entity_id}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        {/* Pagination */}
+                        {data.totalPages > 1 && (
+                            <div className="flex items-center justify-center gap-3 pt-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={page <= 1}
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    className="min-w-[44px] min-h-[44px]"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <span className="text-sm text-gray-600">
+                                    Pagina {data.page} de {data.totalPages}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={page >= data.totalPages}
+                                    onClick={() => setPage(p => p + 1)}
+                                    className="min-w-[44px] min-h-[44px]"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                    </>
                 )}
             </CardContent>
         </Card>
