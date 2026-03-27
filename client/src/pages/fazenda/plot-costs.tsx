@@ -229,15 +229,9 @@ export default function PlotCosts() {
                         <div className="flex items-center justify-center py-32">
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
                         </div>
-                    ) : plots.length === 0 ? (
-                        <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-                            <MapPin className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-400">Nenhuma aplicação registrada</h3>
-                            <p className="text-sm text-gray-400 mt-1">Registre saídas no PDV para ver os custos aqui</p>
-                        </div>
                     ) : (
                         <>
-                            {/* KPI Cards */}
+                            {/* KPI Cards — sempre visíveis */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
                                     <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
@@ -269,7 +263,7 @@ export default function PlotCosts() {
                                 </div>
                             </div>
 
-                            {/* Filters */}
+                            {/* Filters — sempre visíveis */}
                             <div className="space-y-3 mb-6">
                                 {/* Filter by season */}
                                 {seasons.length > 0 && (
@@ -306,6 +300,15 @@ export default function PlotCosts() {
                                 )}
                             </div>
 
+                            {filtered.length === 0 ? (
+                                <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                                    <MapPin className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-400">Nenhuma aplicação registrada</h3>
+                                    <p className="text-sm text-gray-400 mt-1">
+                                        {selectedSeason ? "Nenhum talhão com aplicação nesta safra" : "Registre saídas no PDV para ver os custos aqui"}
+                                    </p>
+                                </div>
+                            ) : (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 {/* Left: Plot cards */}
                                 <div className="lg:col-span-2 space-y-4">
@@ -409,6 +412,7 @@ export default function PlotCosts() {
                                     </div>
                                 </div>
                             </div>
+                            )}
                         </>
                     )}
                 </div>
