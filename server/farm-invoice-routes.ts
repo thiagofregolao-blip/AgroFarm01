@@ -863,11 +863,12 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
                 // Delete price history entries for this invoice date+supplier
                 if (invoice.supplier && invoice.issueDate) {
+                    const issueDateStr = new Date(invoice.issueDate).toISOString().substring(0, 10);
                     await db.execute(sql`
                         DELETE FROM farm_price_history
                         WHERE farmer_id = ${farmerId}
                           AND supplier = ${invoice.supplier}
-                          AND purchase_date = ${invoice.issueDate}
+                          AND CAST(purchase_date AS date) = ${issueDateStr}::date
                     `);
                 }
 
