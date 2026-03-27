@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { requireFarmer, parseLocalDate } from "./farm-middleware";
+import { requireFarmer, parseLocalDate, getEffectiveFarmerId } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -13,7 +13,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const { farmCashAccounts } = await import("../shared/schema");
             const { db } = await import("./db");
             const { eq } = await import("drizzle-orm");
-            const accounts = await db.select().from(farmCashAccounts).where(eq(farmCashAccounts.farmerId, req.user!.id));
+            const accounts = await db.select().from(farmCashAccounts).where(eq(farmCashAccounts.farmerId, farmerId));
             res.json(accounts);
         } catch (error) {
             console.error("[CASH_ACCOUNTS_GET]", error);
@@ -30,7 +30,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
 
             const balance = parseFloat(initialBalance) || 0;
             const [account] = await db.insert(farmCashAccounts).values({
-                farmerId: req.user!.id,
+                farmerId: farmerId,
                 name,
                 bankName: bankName || null,
                 accountType,
@@ -51,7 +51,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const { db } = await import("./db");
             const { eq, and } = await import("drizzle-orm");
             const [account] = await db.select().from(farmCashAccounts).where(
-                and(eq(farmCashAccounts.id, req.params.id), eq(farmCashAccounts.farmerId, req.user!.id))
+                and(eq(farmCashAccounts.id, req.params.id), eq(farmCashAccounts.farmerId, farmerId))
             );
             if (!account) return res.status(404).json({ error: "Account not found" });
             res.json(account);
@@ -76,7 +76,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
             if (isActive !== undefined) updates.isActive = isActive;
 
             const [updated] = await db.update(farmCashAccounts).set(updates).where(
-                and(eq(farmCashAccounts.id, req.params.id), eq(farmCashAccounts.farmerId, req.user!.id))
+                and(eq(farmCashAccounts.id, req.params.id), eq(farmCashAccounts.farmerId, farmerId))
             ).returning();
             res.json(updated);
         } catch (error) {
@@ -91,7 +91,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const { db } = await import("./db");
             const { eq, and } = await import("drizzle-orm");
             await db.delete(farmCashAccounts).where(
-                and(eq(farmCashAccounts.id, req.params.id), eq(farmCashAccounts.farmerId, req.user!.id))
+                and(eq(farmCashAccounts.id, req.params.id), eq(farmCashAccounts.farmerId, farmerId))
             );
             res.status(204).send();
         } catch (error) {
@@ -106,7 +106,8 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const { db } = await import("./db");
             const { eq, and, gte, lte, desc } = await import("drizzle-orm");
 
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const conditions: any[] = [eq(farmCashTransactions.farmerId, farmerId)];
 
             if (req.query.accountId) {
@@ -147,7 +148,8 @@ export function registerFarmCashFlowRoutes(app: Express) {
                 return res.status(400).json({ error: "accountId, type, amount, category required" });
             }
 
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const parsedAmount = parseFloat(amount);
             if (isNaN(parsedAmount) || parsedAmount <= 0) {
                 return res.status(400).json({ error: "Invalid amount" });
@@ -186,7 +188,8 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const { db } = await import("./db");
             const { eq, and, gte, sql: sqlFn } = await import("drizzle-orm");
 
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const accounts = await db.select().from(farmCashAccounts).where(eq(farmCashAccounts.farmerId, farmerId));
 
@@ -317,7 +320,8 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const { db } = await import("./db");
             const { sql: sqlRaw } = await import("drizzle-orm");
 
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const { description, amount, transactionDate } = req.body;
 
             const parsedDate = parseLocalDate(transactionDate) || new Date();
@@ -347,7 +351,8 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const { db } = await import("./db");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
 
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const [tx] = await db.select().from(farmCashTransactions).where(
                 and(eq(farmCashTransactions.id, req.params.id), eq(farmCashTransactions.farmerId, farmerId))
             ).limit(1);

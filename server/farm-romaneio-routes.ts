@@ -3,7 +3,7 @@
  * Extracted from farm-routes.ts
  */
 import { Express } from "express";
-import { requireFarmer, upload, parseLocalDate } from "./farm-middleware";
+import { requireFarmer, upload, parseLocalDate , getEffectiveFarmerId } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -20,7 +20,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmPlots, farmProperties, farmSeasons } = await import("../shared/schema");
             const { eq, and, desc } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const romaneios = await db.select({
                 romaneio: farmRomaneios,
@@ -58,7 +59,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmAccountsReceivable, farmGrainStock } = await import("../shared/schema");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const body = { ...req.body };
             if (body.deliveryDate && typeof body.deliveryDate === "string") {
@@ -148,7 +150,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, globalSilos } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const file = req.file;
 
             if (!file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
@@ -214,7 +217,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmAccountsReceivable, farmGrainStock } = await import("../shared/schema");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             // Update romaneio fields + set status to confirmed
             const updateData: any = { status: "confirmed", ...req.body };
@@ -280,7 +284,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios } = await import("../shared/schema");
             const { eq } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             // Normalization key: strip legal suffixes + punctuation
             const normKey = (s: string) => s.toUpperCase()
@@ -341,7 +346,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const [updated] = await db.update(farmRomaneios).set(req.body).where(
                 and(eq(farmRomaneios.id, req.params.id), eq(farmRomaneios.farmerId, farmerId))
@@ -358,7 +364,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios } = await import("../shared/schema");
             const { eq, and } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             await db.delete(farmRomaneios).where(
                 and(eq(farmRomaneios.id, req.params.id), eq(farmRomaneios.farmerId, farmerId))
@@ -531,7 +538,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmPlots } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const conditions: any[] = [eq(farmRomaneios.farmerId, farmerId)];
             if (req.query.seasonId) {
@@ -573,7 +581,8 @@ export function registerFarmRomaneioRoutes(app: Express) {
             const { farmRomaneios, farmInvoices } = await import("../shared/schema");
             const { eq, and, sql } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const conditions: any[] = [
                 eq(farmRomaneios.farmerId, farmerId),

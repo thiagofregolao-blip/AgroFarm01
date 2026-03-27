@@ -1,5 +1,5 @@
 import { Express, Request, Response } from "express";
-import { requireFarmer, parseLocalDate } from "./farm-middleware";
+import { requireFarmer, parseLocalDate , getEffectiveFarmerId } from "./farm-middleware";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
@@ -13,7 +13,7 @@ export function registerFarmSprint24Routes(app: Express) {
     app.get("/api/farm/suppliers", requireFarmer, async (req: Request, res: Response) => {
         try {
             const rows = await db.execute(sql`
-                SELECT * FROM farm_suppliers WHERE farmer_id = ${req.user!.id} AND is_active = true ORDER BY name
+                SELECT * FROM farm_suppliers WHERE farmer_id = ${farmerId} AND is_active = true ORDER BY name
             `);
             res.json((rows as any).rows ?? rows);
         } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -25,7 +25,7 @@ export function registerFarmSprint24Routes(app: Express) {
             // Validate RUC uniqueness
             if (ruc) {
                 const existing = await db.execute(sql`
-                    SELECT id FROM farm_suppliers WHERE farmer_id = ${req.user!.id} AND ruc = ${ruc} AND is_active = true LIMIT 1
+                    SELECT id FROM farm_suppliers WHERE farmer_id = ${farmerId} AND ruc = ${ruc} AND is_active = true LIMIT 1
                 `);
                 const existingRows = (existing as any).rows ?? existing;
                 if (existingRows.length > 0) {
@@ -34,7 +34,7 @@ export function registerFarmSprint24Routes(app: Express) {
             }
             const rows = await db.execute(sql`
                 INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, notes, person_type, entity_type)
-                VALUES (${req.user!.id}, ${name}, ${ruc ?? null}, ${phone ?? null}, ${email ?? null}, ${address ?? null}, ${notes ?? null}, ${personType ?? null}, ${entityType ?? null})
+                VALUES (${farmerId}, ${name}, ${ruc ?? null}, ${phone ?? null}, ${email ?? null}, ${address ?? null}, ${notes ?? null}, ${personType ?? null}, ${entityType ?? null})
                 RETURNING *
             `);
             res.json(((rows as any).rows ?? rows)[0]);
@@ -46,24 +46,24 @@ export function registerFarmSprint24Routes(app: Express) {
             const { name, ruc, phone, email, address, notes, personType, entityType } = req.body;
             // Get old name before updating (for cascade)
             const oldRows = await db.execute(sql`
-                SELECT name FROM farm_suppliers WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
+                SELECT name FROM farm_suppliers WHERE id=${req.params.id} AND farmer_id=${farmerId}
             `);
             const oldName = ((oldRows as any).rows ?? oldRows)[0]?.name;
             await db.execute(sql`
                 UPDATE farm_suppliers SET name=${name}, ruc=${ruc ?? null}, phone=${phone ?? null},
                 email=${email ?? null}, address=${address ?? null}, notes=${notes ?? null},
                 person_type=${personType ?? null}, entity_type=${entityType ?? null}
-                WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
+                WHERE id=${req.params.id} AND farmer_id=${farmerId}
             `);
             // Cascade name change to accounts payable supplier field
             if (name && oldName && name !== oldName) {
                 await db.execute(sql`
                     UPDATE farm_accounts_payable SET supplier=${name}
-                    WHERE farmer_id=${req.user!.id} AND supplier=${oldName}
+                    WHERE farmer_id=${farmerId} AND supplier=${oldName}
                 `);
                 await db.execute(sql`
                     UPDATE farm_invoices SET supplier=${name}
-                    WHERE farmer_id=${req.user!.id} AND supplier=${oldName}
+                    WHERE farmer_id=${farmerId} AND supplier=${oldName}
                 `);
             }
             res.json({ ok: true });
@@ -73,7 +73,7 @@ export function registerFarmSprint24Routes(app: Express) {
     app.delete("/api/farm/suppliers/:id", requireFarmer, async (req: Request, res: Response) => {
         try {
             await db.execute(sql`
-                UPDATE farm_suppliers SET is_active = false WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
+                UPDATE farm_suppliers SET is_active = false WHERE id=${req.params.id} AND farmer_id=${farmerId}
             `);
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -85,7 +85,7 @@ export function registerFarmSprint24Routes(app: Express) {
             const rows = await db.execute(sql`
                 SELECT g.*, s.name as client_name FROM farm_guarantors g
                 LEFT JOIN farm_suppliers s ON s.id = g.client_id
-                WHERE g.farmer_id = ${req.user!.id} ORDER BY g.created_at DESC
+                WHERE g.farmer_id = ${farmerId} ORDER BY g.created_at DESC
             `);
             res.json((rows as any).rows ?? rows);
         } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -96,7 +96,7 @@ export function registerFarmSprint24Routes(app: Express) {
             const { clientId, guarantorName, guarantorRuc, guarantorPhone, guarantorAddress } = req.body;
             const rows = await db.execute(sql`
                 INSERT INTO farm_guarantors (farmer_id, client_id, guarantor_name, guarantor_ruc, guarantor_phone, guarantor_address)
-                VALUES (${req.user!.id}, ${clientId}, ${guarantorName}, ${guarantorRuc ?? null}, ${guarantorPhone ?? null}, ${guarantorAddress ?? null})
+                VALUES (${farmerId}, ${clientId}, ${guarantorName}, ${guarantorRuc ?? null}, ${guarantorPhone ?? null}, ${guarantorAddress ?? null})
                 RETURNING *
             `);
             res.json(((rows as any).rows ?? rows)[0]);
@@ -105,7 +105,7 @@ export function registerFarmSprint24Routes(app: Express) {
 
     app.delete("/api/farm/guarantors/:id", requireFarmer, async (req: Request, res: Response) => {
         try {
-            await db.execute(sql`DELETE FROM farm_guarantors WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}`);
+            await db.execute(sql`DELETE FROM farm_guarantors WHERE id = ${req.params.id} AND farmer_id = ${farmerId}`);
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
     });
@@ -116,7 +116,7 @@ export function registerFarmSprint24Routes(app: Express) {
             const rows = await db.execute(sql`
                 SELECT i.*, s.name as client_name FROM farm_issued_invoices i
                 LEFT JOIN farm_suppliers s ON s.id = i.client_id
-                WHERE i.farmer_id = ${req.user!.id} ORDER BY i.created_at DESC
+                WHERE i.farmer_id = ${farmerId} ORDER BY i.created_at DESC
             `);
             res.json((rows as any).rows ?? rows);
         } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -125,7 +125,8 @@ export function registerFarmSprint24Routes(app: Express) {
     app.post("/api/farm/issued-invoices", requireFarmer, async (req: Request, res: Response) => {
         try {
             const { clientId, invoiceNumber, description, totalAmount, currency, issueDate, dueDate, notes, seasonId } = req.body;
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             // Create issued invoice
             const invRows = await db.execute(sql`
@@ -157,7 +158,7 @@ export function registerFarmSprint24Routes(app: Express) {
 
     app.delete("/api/farm/issued-invoices/:id", requireFarmer, async (req: Request, res: Response) => {
         try {
-            await db.execute(sql`DELETE FROM farm_issued_invoices WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}`);
+            await db.execute(sql`DELETE FROM farm_issued_invoices WHERE id = ${req.params.id} AND farmer_id = ${farmerId}`);
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
     });
@@ -165,7 +166,8 @@ export function registerFarmSprint24Routes(app: Express) {
     // ── #30: Produtividade por Talhao (enhanced) ──────────────────────────────
     app.get("/api/farm/productivity", requireFarmer, async (req: Request, res: Response) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const { seasonId, plotId } = req.query;
 
             let query = sql`
@@ -262,7 +264,7 @@ export function registerFarmSprint24Routes(app: Express) {
     app.delete("/api/farm/expenses/:id", requireFarmer, async (req: Request, res: Response) => {
         try {
             await db.execute(sql`DELETE FROM farm_expense_items WHERE expense_id = ${req.params.id}`);
-            await db.execute(sql`DELETE FROM farm_expenses WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}`);
+            await db.execute(sql`DELETE FROM farm_expenses WHERE id = ${req.params.id} AND farmer_id = ${farmerId}`);
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
     });
@@ -275,7 +277,7 @@ export function registerFarmSprint24Routes(app: Express) {
                 description=${description ?? null}, amount=${amount}, expense_date=${parseLocalDate(expenseDate) || sql`now()`},
                 payment_type=${paymentType ?? 'a_vista'}, due_date=${parseLocalDate(dueDate)},
                 installments=${installments ?? 1}
-                WHERE id=${req.params.id} AND farmer_id=${req.user!.id}
+                WHERE id=${req.params.id} AND farmer_id=${farmerId}
             `);
             res.json({ ok: true });
         } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -285,7 +287,7 @@ export function registerFarmSprint24Routes(app: Express) {
     app.get("/api/farm/cheques", requireFarmer, async (req: Request, res: Response) => {
         try {
             const rows = await db.execute(sql`
-                SELECT * FROM farm_cheques WHERE farmer_id = ${req.user!.id} ORDER BY created_at DESC
+                SELECT * FROM farm_cheques WHERE farmer_id = ${farmerId} ORDER BY created_at DESC
             `);
             res.json((rows as any).rows ?? rows);
         } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -304,7 +306,8 @@ export function registerFarmSprint24Routes(app: Express) {
             const safeNotes = b.notes ? String(b.notes) : null;
             const safePayableId = b.relatedPayableId ? String(b.relatedPayableId) : null;
             const safeReceivableId = b.relatedReceivableId ? String(b.relatedReceivableId) : null;
-            const farmerId = String(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const rows = await db.execute(sql`
                 INSERT INTO farm_cheques (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
                     issue_date, due_date, owner_type, notes, related_payable_id, related_receivable_id)
@@ -324,7 +327,7 @@ export function registerFarmSprint24Routes(app: Express) {
         try {
             const { accountId } = req.body;
             const chequeRows = await db.execute(sql`
-                SELECT * FROM farm_cheques WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}
+                SELECT * FROM farm_cheques WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
             `);
             const cheque = ((chequeRows as any).rows ?? chequeRows)[0];
             if (!cheque) return res.status(404).json({ error: "Cheque not found" });
@@ -333,7 +336,8 @@ export function registerFarmSprint24Routes(app: Express) {
             const targetAccountId = accountId ? String(accountId) : (cheque.account_id ? String(cheque.account_id) : null);
             if (!targetAccountId) return res.status(400).json({ error: "Conta nao informada" });
             const chequeId = String(req.params.id);
-            const farmerId = String(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             // Update cheque status
             await db.execute(sql`
@@ -374,7 +378,8 @@ export function registerFarmSprint24Routes(app: Express) {
     // Cancel/devolver cheque — estorna transacao e reabre AR se necessario (Bug 13)
     app.put("/api/farm/cheques/:id/cancel", requireFarmer, async (req: Request, res: Response) => {
         try {
-            const farmerId = String(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const chequeRows = await db.execute(sql`
                 SELECT * FROM farm_cheques WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
             `);
@@ -429,7 +434,7 @@ export function registerFarmSprint24Routes(app: Express) {
     app.delete("/api/farm/cheques/:id", requireFarmer, async (req: Request, res: Response) => {
         try {
             await db.execute(sql`
-                DELETE FROM farm_cheques WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}
+                DELETE FROM farm_cheques WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
             `);
             res.status(204).send();
         } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -439,7 +444,7 @@ export function registerFarmSprint24Routes(app: Express) {
     app.get("/api/farm/receipts", requireFarmer, async (req: Request, res: Response) => {
         try {
             const rows = await db.execute(sql`
-                SELECT * FROM farm_receipts WHERE farmer_id = ${req.user!.id} ORDER BY created_at DESC
+                SELECT * FROM farm_receipts WHERE farmer_id = ${farmerId} ORDER BY created_at DESC
             `);
             res.json((rows as any).rows ?? rows);
         } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -450,7 +455,7 @@ export function registerFarmSprint24Routes(app: Express) {
             const { type, entity, totalAmount, currency, paymentType, paymentMethods, invoiceRefs, notes } = req.body;
             // Generate receipt number
             const countRows = await db.execute(sql`
-                SELECT COUNT(*)::int as cnt FROM farm_receipts WHERE farmer_id = ${req.user!.id}
+                SELECT COUNT(*)::int as cnt FROM farm_receipts WHERE farmer_id = ${farmerId}
             `);
             const count = ((countRows as any).rows ?? countRows)[0]?.cnt ?? 0;
             const receiptNumber = String(count + 1).padStart(6, '0');
@@ -458,7 +463,7 @@ export function registerFarmSprint24Routes(app: Express) {
             const rows = await db.execute(sql`
                 INSERT INTO farm_receipts (farmer_id, receipt_number, type, entity, total_amount, currency,
                     payment_type, payment_methods, invoice_refs, notes)
-                VALUES (${req.user!.id}, ${receiptNumber}, ${type}, ${entity}, ${totalAmount}, ${currency ?? 'USD'},
+                VALUES (${farmerId}, ${receiptNumber}, ${type}, ${entity}, ${totalAmount}, ${currency ?? 'USD'},
                     ${paymentType ?? 'total'}, ${JSON.stringify(paymentMethods ?? [])}, ${JSON.stringify(invoiceRefs ?? [])},
                     ${notes ?? null})
                 RETURNING *
@@ -476,9 +481,9 @@ export function registerFarmSprint24Routes(app: Express) {
             const nowISO = (parseLocalDate(req.body.transferDate) || new Date()).toISOString();
 
             // Get source account info
-            const srcRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${srcId} AND farmer_id = ${req.user!.id}`);
+            const srcRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${srcId} AND farmer_id = ${farmerId}`);
             const src = ((srcRows as any).rows ?? srcRows)[0];
-            const dstRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${dstId} AND farmer_id = ${req.user!.id}`);
+            const dstRows = await db.execute(sql`SELECT * FROM farm_cash_accounts WHERE id = ${dstId} AND farmer_id = ${farmerId}`);
             const dst = ((dstRows as any).rows ?? dstRows)[0];
             if (!src || !dst) return res.status(404).json({ error: "Account not found" });
 
@@ -488,14 +493,14 @@ export function registerFarmSprint24Routes(app: Express) {
             // Debit source
             await db.execute(sql`
                 INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description, payment_method, reference_type, transaction_date)
-                VALUES (${req.user!.id}, ${srcId}, 'saida', ${amount}, ${src.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${nowISO}::timestamp)
+                VALUES (${farmerId}, ${srcId}, 'saida', ${amount}, ${src.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${nowISO}::timestamp)
             `);
             await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance - ${amount} WHERE id = ${srcId}`);
 
             // Credit destination
             await db.execute(sql`
                 INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, category, description, payment_method, reference_type, transaction_date)
-                VALUES (${req.user!.id}, ${dstId}, 'entrada', ${convertedAmount}, ${dst.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${nowISO}::timestamp)
+                VALUES (${farmerId}, ${dstId}, 'entrada', ${convertedAmount}, ${dst.currency}, 'transferencia', ${descText}, 'transferencia', 'transfer', ${nowISO}::timestamp)
             `);
             await db.execute(sql`UPDATE farm_cash_accounts SET current_balance = current_balance + ${convertedAmount} WHERE id = ${dstId}`);
 
@@ -511,7 +516,7 @@ export function registerFarmSprint24Routes(app: Express) {
                     FILTER (WHERE ri.id IS NOT NULL) as items
                 FROM farm_remissions r
                 LEFT JOIN farm_remission_items ri ON ri.remission_id = r.id
-                WHERE r.farmer_id = ${req.user!.id}
+                WHERE r.farmer_id = ${farmerId}
                 GROUP BY r.id
                 ORDER BY r.created_at DESC
             `);
@@ -524,7 +529,7 @@ export function registerFarmSprint24Routes(app: Express) {
             const { supplier, ruc, remissionNumber, issueDate, notes, items } = req.body;
             const remRows = await db.execute(sql`
                 INSERT INTO farm_remissions (farmer_id, supplier, ruc, remission_number, issue_date, notes)
-                VALUES (${req.user!.id}, ${supplier}, ${ruc ?? null}, ${remissionNumber ?? null},
+                VALUES (${farmerId}, ${supplier}, ${ruc ?? null}, ${remissionNumber ?? null},
                     ${issueDate ? new Date(issueDate) : null}, ${notes ?? null})
                 RETURNING *
             `);
@@ -541,12 +546,12 @@ export function registerFarmSprint24Routes(app: Express) {
                     if (item.productId) {
                         await db.execute(sql`
                             INSERT INTO farm_stock_movements (farmer_id, product_id, type, quantity, unit_cost, reference_type, reference_id, notes)
-                            VALUES (${req.user!.id}, ${item.productId}, 'entrada', ${item.quantity}, 0, 'remission', ${rem.id},
+                            VALUES (${farmerId}, ${item.productId}, 'entrada', ${item.quantity}, 0, 'remission', ${rem.id},
                                 ${'Remissao #' + (remissionNumber || rem.id)})
                         `);
                         await db.execute(sql`
                             INSERT INTO farm_stock (farmer_id, product_id, quantity, average_cost, updated_at)
-                            VALUES (${req.user!.id}, ${item.productId}, ${item.quantity}, 0, now())
+                            VALUES (${farmerId}, ${item.productId}, ${item.quantity}, 0, now())
                             ON CONFLICT (farmer_id, product_id) DO UPDATE SET
                                 quantity = farm_stock.quantity + ${item.quantity},
                                 updated_at = now()
@@ -566,7 +571,7 @@ export function registerFarmSprint24Routes(app: Express) {
                 SELECT r.*, json_agg(json_build_object('productName', ri.product_name, 'quantity', ri.quantity)) as items
                 FROM farm_remissions r
                 JOIN farm_remission_items ri ON ri.remission_id = r.id
-                WHERE r.farmer_id = ${req.user!.id} AND r.status = 'pendente'
+                WHERE r.farmer_id = ${farmerId} AND r.status = 'pendente'
                 GROUP BY r.id
             `);
             const remissions = (remRows as any).rows ?? remRows;
@@ -602,7 +607,7 @@ export function registerFarmSprint24Routes(app: Express) {
             // Mark remission as reconciled
             await db.execute(sql`
                 UPDATE farm_remissions SET status = 'conciliada', reconciled_invoice_id = ${invoiceId}
-                WHERE id = ${req.params.id} AND farmer_id = ${req.user!.id}
+                WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
             `);
 
             // Update prices on stock movements that were entered with zero cost from this remission
@@ -620,19 +625,19 @@ export function registerFarmSprint24Routes(app: Express) {
                         const avgRows = await db.execute(sql`
                             SELECT COALESCE(SUM(quantity * unit_cost) / NULLIF(SUM(quantity), 0), 0) as avg_cost
                             FROM farm_stock_movements
-                            WHERE farmer_id = ${req.user!.id} AND product_id = ${item.productId} AND type = 'entrada'
+                            WHERE farmer_id = ${farmerId} AND product_id = ${item.productId} AND type = 'entrada'
                         `);
                         const avgCost = ((avgRows as any).rows ?? avgRows)[0]?.avg_cost ?? 0;
                         await db.execute(sql`
                             UPDATE farm_stock SET average_cost = ${avgCost}, updated_at = now()
-                            WHERE farmer_id = ${req.user!.id} AND product_id = ${item.productId}
+                            WHERE farmer_id = ${farmerId} AND product_id = ${item.productId}
                         `);
 
                         // Update plot costs where this product was applied with zero cost
                         // Find applications that used this product and recalculate
                         await db.execute(sql`
                             UPDATE farm_stock_movements SET unit_cost = ${item.unitPrice}
-                            WHERE farmer_id = ${req.user!.id} AND product_id = ${item.productId}
+                            WHERE farmer_id = ${farmerId} AND product_id = ${item.productId}
                             AND type = 'saida' AND (unit_cost IS NULL OR unit_cost = 0)
                         `);
                     }
@@ -648,7 +653,7 @@ export function registerFarmSprint24Routes(app: Express) {
             const rows = await db.execute(sql`
                 SELECT DISTINCT ON (s.id) s.*, p.name as property_name
                 FROM farm_properties s
-                WHERE s.farmer_id = ${req.user!.id}
+                WHERE s.farmer_id = ${farmerId}
                 ORDER BY s.id, s.name
             `);
             res.json((rows as any).rows ?? rows);
@@ -676,7 +681,7 @@ export function registerFarmSprint24Routes(app: Express) {
                 const backup: any = {};
                 for (const t of tables) {
                     try {
-                        const r = await db.execute(sql.raw(`SELECT * FROM ${t} WHERE farmer_id = '${req.user!.id}'`));
+                        const r = await db.execute(sql.raw(`SELECT * FROM ${t} WHERE farmer_id = '${farmerId}'`));
                         backup[t] = (r as any).rows ?? r;
                     } catch { backup[t] = []; }
                 }

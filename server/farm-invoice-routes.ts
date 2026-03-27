@@ -3,7 +3,7 @@
  * Extracted from farm-routes.ts
  */
 import { Express, Request, Response, NextFunction } from "express";
-import { requireFarmer, requireAdminManuals, upload, parseLocalDate } from "./farm-middleware";
+import { requireFarmer, requireAdminManuals, upload, parseLocalDate, getEffectiveFarmerId } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
@@ -66,7 +66,9 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
     app.get("/api/farm/invoices", requireFarmer, async (req, res) => {
         try {
-            const invoices = await farmStorage.getInvoices(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const invoices = await farmStorage.getInvoices(farmerId);
             // Filter by documentType if specified (faturas vs remissoes)
             const docTypeFilter = req.query.documentType as string | undefined;
             const filtered = docTypeFilter
@@ -87,7 +89,9 @@ export function registerFarmInvoiceRoutes(app: Express) {
     // Invoices grouped by supplier for dashboard cards
     app.get("/api/farm/invoices/summary/by-supplier", requireFarmer, async (req, res) => {
         try {
-            const invoices = await farmStorage.getInvoices(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const invoices = await farmStorage.getInvoices(farmerId);
             const supplierMap: Record<string, any> = {};
 
             for (const inv of invoices) {
@@ -132,7 +136,8 @@ export function registerFarmInvoiceRoutes(app: Express) {
             if (!invoice) return res.status(404).json({ error: "Invoice not found" });
             const items = await farmStorage.getInvoiceItems(req.params.id);
             const { pdfBase64, rawPdfData, ...rest } = invoice as any;
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             // For faturas: check if there are matching remissions
             let matchingRemissions: any[] = [];
@@ -212,7 +217,8 @@ export function registerFarmInvoiceRoutes(app: Express) {
             }
 
             // Verificacao de duplicidade
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const { farmInvoices } = await import("../shared/schema");
             const { db } = await import("./db");
             const { eq, and, or, ilike } = await import("drizzle-orm");
@@ -441,7 +447,8 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 return res.status(400).json({ error: "Invoice already confirmed" });
             }
 
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             console.log(`[CONFIRM_DEBUG] invoiceId=${req.params.id} body.skipStockEntry=${req.body.skipStockEntry} invoice.skipStockEntry=${invoice.skipStockEntry} invoice.status=${invoice.status} invoice.documentType=${(invoice as any).documentType}`);
 
             // If body sends skipStockEntry, update the invoice record BEFORE confirming
@@ -570,7 +577,8 @@ export function registerFarmInvoiceRoutes(app: Express) {
     // Find matching remissions for a given invoice (for conciliation)
     app.get("/api/farm/invoices/:id/match-remissions", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const invoice = await farmStorage.getInvoiceById(req.params.id);
             if (!invoice) return res.status(404).json({ error: "Invoice not found" });
 
@@ -627,7 +635,8 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const { remisionId } = req.body;
             if (!remisionId) return res.status(400).json({ error: "remisionId is required" });
 
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const invoice = await farmStorage.getInvoiceById(req.params.id);
             const remision = await farmStorage.getInvoiceById(remisionId);
             if (!invoice || !remision) return res.status(404).json({ error: "Invoice or remission not found" });
@@ -820,7 +829,8 @@ export function registerFarmInvoiceRoutes(app: Express) {
     // Delete invoice (reverses stock if invoice was confirmed)
     app.delete("/api/farm/invoices/:id", requireFarmer, async (req, res) => {
         try {
-            const farmerId = req.user!.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const invoiceId = req.params.id;
 
             // Check if invoice was confirmed — if so, reverse stock entries
@@ -899,7 +909,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
             // Activity log for invoice deletion
             try {
                 const { logActivity } = await import("./lib/activity-logger");
-                await logActivity({ farmerId: req.user!.id, userId: req.user!.id, userName: (req.user as any).name, action: 'delete', entity: 'invoice', entityId: invoiceId, details: { wasConfirmed: invoice?.status === 'confirmed', supplier: invoice?.supplier } });
+                await logActivity({ farmerId, userId: req.user!.id, userName: (req.user as any).name, action: 'delete', entity: 'invoice', entityId: invoiceId, details: { wasConfirmed: invoice?.status === 'confirmed', supplier: invoice?.supplier } });
             } catch (_) { /* logging should not break flow */ }
 
             res.json({ message: invoice?.status === "confirmed" ? "Fatura excluida. Estoque e financeiro revertidos." : "Fatura excluida com sucesso." });
