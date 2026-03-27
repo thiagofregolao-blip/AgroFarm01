@@ -24,13 +24,48 @@ export async function comparePasswords(supplied: string, stored: string) {
     return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-// Middleware: require authenticated user with role 'agricultor' or 'administrador'
+// Cache for employee -> farmer_id lookups (populated on first request)
+const employeeFarmerCache = new Map<string, string>();
+
+/**
+ * For funcionario_fazenda users, look up their farmer_id from farm_employees.
+ * Returns the farmer_id that owns this employee, or null.
+ */
+export async function getEffectiveFarmerId(req: Request): Promise<string | null> {
+    const user = req.user;
+    if (!user) return null;
+
+    if (user.role === 'funcionario_fazenda') {
+        // Check cache first
+        const cached = employeeFarmerCache.get(user.id);
+        if (cached) return cached;
+
+        const { db } = await import("./db");
+        const { farmEmployees } = await import("../shared/schema");
+        const { eq } = await import("drizzle-orm");
+
+        const [emp] = await db.select({ farmerId: farmEmployees.farmerId })
+            .from(farmEmployees)
+            .where(eq(farmEmployees.userId, user.id))
+            .limit(1);
+
+        if (emp) {
+            employeeFarmerCache.set(user.id, emp.farmerId);
+            return emp.farmerId;
+        }
+        return null;
+    }
+
+    return user.id;
+}
+
+// Middleware: require authenticated user with role 'agricultor', 'administrador', or 'funcionario_fazenda'
 export function requireFarmer(req: Request, res: Response, next: NextFunction) {
     if (!req.isAuthenticated || !req.isAuthenticated()) {
         return res.status(401).json({ error: "Autenticacao necessaria" });
     }
     const role = req.user?.role;
-    if (role !== 'agricultor' && role !== 'administrador' && role !== 'admin_agricultor') {
+    if (role !== 'agricultor' && role !== 'administrador' && role !== 'admin_agricultor' && role !== 'funcionario_fazenda') {
         return res.status(403).json({ error: "Acesso restrito a agricultores" });
     }
     next();
@@ -56,8 +91,10 @@ export function requireAdminManuals(req: Request, res: Response, next: NextFunct
     next();
 }
 
-// Helper: get farmer ID from request
+// Helper: get farmer ID from request (uses effective farmer ID for funcionario_fazenda)
 export function getFarmerId(req: any): string | null {
+    // For sync contexts where the caller hasn't resolved the effective farmer ID yet,
+    // use the user's own ID. Callers should prefer getEffectiveFarmerId() for async contexts.
     const id = req.user?.id;
     return id ? id.toString() : null;
 }

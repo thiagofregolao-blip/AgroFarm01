@@ -744,6 +744,18 @@ app.use((req, res, next) => {
     log(`⚠️  Migration farm_stock cleanup: ${(migErr as Error).message}`);
   }
 
+  // Inline migration: employee access system (user_id on farm_employees + access_level on user_modules)
+  try {
+    const { db: empDb, dbReady: empReady } = await import("./db");
+    const { sql: empSql } = await import("drizzle-orm");
+    await empReady;
+    await empDb.execute(empSql`ALTER TABLE farm_employees ADD COLUMN IF NOT EXISTS user_id VARCHAR`);
+    await empDb.execute(empSql`ALTER TABLE user_modules ADD COLUMN IF NOT EXISTS access_level VARCHAR DEFAULT 'view'`);
+    log("✅ Migration: employee access system columns ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration employee access: ${(migErr as Error).message}`);
+  }
+
   const server = await registerRoutes(app);
 
   // Register Farm Stock Management routes

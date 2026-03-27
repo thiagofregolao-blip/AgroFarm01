@@ -1,8 +1,9 @@
 import { Express } from "express";
-import { requireFarmer } from "./farm-middleware";
+import { requireFarmer, hashPassword, getEffectiveFarmerId } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
-import { sql } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
+import { users, farmEmployees, userModules } from "../shared/schema";
 
 export function registerFarmPropertyRoutes(app: Express) {
 
@@ -10,7 +11,9 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.get("/api/farm/properties", requireFarmer, async (req, res) => {
         try {
-            const properties = await farmStorage.getProperties(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const properties = await farmStorage.getProperties(farmerId);
             res.json(properties);
         } catch (error) {
             console.error("[FARM_PROPERTIES_GET]", error);
@@ -22,9 +25,11 @@ export function registerFarmPropertyRoutes(app: Express) {
         try {
             const { name, location, totalAreaHa } = req.body;
             if (!name) return res.status(400).json({ error: "Property name required" });
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const property = await farmStorage.createProperty({
-                farmerId: req.user!.id,
+                farmerId,
                 name,
                 location,
                 totalAreaHa: totalAreaHa ? String(totalAreaHa) : null,
@@ -75,7 +80,9 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.get("/api/farm/plots", requireFarmer, async (req, res) => {
         try {
-            const plots = await farmStorage.getPlotsByFarmer(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const plots = await farmStorage.getPlotsByFarmer(farmerId);
             res.json(plots);
         } catch (error) {
             console.error("[FARM_ALL_PLOTS_GET]", error);
@@ -132,7 +139,9 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.get("/api/farm/equipment", requireFarmer, async (req, res) => {
         try {
-            const equipment = await farmStorage.getEquipment(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const equipment = await farmStorage.getEquipment(farmerId);
             res.json(equipment);
         } catch (error) {
             console.error("[FARM_EQUIPMENT_GET]", error);
@@ -144,9 +153,11 @@ export function registerFarmPropertyRoutes(app: Express) {
         try {
             const { name, type, status, tankCapacityL } = req.body;
             if (!name || !type) return res.status(400).json({ error: "Name and type required" });
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const equip = await farmStorage.createEquipment({
-                farmerId: req.user!.id,
+                farmerId,
                 name,
                 type,
                 status: status || "Ativo",
@@ -189,7 +200,9 @@ export function registerFarmPropertyRoutes(app: Express) {
 
     app.get("/api/farm/employees", requireFarmer, async (req, res) => {
         try {
-            const employees = await farmStorage.getEmployees(req.user!.id);
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const employees = await farmStorage.getEmployees(farmerId);
             res.json(employees);
         } catch (error) {
             console.error("[FARM_EMPLOYEES_GET]", error);
@@ -201,9 +214,11 @@ export function registerFarmPropertyRoutes(app: Express) {
         try {
             const { name, role, phone, status, photoBase64, signatureBase64, faceEmbedding } = req.body;
             if (!name || !role) return res.status(400).json({ error: "Nome e cargo são obrigatórios" });
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const emp = await farmStorage.createEmployee({
-                farmerId: req.user!.id,
+                farmerId,
                 name,
                 role,
                 phone: phone || null,
@@ -248,6 +263,163 @@ export function registerFarmPropertyRoutes(app: Express) {
         } catch (error) {
             console.error("[FARM_EMPLOYEES_DELETE]", error);
             res.status(500).json({ error: "Failed to delete employee" });
+        }
+    });
+
+    // ==================== EMPLOYEE ACCESS SYSTEM ====================
+
+    // Enable system access for an employee (create user account)
+    app.post("/api/farm/employees/:id/enable-access", requireFarmer, async (req, res) => {
+        try {
+            const { username, password } = req.body;
+            if (!username || !password) {
+                return res.status(400).json({ error: "Username e senha são obrigatórios" });
+            }
+            if (password.length < 4) {
+                return res.status(400).json({ error: "Senha deve ter pelo menos 4 caracteres" });
+            }
+
+            const employeeId = req.params.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            // Verify employee belongs to this farmer
+            const [emp] = await db.select().from(farmEmployees).where(and(eq(farmEmployees.id, employeeId), eq(farmEmployees.farmerId, farmerId)));
+            if (!emp) return res.status(404).json({ error: "Funcionário não encontrado" });
+
+            // Check if username already exists (allow if it's the employee's own user)
+            const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.username, username));
+            if (existingUser && existingUser.id !== emp.userId) {
+                return res.status(409).json({ error: "Nome de usuário já está em uso" });
+            }
+
+            const hashedPassword = await hashPassword(password);
+
+            if (emp.userId) {
+                // User already exists — re-enable and update credentials
+                await db.update(users).set({
+                    username,
+                    password: hashedPassword,
+                    isActive: true,
+                }).where(eq(users.id, emp.userId));
+
+                res.json({ message: "Acesso reativado com sucesso", userId: emp.userId });
+            } else {
+                // Create new user record
+                const [newUser] = await db.insert(users).values({
+                    username,
+                    password: hashedPassword,
+                    name: emp.name,
+                    role: "funcionario_fazenda",
+                    isActive: true,
+                }).returning();
+
+                // Link user to employee
+                await db.execute(sql`UPDATE farm_employees SET user_id = ${newUser.id} WHERE id = ${employeeId}`);
+
+                res.json({ message: "Acesso habilitado com sucesso", userId: newUser.id });
+            }
+        } catch (error) {
+            console.error("[EMPLOYEE_ENABLE_ACCESS]", error);
+            res.status(500).json({ error: "Falha ao habilitar acesso" });
+        }
+    });
+
+    // Disable system access for an employee
+    app.post("/api/farm/employees/:id/disable-access", requireFarmer, async (req, res) => {
+        try {
+            const employeeId = req.params.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const [emp] = await db.select().from(farmEmployees).where(and(eq(farmEmployees.id, employeeId), eq(farmEmployees.farmerId, farmerId)));
+            if (!emp) return res.status(404).json({ error: "Funcionário não encontrado" });
+            if (!emp.userId) return res.status(400).json({ error: "Funcionário não possui acesso ao sistema" });
+
+            await db.update(users).set({ isActive: false }).where(eq(users.id, emp.userId));
+
+            res.json({ message: "Acesso desabilitado com sucesso" });
+        } catch (error) {
+            console.error("[EMPLOYEE_DISABLE_ACCESS]", error);
+            res.status(500).json({ error: "Falha ao desabilitar acesso" });
+        }
+    });
+
+    // Get modules for an employee
+    app.get("/api/farm/employees/:id/modules", requireFarmer, async (req, res) => {
+        try {
+            const employeeId = req.params.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const [emp] = await db.select().from(farmEmployees).where(and(eq(farmEmployees.id, employeeId), eq(farmEmployees.farmerId, farmerId)));
+            if (!emp) return res.status(404).json({ error: "Funcionário não encontrado" });
+            if (!emp.userId) return res.json([]);
+
+            const modules = await db.select().from(userModules).where(eq(userModules.userId, emp.userId));
+            res.json(modules);
+        } catch (error) {
+            console.error("[EMPLOYEE_GET_MODULES]", error);
+            res.status(500).json({ error: "Falha ao buscar módulos" });
+        }
+    });
+
+    // Upsert modules for an employee
+    app.put("/api/farm/employees/:id/modules", requireFarmer, async (req, res) => {
+        try {
+            const employeeId = req.params.id;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const { modules } = req.body; // [{ moduleKey, enabled, accessLevel }]
+            if (!Array.isArray(modules)) return res.status(400).json({ error: "modules array required" });
+
+            const [emp] = await db.select().from(farmEmployees).where(and(eq(farmEmployees.id, employeeId), eq(farmEmployees.farmerId, farmerId)));
+            if (!emp) return res.status(404).json({ error: "Funcionário não encontrado" });
+            if (!emp.userId) return res.status(400).json({ error: "Funcionário não possui acesso ao sistema" });
+
+            // Upsert each module
+            for (const mod of modules) {
+                await db.execute(sql`
+                    INSERT INTO user_modules (id, user_id, module_key, enabled, access_level, created_at, updated_at)
+                    VALUES (gen_random_uuid(), ${emp.userId}, ${mod.moduleKey}, ${mod.enabled}, ${mod.accessLevel || 'view'}, now(), now())
+                    ON CONFLICT (user_id, module_key) DO UPDATE SET
+                        enabled = ${mod.enabled},
+                        access_level = ${mod.accessLevel || 'view'},
+                        updated_at = now()
+                `);
+            }
+
+            const updatedModules = await db.select().from(userModules).where(eq(userModules.userId, emp.userId));
+            res.json(updatedModules);
+        } catch (error) {
+            console.error("[EMPLOYEE_UPDATE_MODULES]", error);
+            res.status(500).json({ error: "Falha ao atualizar módulos" });
+        }
+    });
+
+    // Get access levels for the current user (for read-only mode)
+    app.get("/api/farm/my-access-levels", requireFarmer, async (req, res) => {
+        try {
+            const userId = req.user!.id;
+            const role = req.user!.role;
+
+            // Farmers and admins have full edit access
+            if (role !== 'funcionario_fazenda') {
+                return res.json({});
+            }
+
+            const modules = await db.select().from(userModules).where(eq(userModules.userId, userId));
+            const accessMap: Record<string, string> = {};
+            for (const m of modules) {
+                if (m.enabled) {
+                    accessMap[m.moduleKey] = (m as any).accessLevel || 'view';
+                }
+            }
+            res.json(accessMap);
+        } catch (error) {
+            console.error("[MY_ACCESS_LEVELS]", error);
+            res.status(500).json({ error: "Falha ao buscar níveis de acesso" });
         }
     });
 

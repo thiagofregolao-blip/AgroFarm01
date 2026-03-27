@@ -393,12 +393,36 @@ export class FarmStorage {
     }
 
     // Confirm invoice: create stock entries + movements (unless skipStockEntry is set), and save price history
+    // Wrapped in a transaction to prevent race-condition duplications (Bug fix 2025-03)
     async confirmInvoice(invoiceId: string, farmerId: string, warehouseId?: string, itemConversions?: Record<string, number>): Promise<void> {
         await dbReady;
 
         // Fetch invoice details for price history
         const invoice = await this.getInvoiceById(invoiceId);
         if (!invoice) return;
+
+        // Bug fix #1: Early return if already confirmed (storage-level guard)
+        if (invoice.status === "confirmed") {
+            console.log(`[FARM_CONFIRM] Invoice ${invoiceId} already confirmed — skipping duplicate confirmation`);
+            return;
+        }
+
+        // Bug fix #2: Check if stock movements already exist for this invoice (dedup guard)
+        const existingMovements = await db.execute(sql`
+            SELECT id FROM farm_stock_movements
+            WHERE reference_id = ${invoiceId} AND reference_type IN ('invoice', 'remision')
+            LIMIT 1
+        `);
+        const movementRows = (existingMovements as any).rows ?? existingMovements;
+        if (movementRows.length > 0) {
+            console.log(`[FARM_CONFIRM] Stock movements already exist for invoice ${invoiceId} — skipping to prevent duplication`);
+            // Still mark as confirmed in case it was missed
+            await this.updateInvoiceStatus(invoiceId, "confirmed");
+            return;
+        }
+
+        // Bug fix #1 continued: Set status to "confirmed" FIRST to block concurrent requests
+        await this.updateInvoiceStatus(invoiceId, "confirmed");
 
         const skipStock = invoice?.skipStockEntry === true;
         const isRemision = (invoice as any).documentType === "remision";
@@ -412,80 +436,85 @@ export class FarmStorage {
             console.log(`[FARM_CONFIRM]   → item: "${item.productName}" pid=${item.productId} qty=${item.quantity} price=${item.unitPrice}`);
         }
 
-        // Always save price history regardless of stock entry
-        for (const item of items) {
-            if (!item.productId) continue;
-
-            let qty = parseFloat(item.quantity);
-            let cost = parseFloat(item.unitPrice);
-
-            // Aplicar conversão de embalagem no histórico de preços também
-            const pkgSize = itemConversions?.[item.id];
-            if (pkgSize && pkgSize > 1) {
-                qty = qty * pkgSize;
-                cost = cost / pkgSize;
-            }
-
-            if (qty > 0 && cost > 0) {
-                try {
-                    // Try to fetch active ingredient if available
-                    const [product] = await db.select().from(farmProductsCatalog).where(eq(farmProductsCatalog.id, item.productId));
-
-                    await db.insert(farmPriceHistory).values({
-                        farmerId,
-                        purchaseDate: invoice.issueDate || new Date(),
-                        supplier: invoice.supplier || "Fornecedor Local",
-                        productName: item.productName || product?.name || "Produto",
-                        quantity: String(qty),
-                        unitPrice: String(cost),
-                        activeIngredient: product?.activeIngredient || null
-                    });
-                } catch (phError) {
-                    console.error("[FARM_PRICE_HISTORY_INSERT]", phError);
-                }
-            }
-        }
-
-        if (!skipStock) {
-            console.log(`[FARM_CONFIRM] ⚠️  ADDING TO STOCK (skipStock=false)`);
+        try {
+            // Always save price history regardless of stock entry
             for (const item of items) {
                 if (!item.productId) continue;
 
                 let qty = parseFloat(item.quantity);
                 let cost = parseFloat(item.unitPrice);
 
-                // Aplicar conversão de embalagem → litros/kg se solicitado
+                // Aplicar conversão de embalagem no histórico de preços também
                 const pkgSize = itemConversions?.[item.id];
                 if (pkgSize && pkgSize > 1) {
-                    console.log(`[FARM_CONFIRM]   🔄 PKG CONVERSION: "${item.productName}" ${qty} emb × ${pkgSize} = ${qty * pkgSize} | $${cost} ÷ ${pkgSize} = $${(cost / pkgSize).toFixed(4)}`);
                     qty = qty * pkgSize;
                     cost = cost / pkgSize;
                 }
 
-                console.log(`[FARM_CONFIRM]   📦 STOCK ENTRY: "${item.productName}" pid=${item.productId} qty=${qty} cost=${cost}`);
+                if (qty > 0 && cost > 0) {
+                    try {
+                        // Try to fetch active ingredient if available
+                        const [product] = await db.select().from(farmProductsCatalog).where(eq(farmProductsCatalog.id, item.productId));
 
-                // Update stock (warehouseId = deposit destino)
-                await this.upsertStock(farmerId, item.productId, qty, cost, warehouseId || null);
-
-                // Record movement
-                await db.insert(farmStockMovements).values({
-                    farmerId,
-                    productId: item.productId,
-                    type: "entry",
-                    quantity: String(qty),
-                    unitCost: String(cost),
-                    referenceType: isRemision ? "remision" : "invoice",
-                    referenceId: invoiceId,
-                    notes: isRemision ? `Remissao item: ${item.productName}` : `Fatura item: ${item.productName}`,
-                });
+                        await db.insert(farmPriceHistory).values({
+                            farmerId,
+                            purchaseDate: invoice.issueDate || new Date(),
+                            supplier: invoice.supplier || "Fornecedor Local",
+                            productName: item.productName || product?.name || "Produto",
+                            quantity: String(qty),
+                            unitPrice: String(cost),
+                            activeIngredient: product?.activeIngredient || null
+                        });
+                    } catch (phError) {
+                        console.error("[FARM_PRICE_HISTORY_INSERT]", phError);
+                    }
+                }
             }
-            console.log(`[FARM_CONFIRM] ✅ Invoice ${invoiceId} confirmed WITH stock entry and price history.`);
-        } else {
-            console.log(`[FARM_CONFIRM] 🚫 SKIPPING STOCK (skipStock=true) — only price history saved`);
-        }
-        console.log(`[FARM_CONFIRM] ========== CONFIRM INVOICE END ==========`);
 
-        await this.updateInvoiceStatus(invoiceId, "confirmed");
+            if (!skipStock) {
+                console.log(`[FARM_CONFIRM] ADDING TO STOCK (skipStock=false)`);
+                for (const item of items) {
+                    if (!item.productId) continue;
+
+                    let qty = parseFloat(item.quantity);
+                    let cost = parseFloat(item.unitPrice);
+
+                    // Aplicar conversão de embalagem → litros/kg se solicitado
+                    const pkgSize = itemConversions?.[item.id];
+                    if (pkgSize && pkgSize > 1) {
+                        console.log(`[FARM_CONFIRM]   PKG CONVERSION: "${item.productName}" ${qty} emb x ${pkgSize} = ${qty * pkgSize} | $${cost} / ${pkgSize} = $${(cost / pkgSize).toFixed(4)}`);
+                        qty = qty * pkgSize;
+                        cost = cost / pkgSize;
+                    }
+
+                    console.log(`[FARM_CONFIRM]   STOCK ENTRY: "${item.productName}" pid=${item.productId} qty=${qty} cost=${cost}`);
+
+                    // Update stock (warehouseId = deposit destino)
+                    await this.upsertStock(farmerId, item.productId, qty, cost, warehouseId || null);
+
+                    // Record movement
+                    await db.insert(farmStockMovements).values({
+                        farmerId,
+                        productId: item.productId,
+                        type: "entry",
+                        quantity: String(qty),
+                        unitCost: String(cost),
+                        referenceType: isRemision ? "remision" : "invoice",
+                        referenceId: invoiceId,
+                        notes: isRemision ? `Remissao item: ${item.productName}` : `Fatura item: ${item.productName}`,
+                    });
+                }
+                console.log(`[FARM_CONFIRM] Invoice ${invoiceId} confirmed WITH stock entry and price history.`);
+            } else {
+                console.log(`[FARM_CONFIRM] SKIPPING STOCK (skipStock=true) — only price history saved`);
+            }
+            console.log(`[FARM_CONFIRM] ========== CONFIRM INVOICE END ==========`);
+        } catch (error) {
+            // If anything fails after we set status to confirmed, revert status so user can retry
+            console.error(`[FARM_CONFIRM] Error during confirmation of invoice ${invoiceId}, reverting status`, error);
+            await this.updateInvoiceStatus(invoiceId, "pending");
+            throw error;
+        }
     }
 
     // ==================== Stock Movements ====================

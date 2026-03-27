@@ -1075,6 +1075,7 @@ export const farmEmployees = pgTable("farm_employees", {
   photoBase64: text("photo_base64"), // Foto do rosto
   signatureBase64: text("signature_base64"), // Imagem da assinatura em papel
   faceEmbedding: text("face_embedding"), // JSON array of 128 floats from face-api.js
+  userId: varchar("user_id"), // linked user account for system access
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -1624,6 +1625,7 @@ export const userModules = pgTable("user_modules", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   moduleKey: text("module_key").notNull(),
   enabled: boolean("enabled").notNull().default(true),
+  accessLevel: text("access_level").default("view"), // 'view' | 'edit'
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 }, (table) => ({

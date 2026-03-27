@@ -70,6 +70,7 @@ export default function AuthPage() {
       else if (user.role === 'admin_agricultor') setLocation("/admin-farmers");
       else if (user.role === 'faturista') setLocation("/faturista");
       else if (user.role === 'agricultor') setLocation("/fazenda");
+      else if (user.role === 'funcionario_fazenda') setLocation("/fazenda");
       else if (['rtv', 'director', 'financeiro', 'admin_empresa'].includes(user.role)) setLocation("/empresa");
       else setLocation("/dashboard");
     }

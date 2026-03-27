@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { requireFarmer } from "./farm-middleware";
+import { requireFarmer, getEffectiveFarmerId } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { ZApiClient } from "./whatsapp/zapi-client";
 import { db } from "./db";
@@ -8,18 +8,35 @@ import { sql } from "drizzle-orm";
 export function registerFarmAuthRoutes(app: Express) {
 
     // /api/farm/my-modules → returns enabled modules for current user
+    // For funcionario_fazenda: returns their specific module permissions
+    // For regular farmers: returns their modules (set by admin)
     app.get("/api/farm/my-modules", requireFarmer, async (req, res) => {
         try {
             const { userModules } = await import("../shared/schema");
             const { eq } = await import("drizzle-orm");
             const { db } = await import("./db");
 
-            const modules = await db
-                .select()
-                .from(userModules)
-                .where(eq(userModules.userId, req.user!.id));
+            const userId = req.user!.id;
+            const role = req.user!.role;
 
-            res.json(modules);
+            if (role === 'funcionario_fazenda') {
+                // For employee users, return their specific modules
+                const modules = await db
+                    .select()
+                    .from(userModules)
+                    .where(eq(userModules.userId, userId));
+
+                // If no modules configured, return empty (employee sees nothing until farmer configures)
+                res.json(modules);
+            } else {
+                // For farmers/admins, return their modules
+                const modules = await db
+                    .select()
+                    .from(userModules)
+                    .where(eq(userModules.userId, userId));
+
+                res.json(modules);
+            }
         } catch (error) {
             console.error("Failed to fetch my modules:", error);
             res.status(500).json({ error: "Failed to fetch modules" });
@@ -52,7 +69,8 @@ export function registerFarmAuthRoutes(app: Express) {
             const { globalSilos, farmPlots, farmRomaneios } = await import("../shared/schema");
             const { eq, and, isNotNull } = await import("drizzle-orm");
             const { db } = await import("./db");
-            const farmerId = req.user!.id;
+            const { getEffectiveFarmerId: getEF } = await import("./farm-middleware");
+            const farmerId = await getEF(req) || req.user!.id;
 
             // 1. Get all active global silos
             const silos = await db.select().from(globalSilos).where(eq(globalSilos.active, true));
