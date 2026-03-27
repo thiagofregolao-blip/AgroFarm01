@@ -27,22 +27,22 @@ function detectPackageSize(productName: string): number | null {
 
 /**
  * Verifica se um item precisa de conversão embalagem → litros/kg.
- * Regra: qty × pkgSize × price ≈ totalPrice → qty são embalagens → converter.
- * Se não bate → qty já está na unidade correta → não converter.
+ * Regra: se qty % pkgSize ≠ 0 → qty são embalagens → converter.
+ * Se qty % pkgSize = 0 → qty já está em litros/kg → não converter.
+ * Ex: GLIFOGROP 20LTS qty=125 → 125%20=5 ≠ 0 → converter (125 embalagens × 20 = 2500L)
+ * Ex: UNIZEB 15KG qty=105 → 105%15=0 → não converter (105 KG = 7 sacos)
  */
 function shouldConvertPackage(item: { productName: string; quantity: string | number; unitPrice: string | number; totalPrice: string | number }): number | null {
     const pkgSize = detectPackageSize(item.productName);
     if (!pkgSize) return null;
     const qty = parseFloat(String(item.quantity));
-    const price = parseFloat(String(item.unitPrice));
-    const total = parseFloat(String(item.totalPrice));
-    if (!qty || !price || !total) return null;
-    const convertedTotal = qty * pkgSize * price;
-    const tolerance = total * 0.02; // 2% tolerância para arredondamento
-    if (Math.abs(convertedTotal - total) <= tolerance) {
-        return pkgSize; // Converter: qty são embalagens, preço é por unidade
+    if (!qty || qty <= 0) return null;
+    // Se qty é divisível pela embalagem, qty já está na unidade base (litros/kg)
+    // Se NÃO é divisível, qty são embalagens → converter
+    if (qty % pkgSize !== 0) {
+        return pkgSize; // Converter: qty são embalagens
     }
-    return null; // Não converter: qty já está correto
+    return null; // Não converter: qty já está em litros/kg
 }
 
 export default function FarmInvoices() {
