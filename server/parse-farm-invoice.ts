@@ -494,23 +494,14 @@ function normalizeUnit(unit: string): string {
  * If no package size found, returns 1
  */
 function extractPackageSize(productName: string, unit: string): number {
-    // Match patterns like "20LTS", "5LTS", "20L", "10KG", "20 LTS"
-    const patterns = [
-        /(\d+(?:[.,]\d+)?)\s*LTS?\b/i,
-        /(\d+(?:[.,]\d+)?)\s*KG\b/i,
-        /(\d+(?:[.,]\d+)?)\s*(?:LITROS?|KILOS?)\b/i,
-    ];
-
-    for (const pattern of patterns) {
-        const match = productName.match(pattern);
-        if (match) {
-            const size = parseFloat(match[1].replace(',', '.'));
-            if (size > 0 && size <= 1000) {
-                return size;
-            }
+    // Regex unificada — captura: "20LT", "5LTS", "15KG", "20 LITROS", "10L", "25 KILOS"
+    const match = productName.match(/(\d+(?:[.,]\d+)?)\s*(?:LTS?|KGS?|LITROS?|KILOS?|L)\b/i);
+    if (match) {
+        const size = parseFloat(match[1].replace(',', '.'));
+        if (size > 1 && size <= 1000) {
+            return size;
         }
     }
-
     return 1;
 }
 

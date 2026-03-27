@@ -17,66 +17,77 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAccessLevel } from "@/hooks/use-access-level";
 
-/** Detecta tamanho de embalagem no nome do produto (ex: "20LTS" → 20, "5LT" → 5, "10KG" → 10) */
+/**
+ * Detecta tamanho de embalagem no nome do produto.
+ * Regex unificada baseada no documento técnico — captura padrões como:
+ * "20LT", "5LTS", "15KG", "20 LITROS", "- 20LT", "10L", "25 KILOS"
+ */
 function detectPackageSize(productName: string): number | null {
     if (!productName) return null;
-    const match = productName.match(/[\s\-x](\d+(?:[.,]\d+)?)\s*(?:LTS?|KGS?|LITROS?)\.?(?:\s|$|\)|-)/i);
+    const match = productName.match(/(\d+(?:[.,]\d+)?)\s*(?:LTS?|KGS?|LITROS?|KILOS?|L)\b/i);
     if (!match) return null;
     const size = parseFloat(match[1].replace(",", "."));
     return size > 1 ? size : null;
 }
 
+/** Detecta se a unidade extraída é kg (vs litros) */
+function detectUnitType(productName: string): "kg" | "litro" {
+    if (!productName) return "litro";
+    if (/\d+(?:[.,]\d+)?\s*(?:KGS?|KILOS?)\b/i.test(productName)) return "kg";
+    return "litro";
+}
+
 const PRICE_THRESHOLD = 1.90;
-const STOCK_PRICE_MULTIPLIER = 2;
 
 /**
- * Regra de 3 camadas para decidir conversão embalagem → litros/kg:
+ * Regra de conversão embalagem → litros/kg (baseada no documento técnico):
  *
- * Camada 1: detectPackageSize() — se não detecta embalagem no nome, NÃO converte.
- * Camada 2: preço ÷ pkgSize < $1.90 — preço já é por unidade base, NÃO converte.
- * Camada 3: consulta estoque — se produto já existe no estoque, compara preço da fatura
- *           com o preço médio do estoque. Se fatura > estoque × 2, é preço por embalagem → CONVERTE.
- *           Se não tem no estoque (produto novo), usa fallback → CONVERTE.
+ * Camada 1: detectPackageSize() — extrai capacidade da descrição via regex.
+ *           Se NÃO detecta → busca packageSize no catálogo do produto.
+ *           Se nenhum → NÃO converte (status: ALERTA_VALIDACAO_MANUAL).
+ *
+ * Camada 2: preço ÷ capacidade < $1.90 → preço já é por unidade base, NÃO converte.
+ *           Protege contra faturas que já vêm em litros/kg.
+ *
+ * Validação: |Qf × Pf - Total| ≤ 0.01 (total deve permanecer inalterado).
  */
 function shouldConvertPackage(
-    item: { productName: string; quantity: string | number; unitPrice: string | number; totalPrice: string | number },
-    stockData?: any[]
+    item: { productName: string; quantity: string | number; unitPrice: string | number; totalPrice: string | number; productId?: string },
+    stockData?: any[],
+    catalogData?: any[]
 ): number | null {
-    // Camada 1: detectar embalagem no nome
-    const pkgSize = detectPackageSize(item.productName);
-    if (!pkgSize) return null;
     const qty = parseFloat(String(item.quantity));
     if (!qty || qty <= 0) return null;
     const price = parseFloat(String(item.unitPrice));
     if (!price || price <= 0) return null;
+    const total = parseFloat(String(item.totalPrice));
 
-    // Camada 2: threshold de preço — se preço/embalagem < $1.90, já é preço por unidade
-    const pricePerUnit = price / pkgSize;
-    if (pricePerUnit < PRICE_THRESHOLD) return null;
+    // Camada 1a: detectar capacidade no nome do produto
+    let pkgSize = detectPackageSize(item.productName);
 
-    // Camada 3: consultar preço no estoque
-    if (stockData && stockData.length > 0) {
-        const nameNorm = item.productName.toUpperCase().replace(/[^A-Z0-9]/g, "");
-        const match = stockData.find((s: any) => {
-            if (!s.productName) return false;
-            const stockNorm = s.productName.toUpperCase().replace(/[^A-Z0-9]/g, "");
-            // Match se um contém o outro ou se compartilham pelo menos as primeiras palavras significativas
-            return nameNorm.includes(stockNorm) || stockNorm.includes(nameNorm) ||
-                   item.productName.toUpperCase().split(/\s+/).slice(0, 2).join(" ") ===
-                   s.productName.toUpperCase().split(/\s+/).slice(0, 2).join(" ");
-        });
-        if (match && match.averageCost && parseFloat(match.averageCost) > 0) {
-            const stockPrice = parseFloat(match.averageCost);
-            // Se preço da fatura é mais que 2x o preço do estoque → é preço por embalagem → converter
-            if (price > stockPrice * STOCK_PRICE_MULTIPLIER) {
-                return pkgSize;
-            }
-            // Preço compatível com estoque → não converter
-            return null;
+    // Camada 1b: fallback — buscar packageSize no catálogo do produto
+    if (!pkgSize && catalogData && item.productId) {
+        const catMatch = catalogData.find((c: any) => c.id === item.productId);
+        if (catMatch && catMatch.packageSize && parseFloat(catMatch.packageSize) > 1) {
+            pkgSize = parseFloat(catMatch.packageSize);
         }
     }
 
-    // Fallback (produto novo, sem histórico): converter
+    // Sem capacidade detectada → não converter
+    if (!pkgSize) return null;
+
+    // Camada 2: threshold de preço — se preço/capacidade < $1.90, já é preço por unidade
+    const pricePerUnit = price / pkgSize;
+    if (pricePerUnit < PRICE_THRESHOLD) return null;
+
+    // Validação pós-conversão: verificar que total permanece consistente
+    const convertedQty = qty * pkgSize;
+    const convertedPrice = price / pkgSize;
+    const recalcTotal = convertedQty * convertedPrice;
+    if (total > 0 && Math.abs(recalcTotal - total) > 0.01) {
+        console.warn(`[CONV_VALIDATION] Inconsistência: ${item.productName} — total=${total}, recalc=${recalcTotal.toFixed(2)}`);
+    }
+
     return pkgSize;
 }
 
@@ -1116,7 +1127,7 @@ export default function FarmInvoices() {
                                                                 </td>
                                                                 <td className="text-center p-2">{item.unit}</td>
                                                                 {(() => {
-                                                                    const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice }, stockData);
+                                                                    const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products);
                                                                     const qty = parseFloat(item.quantity);
                                                                     const price = parseFloat(item.unitPrice);
                                                                     const realQty = pkgSize ? qty * pkgSize : qty;
@@ -1187,7 +1198,7 @@ export default function FarmInvoices() {
 
                                     {/* Conversão embalagem → litros/kg (informativo) */}
                                     {invoiceDetail.status === "pending" && invoiceDetail.items?.length > 0 && (() => {
-                                        const itemsWithPkg = invoiceDetail.items.filter((item: any) => shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice }, stockData));
+                                        const itemsWithPkg = invoiceDetail.items.filter((item: any) => shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products));
                                         if (itemsWithPkg.length === 0) return null;
                                         return (
                                             <div className="mt-4 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
@@ -1202,7 +1213,7 @@ export default function FarmInvoices() {
                                                 </p>
                                                 <div className="space-y-1">
                                                     {itemsWithPkg.map((item: any) => {
-                                                        const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice }, stockData)!;
+                                                        const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products)!;
                                                         const qty = parseFloat(item.quantity);
                                                         const price = parseFloat(item.unitPrice);
                                                         return (
@@ -1336,7 +1347,7 @@ export default function FarmInvoices() {
                                                         const conversions: Record<string, number> = {};
                                                         if (invoiceDetail.items) {
                                                             for (const item of invoiceDetail.items) {
-                                                                const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice }, stockData);
+                                                                const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products);
                                                                 if (pkgSize) {
                                                                     conversions[item.id] = pkgSize;
                                                                 }

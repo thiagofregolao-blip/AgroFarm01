@@ -466,9 +466,12 @@ export function registerFarmStockRoutes(app: Express) {
 
             // Helper: detect package size from product name (e.g. "Cripton Supra x 5 Lt." → 5)
             const detectPackageSize = (name: string): number | null => {
-                // Match patterns like "x 5 Lt", "x5Lt", "5 LT", "20LTS", "10KG"
-                const match = name.match(/[x×]\s*(\d+(?:[.,]\d+)?)\s*(lt|lts|l|kg|ml)/i);
-                if (match) return parseFloat(match[1].replace(",", "."));
+                // Regex unificada — captura: "20LT", "5LTS", "15KG", "20 LITROS", "x 5 Lt", "10L"
+                const match = name.match(/(\d+(?:[.,]\d+)?)\s*(?:LTS?|KGS?|LITROS?|KILOS?|L)\b/i);
+                if (match) {
+                    const size = parseFloat(match[1].replace(",", "."));
+                    return size > 1 ? size : null;
+                }
                 return null;
             };
 
