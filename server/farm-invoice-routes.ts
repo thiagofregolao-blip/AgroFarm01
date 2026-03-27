@@ -877,6 +877,12 @@ export function registerFarmInvoiceRoutes(app: Express) {
             // Delete related records to avoid FK constraint errors
             await db.execute(sql`DELETE FROM farm_invoice_items WHERE invoice_id = ${invoiceId}`);
             await db.execute(sql`DELETE FROM farm_accounts_payable WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
+            // Delete expense items before expenses (FK constraint)
+            await db.execute(sql`
+                DELETE FROM farm_expense_items WHERE expense_id IN (
+                    SELECT id FROM farm_expenses WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}
+                )
+            `);
             await db.execute(sql`DELETE FROM farm_expenses WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
             await db.execute(sql`UPDATE farm_remissions SET reconciled_invoice_id = NULL WHERE reconciled_invoice_id = ${invoiceId} AND farmer_id = ${farmerId}`);
             await db.execute(sql`DELETE FROM farm_invoices WHERE id = ${invoiceId} AND farmer_id = ${farmerId}`);
