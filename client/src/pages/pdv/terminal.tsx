@@ -369,6 +369,7 @@ export default function PdvTerminal() {
     const [selectedPlots, setSelectedPlots] = useState<any[]>([]);
     const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [negativeStockWarning, setNegativeStockWarning] = useState<{ items: Array<{ name: string; available: number; requested: number; unit: string }>; generatePDF: boolean } | null>(null);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [categoryFilter, setCategoryFilter] = useState<string>("");
     const [distOverrides, setDistOverrides] = useState<Record<string, number>>({});
@@ -549,8 +550,6 @@ export default function PdvTerminal() {
             setCart(cart.filter(c => c.product.id !== product.id));
             return;
         }
-        const stockQty = getStockForProduct(product.id);
-        if (stockQty <= 0) return; // Block adding products with no stock
         setCart([...cart, {
             product,
             quantity: 1,
@@ -561,8 +560,6 @@ export default function PdvTerminal() {
     const updateQuantity = (productId: string, qty: number | string) => {
         let numericQty = typeof qty === 'string' ? parseFloat(qty.replace(',', '.')) : qty;
         if (isNaN(numericQty) || numericQty < 0) numericQty = 0;
-        const stockQty = getStockForProduct(productId);
-        if (numericQty > stockQty) qty = stockQty.toString(); // Cap at available stock but allow string holding
         setCart(cart.map(c => c.product.id === productId ? { ...c, quantity: qty } : c));
     };
 
@@ -925,6 +922,26 @@ export default function PdvTerminal() {
     };
 
     const handleSubmit = async (generatePDF = false) => {
+        // Check for negative stock and ask confirmation
+        const negativeItems: Array<{ name: string; available: number; requested: number; unit: string }> = [];
+        for (const item of confirmationData) {
+            const totalRequested = item.distribution.reduce((s: number, d: any) => s + d.allocatedQty, 0);
+            const available = getStockForProduct(item.product.id);
+            if (totalRequested > available) {
+                negativeItems.push({
+                    name: item.product.name,
+                    available,
+                    requested: totalRequested,
+                    unit: item.product.unit || "UN",
+                });
+            }
+        }
+        if (negativeItems.length > 0 && !negativeStockWarning) {
+            setNegativeStockWarning({ items: negativeItems, generatePDF });
+            return;
+        }
+        setNegativeStockWarning(null);
+
         setSubmitting(true);
         try {
             let count = 0;
@@ -1905,9 +1922,9 @@ export default function PdvTerminal() {
                             const isSelected = inCart || isPending;
                             const lowStock = stockQty <= 0;
                             return (
-                                <button key={p.id} disabled={lowStock}
+                                <button key={p.id}
                                     onClick={() => togglePendingProduct(p)}
-                                    className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition-all ${lowStock ? "opacity-40 cursor-not-allowed bg-white border-gray-100" : isSelected ? "bg-green-50 border-green-600 shadow-sm shadow-green-100" : "bg-white border-gray-100 shadow-sm hover:border-green-200"}`}>
+                                    className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${isSelected ? "bg-green-50 border-green-600 shadow-sm shadow-green-100" : lowStock ? "bg-amber-50/50 border-amber-200 shadow-sm hover:border-amber-300" : "bg-white border-gray-100 shadow-sm hover:border-green-200"}`}>
                                     {/* Checkbox */}
                                     <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${isSelected ? "bg-green-700 border-green-700" : "border-gray-300"}`}>
                                         {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
@@ -1928,7 +1945,7 @@ export default function PdvTerminal() {
                                     {/* Stock */}
                                     <div className="shrink-0 text-right">
                                         {lowStock ? (
-                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-50 text-red-500 border border-red-200">Sem estoque</span>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-200">Sem estoque</span>
                                         ) : (
                                             <>
                                                 <p className="text-lg font-extrabold text-emerald-600 leading-none">{stockQty.toFixed(0)}</p>
@@ -2584,8 +2601,7 @@ export default function PdvTerminal() {
                                 <button
                                     key={p.id}
                                     onClick={() => addToCart(p)}
-                                    disabled={lowStock}
-                                    className={`group relative flex items-center gap-3.5 rounded-2xl transition-all duration-200 bg-white text-left p-3 ${lowStock ? "opacity-50 cursor-not-allowed" : "hover:shadow-md active:scale-[0.99]"} ${inCart ? "ring-2 ring-emerald-500 shadow-md shadow-emerald-100" : "border border-gray-100 shadow-sm"}`}
+                                    className={`group relative flex items-center gap-3.5 rounded-2xl transition-all duration-200 bg-white text-left p-3 cursor-pointer hover:shadow-md active:scale-[0.99] ${inCart ? "ring-2 ring-emerald-500 shadow-md shadow-emerald-100" : lowStock ? "border border-amber-200 shadow-sm" : "border border-gray-100 shadow-sm"}`}
                                 >
                                     {/* Product image */}
                                     <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center relative overflow-hidden shrink-0">
@@ -2620,7 +2636,7 @@ export default function PdvTerminal() {
                                     {/* Stock */}
                                     <div className="shrink-0 text-right">
                                         {lowStock ? (
-                                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg border border-red-200 text-red-500 bg-red-50">
+                                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg border border-amber-200 text-amber-600 bg-amber-50">
                                                 Sem estoque
                                             </span>
                                         ) : (
@@ -2941,6 +2957,48 @@ export default function PdvTerminal() {
                     </button>
                 </div>
             </nav>
+
+            {/* Modal de confirmação de estoque negativo */}
+            {negativeStockWarning && (
+                <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4" onClick={() => setNegativeStockWarning(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                                <span className="text-2xl">!</span>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">Estoque Insuficiente</h3>
+                                <p className="text-sm text-gray-500">O estoque ficara negativo para os itens abaixo</p>
+                            </div>
+                        </div>
+                        <div className="space-y-2 mb-5 max-h-48 overflow-y-auto">
+                            {negativeStockWarning.items.map((item, i) => (
+                                <div key={i} className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                    <span className="text-sm font-medium text-gray-800 truncate mr-2">{item.name}</span>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-xs text-gray-500">Disponivel: <span className="font-semibold text-gray-700">{item.available.toFixed(1)} {item.unit}</span></p>
+                                        <p className="text-xs text-gray-500">Solicitado: <span className="font-semibold text-red-600">{item.requested.toFixed(1)} {item.unit}</span></p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setNegativeStockWarning(null)}
+                                className="flex-1 px-4 py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold text-sm hover:bg-gray-50 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => handleSubmit(negativeStockWarning.generatePDF)}
+                                className="flex-1 px-4 py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 transition-colors"
+                            >
+                                Confirmar Saida
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
