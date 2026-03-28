@@ -857,7 +857,7 @@ export default function FarmInvoices() {
                         {/* Selected invoice detail — Modal */}
                         <Dialog open={!!selectedInvoice && !!invoiceDetail} onOpenChange={(open) => { if (!open) { setSelectedInvoice(null); setSkipConversion(new Set()); setEditingInvoice(false); } }}>
                             <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-0 gap-0">
-                                <div className="p-6 pb-3">
+                                {invoiceDetail && (<><div className="p-6 pb-3">
                                     <div className="flex items-center justify-between flex-wrap gap-2">
                                         <DialogTitle className="text-emerald-800 flex items-center gap-2 text-lg">
                                             {editingInvoice ? "Editando Fatura" : `Fatura #${invoiceDetail.invoiceNumber || "—"}`}
@@ -1391,7 +1391,7 @@ export default function FarmInvoices() {
                                             </div>
                                         </div>
                                     )}
-                                </div>
+                                </div></>)}
                             </DialogContent>
                         </Dialog>
 
