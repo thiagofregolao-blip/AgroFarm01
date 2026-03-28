@@ -19,10 +19,10 @@ import "leaflet/dist/leaflet.css";
 // ══════════════════════════════════════════════════════════════════════════════
 const SHADOW = "0 12px 40px rgba(23,29,20,0.06)";
 const CATEGORY_COLORS: Record<string, string> = {
-    fungicida: "#1b5e20", herbicida: "#204200", inseticida: "#2f5c00",
-    fertilizante: "#4a626d", semente: "#334a55", adjuvante: "#506873",
-    biologico: "#6b8e23", combustivel: "#717a6d", diesel: "#717a6d",
-    outros: "#c0c9bb", outro: "#c0c9bb",
+    herbicida: "#dc2626", fungicida: "#eab308", inseticida: "#2563eb",
+    fertilizante: "#16a34a", semente: "#92400e", adjuvante: "#7c3aed",
+    biologico: "#65a30d", combustivel: "#6b7280", diesel: "#6b7280",
+    outros: "#9ca3af", outro: "#9ca3af",
 };
 
 function normalizeCategory(cat: string): string {
@@ -234,7 +234,7 @@ export default function FarmDashboard() {
 
     if (isLoading) return <FarmLayout><div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div></FarmLayout>;
 
-    function fmt(v: number) { if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`; if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`; return `$${v.toFixed(0)}`; }
+    function fmt(v: number) { return `$${Math.round(v).toLocaleString("pt-BR")}`; }
     function fmtW(kg: number) { return kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${kg.toFixed(0)}kg`; }
     function fmtDate(d: string | null) { if (!d) return "—"; try { return new Date(d).toLocaleDateString("pt-BR"); } catch { return "—"; } }
     function fmtDateTime(d: string | null) { if (!d) return "—"; try { const dt = new Date(d); return `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`; } catch { return "—"; } }
@@ -293,7 +293,7 @@ export default function FarmDashboard() {
                                             <defs><linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(27,94,32,0.2)" /><stop offset="100%" stopColor="rgba(27,94,32,0)" /></linearGradient></defs>
                                             <CartesianGrid vertical={true} horizontal={false} strokeDasharray="3 3" stroke="#e9f0e1" />
                                             <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#41493e", fontWeight: 700 }} axisLine={false} tickLine={false} />
-                                            <YAxis tick={{ fontSize: 9, fill: "#717a6d" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => fmt(v)} />
+                                            <YAxis tick={{ fontSize: 9, fill: "#717a6d" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
                                             <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: "none", boxShadow: SHADOW, padding: "8px 14px" }} formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} />
                                             <Area type="monotone" dataKey="value" stroke="#1b5e20" strokeWidth={3} fill="url(#perfGrad)" dot={{ r: 4, fill: "#1b5e20" }} activeDot={{ r: 6, fill: "#1b5e20" }} />
                                         </AreaChart>
@@ -444,12 +444,12 @@ export default function FarmDashboard() {
                                         <span className="text-[8px] uppercase font-bold tracking-widest text-[#41493e]">Itens</span>
                                     </div>
                                 </div>
-                                <div className="flex-1 space-y-2">
+                                <div className="flex-1 space-y-2.5">
                                     {stockByCategory.map(cat => (
-                                        <div key={cat.category} className="flex items-center gap-2 text-[11px] font-bold">
-                                            <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.category.toLowerCase()] || CATEGORY_COLORS.outros }}></div>
-                                            <span className="text-[#41493e] flex-1">{cat.category}</span>
-                                            <span className="text-emerald-700 font-black">{cat.count}</span>
+                                        <div key={cat.category} className="flex items-center gap-2">
+                                            <div className="w-3.5 h-3.5 rounded-sm shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.category.toLowerCase()] || CATEGORY_COLORS.outros }}></div>
+                                            <span className="text-[13px] font-semibold text-[#171d14] flex-1">{cat.category}</span>
+                                            <span className="text-[13px] font-black text-emerald-700">{cat.count}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -474,25 +474,40 @@ export default function FarmDashboard() {
                         </div>
                     </section>
 
-                    {/* ══ CARD 6: Divida por Empresa (7 col) — barras por fornecedor ══ */}
+                    {/* ══ CARD 6: Divida por Empresa (7 col) — 3 cards + barras verticais finas ══ */}
                     <section className="md:col-span-7 card-stitch p-6 cursor-pointer" onClick={() => setLocation("/fazenda/contas-pagar")}>
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex justify-between items-center mb-5">
                             <div><h3 className="headline-font font-bold text-lg text-emerald-950">Divida por Empresa</h3><p className="text-sm text-[#41493e]">Contas a pagar + faturas pendentes</p></div>
-                            <div className="text-right"><div className="text-[10px] text-[#41493e] font-bold uppercase">Total</div><div className="text-xl font-black text-red-700">{fmt(totalDebt)}</div></div>
                         </div>
+                        {/* 3 metric cards */}
+                        <div className="grid grid-cols-3 gap-3 mb-5">
+                            <div className="bg-red-50 p-3 rounded-xl">
+                                <div className="text-[10px] uppercase font-bold text-red-800 mb-1">Total Divida</div>
+                                <div className="text-lg font-black text-red-700">{fmt(totalDebt)}</div>
+                            </div>
+                            <div className="bg-[#eff6e7] p-3 rounded-xl">
+                                <div className="text-[10px] uppercase font-bold text-[#41493e] mb-1">Maior Credor</div>
+                                <div className="text-sm font-black text-emerald-950 truncate">{debtByCompany[0]?.name || "—"}</div>
+                            </div>
+                            <div className="bg-[#eff6e7] p-3 rounded-xl">
+                                <div className="text-[10px] uppercase font-bold text-[#41493e] mb-1">Faturas Pendentes</div>
+                                <div className="text-lg font-black text-emerald-950">{invoices.filter((i: any) => i.status === "pending").length}</div>
+                            </div>
+                        </div>
+                        {/* Barras verticais finas */}
                         {debtByCompany.length > 0 ? (
-                            <div className="h-44 flex items-end gap-3 px-2">
+                            <div className="flex items-end gap-4 px-1" style={{ height: 160 }}>
                                 {debtByCompany.map((d, i) => {
                                     const pct = (d.amount / maxDebt) * 100;
-                                    const colors = ["#1b5e20", "#1b5e20", "#204200", "#2f5c00", "#41493e", "#717a6d"];
+                                    const colors = ["#1b5e20", "#204200", "#2f5c00", "#41493e", "#717a6d", "#9ca3af"];
                                     return (
-                                        <div key={d.name} className="flex-1 flex flex-col items-center gap-1">
-                                            <span className="text-[10px] font-black text-emerald-950">{fmt(d.amount)}</span>
-                                            <div className="w-full bg-[#e9f0e1] rounded-t-sm relative overflow-hidden" style={{ height: "120px" }}>
+                                        <div key={d.name} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                                            <span className="text-[9px] font-black text-emerald-950 whitespace-nowrap">{fmt(d.amount)}</span>
+                                            <div className="w-3/5 max-w-[32px] bg-[#e9f0e1] rounded-t-sm relative overflow-hidden" style={{ height: "120px" }}>
                                                 <div className="absolute bottom-0 left-0 right-0 rounded-t-sm transition-all duration-700"
-                                                    style={{ height: `${Math.max(pct, 5)}%`, background: colors[i] || "#717a6d" }}></div>
+                                                    style={{ height: `${Math.max(pct, 5)}%`, background: colors[i] || "#9ca3af" }}></div>
                                             </div>
-                                            <span className="text-[8px] font-bold text-[#41493e] text-center truncate max-w-full uppercase leading-tight">{d.name.split(" ").slice(0, 2).join(" ")}</span>
+                                            <span className="text-[7px] font-bold text-[#41493e] text-center truncate max-w-full uppercase leading-tight">{d.name.split(" ").slice(0, 2).join(" ")}</span>
                                         </div>
                                     );
                                 })}
