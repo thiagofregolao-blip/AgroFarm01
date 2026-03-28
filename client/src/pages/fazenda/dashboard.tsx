@@ -123,35 +123,14 @@ function MiniSilo({ fillPercent, color, label, weight }: { fillPercent: number; 
     );
 }
 
-// ─── Equipment SVG icon (harvester/tractor) ───────────────────────────────────
+// ─── Equipment icon (real PNG images) ─────────────────────────────────────────
 function EquipmentIcon({ type, isActive, isMaint }: { type: string; isActive: boolean; isMaint: boolean }) {
-    const color = isActive ? "#4ade80" : isMaint ? "#fbbf24" : "#9ca3af";
-    const darkColor = isActive ? "#16a34a" : isMaint ? "#d97706" : "#6b7280";
-    // Harvester/tractor SVG based on the reference image
+    const isColheitadeira = type === "Colheitadeira";
+    const src = isColheitadeira ? "/colheitadeira.png" : "/trator.png";
     return (
-        <svg width={48} height={36} viewBox="0 0 120 80" fill="none">
-            {/* Body */}
-            <rect x={20} y={20} width={65} height={35} rx={4} fill={color} />
-            {/* Cab */}
-            <path d="M55 10 L75 10 L80 20 L55 20 Z" fill={color} />
-            <path d="M60 12 L73 12 L76 19 L60 19 Z" fill={darkColor} opacity={0.3} />
-            {/* Grain pipe */}
-            <rect x={15} y={15} width={40} height={8} rx={3} fill={color} />
-            <rect x={5} y={12} width={14} height={11} rx={2} fill={darkColor} opacity={0.7} />
-            {/* Front attachment */}
-            <path d="M85 30 L100 35 L100 55 L88 55 L85 45 Z" fill={darkColor} opacity={0.8} />
-            <path d="M100 38 L110 42 L110 52 L100 52 Z" fill={color} />
-            {/* Rear wheel (big) */}
-            <circle cx={35} cy={58} r={18} fill="#374151" />
-            <circle cx={35} cy={58} r={14} fill="#4b5563" />
-            <circle cx={35} cy={58} r={6} fill="#6b7280" />
-            <circle cx={35} cy={58} r={3} fill="#9ca3af" />
-            {/* Front wheel */}
-            <circle cx={85} cy={58} r={14} fill="#374151" />
-            <circle cx={85} cy={58} r={10} fill="#4b5563" />
-            <circle cx={85} cy={58} r={4} fill="#6b7280" />
-            <circle cx={85} cy={58} r={2} fill="#9ca3af" />
-        </svg>
+        <div className={`w-14 h-11 rounded-lg flex items-center justify-center ${isActive ? "bg-emerald-50" : isMaint ? "bg-yellow-50" : "bg-gray-100"}`}>
+            <img src={src} alt={type} className={`h-9 w-auto object-contain ${!isActive && !isMaint ? "opacity-40 grayscale" : ""}`} />
+        </div>
     );
 }
 
