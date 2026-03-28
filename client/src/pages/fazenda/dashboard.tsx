@@ -6,14 +6,11 @@ import FarmLayout from "@/components/fazenda/layout";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-    Warehouse, Loader2, RefreshCw, TrendingUp,
-    Tractor, Wrench, Droplets, Wind, Thermometer, Fuel,
-    X
+    Loader2, RefreshCw, TrendingUp, Droplets, Wind, Thermometer, Fuel, X
 } from "lucide-react";
 import {
     ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
-    PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, CartesianGrid,
-    Legend
+    PieChart, Pie, Cell, BarChart, Bar
 } from "recharts";
 import { MapContainer, TileLayer, Polygon, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -22,7 +19,7 @@ import "leaflet/dist/leaflet.css";
 const CATEGORY_COLORS: Record<string, string> = {
     fungicida: "#16a34a", herbicida: "#eab308", inseticida: "#f97316",
     fertilizante: "#3b82f6", semente: "#8b5cf6", adjuvante: "#ec4899",
-    diesel: "#78716c", outros: "#6b7280",
+    combustivel: "#78716c", diesel: "#78716c", outros: "#6b7280", outro: "#6b7280",
 };
 const CROP_MAP_COLORS: Record<string, string> = {
     soja: "#22c55e", milho: "#eab308", trigo: "#f59e0b", algodao: "#e5e7eb", feijao: "#92400e",
@@ -52,10 +49,10 @@ function MapAutoFit({ plots }: { plots: any[] }) {
     return null;
 }
 
-// ─── Mini Silo SVG (compact version for dashboard) ────────────────────────────
+// ─── Mini Silo SVG (BIGGER version) ───────────────────────────────────────────
 function MiniSilo({ fillPercent, color, label, weight }: { fillPercent: number; color: string; label: string; weight: string }) {
-    const W = 60, H = 90;
-    const bodyX = 10, bodyW = 40, bodyTop = 25, bodyBot = 75;
+    const W = 80, H = 130;
+    const bodyX = 12, bodyW = 56, bodyTop = 32, bodyBot = 108;
     const cx = bodyX + bodyW / 2;
     const bodyH = bodyBot - bodyTop;
     const fillH = (Math.min(fillPercent, 100) / 100) * bodyH;
@@ -68,41 +65,96 @@ function MiniSilo({ fillPercent, color, label, weight }: { fillPercent: number; 
                 <defs>
                     <linearGradient id={`sb-${uid}`} x1="0" y1="0" x2="1" y2="0">
                         <stop offset="0%" stopColor="#8a9099" />
-                        <stop offset="30%" stopColor="#c5cdd5" />
-                        <stop offset="50%" stopColor="#e0e5ea" />
-                        <stop offset="70%" stopColor="#c5cdd5" />
-                        <stop offset="100%" stopColor="#8a9099" />
+                        <stop offset="15%" stopColor="#b8c0c8" />
+                        <stop offset="35%" stopColor="#d8dfe6" />
+                        <stop offset="50%" stopColor="#e8eef4" />
+                        <stop offset="65%" stopColor="#d8dfe6" />
+                        <stop offset="85%" stopColor="#b0b8c0" />
+                        <stop offset="100%" stopColor="#858d95" />
                     </linearGradient>
-                    <clipPath id={`sc-${uid}`}><rect x={bodyX} y={bodyTop} width={bodyW} height={bodyH} rx={3} /></clipPath>
+                    <linearGradient id={`gn-${uid}`} x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="black" stopOpacity={0.12} />
+                        <stop offset="20%" stopColor="black" stopOpacity={0.04} />
+                        <stop offset="50%" stopColor="white" stopOpacity={0.06} />
+                        <stop offset="80%" stopColor="black" stopOpacity={0.04} />
+                        <stop offset="100%" stopColor="black" stopOpacity={0.15} />
+                    </linearGradient>
+                    <clipPath id={`sc-${uid}`}><rect x={bodyX} y={bodyTop} width={bodyW} height={bodyH} rx={4} /></clipPath>
                 </defs>
+                {/* Ground shadow */}
+                <ellipse cx={cx} cy={bodyBot + 6} rx={32} ry={4} fill="black" opacity={0.06} />
                 {/* Body */}
-                <rect x={bodyX} y={bodyTop} width={bodyW} height={bodyH} rx={3} fill={`url(#sb-${uid})`} stroke="#8a9199" strokeWidth={0.8} />
+                <rect x={bodyX} y={bodyTop} width={bodyW} height={bodyH} rx={4} fill={`url(#sb-${uid})`} stroke="#8a9199" strokeWidth={0.8} />
                 {/* Panel lines */}
-                {[0.25, 0.5, 0.75].map((pct, i) => (
+                {[0.167, 0.333, 0.5, 0.667, 0.833].map((pct, i) => (
                     <line key={i} x1={bodyX + 1} y1={bodyTop + bodyH * pct} x2={bodyX + bodyW - 1} y2={bodyTop + bodyH * pct}
                         stroke="#a0a8b0" strokeWidth={0.4} opacity={0.4} />
                 ))}
+                {/* Vertical ribs */}
+                {[0.25, 0.5, 0.75].map((pct, i) => (
+                    <line key={`v${i}`} x1={bodyX + bodyW * pct} y1={bodyTop + 1} x2={bodyX + bodyW * pct} y2={bodyBot - 1}
+                        stroke="#a0a8b0" strokeWidth={0.4} opacity={0.25} />
+                ))}
                 {/* Fill */}
                 <g clipPath={`url(#sc-${uid})`}>
-                    <rect x={bodyX} y={fillTop} width={bodyW} height={fillH + 0.5} fill={color} opacity={0.85} />
+                    <rect x={bodyX} y={fillTop} width={bodyW} height={fillH + 0.5} fill={color} />
+                    <rect x={bodyX} y={fillTop} width={bodyW} height={fillH} fill={`url(#gn-${uid})`} />
+                    <rect x={bodyX} y={fillTop} width={bodyW} height={2.5} fill="white" opacity={0.18} rx={1} />
                 </g>
-                {/* Base */}
-                <rect x={bodyX - 2} y={bodyBot - 1} width={bodyW + 4} height={3} rx={1.5} fill="#8a9199" />
+                {/* Base ring */}
+                <rect x={bodyX - 2} y={bodyBot - 2} width={bodyW + 4} height={4} rx={2} fill="#8a9199" stroke="#777" strokeWidth={0.4} />
                 {/* Roof cone */}
-                <polygon points={`${bodyX - 2},${bodyTop + 1} ${cx},${10} ${bodyX + bodyW + 2},${bodyTop + 1}`}
-                    fill="#b0b8c2" stroke="#8a9199" strokeWidth={0.8} />
+                <polygon points={`${bodyX - 3},${bodyTop + 2} ${cx},${14} ${bodyX + bodyW + 3},${bodyTop + 2}`}
+                    fill="#b0b8c2" stroke="#8a9199" strokeWidth={0.8} strokeLinejoin="round" />
+                {/* Roof ridges */}
+                <line x1={cx} y1={14} x2={bodyX + 10} y2={bodyTop + 2} stroke="#b0b8c0" strokeWidth={0.3} opacity={0.5} />
+                <line x1={cx} y1={14} x2={bodyX + bodyW - 10} y2={bodyTop + 2} stroke="#a0a8b0" strokeWidth={0.3} opacity={0.4} />
                 {/* Chimney */}
-                <rect x={cx - 3} y={4} width={6} height={8} rx={1} fill="#9aa2aa" stroke="#7a8290" strokeWidth={0.4} />
-                <rect x={cx - 4.5} y={2} width={9} height={3} rx={1.5} fill="#8a9199" />
+                <rect x={cx - 4} y={6} width={8} height={10} rx={1.5} fill="#9aa2aa" stroke="#7a8290" strokeWidth={0.5} />
+                <rect x={cx - 5.5} y={4} width={11} height={3} rx={1.5} fill="#8a9199" stroke="#6b7280" strokeWidth={0.3} />
+                {/* Railing */}
+                <line x1={bodyX + 2} y1={bodyTop} x2={bodyX + 8} y2={bodyTop - 6} stroke="#9aa2aa" strokeWidth={0.5} />
+                <line x1={bodyX + bodyW - 2} y1={bodyTop} x2={bodyX + bodyW - 8} y2={bodyTop - 6} stroke="#9aa2aa" strokeWidth={0.5} />
+                <line x1={bodyX + 8} y1={bodyTop - 6} x2={bodyX + bodyW - 8} y2={bodyTop - 6} stroke="#9aa2aa" strokeWidth={0.4} opacity={0.5} />
             </svg>
-            <span className="text-xs font-bold text-gray-700 -mt-1">{weight}</span>
-            <span className="text-[10px] text-gray-500 truncate max-w-[65px] text-center">{label}</span>
+            <span className="text-sm font-bold text-gray-700 -mt-1">{weight}</span>
+            <span className="text-[10px] text-gray-500 truncate max-w-[80px] text-center">{label}</span>
         </div>
     );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MAIN DASHBOARD
+// ─── Equipment SVG icon (harvester/tractor) ───────────────────────────────────
+function EquipmentIcon({ type, isActive, isMaint }: { type: string; isActive: boolean; isMaint: boolean }) {
+    const color = isActive ? "#4ade80" : isMaint ? "#fbbf24" : "#9ca3af";
+    const darkColor = isActive ? "#16a34a" : isMaint ? "#d97706" : "#6b7280";
+    // Harvester/tractor SVG based on the reference image
+    return (
+        <svg width={48} height={36} viewBox="0 0 120 80" fill="none">
+            {/* Body */}
+            <rect x={20} y={20} width={65} height={35} rx={4} fill={color} />
+            {/* Cab */}
+            <path d="M55 10 L75 10 L80 20 L55 20 Z" fill={color} />
+            <path d="M60 12 L73 12 L76 19 L60 19 Z" fill={darkColor} opacity={0.3} />
+            {/* Grain pipe */}
+            <rect x={15} y={15} width={40} height={8} rx={3} fill={color} />
+            <rect x={5} y={12} width={14} height={11} rx={2} fill={darkColor} opacity={0.7} />
+            {/* Front attachment */}
+            <path d="M85 30 L100 35 L100 55 L88 55 L85 45 Z" fill={darkColor} opacity={0.8} />
+            <path d="M100 38 L110 42 L110 52 L100 52 Z" fill={color} />
+            {/* Rear wheel (big) */}
+            <circle cx={35} cy={58} r={18} fill="#374151" />
+            <circle cx={35} cy={58} r={14} fill="#4b5563" />
+            <circle cx={35} cy={58} r={6} fill="#6b7280" />
+            <circle cx={35} cy={58} r={3} fill="#9ca3af" />
+            {/* Front wheel */}
+            <circle cx={85} cy={58} r={14} fill="#374151" />
+            <circle cx={85} cy={58} r={10} fill="#4b5563" />
+            <circle cx={85} cy={58} r={4} fill="#6b7280" />
+            <circle cx={85} cy={58} r={2} fill="#9ca3af" />
+        </svg>
+    );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 export default function FarmDashboard() {
     const [, setLocation] = useLocation();
@@ -119,8 +171,7 @@ export default function FarmDashboard() {
     const PULL_THRESHOLD = 80;
 
     const handleRefresh = useCallback(async () => {
-        setRefreshing(true);
-        setPullDistance(0);
+        setRefreshing(true); setPullDistance(0);
         await Promise.all([
             queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] }),
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] }),
@@ -145,208 +196,134 @@ export default function FarmDashboard() {
         if (d > 0) setPullDistance(Math.min(d * 0.5, PULL_THRESHOLD + 20));
     }, [refreshing]);
     const onTouchEnd = useCallback(() => {
-        if (!isPulling.current) return;
-        isPulling.current = false;
-        if (pullDistance >= PULL_THRESHOLD && !refreshing) handleRefresh();
-        else setPullDistance(0);
+        if (!isPulling.current) return; isPulling.current = false;
+        if (pullDistance >= PULL_THRESHOLD && !refreshing) handleRefresh(); else setPullDistance(0);
     }, [pullDistance, refreshing, handleRefresh]);
 
-    // ─── Module access ─────────────────
+    // Module access
     const isEmployee = user?.role === "funcionario_fazenda";
-    const { data: myModules = [] } = useQuery<any[]>({
-        queryKey: ["/api/farm/my-modules"], enabled: !!user && isEmployee,
-    });
+    const { data: myModules = [] } = useQuery<any[]>({ queryKey: ["/api/farm/my-modules"], enabled: !!user && isEmployee });
     const enabledModules = useMemo(() => {
         if (!isEmployee) return null;
-        const s = new Set<string>();
-        for (const m of myModules) { if (m.enabled) s.add(m.moduleKey); }
-        return s;
+        const s = new Set<string>(); for (const m of myModules) { if (m.enabled) s.add(m.moduleKey); } return s;
     }, [isEmployee, myModules]);
     const hasModule = (k: string) => enabledModules === null || enabledModules.has(k);
 
-    // ─── Data queries ─────────────────
-    const { data: stock = [] } = useQuery({
-        queryKey: ["/api/farm/stock"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/stock")).json(),
-        enabled: !!user,
-    });
+    // ─── Data queries ─────────────────────────────────────────────────────────
+    const { data: stock = [] } = useQuery({ queryKey: ["/api/farm/stock"], queryFn: async () => (await apiRequest("GET", "/api/farm/stock")).json(), enabled: !!user });
+    const { data: invoices = [] } = useQuery<any[]>({ queryKey: ["/api/farm/invoices"], queryFn: async () => (await apiRequest("GET", "/api/farm/invoices")).json(), enabled: !!user });
+    const { data: plots = [] } = useQuery<any[]>({ queryKey: ["/api/farm/plots"], queryFn: async () => (await apiRequest("GET", "/api/farm/plots")).json(), enabled: !!user });
+    const { data: applications = [] } = useQuery<any[]>({ queryKey: ["/api/farm/applications"], queryFn: async () => (await apiRequest("GET", "/api/farm/applications")).json(), enabled: !!user });
+    const { data: siloData } = useQuery<any>({ queryKey: ["/api/farm/romaneios/silos"], queryFn: async () => (await apiRequest("GET", "/api/farm/romaneios/silos")).json(), enabled: !!user });
+    const { data: equipment = [] } = useQuery<any[]>({ queryKey: ["/api/farm/equipment"], queryFn: async () => (await apiRequest("GET", "/api/farm/equipment")).json(), enabled: !!user });
+    const { data: plotCostsData } = useQuery<any>({ queryKey: ["/api/farm/plot-costs"], queryFn: async () => (await apiRequest("GET", "/api/farm/plot-costs")).json(), enabled: !!user });
+    const { data: weatherStations = [] } = useQuery<any[]>({ queryKey: ["/api/farm/weather/stations"], queryFn: async () => (await apiRequest("GET", "/api/farm/weather/stations")).json(), enabled: !!user });
 
-    const { data: invoices = [] } = useQuery<any[]>({
-        queryKey: ["/api/farm/invoices"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/invoices")).json(),
-        enabled: !!user,
-    });
-
-    const { data: plots = [] } = useQuery<any[]>({
-        queryKey: ["/api/farm/plots"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/plots")).json(),
-        enabled: !!user,
-    });
-
-    const { data: applications = [] } = useQuery<any[]>({
-        queryKey: ["/api/farm/applications"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/applications")).json(),
-        enabled: !!user,
-    });
-
-    const { data: siloData } = useQuery<any>({
-        queryKey: ["/api/farm/romaneios/silos"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/romaneios/silos")).json(),
-        enabled: !!user,
-    });
-
-    const { data: equipment = [] } = useQuery<any[]>({
-        queryKey: ["/api/farm/equipment"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/equipment")).json(),
-        enabled: !!user,
-    });
-
-    const { data: plotCosts = [] } = useQuery<any[]>({
-        queryKey: ["/api/farm/plot-costs"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/plot-costs")).json(),
-        enabled: !!user,
-    });
-
-    const { data: weatherStations = [] } = useQuery<any[]>({
-        queryKey: ["/api/farm/weather/stations"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/weather/stations")).json(),
-        enabled: !!user,
-    });
-
-    // ─── Derived: Card 1 — Despesas mensais (faturas de entrada) ──────────────
+    // ─── Card 1: Despesas mensais ─────────────────────────────────────────────
     const monthlyExpenses = useMemo(() => {
         const map: Record<string, number> = {};
         invoices.forEach((inv: any) => {
             if (!inv.issueDate) return;
             const d = new Date(inv.issueDate);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-            const label = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
             if (!map[key]) map[key] = 0;
             map[key] += parseFloat(inv.totalAmount || 0);
         });
-        return Object.entries(map)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .slice(-8)
-            .map(([key, value]) => {
-                const [, m] = key.split("-");
-                const months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-                return { month: months[parseInt(m) - 1] || m, value: Math.round(value) };
-            });
-    }, [invoices]);
-
-    const totalExpenses = monthlyExpenses.reduce((s, m) => s + m.value, 0);
-    const lastMonthVal = monthlyExpenses[monthlyExpenses.length - 1]?.value || 0;
-    const prevMonthVal = monthlyExpenses[monthlyExpenses.length - 2]?.value || 0;
-    const pctChange = prevMonthVal > 0 ? ((lastMonthVal - prevMonthVal) / prevMonthVal * 100) : 0;
-
-    // ─── Derived: Card 2 — Plots with coordinates ────────────────────────────
-    const plotsWithCoords = useMemo(() => plots.filter((p: any) => {
-        try {
-            const c = typeof p.coordinates === "string" ? JSON.parse(p.coordinates) : p.coordinates;
-            return Array.isArray(c) && c.length >= 3;
-        } catch { return false; }
-    }), [plots]);
-
-    // Applications count per plot
-    const appCountByPlot = useMemo(() => {
-        const map: Record<string, number> = {};
-        applications.forEach((a: any) => {
-            if (a.plotId) map[a.plotId] = (map[a.plotId] || 0) + 1;
+        const months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+        return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-8).map(([key, value]) => {
+            const m = parseInt(key.split("-")[1]) - 1;
+            return { month: months[m] || "?", value: Math.round(value) };
         });
-        return map;
+    }, [invoices]);
+    const totalExpenses = monthlyExpenses.reduce((s, m) => s + m.value, 0);
+    const lastMonth = monthlyExpenses[monthlyExpenses.length - 1]?.value || 0;
+    const prevMonth = monthlyExpenses[monthlyExpenses.length - 2]?.value || 0;
+    const pctChange = prevMonth > 0 ? ((lastMonth - prevMonth) / prevMonth * 100) : 0;
+
+    // ─── Card 2: Plots with coords ───────────────────────────────────────────
+    const plotsWithCoords = useMemo(() => plots.filter((p: any) => {
+        try { const c = typeof p.coordinates === "string" ? JSON.parse(p.coordinates) : p.coordinates; return Array.isArray(c) && c.length >= 3; } catch { return false; }
+    }), [plots]);
+    const appCountByPlot = useMemo(() => {
+        const m: Record<string, number> = {};
+        applications.forEach((a: any) => { if (a.plotId) m[a.plotId] = (m[a.plotId] || 0) + 1; });
+        return m;
     }, [applications]);
 
-    // ─── Derived: Card 3 — Silos ──────────────────────────────────────────────
+    // ─── Card 3: Silos ───────────────────────────────────────────────────────
     const silos = siloData?.silos || [];
     const totalHarvest = siloData?.totalHarvest || 0;
     const maxSiloWeight = Math.max(...silos.map((s: any) => s.totalWeight || 0), 1);
 
-    // ─── Derived: Card 4 — Stock by category ─────────────────────────────────
+    // ─── Card 4: Stock donut ─────────────────────────────────────────────────
     const stockByCategory = useMemo(() => {
-        const map: Record<string, { category: string; count: number; value: number }> = {};
+        const m: Record<string, { category: string; count: number; value: number }> = {};
         stock.forEach((s: any) => {
             const cat = (s.category || "outros").toLowerCase();
-            if (!map[cat]) map[cat] = { category: cat, count: 0, value: 0 };
-            map[cat].count += 1;
-            map[cat].value += parseFloat(s.quantity || 0) * parseFloat(s.averageCost || 0);
+            if (!m[cat]) m[cat] = { category: cat, count: 0, value: 0 };
+            m[cat].count += 1; m[cat].value += parseFloat(s.quantity || 0) * parseFloat(s.averageCost || 0);
         });
-        return Object.values(map).sort((a, b) => b.value - a.value);
+        return Object.values(m).sort((a, b) => b.value - a.value);
     }, [stock]);
 
-    // ─── Derived: Card 5 — Plot costs bars + daily line ──────────────────────
+    // ─── Card 5: Plot costs (FIX: response is { plots: [...] }) ──────────────
     const plotCostBars = useMemo(() => {
-        if (!plotCosts || !Array.isArray(plotCosts)) return [];
-        // plotCosts may have .plots or be the array directly
-        const arr = (plotCosts as any).plots || plotCosts;
-        if (!Array.isArray(arr)) return [];
+        const arr = plotCostsData?.plots || [];
         return arr.slice(0, 8).map((p: any) => ({
-            name: p.plotName || p.name || "?",
-            cost: Math.round(parseFloat(p.totalCost || p.cost || 0)),
+            name: (p.plotName || p.name || "?").length > 10 ? (p.plotName || p.name || "?").slice(0, 10) + ".." : (p.plotName || p.name || "?"),
+            cost: Math.round(parseFloat(p.totalCost || 0)),
         }));
-    }, [plotCosts]);
+    }, [plotCostsData]);
 
     const dailyAppCosts = useMemo(() => {
-        const map: Record<string, number> = {};
+        const m: Record<string, number> = {};
         applications.forEach((a: any) => {
             const d = new Date(a.appliedAt || a.createdAt);
             const key = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-            if (!map[key]) map[key] = 0;
-            map[key] += parseFloat(a.totalCost || a.quantity || 0) * parseFloat(a.unitPrice || a.cost || 0);
+            // Use totalCost if available, otherwise try to compute
+            const cost = parseFloat(a.totalCost || 0) || (parseFloat(a.quantity || 0) * parseFloat(a.unitCost || 0));
+            if (!m[key]) m[key] = 0;
+            m[key] += cost;
         });
-        return Object.entries(map).sort(([a], [b]) => {
+        return Object.entries(m).sort(([a], [b]) => {
             const [da, ma] = a.split("/").map(Number);
             const [db, mb] = b.split("/").map(Number);
             return (ma * 100 + da) - (mb * 100 + db);
         }).slice(-14).map(([date, value]) => ({ date, value: Math.round(value) }));
     }, [applications]);
 
-    // ─── Derived: Card 6 — Equipment + diesel ────────────────────────────────
-    const equipmentByStatus = useMemo(() => {
-        const active = equipment.filter((e: any) => e.status === "Ativo" || !e.status);
-        const maint = equipment.filter((e: any) => e.status === "Manutenção" || e.status === "Manutencao");
-        const inactive = equipment.filter((e: any) => e.status === "Inativo");
-        return { active, maint, inactive };
-    }, [equipment]);
-
-    // Diesel consumption from applications (type = diesel or category = diesel)
-    const dieselByEquipment = useMemo(() => {
-        const map: Record<string, { name: string; liters: number }> = {};
+    // ─── Card 6: Equipment + diesel ──────────────────────────────────────────
+    const equipByStatus = useMemo(() => ({
+        active: equipment.filter((e: any) => e.status === "Ativo" || !e.status),
+        maint: equipment.filter((e: any) => e.status === "Manutenção" || e.status === "Manutencao"),
+        inactive: equipment.filter((e: any) => e.status === "Inativo"),
+    }), [equipment]);
+    const dieselByEquip = useMemo(() => {
+        const m: Record<string, { name: string; liters: number }> = {};
         applications.forEach((a: any) => {
-            const isDiesel = (a.productCategory || a.category || "").toLowerCase().includes("diesel") ||
-                (a.productName || "").toLowerCase().includes("diesel");
+            const isDiesel = (a.productCategory || a.category || "").toLowerCase().includes("diesel") || (a.productName || "").toLowerCase().includes("diesel");
             if (isDiesel && a.equipmentName) {
-                if (!map[a.equipmentName]) map[a.equipmentName] = { name: a.equipmentName, liters: 0 };
-                map[a.equipmentName].liters += parseFloat(a.quantity || 0);
+                if (!m[a.equipmentName]) m[a.equipmentName] = { name: a.equipmentName, liters: 0 };
+                m[a.equipmentName].liters += parseFloat(a.quantity || 0);
             }
         });
-        return Object.values(map).sort((a, b) => b.liters - a.liters);
+        return Object.values(m).sort((a, b) => b.liters - a.liters);
     }, [applications]);
 
-    // ─── Derived: Card 7 — Weather (first station) ───────────────────────────
+    // ─── Card 7: Weather ─────────────────────────────────────────────────────
     const mainStation = weatherStations[0];
-    const currentWeather = mainStation?.currentWeather;
+    const cw = mainStation?.currentWeather;
 
-    // ─── Loading ─────────────────────────────────────────────────────────────
-    if (isLoading) {
-        return <FarmLayout><div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div></FarmLayout>;
-    }
+    if (isLoading) return <FarmLayout><div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div></FarmLayout>;
 
-    function fmtCurrency(v: number) {
-        if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
-        if (v >= 1000) return `$${(v / 1000).toFixed(0)}K`;
-        return `$${v.toFixed(0)}`;
-    }
-    function fmtWeight(kg: number) {
-        if (kg >= 1000) return `${(kg / 1000).toFixed(1)}t`;
-        return `${kg.toFixed(0)}kg`;
-    }
+    function fmt(v: number) { if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`; if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`; return `$${v.toFixed(0)}`; }
+    function fmtW(kg: number) { return kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${kg.toFixed(0)}kg`; }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // RENDER
     // ══════════════════════════════════════════════════════════════════════════
     return (
         <FarmLayout>
-            <div ref={containerRef} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="space-y-3">
+            <div ref={containerRef} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+                className="max-w-6xl mx-auto space-y-4 px-2 sm:px-4">
                 {/* Pull-to-refresh */}
                 {(pullDistance > 0 || refreshing) && (
                     <div className="flex items-center justify-center transition-all duration-200 overflow-hidden" style={{ height: refreshing ? 48 : pullDistance }}>
@@ -369,65 +346,53 @@ export default function FarmDashboard() {
                     </button>
                 </div>
 
-                {/* ═══════════════════════════════════════════════════════════
-                    ROW 1: Despesas Mensais | Mapa Talhoes | Silos
-                ═══════════════════════════════════════════════════════════ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-
-                    {/* CARD 1 — Despesas Mensais (Area Chart) */}
+                {/* ═══ ROW 1 ═══ */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    {/* Card 1: Despesas Mensais */}
                     {hasModule("invoices") && (
-                        <Card className="md:col-span-3 border-emerald-200/50 cursor-pointer hover:shadow-lg transition-shadow"
-                            onClick={() => setLocation("/fazenda/faturas")}>
-                            <CardContent className="p-4">
-                                <div className="flex items-center justify-between mb-1">
-                                    <h3 className="text-sm font-bold text-gray-700">Despesas Mensais</h3>
-                                    {pctChange !== 0 && (
-                                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-0.5 ${pctChange > 0 ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
-                                            <TrendingUp className={`w-3 h-3 ${pctChange < 0 ? "rotate-180" : ""}`} />
-                                            {Math.abs(pctChange).toFixed(1)}%
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="h-[110px] -mx-2">
-                                    {monthlyExpenses.length > 1 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={monthlyExpenses}>
-                                                <defs>
-                                                    <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} />
-                                                        <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
-                                                    </linearGradient>
-                                                </defs>
-                                                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                                                <YAxis tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={35}
-                                                    tickFormatter={(v: number) => fmtCurrency(v)} />
-                                                <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                                                <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#expGrad)" strokeWidth={2} dot={false} />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem faturas</div>
-                                    )}
-                                </div>
-                                <div className="flex items-baseline gap-2 mt-1">
-                                    <span className="text-xl font-bold text-gray-800">{fmtCurrency(totalExpenses)}</span>
-                                    <span className="text-xs text-gray-400">Total periodo</span>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <div className="md:col-span-3">
+                            <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Despesas Mensais</h3>
+                            <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow h-[220px]"
+                                onClick={() => setLocation("/fazenda/faturas")}>
+                                <CardContent className="p-4 h-full flex flex-col">
+                                    <div className="flex items-center justify-end mb-1">
+                                        {pctChange !== 0 && (
+                                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-0.5 ${pctChange > 0 ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
+                                                <TrendingUp className={`w-3 h-3 ${pctChange < 0 ? "rotate-180" : ""}`} />
+                                                {Math.abs(pctChange).toFixed(1)}%
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 -mx-2">
+                                        {monthlyExpenses.length > 1 ? (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={monthlyExpenses}>
+                                                    <defs><linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
+                                                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                                    <YAxis tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={35} tickFormatter={(v: number) => fmt(v)} />
+                                                    <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                                    <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#expGrad)" strokeWidth={2} dot={false} />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem faturas</div>}
+                                    </div>
+                                    <div className="flex items-baseline gap-2 mt-1">
+                                        <span className="text-xl font-bold text-gray-800">{fmt(totalExpenses)}</span>
+                                        <span className="text-xs text-gray-400">Total periodo</span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
 
-                    {/* CARD 2 — Mapa Talhoes (Leaflet satellite + polygon outlines) */}
+                    {/* Card 2: Mapa */}
                     {hasModule("properties") && (
-                        <Card className="md:col-span-5 border-emerald-200/50 overflow-hidden">
-                            <CardContent className="p-0 relative">
-                                <div className="absolute top-3 left-3 z-[400] bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm">
-                                    <h3 className="text-sm font-bold text-gray-700">Mapa dos Talhoes</h3>
-                                </div>
-                                <div className="h-[200px] md:h-[195px]">
+                        <div className="md:col-span-5">
+                            <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Mapa dos Talhoes</h3>
+                            <Card className="border-gray-200 overflow-hidden h-[220px]">
+                                <CardContent className="p-0 h-full relative">
                                     {plotsWithCoords.length > 0 ? (
-                                        <MapContainer center={[-25.5, -54.6]} zoom={13} className="h-full w-full z-0"
-                                            zoomControl={false} attributionControl={false}>
+                                        <MapContainer center={[-25.5, -54.6]} zoom={13} className="h-full w-full z-0" zoomControl={false} attributionControl={false}>
                                             <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
                                             <MapAutoFit plots={plotsWithCoords} />
                                             {plotsWithCoords.map((p: any) => {
@@ -443,38 +408,31 @@ export default function FarmDashboard() {
                                                                 <strong className="text-emerald-800">{p.name}</strong>
                                                                 {p.crop && <p className="text-gray-600">Cultura: {p.crop}</p>}
                                                                 <p className="text-gray-600">Area: {parseFloat(p.areaHa || 0).toFixed(1)} ha</p>
-                                                                <p className="font-semibold text-emerald-700 mt-1">{appCount} aplicacoes realizadas</p>
+                                                                <p className="font-semibold text-emerald-700 mt-1">{appCount} aplicacoes</p>
                                                             </div>
                                                         </Popup>
                                                     </Polygon>
                                                 );
                                             })}
                                         </MapContainer>
-                                    ) : (
-                                        <div className="h-full bg-gradient-to-br from-emerald-50 to-emerald-100 flex flex-col items-center justify-center text-gray-400 text-sm">
-                                            Cadastre talhoes com coordenadas
-                                        </div>
-                                    )}
-                                </div>
-                                {/* Legend */}
-                                {plotsWithCoords.length > 0 && (
-                                    <div className="absolute bottom-2 left-2 z-[400] bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1 shadow-sm flex gap-3">
-                                        {(() => {
-                                            const crops = Array.from(new Set(plotsWithCoords.map((p: any) => p.crop).filter(Boolean))) as string[];
-                                            return crops.slice(0, 4).map((c: string) => (
+                                    ) : <div className="h-full bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center text-gray-400 text-sm">Cadastre talhoes com coordenadas</div>}
+                                    {/* Legend */}
+                                    {plotsWithCoords.length > 0 && (
+                                        <div className="absolute bottom-2 left-2 z-[400] bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1 shadow-sm flex gap-3">
+                                            {Array.from(new Set(plotsWithCoords.map((p: any) => p.crop).filter(Boolean)) as Set<string>).slice(0, 4).map((c: string) => (
                                                 <div key={c} className="flex items-center gap-1">
                                                     <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: getCropColor(c) }} />
                                                     <span className="text-[10px] font-medium text-gray-600">{c}</span>
                                                 </div>
-                                            ));
-                                        })()}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
 
-                    {/* Selected plot detail card */}
+                    {/* Plot detail modal */}
                     {selectedPlot && (
                         <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30" onClick={() => setSelectedPlot(null)}>
                             <Card className="w-[90%] max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -498,68 +456,45 @@ export default function FarmDashboard() {
                         </div>
                     )}
 
-                    {/* CARD 3 — Silos (visual SVG como romaneios) */}
-                    <Card className="md:col-span-4 border-emerald-200/50 cursor-pointer hover:shadow-lg transition-shadow"
-                        onClick={() => setLocation("/fazenda/romaneios")}>
-                        <CardContent className="p-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="text-sm font-bold text-gray-700">Silos</h3>
-                                {totalHarvest > 0 && (
-                                    <span className="text-[10px] text-gray-400">{fmtWeight(totalHarvest)} total</span>
-                                )}
-                            </div>
-                            {silos.length > 0 ? (
-                                <div className="flex items-end justify-center gap-2 overflow-x-auto">
-                                    {silos.slice(0, 5).map((silo: any, i: number) => {
-                                        const fillPct = Math.min(90, Math.max(10, (silo.totalWeight / maxSiloWeight) * 100));
-                                        const mainCrop = silo.crops?.[0];
-                                        const siloColorMap: Record<string, string> = { soja: "#c89520", milho: "#dbb830", trigo: "#b87030" };
-                                        const cropKey = (mainCrop?.crop?.toLowerCase() || "") as string;
-                                        const cropColor = mainCrop ? (siloColorMap[cropKey] || "#6b8e23") : "#6b8e23";
-                                        return (
-                                            <MiniSilo
-                                                key={silo.buyer}
-                                                fillPercent={fillPct}
-                                                color={cropColor}
-                                                label={silo.buyer?.split(" ").slice(0, 2).join(" ") || `Silo ${i + 1}`}
-                                                weight={fmtWeight(silo.totalWeight || 0)}
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div className="h-[100px] flex items-center justify-center text-gray-300 text-sm">
-                                    Sem dados de silos
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                    {/* Card 3: Silos */}
+                    <div className="md:col-span-4">
+                        <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Silos</h3>
+                        <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow h-[220px]"
+                            onClick={() => setLocation("/fazenda/romaneios")}>
+                            <CardContent className="p-3 h-full flex flex-col">
+                                {totalHarvest > 0 && <p className="text-[10px] text-gray-400 text-right">{fmtW(totalHarvest)} total</p>}
+                                {silos.length > 0 ? (
+                                    <div className="flex-1 flex items-end justify-center gap-3 overflow-x-auto">
+                                        {silos.slice(0, 4).map((silo: any) => {
+                                            const fillPct = Math.min(90, Math.max(10, (silo.totalWeight / maxSiloWeight) * 100));
+                                            const siloColorMap: Record<string, string> = { soja: "#c89520", milho: "#dbb830", trigo: "#b87030" };
+                                            const cropKey = (silo.crops?.[0]?.crop?.toLowerCase() || "") as string;
+                                            const cropColor = siloColorMap[cropKey] || "#6b8e23";
+                                            return <MiniSilo key={silo.buyer} fillPercent={fillPct} color={cropColor}
+                                                label={silo.buyer?.split(" ").slice(0, 2).join(" ") || "Silo"} weight={fmtW(silo.totalWeight || 0)} />;
+                                        })}
+                                    </div>
+                                ) : <div className="flex-1 flex items-center justify-center text-gray-300 text-sm">Sem dados</div>}
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
 
-                {/* ═══════════════════════════════════════════════════════════
-                    ROW 2: Estoque (Donut) | Custos por Talhao
-                ═══════════════════════════════════════════════════════════ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-
-                    {/* CARD 4 — Estoque Donut */}
+                {/* ═══ ROW 2 ═══ */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    {/* Card 4: Estoque Donut */}
                     {hasModule("stock") && (
-                        <Card className="md:col-span-5 border-emerald-200/50 cursor-pointer hover:shadow-lg transition-shadow"
-                            onClick={() => setLocation("/fazenda/estoque")}>
-                            <CardContent className="p-4">
-                                <h3 className="text-sm font-bold text-gray-700 mb-2">Niveis de Estoque</h3>
-                                <div className="flex items-center gap-4">
+                        <div className="md:col-span-5">
+                            <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Niveis de Estoque</h3>
+                            <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow h-[200px]"
+                                onClick={() => setLocation("/fazenda/estoque")}>
+                                <CardContent className="p-4 h-full flex items-center gap-4">
                                     <div className="w-[130px] h-[130px] shrink-0">
                                         {stockByCategory.length > 0 ? (
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <PieChart>
-                                                    <Pie data={stockByCategory} dataKey="value" nameKey="category"
-                                                        cx="50%" cy="50%" outerRadius={55} innerRadius={30} paddingAngle={2}>
-                                                        {stockByCategory.map((e, i) => (
-                                                            <Cell key={i} fill={CATEGORY_COLORS[e.category] || CATEGORY_COLORS.outros} />
-                                                        ))}
-                                                    </Pie>
-                                                    <Tooltip formatter={(v: number) => [`$${Math.round(v).toLocaleString()}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                                                </PieChart>
+                                                <PieChart><Pie data={stockByCategory} dataKey="value" nameKey="category" cx="50%" cy="50%" outerRadius={55} innerRadius={30} paddingAngle={2}>
+                                                    {stockByCategory.map((e, i) => <Cell key={i} fill={CATEGORY_COLORS[e.category] || CATEGORY_COLORS.outros} />)}
+                                                </Pie><Tooltip formatter={(v: number) => [`$${Math.round(v).toLocaleString()}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8 }} /></PieChart>
                                             </ResponsiveContainer>
                                         ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">-</div>}
                                     </div>
@@ -569,166 +504,119 @@ export default function FarmDashboard() {
                                                 <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.category] || CATEGORY_COLORS.outros }} />
                                                 <span className="text-gray-700 font-medium capitalize truncate flex-1">{cat.category}</span>
                                                 <span className="text-gray-500 font-semibold">{cat.count}</span>
-                                                <span className="text-gray-400 text-[10px]">{fmtCurrency(cat.value)}</span>
+                                                <span className="text-gray-400 text-[10px]">{fmt(cat.value)}</span>
                                             </div>
                                         ))}
                                     </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
 
-                    {/* CARD 5 — Custos por Talhao (barras) + Gasto diario (linha) */}
-                    <Card className="md:col-span-7 border-emerald-200/50 cursor-pointer hover:shadow-lg transition-shadow"
-                        onClick={() => setLocation("/fazenda/custos")}>
-                        <CardContent className="p-4">
-                            <h3 className="text-sm font-bold text-gray-700 mb-2">Custos por Talhao</h3>
-                            <div className="flex gap-3">
-                                {/* Bars */}
-                                <div className="flex-1 h-[130px]">
+                    {/* Card 5: Custos por Talhao */}
+                    <div className="md:col-span-7">
+                        <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Custos por Talhao</h3>
+                        <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow h-[200px]"
+                            onClick={() => setLocation("/fazenda/custos")}>
+                            <CardContent className="p-4 h-full flex gap-3">
+                                <div className="flex-1 h-full">
                                     {plotCostBars.length > 0 ? (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={plotCostBars} layout="vertical" margin={{ left: 0, right: 5 }}>
-                                                <XAxis type="number" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false}
-                                                    tickFormatter={(v: number) => fmtCurrency(v)} />
-                                                <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "#6b7280" }} width={60} axisLine={false} tickLine={false} />
+                                                <XAxis type="number" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmt(v)} />
+                                                <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "#6b7280" }} width={65} axisLine={false} tickLine={false} />
                                                 <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Custo"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                                                 <Bar dataKey="cost" fill="#16803C" radius={[0, 4, 4, 0]} barSize={14} />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem custos</div>}
                                 </div>
-                                {/* Daily line */}
-                                <div className="w-[40%] h-[130px]">
+                                <div className="w-[40%] h-full">
                                     {dailyAppCosts.length > 1 ? (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={dailyAppCosts}>
-                                                <defs>
-                                                    <linearGradient id="dailyGrad" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#16a34a" stopOpacity={0.25} />
-                                                        <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
-                                                    </linearGradient>
-                                                </defs>
+                                                <defs><linearGradient id="dailyGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.25} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
                                                 <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                                                <YAxis tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={30}
-                                                    tickFormatter={(v: number) => fmtCurrency(v)} />
+                                                <YAxis tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={30} tickFormatter={(v: number) => fmt(v)} />
                                                 <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Gasto"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                                                 <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#dailyGrad)" strokeWidth={2} dot={false} />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem dados</div>}
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
 
-                {/* ═══════════════════════════════════════════════════════════
-                    ROW 3: Equipamentos | Clima
-                ═══════════════════════════════════════════════════════════ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-
-                    {/* CARD 6 — Equipamentos + Abastecimento */}
+                {/* ═══ ROW 3 ═══ */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    {/* Card 6: Equipamentos */}
                     {hasModule("fleet") && (
-                        <Card className="md:col-span-6 border-emerald-200/50 cursor-pointer hover:shadow-lg transition-shadow"
-                            onClick={() => setLocation("/fazenda/equipamentos")}>
-                            <CardContent className="p-4">
-                                <h3 className="text-sm font-bold text-gray-700 mb-3">Equipamentos</h3>
-                                {equipment.length > 0 ? (
-                                    <>
-                                        <div className="flex flex-wrap gap-3">
-                                            {equipment.slice(0, 6).map((eq: any) => {
-                                                const isActive = eq.status === "Ativo" || !eq.status;
-                                                const isMaint = eq.status === "Manutenção" || eq.status === "Manutencao";
-                                                const diesel = dieselByEquipment.find(d => d.name === eq.name);
-                                                return (
-                                                    <div key={eq.id} className="flex flex-col items-center gap-1 min-w-[72px]">
-                                                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${isActive ? "bg-emerald-100" : isMaint ? "bg-yellow-100" : "bg-gray-100"}`}>
-                                                            {eq.type === "Trator" || eq.type === "Colheitadeira" ? (
-                                                                <Tractor className={`w-5 h-5 ${isActive ? "text-emerald-600" : isMaint ? "text-yellow-600" : "text-gray-400"}`} />
-                                                            ) : (
-                                                                <Wrench className={`w-5 h-5 ${isActive ? "text-emerald-600" : isMaint ? "text-yellow-600" : "text-gray-400"}`} />
-                                                            )}
-                                                        </div>
-                                                        <span className={`text-[10px] font-semibold ${isActive ? "text-emerald-600" : isMaint ? "text-yellow-600" : "text-gray-400"}`}>
-                                                            {isActive ? "Ativo" : isMaint ? "Manut." : "Inativo"}
-                                                        </span>
-                                                        {diesel && (
-                                                            <span className="text-[9px] text-amber-600 flex items-center gap-0.5">
-                                                                <Fuel className="w-2.5 h-2.5" /> {diesel.liters.toFixed(0)}L
+                        <div className="md:col-span-6">
+                            <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Equipamentos</h3>
+                            <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow"
+                                onClick={() => setLocation("/fazenda/equipamentos")}>
+                                <CardContent className="p-4">
+                                    {equipment.length > 0 ? (
+                                        <>
+                                            <div className="flex flex-wrap gap-4">
+                                                {equipment.slice(0, 5).map((eq: any) => {
+                                                    const isActive = eq.status === "Ativo" || !eq.status;
+                                                    const isMaint = eq.status === "Manutenção" || eq.status === "Manutencao";
+                                                    const diesel = dieselByEquip.find(d => d.name === eq.name);
+                                                    return (
+                                                        <div key={eq.id} className="flex flex-col items-center gap-0.5 min-w-[70px]">
+                                                            <EquipmentIcon type={eq.type} isActive={isActive} isMaint={isMaint} />
+                                                            <span className={`text-[10px] font-semibold ${isActive ? "text-emerald-600" : isMaint ? "text-yellow-600" : "text-gray-400"}`}>
+                                                                {isActive ? "Ativo" : isMaint ? "Manut." : "Inativo"}
                                                             </span>
-                                                        )}
-                                                        <span className="text-[10px] text-gray-500 truncate max-w-[72px] text-center" title={eq.name}>
-                                                            {eq.name?.split(" ").slice(0, 2).join(" ")}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
-                                            {equipment.length > 6 && (
-                                                <div className="flex items-center justify-center min-w-[50px]">
-                                                    <span className="text-xs font-bold text-gray-400">+{equipment.length - 6}</span>
-                                                </div>
-                                            )}
+                                                            {diesel && <span className="text-[9px] text-amber-600 flex items-center gap-0.5"><Fuel className="w-2.5 h-2.5" />{diesel.liters.toFixed(0)}L</span>}
+                                                            <span className="text-[10px] text-gray-500 truncate max-w-[72px] text-center">{eq.name?.split(" ").slice(0, 2).join(" ")}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {equipment.length > 5 && <div className="flex items-center"><span className="text-xs font-bold text-gray-400">+{equipment.length - 5}</span></div>}
+                                            </div>
+                                            <div className="flex gap-4 mt-3 pt-2 border-t border-gray-100">
+                                                <span className="text-xs text-emerald-600 font-medium">{equipByStatus.active.length} Ativos</span>
+                                                {equipByStatus.maint.length > 0 && <span className="text-xs text-yellow-600 font-medium">{equipByStatus.maint.length} Manut.</span>}
+                                                {dieselByEquip.length > 0 && <span className="text-xs text-amber-600 font-medium ml-auto flex items-center gap-1"><Fuel className="w-3 h-3" />{dieselByEquip.reduce((s, d) => s + d.liters, 0).toFixed(0)}L total</span>}
+                                            </div>
+                                        </>
+                                    ) : <div className="h-[80px] flex items-center justify-center text-gray-300 text-sm">Nenhum equipamento</div>}
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+
+                    {/* Card 7: Clima */}
+                    <div className="md:col-span-6">
+                        <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Previsao do Tempo</h3>
+                        <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow"
+                            onClick={() => setLocation("/fazenda/clima")}>
+                            <CardContent className="p-4">
+                                {cw ? (
+                                    <div className="flex items-center gap-4">
+                                        <div className="text-center">
+                                            <p className="text-3xl font-bold text-gray-800">{parseFloat(cw.temperature || 0).toFixed(1)}°C</p>
                                         </div>
-                                        <div className="flex gap-4 mt-3 pt-2 border-t border-gray-100">
-                                            <span className="text-xs text-emerald-600 font-medium">{equipmentByStatus.active.length} Ativos</span>
-                                            {equipmentByStatus.maint.length > 0 && <span className="text-xs text-yellow-600 font-medium">{equipmentByStatus.maint.length} Manut.</span>}
-                                            {equipmentByStatus.inactive.length > 0 && <span className="text-xs text-gray-400 font-medium">{equipmentByStatus.inactive.length} Inativos</span>}
-                                            {dieselByEquipment.length > 0 && (
-                                                <span className="text-xs text-amber-600 font-medium ml-auto flex items-center gap-1">
-                                                    <Fuel className="w-3 h-3" /> {dieselByEquipment.reduce((s, d) => s + d.liters, 0).toFixed(0)}L total
-                                                </span>
-                                            )}
+                                        <div className="flex-1 grid grid-cols-3 gap-2 text-center">
+                                            <div><Droplets className="w-4 h-4 text-blue-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{cw.humidity || 0}%</p><p className="text-[10px] text-gray-400">Umidade</p></div>
+                                            <div><Wind className="w-4 h-4 text-gray-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{parseFloat(cw.windSpeed || 0).toFixed(0)} km/h</p><p className="text-[10px] text-gray-400">Vento</p></div>
+                                            <div><Droplets className="w-4 h-4 text-cyan-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{parseFloat(cw.precipitation || 0).toFixed(1)} mm</p><p className="text-[10px] text-gray-400">Chuva</p></div>
                                         </div>
-                                    </>
+                                    </div>
                                 ) : (
-                                    <div className="h-[80px] flex items-center justify-center text-gray-300 text-sm">Nenhum equipamento</div>
+                                    <div className="h-[80px] flex flex-col items-center justify-center text-gray-300 text-sm">
+                                        <Thermometer className="w-8 h-8 mb-1" />
+                                        <span>Configure uma estacao meteorologica</span>
+                                        <span className="text-[10px] text-gray-400 mt-1">Menu Inteligencia → Clima</span>
+                                    </div>
                                 )}
                             </CardContent>
                         </Card>
-                    )}
-
-                    {/* CARD 7 — Previsao do Tempo (API existente: weather stations) */}
-                    <Card className="md:col-span-6 border-emerald-200/50 cursor-pointer hover:shadow-lg transition-shadow"
-                        onClick={() => setLocation("/fazenda/clima")}>
-                        <CardContent className="p-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="text-sm font-bold text-gray-700">Previsao do Tempo</h3>
-                                <span className="text-[10px] text-gray-400">{mainStation?.name || "Configure uma estacao"}</span>
-                            </div>
-                            {currentWeather ? (
-                                <div className="flex items-center gap-4">
-                                    <div className="text-center">
-                                        <p className="text-3xl font-bold text-gray-800">{parseFloat(currentWeather.temperature || 0).toFixed(1)}°C</p>
-                                        <p className="text-xs text-gray-500 capitalize">{currentWeather.description || ""}</p>
-                                    </div>
-                                    <div className="flex-1 grid grid-cols-3 gap-2 text-center">
-                                        <div>
-                                            <Droplets className="w-4 h-4 text-blue-400 mx-auto mb-0.5" />
-                                            <p className="text-xs font-bold text-gray-700">{currentWeather.humidity || 0}%</p>
-                                            <p className="text-[10px] text-gray-400">Umidade</p>
-                                        </div>
-                                        <div>
-                                            <Wind className="w-4 h-4 text-gray-400 mx-auto mb-0.5" />
-                                            <p className="text-xs font-bold text-gray-700">{parseFloat(currentWeather.windSpeed || 0).toFixed(0)} km/h</p>
-                                            <p className="text-[10px] text-gray-400">Vento</p>
-                                        </div>
-                                        <div>
-                                            <Droplets className="w-4 h-4 text-cyan-400 mx-auto mb-0.5" />
-                                            <p className="text-xs font-bold text-gray-700">{parseFloat(currentWeather.precipitation || 0).toFixed(1)} mm</p>
-                                            <p className="text-[10px] text-gray-400">Chuva</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="h-[80px] flex flex-col items-center justify-center text-gray-300 text-sm">
-                                    <Thermometer className="w-8 h-8 mb-1" />
-                                    <span>Configure uma estacao meteorologica</span>
-                                    <span className="text-[10px] text-gray-400 mt-1">Menu Inteligencia → Clima</span>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                    </div>
                 </div>
             </div>
         </FarmLayout>
