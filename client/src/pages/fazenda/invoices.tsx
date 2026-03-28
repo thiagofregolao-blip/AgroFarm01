@@ -1590,11 +1590,21 @@ export default function FarmInvoices() {
                                         </div>
                                     )}
 
+                                    {/* Aviso de vinculação */}
+                                    {invoiceDetail.status === "pending" && (invoiceDetail.items || []).some((i: any) => !i.productId) && (
+                                        <div className="mb-3 p-3 rounded-lg border border-amber-300 bg-amber-50 flex items-center gap-2">
+                                            <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                                            <span className="text-sm text-amber-800">
+                                                Vincule os produtos ao catalogo para que entrem no estoque ao aprovar.
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <table className="w-full text-sm">
                                         <thead className="bg-purple-50">
                                             <tr>
-                                                <th className="text-left p-2 font-semibold text-purple-800">Cod</th>
                                                 <th className="text-left p-2 font-semibold text-purple-800">Produto (Remissao)</th>
+                                                <th className="text-left p-2 font-semibold text-purple-800 min-w-[180px]">Vincular ao Catalogo</th>
                                                 <th className="text-left p-2 font-semibold text-purple-800">Un</th>
                                                 <th className="text-right p-2 font-semibold text-purple-800">Qtd</th>
                                             </tr>
@@ -1602,8 +1612,22 @@ export default function FarmInvoices() {
                                         <tbody>
                                             {(invoiceDetail.items || []).map((item: any, idx: number) => (
                                                 <tr key={item.id || idx} className="border-t border-gray-100">
-                                                    <td className="p-2 text-gray-400">{item.productCode || "--"}</td>
                                                     <td className="p-2 font-medium">{item.productName}</td>
+                                                    <td className="p-2">
+                                                        <Select
+                                                            value={item.productId || ""}
+                                                            onValueChange={(v) => linkProductMutation.mutate({ invoiceId: selectedInvoice!, itemId: item.id, productId: v })}
+                                                        >
+                                                            <SelectTrigger className={`h-8 text-xs ${item.productId ? 'border-emerald-300 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+                                                                <SelectValue placeholder="Selecione..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {(products as any[]).map((p: any) => (
+                                                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </td>
                                                     <td className="p-2 text-gray-600">{item.unit}</td>
                                                     <td className="p-2 text-right">{parseFloat(item.quantity || 0).toFixed(2)}</td>
                                                 </tr>
@@ -1612,22 +1636,62 @@ export default function FarmInvoices() {
                                     </table>
 
                                     {invoiceDetail.status === "pending" && (
-                                        <div className="mt-4 flex gap-2">
-                                            <Button
-                                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                                onClick={() => {
-                                                    confirmMutation.mutate({ id: selectedInvoice! });
-                                                }}
-                                                disabled={confirmMutation.isPending}
-                                            >
-                                                {confirmMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-                                                Aprovar Remissao (entrada no estoque)
-                                            </Button>
-                                            <Button variant="outline" className="text-red-600 border-red-300" onClick={() => {
-                                                deleteMutation.mutate(selectedInvoice!);
-                                            }}>
-                                                Excluir
-                                            </Button>
+                                        <div className="mt-4 space-y-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                        <Warehouse className="h-4 w-4 text-emerald-500" />
+                                                        Deposito
+                                                    </Label>
+                                                    <Select value={confirmWarehouseId} onValueChange={setConfirmWarehouseId}>
+                                                        <SelectTrigger className="mt-1">
+                                                            <SelectValue placeholder="Selecione..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {(deposits as any[]).map((d: any) => (
+                                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                        <Wheat className="h-4 w-4 text-emerald-500" />
+                                                        Safra
+                                                    </Label>
+                                                    <Select value={confirmSeasonId || (invoiceDetail.seasonId || "")} onValueChange={setConfirmSeasonId}>
+                                                        <SelectTrigger className="mt-1">
+                                                            <SelectValue placeholder="Selecione..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {(seasons as any[]).map((s: any) => (
+                                                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                    onClick={() => {
+                                                        confirmMutation.mutate({
+                                                            id: selectedInvoice!,
+                                                            warehouseId: confirmWarehouseId || undefined,
+                                                            seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
+                                                        });
+                                                    }}
+                                                    disabled={confirmMutation.isPending || (invoiceDetail.items || []).every((i: any) => !i.productId)}
+                                                >
+                                                    {confirmMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+                                                    Aprovar Remissao (entrada no estoque)
+                                                </Button>
+                                                <Button variant="outline" className="text-red-600 border-red-300" onClick={() => {
+                                                    deleteMutation.mutate(selectedInvoice!);
+                                                }}>
+                                                    Excluir
+                                                </Button>
+                                            </div>
                                         </div>
                                     )}
                                 </CardContent>
