@@ -550,7 +550,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
 
             {/* ── Main content ── */}
             <main className="flex-1 flex flex-col w-full overflow-x-hidden">
-                <div className={`flex-1 flex flex-col w-full ${location === "/fazenda/clima" ? "p-0" : "px-2 sm:px-6 lg:px-8 py-4 sm:py-6"}`}>
+                <div className={`flex-1 flex flex-col w-full ${location === "/fazenda/clima" ? "p-0" : "px-2 sm:px-6 py-4 sm:py-6"}`} style={location !== "/fazenda/clima" ? { paddingLeft: "clamp(8px, 3vw, 58px)", paddingRight: "clamp(8px, 3vw, 58px)" } : undefined}>
                     {children}
                 </div>
             </main>

@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import {
     ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
-    PieChart, Pie, Cell, BarChart, Bar
+    PieChart, Pie, Cell, BarChart, Bar, CartesianGrid
 } from "recharts";
 import { MapContainer, TileLayer, Polygon, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -367,6 +367,7 @@ export default function FarmDashboard() {
                                         <ResponsiveContainer width="100%" height="100%">
                                             <AreaChart data={monthlyExpenses}>
                                                 <defs><linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
+                                                <CartesianGrid vertical={true} horizontal={false} strokeDasharray="3 3" stroke="#e5e7eb" />
                                                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                                                 <YAxis tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={35} tickFormatter={(v: number) => fmt(v)} />
                                                 <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
@@ -505,6 +506,7 @@ export default function FarmDashboard() {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={dailyAppCosts}>
                                             <defs><linearGradient id="dailyGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.25} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
+                                            <CartesianGrid vertical={true} horizontal={false} strokeDasharray="3 3" stroke="#e5e7eb" />
                                             <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                                             <YAxis tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={30} tickFormatter={(v: number) => fmt(v)} />
                                             <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Gasto"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
