@@ -320,14 +320,6 @@ export default function FarmDashboard() {
                     </div>
                 )}
 
-                {/* Header */}
-                <div className="flex items-center justify-between mb-1">
-                    <h1 className="text-lg font-bold text-gray-800">Painel Geral</h1>
-                    <button onClick={handleRefresh} disabled={refreshing}
-                        className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium disabled:opacity-50">
-                        <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
-                    </button>
-                </div>
 
                 {/* ═══ ROW 1 ═══ */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
