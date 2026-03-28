@@ -125,8 +125,9 @@ export default function FarmInvoices() {
     const [filterDate, setFilterDate] = useState("");
     const [confirmSkipStock, setConfirmSkipStock] = useState(false);
     const [confirmWarehouseId, setConfirmWarehouseId] = useState<string>("");
+    const [skipConversion, setSkipConversion] = useState<Set<string>>(new Set());
     const [confirmSeasonId, setConfirmSeasonId] = useState<string>("");
-    const [confirmFrotaAmount, setConfirmFrotaAmount] = useState<string>("");
+    // confirmFrotaAmount removed — field no longer needed
     const [confirmEquipmentId, setConfirmEquipmentId] = useState<string>("");
 
     // Nova Despesa dialog state
@@ -245,12 +246,11 @@ export default function FarmInvoices() {
     };
 
     const confirmMutation = useMutation({
-        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, frotaAmount, itemConversions, equipmentId }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; frotaAmount?: string; itemConversions?: Record<string, number>; equipmentId?: string }) =>
+        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, itemConversions, equipmentId }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; itemConversions?: Record<string, number>; equipmentId?: string }) =>
             apiRequest("POST", `/api/farm/invoices/${id}/confirm`, {
                 ...(skipStockEntry ? { skipStockEntry: true } : {}),
                 ...(warehouseId ? { warehouseId } : {}),
                 ...(seasonId ? { seasonId } : {}),
-                ...(frotaAmount && parseFloat(frotaAmount) > 0 ? { frotaAmount } : {}),
                 ...(itemConversions && Object.keys(itemConversions).length > 0 ? { itemConversions } : {}),
                 ...(equipmentId ? { equipmentId } : {}),
             }),
@@ -263,7 +263,7 @@ export default function FarmInvoices() {
                 : confirmSkipStock ? "Fatura confirmada (somente valor, sem estoque)."
                 : "Confirmado! Estoque atualizado."
             });
-            setSelectedInvoice(null);
+            setSelectedInvoice(null); setSkipConversion(new Set());
             setConfirmSkipStock(false);
             setConfirmWarehouseId("");
             setConfirmSeasonId("");
@@ -280,7 +280,7 @@ export default function FarmInvoices() {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
             toast({ title: data?.message || "Excluido com sucesso." });
-            setSelectedInvoice(null);
+            setSelectedInvoice(null); setSkipConversion(new Set());
         },
         onError: () => toast({ title: "Erro ao excluir", variant: "destructive" }),
     });
@@ -478,26 +478,9 @@ export default function FarmInvoices() {
                 formData.append("seasonId", selectedSeasonId);
             }
 
-            // If remission mode, post to remissions endpoint
+            // If remission mode, send to same endpoint with isRemision flag
             if (isRemission) {
-                formData.append("isRemission", "true");
-                const res = await fetch("/api/farm/remissions/import", {
-                    method: "POST",
-                    body: formData,
-                    credentials: "include",
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error("Upload failed");
-                queryClient.invalidateQueries({ queryKey: ["/api/farm/remissions"] });
-                setImportDialogOpen(false);
-                setIsRemission(false);
-                toast({ title: `Remissao importada com sucesso` });
-
-                // Auto-register supplier from remission
-                if (data.ruc && data.supplier) {
-                    await autoRegisterSupplier(data.supplier, data.ruc);
-                }
-                return;
+                formData.append("isRemision", "true");
             }
 
             if (skipStockEntry) {
@@ -528,11 +511,14 @@ export default function FarmInvoices() {
             }
 
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
-            setSelectedInvoice(data.invoice.id);
+            setSelectedInvoice(data.invoice?.id || null);
             setImportDialogOpen(false);
+            setIsRemission(false);
 
             // Show import success + remission match notification
-            if (data.matchingRemissions && data.matchingRemissions.length > 0) {
+            if (data.isRemision) {
+                toast({ title: "Remissao importada com sucesso" });
+            } else if (data.matchingRemissions && data.matchingRemissions.length > 0) {
                 toast({
                     title: "Fatura importada - Remissao encontrada!",
                     description: `${data.matchingRemissions.length} remissao(oes) do mesmo fornecedor. Abra o card da fatura para conciliar.`,
@@ -853,12 +839,12 @@ export default function FarmInvoices() {
                     </TabsList>
 
                     <TabsContent value="invoices">
-                        {/* Selected invoice detail */}
-                        {selectedInvoice && invoiceDetail && (
-                            <Card className="border-emerald-200 bg-white mb-4">
-                                <CardHeader className="pb-3">
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="text-emerald-800 flex items-center gap-2">
+                        {/* Selected invoice detail — Modal */}
+                        <Dialog open={!!selectedInvoice && !!invoiceDetail} onOpenChange={(open) => { if (!open) { setSelectedInvoice(null); setSkipConversion(new Set()); setEditingInvoice(false); } }}>
+                            <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-0 gap-0">
+                                {invoiceDetail && (<><div className="p-6 pb-3">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <DialogTitle className="text-emerald-800 flex items-center gap-2 text-lg">
                                             {editingInvoice ? "Editando Fatura" : `Fatura #${invoiceDetail.invoiceNumber || "—"}`}
                                             <Badge className="ml-2" variant={invoiceDetail.status === "confirmed" ? "default" : "secondary"}>
                                                 {invoiceDetail.status === "confirmed" ? "Confirmada" : "Pendente"}
@@ -871,7 +857,7 @@ export default function FarmInvoices() {
                                                 {invoiceDetail.source === "whatsapp" ? "WhatsApp" :
                                                  invoiceDetail.source === "email_import" ? "Email" : "Import"}
                                             </Badge>
-                                        </CardTitle>
+                                        </DialogTitle>
                                         <div className="flex items-center gap-2">
                                             {canEdit && !editingInvoice && (
                                                 <Button variant="outline" size="sm" onClick={() => {
@@ -909,7 +895,6 @@ export default function FarmInvoices() {
                                                     <Eye className="mr-1 h-3 w-3" /> Ver Original
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" onClick={() => { setSelectedInvoice(null); setEditingInvoice(false); }}>Fechar</Button>
                                         </div>
                                     </div>
                                     {editingInvoice ? (
@@ -990,8 +975,8 @@ export default function FarmInvoices() {
                                             })()}
                                         </div>
                                     )}
-                                </CardHeader>
-                                <CardContent>
+                                </div>
+                                <div className="px-6 pb-6 space-y-4">
                                     {/* Banner: matching remissions found */}
                                     {invoiceDetail.matchingRemissions && invoiceDetail.matchingRemissions.length > 0 && !invoiceDetail.linkedRemisionId && (
                                         <div className="mb-4 p-3 rounded-lg border-2 border-amber-400 bg-amber-50">
@@ -1094,9 +1079,15 @@ export default function FarmInvoices() {
                                                                 <td className="p-2 text-center">
                                                                     <div className="flex items-center justify-center gap-1">
                                                                         <button className="p-1 rounded hover:bg-emerald-200" title="Salvar"
-                                                                            onClick={() => updateInvoiceItemMutation.mutate({
-                                                                                invoiceId: selectedInvoice!, itemId: item.id, data: editItemData
-                                                                            })}>
+                                                                            onClick={() => {
+                                                                                const sanitized = { ...editItemData };
+                                                                                if (sanitized.quantity) sanitized.quantity = String(sanitized.quantity).replace(",", ".");
+                                                                                if (sanitized.unitPrice) sanitized.unitPrice = String(sanitized.unitPrice).replace(",", ".");
+                                                                                if (sanitized.totalPrice) sanitized.totalPrice = String(sanitized.totalPrice).replace(",", ".");
+                                                                                updateInvoiceItemMutation.mutate({
+                                                                                    invoiceId: selectedInvoice!, itemId: item.id, data: sanitized
+                                                                                });
+                                                                            }}>
                                                                             <Save className="h-4 w-4 text-emerald-600" />
                                                                         </button>
                                                                         <button className="p-1 rounded hover:bg-gray-200" title="Cancelar"
@@ -1127,7 +1118,7 @@ export default function FarmInvoices() {
                                                                 </td>
                                                                 <td className="text-center p-2">{item.unit}</td>
                                                                 {(() => {
-                                                                    const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products);
+                                                                    const pkgSize = skipConversion.has(item.id) ? null : shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products);
                                                                     const qty = parseFloat(item.quantity);
                                                                     const price = parseFloat(item.unitPrice);
                                                                     const realQty = pkgSize ? qty * pkgSize : qty;
@@ -1198,32 +1189,44 @@ export default function FarmInvoices() {
 
                                     {/* Conversão embalagem → litros/kg (informativo) */}
                                     {invoiceDetail.status === "pending" && invoiceDetail.items?.length > 0 && (() => {
-                                        const itemsWithPkg = invoiceDetail.items.filter((item: any) => shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products));
-                                        if (itemsWithPkg.length === 0) return null;
+                                        const itemsConvertible = invoiceDetail.items.filter((item: any) => shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products));
+                                        if (itemsConvertible.length === 0) return null;
+                                        const activeCount = itemsConvertible.filter((item: any) => !skipConversion.has(item.id)).length;
                                         return (
                                             <div className="mt-4 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <Package className="h-4 w-4 text-emerald-600" />
                                                     <span className="text-sm font-semibold text-emerald-800">
-                                                        Conversao automatica de embalagem ({itemsWithPkg.length} {itemsWithPkg.length === 1 ? "item" : "itens"})
+                                                        Conversao de embalagem ({activeCount}/{itemsConvertible.length} {activeCount === 1 ? "ativo" : "ativos"})
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-emerald-700 mb-2">
-                                                    Quantidade convertida de embalagens para litros/kg. Preco unitario ajustado proporcionalmente. Valor total inalterado.
+                                                    Clique no item para ativar/desativar a conversao. Valor total inalterado.
                                                 </p>
                                                 <div className="space-y-1">
-                                                    {itemsWithPkg.map((item: any) => {
+                                                    {itemsConvertible.map((item: any) => {
                                                         const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products)!;
                                                         const qty = parseFloat(item.quantity);
                                                         const price = parseFloat(item.unitPrice);
+                                                        const isSkipped = skipConversion.has(item.id);
                                                         return (
-                                                            <div key={item.id} className="flex items-center gap-2 p-1.5 rounded bg-white/60 text-xs">
-                                                                <Check className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
-                                                                <span className="font-medium flex-1 truncate">{item.productName}</span>
-                                                                <span className="text-emerald-700 flex-shrink-0">
+                                                            <button key={item.id}
+                                                                onClick={() => {
+                                                                    setSkipConversion(prev => {
+                                                                        const next = new Set(prev);
+                                                                        if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                                                                        return next;
+                                                                    });
+                                                                }}
+                                                                className={`w-full flex items-center gap-2 p-1.5 rounded text-xs transition-all cursor-pointer ${isSkipped ? "bg-gray-100 opacity-60" : "bg-white/60 hover:bg-white"}`}>
+                                                                <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${isSkipped ? "bg-gray-300" : "bg-emerald-500"}`}>
+                                                                    <Check className={`h-3 w-3 text-white ${isSkipped ? "hidden" : ""}`} />
+                                                                </div>
+                                                                <span className={`font-medium flex-1 truncate text-left ${isSkipped ? "line-through text-gray-400" : ""}`}>{item.productName}</span>
+                                                                <span className={`flex-shrink-0 ${isSkipped ? "text-gray-400 line-through" : "text-emerald-700"}`}>
                                                                     {qty} × {pkgSize} = {(qty * pkgSize).toFixed(0)} | ${(price / pkgSize).toFixed(2)}/un
                                                                 </span>
-                                                            </div>
+                                                            </button>
                                                         );
                                                     })}
                                                 </div>
@@ -1263,80 +1266,68 @@ export default function FarmInvoices() {
                                                 <Info className={`h-4 w-4 mt-0.5 flex-shrink-0 ${confirmSkipStock ? 'text-amber-500' : 'text-gray-400'}`} />
                                             </div>
 
-                                            {/* Item #13: Deposito destino */}
-                                            {!confirmSkipStock && (
+                                            <div className={`grid gap-3 ${confirmSkipStock ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
+                                                {/* Deposito destino */}
+                                                {!confirmSkipStock && (
+                                                    <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                        <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                            <Warehouse className="h-4 w-4 text-emerald-500" />
+                                                            Deposito
+                                                        </Label>
+                                                        <Select value={confirmWarehouseId} onValueChange={setConfirmWarehouseId}>
+                                                            <SelectTrigger className="mt-1">
+                                                                <SelectValue placeholder="Selecione..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {(deposits as any[]).map((d: any) => (
+                                                                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                )}
+
+                                                {/* Safra */}
                                                 <div className="p-3 rounded-lg border border-gray-200 bg-white">
                                                     <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                                        <Warehouse className="h-4 w-4 text-emerald-500" />
-                                                        Deposito destino dos produtos
+                                                        <Wheat className="h-4 w-4 text-emerald-500" />
+                                                        Safra
                                                     </Label>
-                                                    <Select value={confirmWarehouseId} onValueChange={setConfirmWarehouseId}>
+                                                    <Select value={confirmSeasonId || (invoiceDetail.seasonId || "")} onValueChange={setConfirmSeasonId}>
                                                         <SelectTrigger className="mt-1">
-                                                            <SelectValue placeholder="Selecione o deposito..." />
+                                                            <SelectValue placeholder="Selecione..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {(deposits as any[]).map((d: any) => (
-                                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                            {(seasons as any[]).map((s: any) => (
+                                                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
-                                            )}
 
-                                            {/* Safra selector */}
-                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
-                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                                    <Wheat className="h-4 w-4 text-emerald-500" />
-                                                    Safra
-                                                </Label>
-                                                <Select value={confirmSeasonId || (invoiceDetail.seasonId || "")} onValueChange={setConfirmSeasonId}>
-                                                    <SelectTrigger className="mt-1">
-                                                        <SelectValue placeholder="Selecione a safra..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {(seasons as any[]).map((s: any) => (
-                                                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-
-                                            {/* Vincular a veículo da frota */}
-                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
-                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                                    Vincular a veiculo (opcional)
-                                                </Label>
-                                                <Select value={confirmEquipmentId} onValueChange={setConfirmEquipmentId}>
-                                                    <SelectTrigger className="mt-1">
-                                                        <SelectValue placeholder="Selecione o veiculo..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="__none__">Nenhum (entrada no estoque)</SelectItem>
-                                                        {(equipment as any[]).filter((e: any) => e.status === "Ativo").map((e: any) => (
-                                                            <SelectItem key={e.id} value={e.id}>{e.name} ({e.type})</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <p className="text-xs text-gray-400 mt-1">
-                                                    {confirmEquipmentId && confirmEquipmentId !== "__none__"
-                                                        ? "A fatura sera registrada como despesa do veiculo (nao entra no estoque)"
-                                                        : "Produtos entrarao no estoque normalmente"
-                                                    }
-                                                </p>
-                                            </div>
-
-                                            {/* Despesa de Frota */}
-                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
-                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                                    Despesa de Frota (opcional)
-                                                </Label>
-                                                <CurrencyInput
-                                                    value={confirmFrotaAmount}
-                                                    onValueChange={setConfirmFrotaAmount}
-                                                    className="mt-1"
-                                                    placeholder="0,00"
-                                                />
-                                                <p className="text-xs text-gray-400 mt-1">Frete e transporte relacionado a esta fatura</p>
+                                                {/* Vincular a veículo */}
+                                                <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                        Veiculo (opcional)
+                                                    </Label>
+                                                    <Select value={confirmEquipmentId} onValueChange={setConfirmEquipmentId}>
+                                                        <SelectTrigger className="mt-1">
+                                                            <SelectValue placeholder="Selecione..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="__none__">Nenhum</SelectItem>
+                                                            {(equipment as any[]).filter((e: any) => e.status === "Ativo").map((e: any) => (
+                                                                <SelectItem key={e.id} value={e.id}>{e.name} ({e.type})</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <p className="text-xs text-gray-400 mt-1">
+                                                        {confirmEquipmentId && confirmEquipmentId !== "__none__"
+                                                            ? "Despesa do veiculo"
+                                                            : "Entrada no estoque"
+                                                        }
+                                                    </p>
+                                                </div>
                                             </div>
 
                                             <div className="flex justify-end">
@@ -1347,6 +1338,7 @@ export default function FarmInvoices() {
                                                         const conversions: Record<string, number> = {};
                                                         if (invoiceDetail.items) {
                                                             for (const item of invoiceDetail.items) {
+                                                                if (skipConversion.has(item.id)) continue;
                                                                 const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products);
                                                                 if (pkgSize) {
                                                                     conversions[item.id] = pkgSize;
@@ -1359,7 +1351,6 @@ export default function FarmInvoices() {
                                                             skipStockEntry: confirmSkipStock || hasEquipment || undefined,
                                                             warehouseId: !confirmSkipStock && !hasEquipment && confirmWarehouseId ? confirmWarehouseId : undefined,
                                                             seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
-                                                            frotaAmount: confirmFrotaAmount || undefined,
                                                             itemConversions: Object.keys(conversions).length > 0 ? conversions : undefined,
                                                             equipmentId: hasEquipment ? confirmEquipmentId : undefined,
                                                         });
@@ -1372,9 +1363,9 @@ export default function FarmInvoices() {
                                             </div>
                                         </div>
                                     )}
-                                </CardContent>
-                            </Card>
-                        )}
+                                </div></>)}
+                            </DialogContent>
+                        </Dialog>
 
                         {/* Invoices list */}
                         <Card className="border-emerald-100">
@@ -1562,7 +1553,7 @@ export default function FarmInvoices() {
                                                     <Eye className="mr-1 h-3 w-3" /> Ver Original
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null)}>Fechar</Button>
+                                            <Button variant="ghost" size="sm" onClick={() => { setSelectedInvoice(null); setSkipConversion(new Set()); }}>Fechar</Button>
                                         </div>
                                     </div>
                                     <p className="text-sm text-gray-500 mt-1">
@@ -1599,11 +1590,21 @@ export default function FarmInvoices() {
                                         </div>
                                     )}
 
+                                    {/* Aviso de vinculação */}
+                                    {invoiceDetail.status === "pending" && (invoiceDetail.items || []).some((i: any) => !i.productId) && (
+                                        <div className="mb-3 p-3 rounded-lg border border-amber-300 bg-amber-50 flex items-center gap-2">
+                                            <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                                            <span className="text-sm text-amber-800">
+                                                Vincule os produtos ao catalogo para que entrem no estoque ao aprovar.
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <table className="w-full text-sm">
                                         <thead className="bg-purple-50">
                                             <tr>
-                                                <th className="text-left p-2 font-semibold text-purple-800">Cod</th>
                                                 <th className="text-left p-2 font-semibold text-purple-800">Produto (Remissao)</th>
+                                                <th className="text-left p-2 font-semibold text-purple-800 min-w-[180px]">Vincular ao Catalogo</th>
                                                 <th className="text-left p-2 font-semibold text-purple-800">Un</th>
                                                 <th className="text-right p-2 font-semibold text-purple-800">Qtd</th>
                                             </tr>
@@ -1611,8 +1612,22 @@ export default function FarmInvoices() {
                                         <tbody>
                                             {(invoiceDetail.items || []).map((item: any, idx: number) => (
                                                 <tr key={item.id || idx} className="border-t border-gray-100">
-                                                    <td className="p-2 text-gray-400">{item.productCode || "--"}</td>
                                                     <td className="p-2 font-medium">{item.productName}</td>
+                                                    <td className="p-2">
+                                                        <Select
+                                                            value={item.productId || ""}
+                                                            onValueChange={(v) => linkProductMutation.mutate({ invoiceId: selectedInvoice!, itemId: item.id, productId: v })}
+                                                        >
+                                                            <SelectTrigger className={`h-8 text-xs ${item.productId ? 'border-emerald-300 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+                                                                <SelectValue placeholder="Selecione..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {(products as any[]).map((p: any) => (
+                                                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </td>
                                                     <td className="p-2 text-gray-600">{item.unit}</td>
                                                     <td className="p-2 text-right">{parseFloat(item.quantity || 0).toFixed(2)}</td>
                                                 </tr>
@@ -1621,22 +1636,62 @@ export default function FarmInvoices() {
                                     </table>
 
                                     {invoiceDetail.status === "pending" && (
-                                        <div className="mt-4 flex gap-2">
-                                            <Button
-                                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                                                onClick={() => {
-                                                    confirmMutation.mutate({ id: selectedInvoice! });
-                                                }}
-                                                disabled={confirmMutation.isPending}
-                                            >
-                                                {confirmMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-                                                Aprovar Remissao (entrada no estoque)
-                                            </Button>
-                                            <Button variant="outline" className="text-red-600 border-red-300" onClick={() => {
-                                                deleteMutation.mutate(selectedInvoice!);
-                                            }}>
-                                                Excluir
-                                            </Button>
+                                        <div className="mt-4 space-y-3">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                        <Warehouse className="h-4 w-4 text-emerald-500" />
+                                                        Deposito
+                                                    </Label>
+                                                    <Select value={confirmWarehouseId} onValueChange={setConfirmWarehouseId}>
+                                                        <SelectTrigger className="mt-1">
+                                                            <SelectValue placeholder="Selecione..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {(deposits as any[]).map((d: any) => (
+                                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                        <Wheat className="h-4 w-4 text-emerald-500" />
+                                                        Safra
+                                                    </Label>
+                                                    <Select value={confirmSeasonId || (invoiceDetail.seasonId || "")} onValueChange={setConfirmSeasonId}>
+                                                        <SelectTrigger className="mt-1">
+                                                            <SelectValue placeholder="Selecione..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {(seasons as any[]).map((s: any) => (
+                                                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                    onClick={() => {
+                                                        confirmMutation.mutate({
+                                                            id: selectedInvoice!,
+                                                            warehouseId: confirmWarehouseId || undefined,
+                                                            seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
+                                                        });
+                                                    }}
+                                                    disabled={confirmMutation.isPending || (invoiceDetail.items || []).every((i: any) => !i.productId)}
+                                                >
+                                                    {confirmMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+                                                    Aprovar Remissao (entrada no estoque)
+                                                </Button>
+                                                <Button variant="outline" className="text-red-600 border-red-300" onClick={() => {
+                                                    deleteMutation.mutate(selectedInvoice!);
+                                                }}>
+                                                    Excluir
+                                                </Button>
+                                            </div>
                                         </div>
                                     )}
                                 </CardContent>

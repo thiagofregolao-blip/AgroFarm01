@@ -2233,9 +2233,25 @@ ${csvText}`;
             if (!companyId) return res.status(403).json({ error: "Sem empresa vinculada" });
             if (!req.file) return res.status(400).json({ error: "Envie um arquivo PDF" });
 
-            const { extractInvoiceFromPdf } = await import("./services/invoice-email-service");
+            const { parseWithGemini } = await import("./gemini-invoice-parser");
             const pdfBase64 = req.file.buffer.toString("base64");
-            const extracted = await extractInvoiceFromPdf(pdfBase64);
+            const parsed = await parseWithGemini(pdfBase64, "application/pdf");
+            const extracted = {
+                invoiceNumber: parsed.invoiceNumber || null,
+                supplier: parsed.supplier || "Fornecedor não identificado",
+                issueDate: parsed.issueDate || null,
+                dueDate: parsed.dueDate || null,
+                currency: parsed.currency || "USD",
+                totalAmount: parsed.totalAmount || 0,
+                items: (parsed.items || []).map((item: any) => ({
+                    productName: item.productName || "",
+                    productCode: item.productCode || null,
+                    quantity: item.quantity || 0,
+                    unit: item.unit || "UNI",
+                    unitPrice: item.unitPrice || 0,
+                    totalPrice: item.totalPrice || 0,
+                })),
+            };
 
             // Try to match client by invoice data
             let clientId: string | null = null;

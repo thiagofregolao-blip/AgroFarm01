@@ -9,16 +9,21 @@
 import { db } from "../db";
 import { farmInvoices, farmInvoiceItems, farmProductsCatalog, users } from "../../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
-
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+import { parseWithGemini } from "../gemini-invoice-parser";
 
 interface ExtractedInvoice {
     invoiceNumber: string | null;
     supplier: string;
-    issueDate: string | null; // ISO date
-    dueDate: string | null; // ISO date — data de vencimento
+    supplierRuc: string | null;
+    supplierPhone: string | null;
+    supplierEmail: string | null;
+    supplierAddress: string | null;
+    issueDate: string | null;
+    dueDate: string | null;
     currency: string;
+    paymentCondition: string | null;
     totalAmount: number;
+    isRemision: boolean;
     items: Array<{
         productName: string;
         productCode: string | null;
@@ -31,102 +36,68 @@ interface ExtractedInvoice {
 }
 
 /**
- * Extract invoice data from a PDF using Gemini Vision AI
+ * Detect if a document is a remission using 3-layer detection
+ * Same logic as farm-invoice-routes.ts
  */
-export async function extractInvoiceFromPdf(pdfBase64: string): Promise<ExtractedInvoice> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
+function detectRemision(parsed: any): boolean {
+    // Camada 1: Gemini classificou como remision
+    if (parsed.type === "remision") return true;
 
-    const prompt = `Você é um especialista em leitura de faturas/notas fiscais de empresas agrícolas.
-Analise este PDF de fatura e extraia TODOS os dados estruturados.
+    // Camada 2: fallback por texto na descrição ou supplier
+    const textsToCheck = [parsed.description || "", parsed.supplier || ""].join(" ").toUpperCase();
+    if (textsToCheck.includes("REMISION") || textsToCheck.includes("REMISSAO") ||
+        textsToCheck.includes("NOTA DE REMISION") || textsToCheck.includes("GUIA DE REMESSA")) {
+        console.log(`[EMAIL_IMPORT] Fallback texto: detectado como REMISION`);
+        return true;
+    }
 
-RETORNE APENAS UM JSON VÁLIDO no formato exato abaixo:
-{
-    "invoiceNumber": "Número da nota/fatura (ou null se não encontrar)",
-    "supplier": "Nome da empresa fornecedora",
-    "issueDate": "Data de emissão no formato YYYY-MM-DD (ou null)",
-    "dueDate": "Data de vencimento no formato YYYY-MM-DD (ou null). Procure por: Vencimiento, Fecha de Vencimiento, Vecto, Due Date, Cuotas X Vencimiento",
-    "currency": "USD, PYG ou BRL (identifique pela moeda usada nos valores)",
-    "totalAmount": 0.00,
-    "items": [
-        {
-            "productName": "NOME DO PRODUTO EM MAIÚSCULAS",
-            "productCode": "Código do produto (ou null)",
-            "quantity": 0.00,
-            "unit": "LT, KG, UNI, SC ou outra unidade",
-            "unitPrice": 0.00,
-            "totalPrice": 0.00,
-            "batch": "Número do lote (ou null)"
+    // Camada 3: fallback por dados — todos preços zero + total zero
+    if (parsed.items && parsed.items.length > 0) {
+        const allZeroPrice = parsed.items.every((item: any) => !item.unitPrice || item.unitPrice === 0);
+        const zeroTotal = !parsed.totalAmount || parsed.totalAmount === 0;
+        if (allZeroPrice && zeroTotal) {
+            console.log(`[EMAIL_IMPORT] Fallback dados: detectado como REMISION (todos preços zero)`);
+            return true;
         }
-    ]
+    }
+
+    return false;
 }
 
-REGRAS:
-1. Extraia TODOS os itens da fatura, não omita nenhum.
-2. Se os valores tiverem separador de milhar com ponto e decimal com vírgula (ex: 1.500,00), converta para número decimal (1500.00).
-3. Se os valores usarem ponto como decimal (ex: 1500.00), mantenha assim.
-4. Os nomes dos produtos devem ser em MAIÚSCULAS.
-5. Se a moeda for guarani (₲ ou Gs), use "PYG". Se for dólar ($, USD, U$), use "USD". Se for real (R$), use "BRL".
-6. Se não encontrar algum campo, use null.
-7. totalAmount deve ser a soma de todos os itens OU o valor total da fatura.
-8. IMPORTANTE: Procure a data de vencimento ("Vencimiento:", "Cuotas: 1 Vencimiento: DD/MM/YYYY"). NÃO confunda com data de emissão.
+/**
+ * Extract invoice data from a PDF using the unified Gemini parser
+ */
+export async function extractInvoiceFromPdf(pdfBase64: string): Promise<ExtractedInvoice> {
+    const parsed = await parseWithGemini(pdfBase64, "application/pdf");
+    const isRemision = detectRemision(parsed);
 
-RESPONDA APENAS JSON, sem texto adicional.`;
-
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{
-                parts: [
-                    { text: prompt },
-                    {
-                        inline_data: {
-                            mime_type: "application/pdf",
-                            data: pdfBase64
-                        }
-                    }
-                ]
-            }],
-            generationConfig: {
-                temperature: 0.1,
-            }
-        })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        console.error("[Invoice Email] Gemini API Error:", data);
-        throw new Error(data.error?.message || "Falha na API Gemini");
+    if (isRemision) {
+        console.log(`[EMAIL_IMPORT] Documento classificado como NOTA DE REMISION`);
     }
 
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
-
-    try {
-        const parsed = JSON.parse(cleanJson);
-        return {
-            invoiceNumber: parsed.invoiceNumber || null,
-            supplier: parsed.supplier || "Fornecedor não identificado",
-            issueDate: parsed.issueDate || null,
-            dueDate: parsed.dueDate || null,
-            currency: parsed.currency || "USD",
-            totalAmount: typeof parsed.totalAmount === "number" ? parsed.totalAmount : 0,
-            items: Array.isArray(parsed.items) ? parsed.items.map((item: any) => ({
-                productName: item.productName || "Produto não identificado",
-                productCode: item.productCode || null,
-                quantity: typeof item.quantity === "number" ? item.quantity : 0,
-                unit: item.unit || "UNI",
-                unitPrice: typeof item.unitPrice === "number" ? item.unitPrice : 0,
-                totalPrice: typeof item.totalPrice === "number" ? item.totalPrice : 0,
-                batch: item.batch || null,
-            })) : [],
-        };
-    } catch (e) {
-        console.error("[Invoice Email] Failed to parse Gemini response:", cleanJson);
-        throw new Error("A IA não retornou um formato JSON válido para esta fatura.");
-    }
+    return {
+        invoiceNumber: parsed.invoiceNumber || null,
+        supplier: parsed.supplier || "Fornecedor não identificado",
+        supplierRuc: parsed.supplierRuc || null,
+        supplierPhone: parsed.supplierPhone || null,
+        supplierEmail: parsed.supplierEmail || null,
+        supplierAddress: parsed.supplierAddress || null,
+        issueDate: parsed.issueDate || null,
+        dueDate: parsed.dueDate || null,
+        currency: parsed.currency || "USD",
+        paymentCondition: parsed.paymentCondition || null,
+        totalAmount: isRemision ? 0 : (typeof parsed.totalAmount === "number" ? parsed.totalAmount : 0),
+        isRemision,
+        items: Array.isArray(parsed.items) ? parsed.items.map((item: any) => ({
+            productName: item.productName || "Produto não identificado",
+            productCode: item.productCode || null,
+            quantity: typeof item.quantity === "number" ? item.quantity : 0,
+            unit: item.unit || "UNI",
+            unitPrice: isRemision ? 0 : (typeof item.unitPrice === "number" ? item.unitPrice : 0),
+            totalPrice: isRemision ? 0 : (typeof item.totalPrice === "number" ? item.totalPrice : 0),
+            batch: item.batch || null,
+        })) : [],
+    };
 }
 
 /**
@@ -257,6 +228,8 @@ export async function createDraftInvoice(
     // Match products with catalog
     const matchedItems = await matchProducts(farmerId, extracted.items);
 
+    const isRemision = extracted.isRemision;
+
     // Create the invoice
     const [invoice] = await db.insert(farmInvoices).values({
         farmerId,
@@ -264,9 +237,9 @@ export async function createDraftInvoice(
         invoiceNumber: extracted.invoiceNumber,
         supplier: extracted.supplier,
         issueDate: extracted.issueDate ? new Date(extracted.issueDate.length === 10 ? extracted.issueDate + "T12:00:00" : extracted.issueDate) : null,
-        dueDate: extracted.dueDate ? new Date(extracted.dueDate.length === 10 ? extracted.dueDate + "T12:00:00" : extracted.dueDate) : null,
+        dueDate: isRemision ? null : (extracted.dueDate ? new Date(extracted.dueDate.length === 10 ? extracted.dueDate + "T12:00:00" : extracted.dueDate) : null),
         currency: extracted.currency,
-        totalAmount: String(extracted.totalAmount),
+        totalAmount: isRemision ? "0" : String(extracted.totalAmount),
         status: "pending",
         source: "email_import",
         sourceEmailId: emailId,
@@ -274,7 +247,29 @@ export async function createDraftInvoice(
         rawPdfData: rawPdfText || "PDF processado via Gemini AI",
         pdfBase64: pdfBase64 || null,
         fileMimeType: "application/pdf",
+        documentType: isRemision ? "remision" : "factura",
+        paymentCondition: extracted.paymentCondition || null,
     } as any).returning();
+
+    // Auto-create/update supplier with extracted data
+    if (extracted.supplier && extracted.supplier !== "Fornecedor não identificado") {
+        try {
+            const existingSupplier = await db.execute(sql`
+                SELECT id FROM farm_suppliers WHERE farmer_id = ${farmerId} AND lower(name) = lower(${extracted.supplier}) LIMIT 1
+            `);
+            const supplierRows = Array.isArray(existingSupplier) ? existingSupplier : (existingSupplier as any).rows || [];
+            if (supplierRows.length === 0 && (extracted.supplierRuc || extracted.supplierPhone || extracted.supplierEmail)) {
+                await db.execute(sql`
+                    INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, person_type, entity_type)
+                    VALUES (${farmerId}, ${extracted.supplier}, ${extracted.supplierRuc}, ${extracted.supplierPhone}, ${extracted.supplierEmail}, ${extracted.supplierAddress}, 'juridica', 'supplier')
+                    ON CONFLICT DO NOTHING
+                `);
+                console.log(`[EMAIL_IMPORT] Auto-criado fornecedor: ${extracted.supplier}`);
+            }
+        } catch (e) {
+            console.error("[EMAIL_IMPORT] Erro ao criar fornecedor:", e);
+        }
+    }
 
     // Create invoice items
     if (matchedItems.length > 0) {
@@ -286,15 +281,16 @@ export async function createDraftInvoice(
                 productName: item.productName,
                 unit: item.unit,
                 quantity: String(item.quantity),
-                unitPrice: String(item.unitPrice),
+                unitPrice: isRemision ? "0" : String(item.unitPrice),
                 discount: "0",
-                totalPrice: String(item.totalPrice),
+                totalPrice: isRemision ? "0" : String(item.totalPrice),
                 batch: item.batch,
             }))
         );
     }
 
-    console.log(`[Invoice Email] Created draft invoice ${invoice.id} with ${matchedItems.length} items for farmer ${farmerId}`);
+    const docLabel = isRemision ? "REMISION" : "FATURA";
+    console.log(`[Invoice Email] Created draft ${docLabel} ${invoice.id} with ${matchedItems.length} items for farmer ${farmerId}`);
 
     return {
         invoiceId: invoice.id,
@@ -303,5 +299,6 @@ export async function createDraftInvoice(
         currency: extracted.currency,
         itemCount: matchedItems.length,
         matchedCount: matchedItems.filter(i => i.matchedProductId).length,
+        isRemision,
     };
 }

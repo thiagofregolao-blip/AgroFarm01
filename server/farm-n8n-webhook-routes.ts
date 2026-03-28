@@ -464,6 +464,18 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
                 return res.status(400).json({ error: "Failed to parse image content" });
             }
 
+            // Fallback detecção remissão: se Gemini disse "invoice" mas texto/dados indicam remissão
+            if (parsed.type === "invoice") {
+                const textUpper = (parsed.description || "").toUpperCase();
+                const hasRemisionText = textUpper.includes("REMISION") || textUpper.includes("REMISSAO") || textUpper.includes("GUIA DE REMESSA");
+                const allZeroPrice = parsed.items.length > 0 && parsed.items.every(item => !item.unitPrice || item.unitPrice === 0);
+                const zeroTotal = !parsed.totalAmount || parsed.totalAmount === 0;
+                if (hasRemisionText || (allZeroPrice && zeroTotal)) {
+                    (parsed as any).type = "remision";
+                    console.log(`[WHATSAPP_WEBHOOK] Fallback: reclassificado de invoice para remision (texto=${hasRemisionText}, preços_zero=${allZeroPrice && zeroTotal})`);
+                }
+            }
+
             const amount = parsed.totalAmount;
 
             // Try to match equipment from caption (for vehicle/fleet receipts)

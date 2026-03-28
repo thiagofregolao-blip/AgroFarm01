@@ -1,13 +1,13 @@
-import { ReactNode, useState, useEffect, useRef } from "react";
+import { ReactNode, useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import {
     Home, Warehouse, Map, FileText, BarChart3,
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
     Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2,
-    Settings, HelpCircle, Download, ChevronDown, FilePlus, Users
+    Settings, HelpCircle, Download, ChevronDown, FilePlus, Users, RefreshCw
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
 
@@ -292,6 +292,15 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
     const { user, logoutMutation } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { t } = useLanguage();
+    const queryClient = useQueryClient();
+    const [refreshing, setRefreshing] = useState(false);
+
+    const handleGlobalRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await queryClient.invalidateQueries();
+        await new Promise(r => setTimeout(r, 400));
+        setRefreshing(false);
+    }, [queryClient]);
 
     const isFinanceRoute = financeRoutes.some(r => location === r || location.startsWith(r + "/"));
     const [activeTab, setActiveTab] = useState<SidebarTab>(isFinanceRoute ? "financeiro" : "fazenda");
@@ -455,6 +464,15 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                 {/* Desktop: right side actions */}
                 <div className="hidden md:flex items-center gap-1">
                     <button
+                        onClick={handleGlobalRefresh}
+                        disabled={refreshing}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50"
+                        aria-label="Atualizar página"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+                        <span>Atualizar</span>
+                    </button>
+                    <button
                         onClick={() => setLocation("/fazenda/relatorios")}
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
                             ${location.startsWith("/fazenda/relatorios") ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
@@ -479,8 +497,18 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     </button>
                 </div>
 
-                {/* Mobile: logo right */}
-                <img src="/logo.png" alt="AgroFarm" className="h-8 w-auto object-contain md:hidden" />
+                {/* Mobile: refresh + logo */}
+                <div className="flex items-center gap-2 md:hidden">
+                    <button
+                        onClick={handleGlobalRefresh}
+                        disabled={refreshing}
+                        className="p-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors disabled:opacity-50"
+                        aria-label="Atualizar página"
+                    >
+                        <RefreshCw className={`w-5 h-5 ${refreshing ? "animate-spin" : ""}`} />
+                    </button>
+                    <img src="/logo.png" alt="AgroFarm" className="h-8 w-auto object-contain" />
+                </div>
             </header>
 
             {/* ══════════════════════════════════════════════════════════════════

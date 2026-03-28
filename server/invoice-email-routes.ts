@@ -106,11 +106,18 @@ export function registerInvoiceEmailRoutes(app: Express) {
                                 const formattedTotal = extracted.totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
                                 const farmerName = farmer.name || "Produtor";
 
-                                const message = `👋 *${farmerName}*, tudo bem?\n\n` +
-                                    `Recebemos uma fatura em seu nome do fornecedor *${extracted.supplier}* no valor de *${currencySymbol} ${formattedTotal}* com ${extracted.items.length} produtos.\n\n` +
-                                    `${result.matchedCount > 0 ? `✅ ${result.matchedCount} produto${result.matchedCount > 1 ? "s" : ""} já ${result.matchedCount > 1 ? "foram identificados" : "foi identificado"} no seu catálogo.\n\n` : ""}` +
-                                    `Acesse o sistema para *revisar os dados* e aprovar a entrada no estoque.\n\n` +
-                                    `🌱 _AgroFarm Digital — Gestão inteligente para o campo._`;
+                                const docType = result.isRemision ? "nota de remissão" : "fatura";
+                                const message = result.isRemision
+                                    ? `👋 *${farmerName}*, tudo bem?\n\n` +
+                                      `Recebemos uma *nota de remissão* do fornecedor *${extracted.supplier}* com ${extracted.items.length} produtos.\n\n` +
+                                      `${result.matchedCount > 0 ? `✅ ${result.matchedCount} produto${result.matchedCount > 1 ? "s" : ""} já ${result.matchedCount > 1 ? "foram identificados" : "foi identificado"} no seu catálogo.\n\n` : ""}` +
+                                      `Acesse o sistema para *revisar os dados* e aprovar a entrada no estoque.\n\n` +
+                                      `🌱 _AgroFarm Digital — Gestão inteligente para o campo._`
+                                    : `👋 *${farmerName}*, tudo bem?\n\n` +
+                                      `Recebemos uma fatura em seu nome do fornecedor *${extracted.supplier}* no valor de *${currencySymbol} ${formattedTotal}* com ${extracted.items.length} produtos.\n\n` +
+                                      `${result.matchedCount > 0 ? `✅ ${result.matchedCount} produto${result.matchedCount > 1 ? "s" : ""} já ${result.matchedCount > 1 ? "foram identificados" : "foi identificado"} no seu catálogo.\n\n` : ""}` +
+                                      `Acesse o sistema para *revisar os dados* e aprovar a entrada no estoque.\n\n` +
+                                      `🌱 _AgroFarm Digital — Gestão inteligente para o campo._`;
 
                                 const zapiResponse = await fetch(zapiUrl, {
                                     method: "POST",

@@ -210,10 +210,30 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const parsed = await parseWithGemini(fileBase64, mimeType);
             console.log(`[INVOICE_IMPORT] Gemini extracted: type=${parsed.type}, supplier=${parsed.supplier}, items=${parsed.items.length}, total=${parsed.totalAmount}`);
 
-            // Auto-detect: se a IA detectou que e Nota de Remision, forcar skipStockEntry e zerar valores
-            const isRemision = parsed.type === "remision" || req.body?.isRemision === "true";
-            if (parsed.documentType === "remision") {
-                console.log(`[INVOICE_IMPORT] Documento detectado como NOTA DE REMISION (auto-detected by AI)`);
+            // Auto-detect remision: 3 camadas de detecção
+            let isRemision = parsed.type === "remision" || req.body?.isRemision === "true";
+
+            // Camada 2: fallback por texto — se Gemini disse "invoice" mas o texto contém palavras de remissão
+            if (!isRemision && parsed.description) {
+                const textUpper = parsed.description.toUpperCase();
+                if (textUpper.includes("REMISION") || textUpper.includes("REMISSAO") || textUpper.includes("NOTA DE REMISION") || textUpper.includes("GUIA DE REMESSA")) {
+                    isRemision = true;
+                    console.log(`[INVOICE_IMPORT] Fallback texto: detectado como REMISION pela descrição (Gemini disse type=${parsed.type})`);
+                }
+            }
+
+            // Camada 3: fallback por dados — todos itens sem preço + total zero = provável remissão
+            if (!isRemision && parsed.items.length > 0) {
+                const allZeroPrice = parsed.items.every(item => !item.unitPrice || item.unitPrice === 0);
+                const zeroTotal = !parsed.totalAmount || parsed.totalAmount === 0;
+                if (allZeroPrice && zeroTotal) {
+                    isRemision = true;
+                    console.log(`[INVOICE_IMPORT] Fallback dados: detectado como REMISION (todos preços zero, total zero)`);
+                }
+            }
+
+            if (isRemision) {
+                console.log(`[INVOICE_IMPORT] Documento classificado como NOTA DE REMISION`);
             }
 
             // Verificacao de duplicidade
@@ -751,7 +771,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
             const { productId, productName, productCode, unit, quantity, unitPrice, discount, totalPrice, batch, expiryDate } = req.body;
             const updateData: any = {};
-            if (productId !== undefined) updateData.productId = productId;
+            if (productId !== undefined) updateData.productId = productId || null;
             if (productName !== undefined) updateData.productName = productName;
             if (productCode !== undefined) updateData.productCode = productCode;
             if (unit !== undefined) updateData.unit = unit;
