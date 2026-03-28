@@ -153,16 +153,14 @@ function DesktopMenuDropdown({
     return (
         <div ref={ref} className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
             <button
-                className={`flex flex-col items-center gap-1 px-4 py-2 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
-                    ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                    ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-500 hover:text-emerald-700 hover:bg-gray-50"}
                 `}
                 onClick={() => setOpen(!open)}
             >
-                {Icon && <Icon className="w-6 h-6" />}
-                <div className="flex items-center gap-0.5">
-                    <span>{label}</span>
-                    <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
-                </div>
+                {Icon && <Icon className="w-3.5 h-3.5" />}
+                <span>{label}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
             </button>
 
             {open && (
@@ -214,16 +212,14 @@ function FinanceiroMegaDropdown({
     return (
         <div className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
             <button
-                className={`flex flex-col items-center gap-1 px-4 py-2 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
-                    ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                    ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-500 hover:text-emerald-700 hover:bg-gray-50"}
                 `}
                 onClick={() => setOpen(!open)}
             >
-                <Wallet className="w-6 h-6" />
-                <div className="flex items-center gap-0.5">
-                    <span>Financeiro</span>
-                    <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
-                </div>
+                <Wallet className="w-3.5 h-3.5" />
+                <span>Financeiro</span>
+                <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
             </button>
 
             {open && (
@@ -456,27 +452,27 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                 DESKTOP HEADER — White bar with DataGrow logo + menu integrated (>= md)
                 ══════════════════════════════════════════════════════════════════ */}
             <header className="hidden md:block bg-white/95 backdrop-blur-md sticky top-0 z-30" style={{ boxShadow: "0 2px 20px rgba(0,0,0,0.07)" }}>
-                <div className="px-6 lg:px-8">
-                    {/* Top row: Logo + actions */}
-                    <div className="flex items-center justify-between h-[60px]">
-                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setLocation("/fazenda")}>
-                            <img src="/icon-datagrow.png" alt="" className="h-11 w-auto object-contain" />
+                <div className="px-8 lg:px-12">
+                    {/* Top row: Logo + menu + actions */}
+                    <div className="flex items-center justify-between h-[64px]">
+                        <div className="flex items-center gap-4 cursor-pointer" onClick={() => setLocation("/fazenda")}>
+                            <img src="/icon-datagrow.png" alt="" className="h-14 w-auto object-contain" />
                             <div className="flex flex-col leading-none">
-                                <span className="font-black tracking-tight" style={{ fontSize: "1.5rem", lineHeight: 1.05 }}>
+                                <span className="font-black tracking-tight" style={{ fontSize: "1.8rem", lineHeight: 1.05 }}>
                                     <span style={{ color: "#024177" }}>Data</span><span style={{ color: "#215F30" }}>Grow</span>
                                 </span>
-                                <span className="font-semibold tracking-widest uppercase" style={{ fontSize: "0.55rem", color: "#555", letterSpacing: "0.14em" }}>
+                                <span className="font-semibold tracking-widest uppercase" style={{ fontSize: "0.6rem", color: "#555", letterSpacing: "0.14em" }}>
                                     DG Agricultura
                                 </span>
                             </div>
                         </div>
 
-                        {/* Menu items inline */}
+                        {/* Menu items inline — icone a esquerda do texto, mesmo tamanho dos botoes */}
                         <div className="flex items-center gap-1">
                             <button onClick={() => setLocation("/fazenda")}
-                                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 text-[11px] font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
                                     ${location === "/fazenda" ? "text-emerald-700 bg-emerald-50" : "text-gray-500 hover:text-emerald-700 hover:bg-gray-50"}`}>
-                                <Home className="w-5 h-5" /><span>Inicio</span>
+                                <Home className="w-3.5 h-3.5" /><span>Inicio</span>
                             </button>
                             <DesktopMenuDropdown label="Producao" icon={Sprout} items={farmNavGroups[1].items} location={location} onNavigate={setLocation} isEnabled={isEnabled} />
                             <DesktopMenuDropdown label="Campo" icon={BookOpen} items={farmNavGroups[2].items} location={location} onNavigate={setLocation} isEnabled={isEnabled} />
