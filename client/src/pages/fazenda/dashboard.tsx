@@ -320,10 +320,17 @@ export default function FarmDashboard() {
     function fmtW(kg: number) { return kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${kg.toFixed(0)}kg`; }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // CardTitle helper — green bg strip with black text, like the reference
+    const CT = ({ children, extra }: { children: React.ReactNode; extra?: React.ReactNode }) => (
+        <div className="bg-emerald-50/80 border-b border-emerald-100 px-3 py-1.5 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-gray-800">{children}</h3>
+            {extra}
+        </div>
+    );
+
     return (
         <FarmLayout>
-            <div ref={containerRef} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-                className="max-w-6xl mx-auto space-y-4 px-2 sm:px-4">
+            <div ref={containerRef} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="space-y-2">
                 {/* Pull-to-refresh */}
                 {(pullDistance > 0 || refreshing) && (
                     <div className="flex items-center justify-center transition-all duration-200 overflow-hidden" style={{ height: refreshing ? 48 : pullDistance }}>
@@ -335,288 +342,243 @@ export default function FarmDashboard() {
                 )}
 
                 {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Painel Geral</h1>
-                        <p className="text-sm text-gray-500">Ola, {user?.name?.split(" ")[0]}</p>
-                    </div>
+                <div className="flex items-center justify-between mb-1">
+                    <h1 className="text-lg font-bold text-gray-800">Painel Geral</h1>
                     <button onClick={handleRefresh} disabled={refreshing}
-                        className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors text-sm font-medium disabled:opacity-50">
-                        <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
+                        className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium disabled:opacity-50">
+                        <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
                     </button>
                 </div>
 
                 {/* ═══ ROW 1 ═══ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    {/* Card 1: Despesas Mensais */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                    {/* Card 1: Despesas */}
                     {hasModule("invoices") && (
-                        <div className="md:col-span-3">
-                            <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Despesas Mensais</h3>
-                            <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow h-[220px]"
-                                onClick={() => setLocation("/fazenda/faturas")}>
-                                <CardContent className="p-4 h-full flex flex-col">
-                                    <div className="flex items-center justify-end mb-1">
-                                        {pctChange !== 0 && (
-                                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-0.5 ${pctChange > 0 ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
-                                                <TrendingUp className={`w-3 h-3 ${pctChange < 0 ? "rotate-180" : ""}`} />
-                                                {Math.abs(pctChange).toFixed(1)}%
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex-1 -mx-2">
-                                        {monthlyExpenses.length > 1 ? (
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={monthlyExpenses}>
-                                                    <defs><linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
-                                                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                                                    <YAxis tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={35} tickFormatter={(v: number) => fmt(v)} />
-                                                    <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                                                    <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#expGrad)" strokeWidth={2} dot={false} />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem faturas</div>}
-                                    </div>
-                                    <div className="flex items-baseline gap-2 mt-1">
-                                        <span className="text-xl font-bold text-gray-800">{fmt(totalExpenses)}</span>
-                                        <span className="text-xs text-gray-400">Total periodo</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
+                        <Card className="md:col-span-3 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                            onClick={() => setLocation("/fazenda/faturas")}>
+                            <CT extra={pctChange !== 0 ? (
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${pctChange > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                                    <TrendingUp className={`w-2.5 h-2.5 ${pctChange < 0 ? "rotate-180" : ""}`} /> {Math.abs(pctChange).toFixed(1)}%
+                                </span>
+                            ) : undefined}>Despesas Mensais</CT>
+                            <CardContent className="p-3">
+                                <div className="h-[120px]">
+                                    {monthlyExpenses.length > 1 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={monthlyExpenses}>
+                                                <defs><linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
+                                                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                                <YAxis tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={35} tickFormatter={(v: number) => fmt(v)} />
+                                                <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                                <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#expGrad)" strokeWidth={2} dot={false} />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem faturas</div>}
+                                </div>
+                                <div className="flex items-baseline gap-2 mt-1">
+                                    <span className="text-xl font-bold text-gray-800">{fmt(totalExpenses)}</span>
+                                    <span className="text-xs text-gray-400">Total</span>
+                                </div>
+                            </CardContent>
+                        </Card>
                     )}
 
                     {/* Card 2: Mapa */}
                     {hasModule("properties") && (
-                        <div className="md:col-span-5">
-                            <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Mapa dos Talhoes</h3>
-                            <Card className="border-gray-200 overflow-hidden h-[220px]">
-                                <CardContent className="p-0 h-full relative">
-                                    {plotsWithCoords.length > 0 ? (
-                                        <MapContainer center={[-25.5, -54.6]} zoom={13} className="h-full w-full z-0" zoomControl={false} attributionControl={false}>
-                                            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
-                                            <MapAutoFit plots={plotsWithCoords} />
-                                            {plotsWithCoords.map((p: any) => {
-                                                const coords = typeof p.coordinates === "string" ? JSON.parse(p.coordinates) : p.coordinates;
-                                                const positions = coords.map((c: any) => [c.lat, c.lng] as [number, number]);
-                                                const appCount = appCountByPlot[p.id] || 0;
-                                                return (
-                                                    <Polygon key={p.id} positions={positions}
-                                                        pathOptions={{ color: "#f59e0b", weight: 2, fillOpacity: 0.15, fillColor: "#f59e0b" }}
-                                                        eventHandlers={{ click: () => setSelectedPlot({ ...p, appCount }) }}>
-                                                        <Popup>
-                                                            <div className="text-sm min-w-[160px]">
-                                                                <strong className="text-emerald-800">{p.name}</strong>
-                                                                {p.crop && <p className="text-gray-600">Cultura: {p.crop}</p>}
-                                                                <p className="text-gray-600">Area: {parseFloat(p.areaHa || 0).toFixed(1)} ha</p>
-                                                                <p className="font-semibold text-emerald-700 mt-1">{appCount} aplicacoes</p>
-                                                            </div>
-                                                        </Popup>
-                                                    </Polygon>
-                                                );
-                                            })}
-                                        </MapContainer>
-                                    ) : <div className="h-full bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center text-gray-400 text-sm">Cadastre talhoes com coordenadas</div>}
-                                    {/* Legend */}
-                                    {plotsWithCoords.length > 0 && (
-                                        <div className="absolute bottom-2 left-2 z-[400] bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1 shadow-sm flex gap-3">
-                                            {Array.from(new Set(plotsWithCoords.map((p: any) => p.crop).filter(Boolean)) as Set<string>).slice(0, 4).map((c: string) => (
-                                                <div key={c} className="flex items-center gap-1">
-                                                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: getCropColor(c) }} />
-                                                    <span className="text-[10px] font-medium text-gray-600">{c}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </div>
+                        <Card className="md:col-span-5 border-gray-200 overflow-hidden">
+                            <CT>Mapa dos Talhoes</CT>
+                            <div className="h-[170px] relative">
+                                {plotsWithCoords.length > 0 ? (
+                                    <MapContainer center={[-25.5, -54.6]} zoom={13} className="h-full w-full z-0" zoomControl={false} attributionControl={false}>
+                                        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+                                        <MapAutoFit plots={plotsWithCoords} />
+                                        {plotsWithCoords.map((p: any) => {
+                                            const coords = typeof p.coordinates === "string" ? JSON.parse(p.coordinates) : p.coordinates;
+                                            const positions = coords.map((c: any) => [c.lat, c.lng] as [number, number]);
+                                            const appCount = appCountByPlot[p.id] || 0;
+                                            return (
+                                                <Polygon key={p.id} positions={positions}
+                                                    pathOptions={{ color: "#f59e0b", weight: 2, fillOpacity: 0.15, fillColor: "#f59e0b" }}
+                                                    eventHandlers={{ click: () => setSelectedPlot({ ...p, appCount }) }}>
+                                                    <Popup><div className="text-sm"><strong>{p.name}</strong>{p.crop && <span> — {p.crop}</span>}<br/>{parseFloat(p.areaHa || 0).toFixed(1)} ha<br/><b className="text-emerald-700">{appCount} aplicacoes</b></div></Popup>
+                                                </Polygon>
+                                            );
+                                        })}
+                                    </MapContainer>
+                                ) : <div className="h-full bg-emerald-50 flex items-center justify-center text-gray-400 text-sm">Cadastre talhoes com coordenadas</div>}
+                                {plotsWithCoords.length > 0 && (
+                                    <div className="absolute bottom-2 left-2 z-[400] bg-white/90 backdrop-blur-sm rounded px-2 py-1 flex gap-3">
+                                        {Array.from(new Set(plotsWithCoords.map((p: any) => p.crop).filter(Boolean)) as Set<string>).slice(0, 4).map((c: string) => (
+                                            <div key={c} className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm" style={{ backgroundColor: getCropColor(c) }} /><span className="text-[9px] text-gray-600">{c}</span></div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
                     )}
 
-                    {/* Plot detail modal */}
+                    {/* Plot modal */}
                     {selectedPlot && (
                         <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30" onClick={() => setSelectedPlot(null)}>
                             <Card className="w-[90%] max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
                                 <CardContent className="p-5">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h3 className="text-lg font-bold text-emerald-800">{selectedPlot.name}</h3>
-                                        <button onClick={() => setSelectedPlot(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5 text-gray-400" /></button>
-                                    </div>
+                                    <div className="flex justify-between mb-3"><h3 className="text-lg font-bold text-emerald-800">{selectedPlot.name}</h3><button onClick={() => setSelectedPlot(null)} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5 text-gray-400" /></button></div>
                                     {selectedPlot.crop && <p className="text-sm text-gray-600 mb-1">Cultura: <strong>{selectedPlot.crop}</strong></p>}
-                                    <p className="text-sm text-gray-600 mb-1">Area: <strong>{parseFloat(selectedPlot.areaHa || 0).toFixed(1)} ha</strong></p>
-                                    <div className="mt-3 p-3 bg-emerald-50 rounded-lg text-center">
-                                        <p className="text-3xl font-extrabold text-emerald-700">{selectedPlot.appCount}</p>
-                                        <p className="text-sm text-emerald-600">Aplicacoes Realizadas</p>
-                                    </div>
-                                    <button onClick={() => { setSelectedPlot(null); setLocation("/fazenda/aplicacoes"); }}
-                                        className="mt-3 w-full py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors cursor-pointer">
-                                        Ver Detalhes
-                                    </button>
+                                    <p className="text-sm text-gray-600">Area: <strong>{parseFloat(selectedPlot.areaHa || 0).toFixed(1)} ha</strong></p>
+                                    <div className="mt-3 p-3 bg-emerald-50 rounded-lg text-center"><p className="text-3xl font-extrabold text-emerald-700">{selectedPlot.appCount}</p><p className="text-sm text-emerald-600">Aplicacoes Realizadas</p></div>
+                                    <button onClick={() => { setSelectedPlot(null); setLocation("/fazenda/aplicacoes"); }} className="mt-3 w-full py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 cursor-pointer">Ver Detalhes</button>
                                 </CardContent>
                             </Card>
                         </div>
                     )}
 
                     {/* Card 3: Silos */}
-                    <div className="md:col-span-4">
-                        <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Silos</h3>
-                        <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow h-[220px]"
-                            onClick={() => setLocation("/fazenda/romaneios")}>
-                            <CardContent className="p-3 h-full flex flex-col">
-                                {totalHarvest > 0 && <p className="text-[10px] text-gray-400 text-right">{fmtW(totalHarvest)} total</p>}
-                                {silos.length > 0 ? (
-                                    <div className="flex-1 flex items-end justify-center gap-3 overflow-x-auto">
-                                        {silos.slice(0, 4).map((silo: any) => {
-                                            const fillPct = Math.min(90, Math.max(10, (silo.totalWeight / maxSiloWeight) * 100));
-                                            const siloColorMap: Record<string, string> = { soja: "#c89520", milho: "#dbb830", trigo: "#b87030" };
-                                            const cropKey = (silo.crops?.[0]?.crop?.toLowerCase() || "") as string;
-                                            const cropColor = siloColorMap[cropKey] || "#6b8e23";
-                                            return <MiniSilo key={silo.buyer} fillPercent={fillPct} color={cropColor}
-                                                label={silo.buyer?.split(" ").slice(0, 2).join(" ") || "Silo"} weight={fmtW(silo.totalWeight || 0)} />;
-                                        })}
-                                    </div>
-                                ) : <div className="flex-1 flex items-center justify-center text-gray-300 text-sm">Sem dados</div>}
-                            </CardContent>
-                        </Card>
-                    </div>
+                    <Card className="md:col-span-4 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                        onClick={() => setLocation("/fazenda/romaneios")}>
+                        <CT extra={totalHarvest > 0 ? <span className="text-[10px] text-gray-500">{fmtW(totalHarvest)} total</span> : undefined}>Silos</CT>
+                        <CardContent className="p-2">
+                            {silos.length > 0 ? (
+                                <div className="flex items-end justify-center gap-2 overflow-x-auto">
+                                    {silos.slice(0, 4).map((silo: any) => {
+                                        const fillPct = Math.min(90, Math.max(10, (silo.totalWeight / maxSiloWeight) * 100));
+                                        const siloColorMap: Record<string, string> = { soja: "#c89520", milho: "#dbb830", trigo: "#b87030" };
+                                        const cropKey = (silo.crops?.[0]?.crop?.toLowerCase() || "") as string;
+                                        return <MiniSilo key={silo.buyer} fillPercent={fillPct} color={siloColorMap[cropKey] || "#6b8e23"}
+                                            label={silo.buyer?.split(" ").slice(0, 2).join(" ") || "Silo"} weight={fmtW(silo.totalWeight || 0)} />;
+                                    })}
+                                </div>
+                            ) : <div className="h-[130px] flex items-center justify-center text-gray-300 text-sm">Sem dados</div>}
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* ═══ ROW 2 ═══ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    {/* Card 4: Estoque Donut */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                    {/* Card 4: Estoque */}
                     {hasModule("stock") && (
-                        <div className="md:col-span-5">
-                            <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Niveis de Estoque</h3>
-                            <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow h-[200px]"
-                                onClick={() => setLocation("/fazenda/estoque")}>
-                                <CardContent className="p-4 h-full flex items-center gap-4">
-                                    <div className="w-[130px] h-[130px] shrink-0">
-                                        {stockByCategory.length > 0 ? (
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <PieChart><Pie data={stockByCategory} dataKey="value" nameKey="category" cx="50%" cy="50%" outerRadius={55} innerRadius={30} paddingAngle={2}>
-                                                    {stockByCategory.map((e, i) => <Cell key={i} fill={CATEGORY_COLORS[e.category] || CATEGORY_COLORS.outros} />)}
-                                                </Pie><Tooltip formatter={(v: number) => [`$${Math.round(v).toLocaleString()}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8 }} /></PieChart>
-                                            </ResponsiveContainer>
-                                        ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">-</div>}
-                                    </div>
-                                    <div className="space-y-1.5 flex-1 min-w-0">
-                                        {stockByCategory.slice(0, 6).map(cat => (
-                                            <div key={cat.category} className="flex items-center gap-2 text-xs">
-                                                <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.category] || CATEGORY_COLORS.outros }} />
-                                                <span className="text-gray-700 font-medium capitalize truncate flex-1">{cat.category}</span>
-                                                <span className="text-gray-500 font-semibold">{cat.count}</span>
-                                                <span className="text-gray-400 text-[10px]">{fmt(cat.value)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* Card 5: Custos por Talhao */}
-                    <div className="md:col-span-7">
-                        <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Custos por Talhao</h3>
-                        <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow h-[200px]"
-                            onClick={() => setLocation("/fazenda/custos")}>
-                            <CardContent className="p-4 h-full flex gap-3">
-                                <div className="flex-1 h-full">
-                                    {plotCostBars.length > 0 ? (
+                        <Card className="md:col-span-5 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                            onClick={() => setLocation("/fazenda/estoque")}>
+                            <CT>Niveis de Estoque</CT>
+                            <CardContent className="p-3 flex items-center gap-3">
+                                <div className="w-[120px] h-[120px] shrink-0">
+                                    {stockByCategory.length > 0 ? (
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={plotCostBars} layout="vertical" margin={{ left: 0, right: 5 }}>
-                                                <XAxis type="number" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmt(v)} />
-                                                <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "#6b7280" }} width={65} axisLine={false} tickLine={false} />
-                                                <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Custo"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                                                <Bar dataKey="cost" fill="#16803C" radius={[0, 4, 4, 0]} barSize={14} />
-                                            </BarChart>
+                                            <PieChart><Pie data={stockByCategory} dataKey="value" nameKey="category" cx="50%" cy="50%" outerRadius={50} innerRadius={25} paddingAngle={2}>
+                                                {stockByCategory.map((e, i) => <Cell key={i} fill={CATEGORY_COLORS[e.category] || CATEGORY_COLORS.outros} />)}
+                                            </Pie><Tooltip formatter={(v: number) => [`$${Math.round(v).toLocaleString()}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8 }} /></PieChart>
                                         </ResponsiveContainer>
-                                    ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem custos</div>}
+                                    ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">-</div>}
                                 </div>
-                                <div className="w-[40%] h-full">
-                                    {dailyAppCosts.length > 1 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={dailyAppCosts}>
-                                                <defs><linearGradient id="dailyGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.25} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
-                                                <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                                                <YAxis tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={30} tickFormatter={(v: number) => fmt(v)} />
-                                                <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Gasto"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                                                <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#dailyGrad)" strokeWidth={2} dot={false} />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem dados</div>}
+                                <div className="space-y-1.5 flex-1 min-w-0">
+                                    {stockByCategory.slice(0, 6).map(cat => (
+                                        <div key={cat.category} className="flex items-center gap-2 text-xs">
+                                            <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.category] || CATEGORY_COLORS.outros }} />
+                                            <span className="text-gray-700 font-medium capitalize truncate flex-1">{cat.category}</span>
+                                            <span className="text-gray-500 font-semibold">{cat.count}</span>
+                                            <span className="text-gray-400 text-[10px]">{fmt(cat.value)}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </CardContent>
                         </Card>
-                    </div>
+                    )}
+
+                    {/* Card 5: Custos */}
+                    <Card className="md:col-span-7 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                        onClick={() => setLocation("/fazenda/custos")}>
+                        <CT>Custos por Talhao</CT>
+                        <CardContent className="p-3 flex gap-2" style={{ height: 160 }}>
+                            <div className="flex-1 h-full">
+                                {plotCostBars.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={plotCostBars} layout="vertical" margin={{ left: 0, right: 5 }}>
+                                            <XAxis type="number" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmt(v)} />
+                                            <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "#6b7280" }} width={65} axisLine={false} tickLine={false} />
+                                            <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Custo"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                            <Bar dataKey="cost" fill="#16803C" radius={[0, 4, 4, 0]} barSize={14} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem custos</div>}
+                            </div>
+                            <div className="w-[40%] h-full">
+                                {dailyAppCosts.length > 1 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={dailyAppCosts}>
+                                            <defs><linearGradient id="dailyGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.25} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
+                                            <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                            <YAxis tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={30} tickFormatter={(v: number) => fmt(v)} />
+                                            <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Gasto"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                            <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#dailyGrad)" strokeWidth={2} dot={false} />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem dados</div>}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* ═══ ROW 3 ═══ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                     {/* Card 6: Equipamentos */}
                     {hasModule("fleet") && (
-                        <div className="md:col-span-6">
-                            <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Equipamentos</h3>
-                            <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow"
-                                onClick={() => setLocation("/fazenda/equipamentos")}>
-                                <CardContent className="p-4">
-                                    {equipment.length > 0 ? (
-                                        <>
-                                            <div className="flex flex-wrap gap-4">
-                                                {equipment.slice(0, 5).map((eq: any) => {
-                                                    const isActive = eq.status === "Ativo" || !eq.status;
-                                                    const isMaint = eq.status === "Manutenção" || eq.status === "Manutencao";
-                                                    const diesel = dieselByEquip.find(d => d.name === eq.name);
-                                                    return (
-                                                        <div key={eq.id} className="flex flex-col items-center gap-0.5 min-w-[70px]">
-                                                            <EquipmentIcon type={eq.type} isActive={isActive} isMaint={isMaint} />
-                                                            <span className={`text-[10px] font-semibold ${isActive ? "text-emerald-600" : isMaint ? "text-yellow-600" : "text-gray-400"}`}>
-                                                                {isActive ? "Ativo" : isMaint ? "Manut." : "Inativo"}
-                                                            </span>
-                                                            {diesel && <span className="text-[9px] text-amber-600 flex items-center gap-0.5"><Fuel className="w-2.5 h-2.5" />{diesel.liters.toFixed(0)}L</span>}
-                                                            <span className="text-[10px] text-gray-500 truncate max-w-[72px] text-center">{eq.name?.split(" ").slice(0, 2).join(" ")}</span>
-                                                        </div>
-                                                    );
-                                                })}
-                                                {equipment.length > 5 && <div className="flex items-center"><span className="text-xs font-bold text-gray-400">+{equipment.length - 5}</span></div>}
-                                            </div>
-                                            <div className="flex gap-4 mt-3 pt-2 border-t border-gray-100">
-                                                <span className="text-xs text-emerald-600 font-medium">{equipByStatus.active.length} Ativos</span>
-                                                {equipByStatus.maint.length > 0 && <span className="text-xs text-yellow-600 font-medium">{equipByStatus.maint.length} Manut.</span>}
-                                                {dieselByEquip.length > 0 && <span className="text-xs text-amber-600 font-medium ml-auto flex items-center gap-1"><Fuel className="w-3 h-3" />{dieselByEquip.reduce((s, d) => s + d.liters, 0).toFixed(0)}L total</span>}
-                                            </div>
-                                        </>
-                                    ) : <div className="h-[80px] flex items-center justify-center text-gray-300 text-sm">Nenhum equipamento</div>}
-                                </CardContent>
-                            </Card>
-                        </div>
+                        <Card className="md:col-span-6 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                            onClick={() => setLocation("/fazenda/equipamentos")}>
+                            <CT>Equipamentos</CT>
+                            <CardContent className="p-3">
+                                {equipment.length > 0 ? (
+                                    <>
+                                        <div className="flex flex-wrap gap-4">
+                                            {equipment.slice(0, 5).map((eq: any) => {
+                                                const isActive = eq.status === "Ativo" || !eq.status;
+                                                const isMaint = eq.status === "Manutenção" || eq.status === "Manutencao";
+                                                const diesel = dieselByEquip.find(d => d.name === eq.name);
+                                                return (
+                                                    <div key={eq.id} className="flex flex-col items-center gap-0.5 min-w-[70px]">
+                                                        <EquipmentIcon type={eq.type} isActive={isActive} isMaint={isMaint} />
+                                                        <span className={`text-[10px] font-semibold ${isActive ? "text-emerald-600" : isMaint ? "text-yellow-600" : "text-gray-400"}`}>
+                                                            {isActive ? "Ativo" : isMaint ? "Manut." : "Inativo"}
+                                                        </span>
+                                                        {diesel && <span className="text-[9px] text-amber-600 flex items-center gap-0.5"><Fuel className="w-2.5 h-2.5" />{diesel.liters.toFixed(0)}L</span>}
+                                                        <span className="text-[10px] text-gray-500 truncate max-w-[72px] text-center">{eq.name?.split(" ").slice(0, 2).join(" ")}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {equipment.length > 5 && <div className="flex items-center"><span className="text-xs font-bold text-gray-400">+{equipment.length - 5}</span></div>}
+                                        </div>
+                                        <div className="flex gap-4 mt-2 pt-2 border-t border-gray-100">
+                                            <span className="text-xs text-emerald-600 font-medium">{equipByStatus.active.length} Ativos</span>
+                                            {equipByStatus.maint.length > 0 && <span className="text-xs text-yellow-600 font-medium">{equipByStatus.maint.length} Manut.</span>}
+                                            {dieselByEquip.length > 0 && <span className="text-xs text-amber-600 font-medium ml-auto flex items-center gap-1"><Fuel className="w-3 h-3" />{dieselByEquip.reduce((s, d) => s + d.liters, 0).toFixed(0)}L total</span>}
+                                        </div>
+                                    </>
+                                ) : <div className="h-[80px] flex items-center justify-center text-gray-300 text-sm">Nenhum equipamento</div>}
+                            </CardContent>
+                        </Card>
                     )}
 
                     {/* Card 7: Clima */}
-                    <div className="md:col-span-6">
-                        <h3 className="text-sm font-bold text-emerald-600 mb-1.5 ml-1">Previsao do Tempo</h3>
-                        <Card className="border-gray-200 cursor-pointer hover:shadow-lg transition-shadow"
-                            onClick={() => setLocation("/fazenda/clima")}>
-                            <CardContent className="p-4">
-                                {cw ? (
-                                    <div className="flex items-center gap-4">
-                                        <div className="text-center">
-                                            <p className="text-3xl font-bold text-gray-800">{parseFloat(cw.temperature || 0).toFixed(1)}°C</p>
-                                        </div>
-                                        <div className="flex-1 grid grid-cols-3 gap-2 text-center">
-                                            <div><Droplets className="w-4 h-4 text-blue-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{cw.humidity || 0}%</p><p className="text-[10px] text-gray-400">Umidade</p></div>
-                                            <div><Wind className="w-4 h-4 text-gray-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{parseFloat(cw.windSpeed || 0).toFixed(0)} km/h</p><p className="text-[10px] text-gray-400">Vento</p></div>
-                                            <div><Droplets className="w-4 h-4 text-cyan-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{parseFloat(cw.precipitation || 0).toFixed(1)} mm</p><p className="text-[10px] text-gray-400">Chuva</p></div>
-                                        </div>
+                    <Card className="md:col-span-6 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                        onClick={() => setLocation("/fazenda/clima")}>
+                        <CT extra={<span className="text-[10px] text-gray-500">{mainStation?.name || ""}</span>}>Previsao do Tempo</CT>
+                        <CardContent className="p-3">
+                            {cw ? (
+                                <div className="flex items-center gap-4">
+                                    <div className="text-center"><p className="text-3xl font-bold text-gray-800">{parseFloat(cw.temperature || 0).toFixed(1)}°C</p></div>
+                                    <div className="flex-1 grid grid-cols-3 gap-2 text-center">
+                                        <div><Droplets className="w-4 h-4 text-blue-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{cw.humidity || 0}%</p><p className="text-[10px] text-gray-400">Umidade</p></div>
+                                        <div><Wind className="w-4 h-4 text-gray-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{parseFloat(cw.windSpeed || 0).toFixed(0)} km/h</p><p className="text-[10px] text-gray-400">Vento</p></div>
+                                        <div><Droplets className="w-4 h-4 text-cyan-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{parseFloat(cw.precipitation || 0).toFixed(1)} mm</p><p className="text-[10px] text-gray-400">Chuva</p></div>
                                     </div>
-                                ) : (
-                                    <div className="h-[80px] flex flex-col items-center justify-center text-gray-300 text-sm">
-                                        <Thermometer className="w-8 h-8 mb-1" />
-                                        <span>Configure uma estacao meteorologica</span>
-                                        <span className="text-[10px] text-gray-400 mt-1">Menu Inteligencia → Clima</span>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
+                                </div>
+                            ) : (
+                                <div className="h-[70px] flex flex-col items-center justify-center text-gray-300 text-sm">
+                                    <Thermometer className="w-6 h-6 mb-1" />
+                                    <span className="text-xs">Configure uma estacao meteorologica</span>
+                                    <span className="text-[10px] text-gray-400">Inteligencia → Clima</span>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </FarmLayout>
