@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel, User, Eye } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel, User, Eye, AlertTriangle, TrendingUp, DollarSign, BarChart3 } from "lucide-react";
 import { useState, useRef, useMemo } from "react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,10 +17,49 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useAccessLevel } from "@/hooks/use-access-level";
 
+// ─── Category normalization & colors ─────────────────────────────────────────
+function normalizeCategory(cat: string): string {
+    const l = (cat || "").toLowerCase().trim();
+    if (l.includes("herbicida")) return "Herbicida";
+    if (l.includes("fungicida")) return "Fungicida";
+    if (l.includes("inseticida") || l.includes("insecticida")) return "Inseticida";
+    if (l.includes("fertilizante") || l.includes("foliar")) return "Fertilizante";
+    if (l.includes("semente")) return "Semente";
+    if (l.includes("adjuvante")) return "Adjuvante";
+    if (l.includes("biolog")) return "Biologico";
+    if (l.includes("diesel") || l.includes("combusti")) return "Diesel";
+    return "Outros";
+}
+
+const CAT_COLORS: Record<string, { bg: string; text: string }> = {
+    Herbicida: { bg: "bg-red-100", text: "text-red-700" },
+    Fungicida: { bg: "bg-yellow-100", text: "text-yellow-700" },
+    Inseticida: { bg: "bg-blue-100", text: "text-blue-700" },
+    Fertilizante: { bg: "bg-green-100", text: "text-green-700" },
+    Semente: { bg: "bg-amber-100", text: "text-amber-700" },
+    Adjuvante: { bg: "bg-purple-100", text: "text-purple-700" },
+    Biologico: { bg: "bg-lime-100", text: "text-lime-700" },
+    Diesel: { bg: "bg-gray-100", text: "text-gray-700" },
+    Outros: { bg: "bg-gray-100", text: "text-gray-500" },
+};
+
+const CAT_PILL_COLORS: Record<string, string> = {
+    Herbicida: "#dc2626",
+    Fungicida: "#eab308",
+    Inseticida: "#2563eb",
+    Fertilizante: "#16a34a",
+    Semente: "#92400e",
+    Adjuvante: "#7c3aed",
+    Biologico: "#65a30d",
+    Diesel: "#6b7280",
+    Outros: "#9ca3af",
+};
+
 export default function FarmStock() {
     const [, setLocation] = useLocation();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
+    const [categoryFilter, setCategoryFilter] = useState("");
     const [dieselReceipt, setDieselReceipt] = useState<any>(null);
     const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
     const { toast } = useToast();
@@ -173,10 +212,41 @@ export default function FarmStock() {
         }
     };
 
-    const filtered = stock.filter((s: any) =>
-        s.productName.toLowerCase().includes(search.toLowerCase()) ||
-        (s.productCategory || "").toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = stock.filter((s: any) => {
+        const matchesSearch = s.productName.toLowerCase().includes(search.toLowerCase()) ||
+            (s.productCategory || "").toLowerCase().includes(search.toLowerCase());
+        const matchesCategory = !categoryFilter || normalizeCategory(s.productCategory) === categoryFilter;
+        return matchesSearch && matchesCategory;
+    });
+
+    // KPI computations
+    const kpiData = useMemo(() => {
+        const negativeCount = stock.filter((s: any) => parseFloat(s.quantity) < 0).length;
+        const catCounts: Record<string, number> = {};
+        stock.forEach((s: any) => {
+            const cat = normalizeCategory(s.productCategory);
+            catCounts[cat] = (catCounts[cat] || 0) + 1;
+        });
+        const allCategories = Object.keys(catCounts);
+        const topCategory = allCategories.length > 0
+            ? allCategories.reduce((a, b) => catCounts[a] >= catCounts[b] ? a : b)
+            : "—";
+        const topCategoryCount = catCounts[topCategory] || 0;
+        return { negativeCount, catCounts, allCategories, topCategory, topCategoryCount };
+    }, [stock]);
+
+    // Check if Lote/Validade columns should be shown (>20% filled)
+    const showLoteColumn = useMemo(() => {
+        if (filtered.length === 0) return false;
+        const filledCount = filtered.filter((s: any) => s.lote).length;
+        return filledCount / filtered.length > 0.2;
+    }, [filtered]);
+
+    const showValidadeColumn = useMemo(() => {
+        if (filtered.length === 0) return false;
+        const filledCount = filtered.filter((s: any) => s.expiryDate).length;
+        return filledCount / filtered.length > 0.2;
+    }, [filtered]);
 
     // Group stock by deposit/property for warehouse view
     const stockByProperty: Record<string, any[]> = {};
@@ -209,6 +279,40 @@ export default function FarmStock() {
                     )}
                 </div>
 
+                {/* KPI Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-xl border border-gray-100 border-l-4 border-l-emerald-500 p-4 shadow-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Package className="h-4 w-4 text-emerald-600" />
+                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Itens</span>
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900">{stock.length}</p>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-100 border-l-4 border-l-blue-500 p-4 shadow-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                            <DollarSign className="h-4 w-4 text-blue-600" />
+                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Valor Total</span>
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalValue)}</p>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-100 border-l-4 border-l-red-500 p-4 shadow-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
+                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Alertas</span>
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900">{kpiData.negativeCount}</p>
+                        <p className="text-[11px] text-gray-400">Itens com qtd negativa</p>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-100 border-l-4 border-l-purple-500 p-4 shadow-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                            <BarChart3 className="h-4 w-4 text-purple-600" />
+                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Top Categoria</span>
+                        </div>
+                        <p className="text-2xl font-bold text-gray-900">{kpiData.topCategory}</p>
+                        <p className="text-[11px] text-gray-400">{kpiData.topCategoryCount} itens</p>
+                    </div>
+                </div>
+
                 <Tabs defaultValue="stock">
                     <TabsList>
                         <TabsTrigger value="stock">Estoque Atual</TabsTrigger>
@@ -220,9 +324,59 @@ export default function FarmStock() {
                     </TabsList>
 
                     <TabsContent value="stock" className="mt-4">
-                        <div className="relative mb-4">
+                        <div className="relative mb-3">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                             <Input className="pl-10" placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
+                        </div>
+
+                        {/* Category filter pills */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            <button
+                                type="button"
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                                    !categoryFilter
+                                        ? "bg-emerald-600 text-white shadow-sm"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                }`}
+                                onClick={() => setCategoryFilter("")}
+                            >
+                                Todos
+                            </button>
+                            {kpiData.allCategories
+                                .filter(c => c !== "Outros")
+                                .sort((a, b) => (kpiData.catCounts[b] || 0) - (kpiData.catCounts[a] || 0))
+                                .map(cat => {
+                                    const pillColor = CAT_PILL_COLORS[cat] || "#9ca3af";
+                                    const isActive = categoryFilter === cat;
+                                    return (
+                                        <button
+                                            key={cat}
+                                            type="button"
+                                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                                                isActive
+                                                    ? "text-white shadow-sm"
+                                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                            }`}
+                                            style={isActive ? { backgroundColor: pillColor } : undefined}
+                                            onClick={() => setCategoryFilter(isActive ? "" : cat)}
+                                        >
+                                            {cat} ({kpiData.catCounts[cat]})
+                                        </button>
+                                    );
+                                })}
+                            {kpiData.catCounts["Outros"] > 0 && (
+                                <button
+                                    type="button"
+                                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                                        categoryFilter === "Outros"
+                                            ? "bg-gray-500 text-white shadow-sm"
+                                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    }`}
+                                    onClick={() => setCategoryFilter(categoryFilter === "Outros" ? "" : "Outros")}
+                                >
+                                    Outros ({kpiData.catCounts["Outros"]})
+                                </button>
+                            )}
                         </div>
 
                         {isLoading ? (
@@ -240,37 +394,44 @@ export default function FarmStock() {
                                         <tr>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Produto</th>
                                             <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Lote</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Validade</th>
+                                            {showLoteColumn && <th className="text-left p-3 font-semibold text-emerald-800">Lote</th>}
+                                            {showValidadeColumn && <th className="text-left p-3 font-semibold text-emerald-800">Validade</th>}
                                             <th className="text-right p-3 font-semibold text-emerald-800">Quantidade</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Custo Médio</th>
+                                            <th className="text-right p-3 font-semibold text-emerald-800">Custo Medio</th>
                                             <th className="text-right p-3 font-semibold text-emerald-800">Valor Total</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Ações</th>
+                                            <th className="text-right p-3 font-semibold text-emerald-800">Acoes</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {filtered.map((s: any) => {
                                             const qty = parseFloat(s.quantity);
                                             const cost = parseFloat(s.averageCost);
+                                            const isNegative = qty < 0;
+                                            const cat = normalizeCategory(s.productCategory);
+                                            const catColor = CAT_COLORS[cat] || CAT_COLORS.Outros;
+                                            const displayName = s.productName?.length > 60
+                                                ? s.productName.substring(0, 60) + "..."
+                                                : s.productName;
                                             return (
-                                                <tr key={s.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
+                                                <tr key={s.id} className={`border-t border-gray-100 transition-colors duration-150 hover:bg-gray-50 ${isNegative ? "bg-red-50" : ""}`}>
                                                     <td className="p-3">
-                                                        <span className="font-medium">{s.productName}</span>
+                                                        <span className="font-medium" title={s.productName}>{displayName}</span>
                                                         {s.activeIngredient && (
-                                                            <p className="text-xs text-gray-500 mt-0.5">{s.activeIngredient}</p>
+                                                            <p className="text-xs text-gray-400 mt-0.5">{s.activeIngredient}</p>
                                                         )}
                                                     </td>
                                                     <td className="p-3">
-                                                        <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                                                            {s.productCategory || "—"}
+                                                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${catColor.bg} ${catColor.text}`}>
+                                                            {cat}
                                                         </span>
                                                     </td>
-                                                    <td className="p-3 text-sm text-gray-600">{s.lote || "—"}</td>
-                                                    <td className="p-3 text-sm text-gray-600">
+                                                    {showLoteColumn && <td className="p-3 text-sm text-gray-600">{s.lote || "—"}</td>}
+                                                    {showValidadeColumn && <td className="p-3 text-sm text-gray-600">
                                                         {s.expiryDate ? new Date(s.expiryDate).toLocaleDateString("pt-BR") : "—"}
-                                                    </td>
+                                                    </td>}
                                                     <td className="text-right p-3 font-mono">
-                                                        <span className={qty <= 0 ? "text-red-600 font-bold" : ""}>
+                                                        <span className={`inline-flex items-center gap-1 ${isNegative ? "text-red-600 font-bold" : ""}`}>
+                                                            {isNegative && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
                                                             {qty.toFixed(2)} {s.productUnit}
                                                         </span>
                                                     </td>
@@ -296,13 +457,18 @@ export default function FarmStock() {
                                 {filtered.map((s: any) => {
                                     const qty = parseFloat(s.quantity);
                                     const cost = parseFloat(s.averageCost);
+                                    const isNegative = qty < 0;
+                                    const cat = normalizeCategory(s.productCategory);
+                                    const catColor = CAT_COLORS[cat] || CAT_COLORS.Outros;
                                     return (
-                                        <div key={s.id} className="bg-white rounded-xl border border-emerald-100 p-4 shadow-sm">
+                                        <div key={s.id} className={`rounded-xl border p-4 shadow-sm ${isNegative ? "bg-red-50 border-red-200" : "bg-white border-emerald-100"}`}>
                                             <div className="flex justify-between items-start mb-1">
                                                 <div className="flex-1 mr-2">
-                                                    <div className="font-bold text-sm text-gray-900">{s.productName}</div>
+                                                    <div className="font-bold text-sm text-gray-900" title={s.productName}>
+                                                        {s.productName?.length > 50 ? s.productName.substring(0, 50) + "..." : s.productName}
+                                                    </div>
                                                     {s.activeIngredient && (
-                                                        <div className="text-[11px] text-gray-500">{s.activeIngredient}</div>
+                                                        <div className="text-[11px] text-gray-400">{s.activeIngredient}</div>
                                                     )}
                                                 </div>
                                                 {canEdit && (
@@ -314,13 +480,14 @@ export default function FarmStock() {
                                                 </div>
                                                 )}
                                             </div>
-                                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 text-emerald-700 mb-3">
-                                                {s.productCategory || "—"}
+                                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide mb-3 ${catColor.bg} ${catColor.text}`}>
+                                                {cat}
                                             </span>
                                             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                                                 <div>
                                                     <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Quantidade</div>
-                                                    <div className={`text-[15px] font-bold ${qty <= 0 ? "text-red-600" : "text-emerald-700"}`}>
+                                                    <div className={`text-[15px] font-bold flex items-center gap-1 ${isNegative ? "text-red-600" : "text-emerald-700"}`}>
+                                                        {isNegative && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
                                                         {qty.toFixed(2)} {s.productUnit}
                                                     </div>
                                                 </div>
