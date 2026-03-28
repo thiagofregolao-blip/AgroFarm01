@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgriGrow — Operations Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { inter: ['Inter', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; background: #f0f4f0; color: #111827; }
+
+    .card {
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      border: 1px solid #d4e5d4;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.01em;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header style="background: #16803C; height: 55px;" class="flex items-center justify-between px-5 shadow-md relative z-50">
+    <div class="flex items-center gap-2.5">
+      <!-- Wheat/leaf icon -->
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2C6.5 6 4 10 3 15c0 0 4-1 7-3 3 2 7 3 7 3-1-5-3.5-9-5-13z" fill="#facc15" opacity="0.9"/>
+        <path d="M12 2v13" stroke="#facc15" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M9 8c1.5 1 3 1.5 3 1.5s1.5-.5 3-1.5" stroke="#facc15" stroke-width="1" stroke-linecap="round" fill="none"/>
+        <path d="M8 11c1.5 1 4 1.5 4 1.5s2.5-.5 4-1.5" stroke="#facc15" stroke-width="1" stroke-linecap="round" fill="none"/>
+      </svg>
+      <span class="text-white font-bold" style="font-size:22px; letter-spacing:-0.02em;">AgriGrow</span>
+      <span class="text-white font-light ml-1" style="font-size:17px; opacity:0.85;">Operations Dashboard</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <!-- Gear icon -->
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="opacity-80">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      <!-- Bell icon -->
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="opacity-80">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+      <!-- User avatar -->
+      <div class="w-8 h-8 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center overflow-hidden">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="white" opacity="0.8"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== MAIN LAYOUT: sidebar + content ===== -->
+  <div class="flex" style="height: calc(100vh - 55px);">
+
+    <!-- LEFT SIDEBAR -->
+    <aside style="width: 48px; background: #145a2a;" class="flex flex-col items-center py-4 gap-3 flex-shrink-0">
+      <!-- Home (active) -->
+      <div class="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      </div>
+      <!-- Chart -->
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center opacity-50 hover:opacity-80 cursor-pointer">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+      </div>
+      <!-- Spacer -->
+      <div class="flex-1"></div>
+      <!-- Settings -->
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center opacity-50 hover:opacity-80 cursor-pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </div>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <main class="flex-1 flex flex-col overflow-hidden" style="padding: 12px 14px 10px 14px;">
+
+      <!-- Title row -->
+      <div class="flex items-center justify-between mb-2">
+        <h1 style="font-size: 22px; font-weight: 700; color: #111827;">Global Overview</h1>
+        <span style="font-size: 12px; color: #6b7280; font-weight: 500;">+A.2</span>
+      </div>
+
+      <!-- GRID -->
+      <div class="flex-1 grid gap-2.5" style="grid-template-rows: 35fr 30fr 30fr; grid-template-columns: 1fr 1.2fr 0.8fr; min-height: 0;">
+
+        <!-- ===================== ROW 1 ===================== -->
+
+        <!-- CARD: Farm Performance -->
+        <div class="card" style="grid-row:1; grid-column:1;">
+          <div class="flex items-center justify-between mb-1">
+            <span class="card-title">Farm Performance</span>
+            <span style="font-size:11px; font-weight:600; color:#16a34a; background:#dcfce7; padding:2px 8px; border-radius:10px;">&#9650; 3.4% up</span>
+          </div>
+          <!-- Y-axis + Chart area -->
+          <div class="flex-1 flex" style="min-height:0;">
+            <!-- Y axis labels -->
+            <div class="flex flex-col justify-between pr-2 py-1" style="font-size:10px; color:#6b7280; width:28px; text-align:right;">
+              <span>20</span><span>15</span><span>10</span><span>5</span><span>0</span>
+            </div>
+            <!-- Chart -->
+            <div class="flex-1 flex flex-col">
+              <div class="flex-1 relative">
+                <svg viewBox="0 0 220 90" class="w-full h-full" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#16a34a" stop-opacity="0.3"/>
+                      <stop offset="100%" stop-color="#16a34a" stop-opacity="0.02"/>
+                    </linearGradient>
+                  </defs>
+                  <!-- Grid lines -->
+                  <line x1="0" y1="0" x2="220" y2="0" stroke="#e2e8e2" stroke-width="0.5"/>
+                  <line x1="0" y1="22.5" x2="220" y2="22.5" stroke="#e2e8e2" stroke-width="0.5"/>
+                  <line x1="0" y1="45" x2="220" y2="45" stroke="#e2e8e2" stroke-width="0.5"/>
+                  <line x1="0" y1="67.5" x2="220" y2="67.5" stroke="#e2e8e2" stroke-width="0.5"/>
+                  <line x1="0" y1="90" x2="220" y2="90" stroke="#e2e8e2" stroke-width="0.5"/>
+                  <!-- Area fill -->
+                  <polygon fill="url(#perfGrad)" points="0,72 44,58 88,50 132,38 176,28 220,14 220,90 0,90"/>
+                  <!-- Line -->
+                  <polyline fill="none" stroke="#16803C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="0,72 44,58 88,50 132,38 176,28 220,14"/>
+                  <!-- End dot -->
+                  <circle cx="220" cy="14" r="3.5" fill="#16803C"/>
+                </svg>
+              </div>
+              <!-- X axis -->
+              <div class="flex justify-between pt-1" style="font-size:10px; color:#6b7280;">
+                <span>Jan</span><span>Apr</span><span>Aug</span><span>Sep</span><span>Jan</span>
+              </div>
+            </div>
+          </div>
+          <!-- Bottom value + green accent -->
+          <div class="flex items-baseline justify-end gap-2 mt-1">
+            <span style="font-size:28px; font-weight:800; color:#111827;">14.2</span>
+            <span style="font-size:12px; color:#6b7280;">Tons/Acre</span>
+          </div>
+          <div style="height:3px; background:#16803C; border-radius:2px; margin-top:4px;"></div>
+        </div>
+
+        <!-- CARD: Live Map -->
+        <div class="card" style="grid-row:1; grid-column:2; padding:12px;">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="card-title">Live Map</span>
+            <div class="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center cursor-pointer">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16803C" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg>
+            </div>
+          </div>
+          <div class="flex-1 flex gap-3" style="min-height:0;">
+            <!-- Map area -->
+            <div class="flex-1 relative rounded-lg overflow-hidden" style="background: linear-gradient(135deg, #d4e5d4 0%, #b8d4b0 30%, #c8dcc0 60%, #e0ead8 100%);">
+              <!-- Farm plots (yellow outlined) -->
+              <div style="position:absolute; top:8%; left:5%; width:35%; height:42%; border:2px solid #eab308; border-radius:6px; background:rgba(234,179,8,0.12);">
+                <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:14px; font-weight:700; color:#92400e;">26</span>
+              </div>
+              <div style="position:absolute; top:12%; left:44%; width:28%; height:48%; border:2px solid #eab308; border-radius:6px; background:rgba(234,179,8,0.10);">
+                <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:14px; font-weight:700; color:#92400e;">8.8</span>
+              </div>
+              <div style="position:absolute; top:58%; left:8%; width:30%; height:34%; border:2px solid #eab308; border-radius:6px; background:rgba(234,179,8,0.10);">
+                <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:14px; font-weight:700; color:#92400e;">33</span>
+              </div>
+              <div style="position:absolute; top:55%; left:55%; width:32%; height:38%; border:2px solid #eab308; border-radius:6px; background:rgba(234,179,8,0.08);">
+                <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:14px; font-weight:700; color:#92400e;">27</span>
+              </div>
+              <!-- Farm label -->
+              <div style="position:absolute; top:3%; right:5%; font-size:10px; font-weight:600; color:#374151; background:rgba(255,255,255,0.7); padding:2px 6px; border-radius:4px;">Oddwood Farm</div>
+              <!-- Legend -->
+              <div style="position:absolute; bottom:6px; left:6px; background:rgba(255,255,255,0.85); border-radius:6px; padding:4px 8px; font-size:10px; display:flex; gap:8px;">
+                <span style="display:flex; align-items:center; gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#16803C;display:inline-block;"></span>Corn</span>
+                <span style="display:flex; align-items:center; gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#eab308;display:inline-block;"></span>Saru</span>
+                <span style="display:flex; align-items:center; gap:3px;"><span style="width:8px;height:8px;border-radius:2px;background:#2d8a4e;display:inline-block;"></span>Soy</span>
+              </div>
+            </div>
+            <!-- Right info panel -->
+            <div class="flex flex-col gap-2 justify-center" style="width:110px; font-size:11px;">
+              <div class="flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#16803C" stroke="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="white"/></svg>
+                <div>
+                  <div style="font-weight:600; color:#111827;">Hitson</div>
+                  <div style="color:#6b7280; font-size:10px;">91548</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16803C" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <div>
+                  <div style="font-weight:600; color:#111827;">30</div>
+                  <div style="color:#6b7280; font-size:10px;">Sensors</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#facc15" stroke="none"><circle cx="12" cy="12" r="5"/><g stroke="#facc15" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></g></svg>
+                <div>
+                  <div style="font-weight:600; color:#111827;">Sunny 22&#176;F</div>
+                  <div style="color:#6b7280; font-size:10px;">Genyil Ki</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD: Crop Health -->
+        <div class="card" style="grid-row:1; grid-column:3; background:#f8faf8;">
+          <span class="card-title mb-2">Crop Health</span>
+          <div class="flex-1 flex" style="min-height:0;">
+            <!-- Y axis -->
+            <div class="flex flex-col justify-between pr-2" style="font-size:9px; color:#6b7280; width:30px; text-align:right; padding: 4px 4px 24px 0;">
+              <span>58K</span><span>6K</span><span>20</span><span>0</span>
+            </div>
+            <!-- Bars -->
+            <div class="flex-1 flex items-end justify-center gap-6 pb-0">
+              <div class="flex flex-col items-center" style="width:55px;">
+                <span style="font-size:14px; font-weight:700; color:#111827; margin-bottom:4px;">88%</span>
+                <div style="width:55px; height:72%; background:#1a5c2a; border-radius:6px 6px 0 0;"></div>
+                <span style="font-size:11px; color:#6b7280; margin-top:4px;">Corn</span>
+              </div>
+              <div class="flex flex-col items-center" style="width:55px;">
+                <span style="font-size:14px; font-weight:700; color:#111827; margin-bottom:4px;">91%</span>
+                <div style="width:55px; height:80%; background:#2d8a4e; border-radius:6px 6px 0 0;"></div>
+                <span style="font-size:11px; color:#6b7280; margin-top:4px;">Soy</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================== ROW 2 ===================== -->
+
+        <!-- CARD: Stock Levels -->
+        <div class="card" style="grid-row:2; grid-column:1;">
+          <span class="card-title mb-2">Stock Levels</span>
+          <div class="flex-1 flex items-center gap-4" style="min-height:0;">
+            <!-- Donut chart -->
+            <div class="flex-shrink-0" style="width:120px; height:120px;">
+              <svg viewBox="0 0 42 42" class="w-full h-full" style="transform:rotate(-90deg);">
+                <!-- Background -->
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#e2e8e2" stroke-width="6"/>
+                <!-- Seed 40% - dark green -->
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#1a5c2a" stroke-width="6" stroke-dasharray="40 60" stroke-dashoffset="0" stroke-linecap="round"/>
+                <!-- Fertilizer 30% - medium green -->
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#2d8a4e" stroke-width="6" stroke-dasharray="30 70" stroke-dashoffset="-40"/>
+                <!-- Grain 20% - yellow -->
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#eab308" stroke-width="6" stroke-dasharray="20 80" stroke-dashoffset="-70"/>
+                <!-- Diesel 10% - brown -->
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#78350f" stroke-width="6" stroke-dasharray="10 90" stroke-dashoffset="-90"/>
+              </svg>
+            </div>
+            <!-- Legend -->
+            <div class="flex flex-col gap-2.5" style="font-size:12px;">
+              <div class="flex items-center gap-2">
+                <span style="width:10px;height:10px;border-radius:2px;background:#1a5c2a;display:inline-block;flex-shrink:0;"></span>
+                <span style="color:#111827; min-width:60px;">Seed</span>
+                <span style="font-weight:700; color:#111827; min-width:20px;">31</span>
+                <span style="color:#16a34a; font-size:11px;">Adequate</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span style="width:10px;height:10px;border-radius:2px;background:#2d8a4e;display:inline-block;flex-shrink:0;"></span>
+                <span style="color:#111827; min-width:60px;">Fertilizer</span>
+                <span style="font-weight:700; color:#111827; min-width:20px;">29</span>
+                <span style="color:#16a34a; font-size:11px;">Adequate</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span style="width:10px;height:10px;border-radius:2px;background:#eab308;display:inline-block;flex-shrink:0;"></span>
+                <span style="color:#111827; min-width:60px;">Grain</span>
+                <span style="font-weight:700; color:#111827; min-width:20px;">17</span>
+                <span style="color:#16a34a; font-size:11px;">Adequate</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span style="width:10px;height:10px;border-radius:2px;background:#78350f;display:inline-block;flex-shrink:0;"></span>
+                <span style="color:#111827; min-width:60px;">Diesel</span>
+                <span style="font-weight:700; color:#111827; min-width:20px;">7</span>
+                <span style="color:#16a34a; font-size:11px;">Adequate</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD: Financials Q3 (spans col 2+3) -->
+        <div class="card" style="grid-row:2; grid-column:2 / span 2;">
+          <span class="card-title mb-2">Financials Q3</span>
+          <div class="flex-1 flex gap-4" style="min-height:0;">
+            <!-- LEFT: Bar chart with Y axis -->
+            <div class="flex" style="flex:0.6; min-height:0;">
+              <!-- Y axis -->
+              <div class="flex flex-col justify-between pr-2 pb-5" style="font-size:9px; color:#6b7280; width:34px; text-align:right;">
+                <span>40K</span><span>30K</span><span>20K</span><span>10K</span><span>0</span>
+              </div>
+              <!-- Bars -->
+              <div class="flex-1 flex items-end justify-center gap-5 pb-0">
+                <!-- Revenue -->
+                <div class="flex flex-col items-center">
+                  <span style="font-size:13px; font-weight:700; color:#111827; margin-bottom:3px;">$412K</span>
+                  <div style="width:48px; height:85%; background:#1a5c2a; border-radius:5px 5px 0 0;"></div>
+                  <span style="font-size:10px; color:#6b7280; margin-top:3px;">Revenue</span>
+                </div>
+                <!-- Expenses -->
+                <div class="flex flex-col items-center">
+                  <span style="font-size:13px; font-weight:700; color:#111827; margin-bottom:3px;">$245K</span>
+                  <div style="width:48px; height:52%; background:#374151; border-radius:5px 5px 0 0;"></div>
+                  <span style="font-size:10px; color:#6b7280; margin-top:3px;">Expenses</span>
+                </div>
+                <!-- Net Profit -->
+                <div class="flex flex-col items-center">
+                  <span style="font-size:13px; font-weight:700; color:#111827; margin-bottom:3px;">$167K</span>
+                  <div style="width:48px; height:60%; background:#2d8a4e; border-radius:5px 5px 0 0;"></div>
+                  <span style="font-size:10px; color:#6b7280; margin-top:3px;">Net Profit</span>
+                </div>
+              </div>
+            </div>
+            <!-- RIGHT: Sparkline -->
+            <div class="flex" style="flex:0.4; min-height:0;">
+              <div class="flex-1 flex flex-col">
+                <!-- Y axis labels for sparkline -->
+                <div class="flex flex-col justify-between flex-1 relative">
+                  <div class="flex justify-between items-center" style="font-size:9px; color:#6b7280;">
+                    <span></span><span>$15K</span>
+                  </div>
+                  <div class="flex justify-between items-center" style="font-size:9px; color:#6b7280;">
+                    <span></span><span>$10K</span>
+                  </div>
+                  <div class="flex justify-between items-center" style="font-size:9px; color:#6b7280;">
+                    <span></span><span>$8K</span>
+                  </div>
+                  <!-- Chart overlay -->
+                  <div style="position:absolute; inset:0; right:30px;">
+                    <svg viewBox="0 0 180 80" class="w-full h-full" preserveAspectRatio="none">
+                      <defs>
+                        <linearGradient id="finGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stop-color="#16a34a" stop-opacity="0.25"/>
+                          <stop offset="100%" stop-color="#16a34a" stop-opacity="0.02"/>
+                        </linearGradient>
+                      </defs>
+                      <polygon fill="url(#finGrad)" points="0,68 30,60 60,52 90,48 120,35 150,22 180,10 180,80 0,80"/>
+                      <polyline fill="none" stroke="#16803C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="0,68 30,60 60,52 90,48 120,35 150,22 180,10"/>
+                      <circle cx="180" cy="10" r="3" fill="#16803C"/>
+                    </svg>
+                  </div>
+                </div>
+                <!-- X axis -->
+                <div class="flex justify-between pt-1" style="font-size:9px; color:#6b7280; padding-right:30px;">
+                  <span>Jan</span><span>Apr</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dev</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================== ROW 3 ===================== -->
+
+        <!-- CARD: Machinery Status -->
+        <div class="card" style="grid-row:3; grid-column:1;">
+          <span class="card-title mb-2">Machinery Status</span>
+          <div class="flex-1 flex items-center justify-around" style="min-height:0;">
+            <!-- Tractor 1: Active -->
+            <div class="flex flex-col items-center gap-1">
+              <svg width="52" height="38" viewBox="0 0 52 38" fill="none">
+                <!-- Body -->
+                <rect x="8" y="8" width="28" height="14" rx="3" fill="#16803C"/>
+                <!-- Cab -->
+                <rect x="28" y="2" width="12" height="20" rx="3" fill="#1a5c2a"/>
+                <!-- Window -->
+                <rect x="30" y="4" width="8" height="8" rx="2" fill="#dcfce7" opacity="0.6"/>
+                <!-- Exhaust -->
+                <rect x="10" y="3" width="3" height="7" rx="1" fill="#374151"/>
+                <circle cx="11.5" cy="2" r="1.5" fill="#9ca3af" opacity="0.5"/>
+                <!-- Rear wheel -->
+                <circle cx="16" cy="30" r="7.5" fill="#374151"/>
+                <circle cx="16" cy="30" r="5" fill="#1f2937"/>
+                <circle cx="16" cy="30" r="2" fill="#4b5563"/>
+                <!-- Front wheel -->
+                <circle cx="38" cy="30" r="5.5" fill="#374151"/>
+                <circle cx="38" cy="30" r="3.5" fill="#1f2937"/>
+                <circle cx="38" cy="30" r="1.5" fill="#4b5563"/>
+                <!-- Hitch -->
+                <rect x="1" y="16" width="7" height="3" rx="1" fill="#6b7280"/>
+              </svg>
+              <span style="font-size:10px; font-weight:600; color:#16a34a;">Active</span>
+              <span style="font-size:9px; color:#6b7280;">Fuel 87%</span>
+            </div>
+            <!-- Tractor 2: Active -->
+            <div class="flex flex-col items-center gap-1">
+              <svg width="52" height="38" viewBox="0 0 52 38" fill="none">
+                <rect x="8" y="8" width="28" height="14" rx="3" fill="#16803C"/>
+                <rect x="28" y="2" width="12" height="20" rx="3" fill="#1a5c2a"/>
+                <rect x="30" y="4" width="8" height="8" rx="2" fill="#dcfce7" opacity="0.6"/>
+                <rect x="10" y="3" width="3" height="7" rx="1" fill="#374151"/>
+                <circle cx="11.5" cy="2" r="1.5" fill="#9ca3af" opacity="0.5"/>
+                <circle cx="16" cy="30" r="7.5" fill="#374151"/>
+                <circle cx="16" cy="30" r="5" fill="#1f2937"/>
+                <circle cx="16" cy="30" r="2" fill="#4b5563"/>
+                <circle cx="38" cy="30" r="5.5" fill="#374151"/>
+                <circle cx="38" cy="30" r="3.5" fill="#1f2937"/>
+                <circle cx="38" cy="30" r="1.5" fill="#4b5563"/>
+                <rect x="1" y="16" width="7" height="3" rx="1" fill="#6b7280"/>
+              </svg>
+              <span style="font-size:10px; font-weight:600; color:#16a34a;">Active</span>
+              <span style="font-size:9px; color:#6b7280;">Fuel 72%</span>
+            </div>
+            <!-- Tractor 3: Active -->
+            <div class="flex flex-col items-center gap-1">
+              <svg width="52" height="38" viewBox="0 0 52 38" fill="none">
+                <rect x="8" y="8" width="28" height="14" rx="3" fill="#16803C"/>
+                <rect x="28" y="2" width="12" height="20" rx="3" fill="#1a5c2a"/>
+                <rect x="30" y="4" width="8" height="8" rx="2" fill="#dcfce7" opacity="0.6"/>
+                <rect x="10" y="3" width="3" height="7" rx="1" fill="#374151"/>
+                <circle cx="11.5" cy="2" r="1.5" fill="#9ca3af" opacity="0.5"/>
+                <circle cx="16" cy="30" r="7.5" fill="#374151"/>
+                <circle cx="16" cy="30" r="5" fill="#1f2937"/>
+                <circle cx="16" cy="30" r="2" fill="#4b5563"/>
+                <circle cx="38" cy="30" r="5.5" fill="#374151"/>
+                <circle cx="38" cy="30" r="3.5" fill="#1f2937"/>
+                <circle cx="38" cy="30" r="1.5" fill="#4b5563"/>
+                <rect x="1" y="16" width="7" height="3" rx="1" fill="#6b7280"/>
+              </svg>
+              <span style="font-size:10px; font-weight:600; color:#16a34a;">Active</span>
+              <span style="font-size:9px; color:#6b7280;">Fuel 91%</span>
+            </div>
+            <!-- Tractor 4: Idle -->
+            <div class="flex flex-col items-center gap-1">
+              <svg width="52" height="38" viewBox="0 0 52 38" fill="none">
+                <rect x="8" y="8" width="28" height="14" rx="3" fill="#ca8a04"/>
+                <rect x="28" y="2" width="12" height="20" rx="3" fill="#a16207"/>
+                <rect x="30" y="4" width="8" height="8" rx="2" fill="#fef9c3" opacity="0.5"/>
+                <rect x="10" y="3" width="3" height="7" rx="1" fill="#374151"/>
+                <circle cx="11.5" cy="2" r="1.5" fill="#9ca3af" opacity="0.5"/>
+                <circle cx="16" cy="30" r="7.5" fill="#374151"/>
+                <circle cx="16" cy="30" r="5" fill="#1f2937"/>
+                <circle cx="16" cy="30" r="2" fill="#4b5563"/>
+                <circle cx="38" cy="30" r="5.5" fill="#374151"/>
+                <circle cx="38" cy="30" r="3.5" fill="#1f2937"/>
+                <circle cx="38" cy="30" r="1.5" fill="#4b5563"/>
+                <rect x="1" y="16" width="7" height="3" rx="1" fill="#6b7280"/>
+              </svg>
+              <span style="font-size:10px; font-weight:600; color:#ca8a04;">Idle</span>
+              <span style="font-size:9px; color:#6b7280;">Fuel 45%</span>
+            </div>
+            <!-- Tractor 5: Maintenance -->
+            <div class="flex flex-col items-center gap-1">
+              <svg width="52" height="38" viewBox="0 0 52 38" fill="none">
+                <rect x="8" y="8" width="28" height="14" rx="3" fill="#ca8a04"/>
+                <rect x="28" y="2" width="12" height="20" rx="3" fill="#a16207"/>
+                <rect x="30" y="4" width="8" height="8" rx="2" fill="#fef9c3" opacity="0.5"/>
+                <rect x="10" y="3" width="3" height="7" rx="1" fill="#374151"/>
+                <circle cx="11.5" cy="2" r="1.5" fill="#9ca3af" opacity="0.5"/>
+                <circle cx="16" cy="30" r="7.5" fill="#374151"/>
+                <circle cx="16" cy="30" r="5" fill="#1f2937"/>
+                <circle cx="16" cy="30" r="2" fill="#4b5563"/>
+                <circle cx="38" cy="30" r="5.5" fill="#374151"/>
+                <circle cx="38" cy="30" r="3.5" fill="#1f2937"/>
+                <circle cx="38" cy="30" r="1.5" fill="#4b5563"/>
+                <rect x="1" y="16" width="7" height="3" rx="1" fill="#6b7280"/>
+              </svg>
+              <span style="font-size:10px; font-weight:600; color:#ca8a04;">2 Skobines</span>
+              <span style="font-size:9px; color:#6b7280;">Prof%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD: Meteorologia -->
+        <div class="card" style="grid-row:3; grid-column:2 / span 2;">
+          <div class="flex items-center justify-between mb-1">
+            <span class="card-title">Meteorologia</span>
+            <span style="font-size:11px; color:#6b7280;">Naranjal, Alto Parana</span>
+          </div>
+          <div class="flex-1 flex gap-6" style="min-height:0;">
+            <!-- LEFT: Current weather -->
+            <div class="flex items-center gap-3">
+              <!-- Sun + cloud icon -->
+              <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
+                <circle cx="22" cy="22" r="10" fill="#facc15"/>
+                <g stroke="#facc15" stroke-width="2" stroke-linecap="round">
+                  <line x1="22" y1="4" x2="22" y2="8"/><line x1="22" y1="36" x2="22" y2="40"/>
+                  <line x1="9.3" y1="9.3" x2="12.1" y2="12.1"/><line x1="31.9" y1="31.9" x2="34.7" y2="34.7"/>
+                  <line x1="4" y1="22" x2="8" y2="22"/><line x1="36" y1="22" x2="40" y2="22"/>
+                  <line x1="9.3" y1="34.7" x2="12.1" y2="31.9"/><line x1="31.9" y1="12.1" x2="34.7" y2="9.3"/>
+                </g>
+                <!-- Small cloud -->
+                <path d="M30 30c0-3 2.5-5.5 5.5-5.5 2.2 0 4 1.3 4.8 3.2.3-.1.6-.1.9-.1 2.5 0 4.5 2 4.5 4.5s-2 4.5-4.5 4.5H32c-2.8 0-5-2.2-5-5 0-1 .3-1.9.8-2.6" fill="#e5e7eb" opacity="0.8"/>
+              </svg>
+              <div>
+                <div style="font-size:36px; font-weight:800; color:#111827; line-height:1;">28&#176;C</div>
+                <div style="font-size:12px; color:#6b7280; margin-top:2px;">Parcialmente Nublado</div>
+              </div>
+            </div>
+            <!-- RIGHT: Metrics -->
+            <div class="flex flex-col justify-center gap-2">
+              <div class="flex items-center gap-6">
+                <div style="background:#f0f4f0; border-radius:8px; padding:6px 14px; text-align:center;">
+                  <div style="font-size:10px; color:#6b7280;">Umidade</div>
+                  <div style="font-size:16px; font-weight:700; color:#111827;">68%</div>
+                </div>
+                <div style="background:#f0f4f0; border-radius:8px; padding:6px 14px; text-align:center;">
+                  <div style="font-size:10px; color:#6b7280;">Vento</div>
+                  <div style="font-size:16px; font-weight:700; color:#111827;">12 km/h</div>
+                </div>
+                <div style="background:#f0f4f0; border-radius:8px; padding:6px 14px; text-align:center;">
+                  <div style="font-size:10px; color:#6b7280;">Chance Chuva</div>
+                  <div style="font-size:16px; font-weight:700; color:#111827;">35%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 5-day forecast strip -->
+          <div class="flex justify-between mt-auto pt-2" style="border-top:1px solid #e2e8e2;">
+            <div class="flex flex-col items-center flex-1">
+              <span style="font-size:10px; color:#6b7280; font-weight:500;">Seg</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#facc15" style="margin:2px 0;"><circle cx="12" cy="12" r="5"/><g stroke="#facc15" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></g></svg>
+              <span style="font-size:12px; font-weight:600; color:#111827;">30&#176;</span>
+            </div>
+            <div class="flex flex-col items-center flex-1">
+              <span style="font-size:10px; color:#6b7280; font-weight:500;">Ter</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin:2px 0;"><path d="M18 10a6 6 0 1 0-7.7 5.7A6 6 0 0 0 18 10z" fill="#d1d5db"/><path d="M6 18c0-2 1.5-4 3.5-4 1.4 0 2.6.8 3.1 2 .2-.1.4-.1.6-.1 1.7 0 3 1.3 3 3s-1.3 3-3 3H7.5C5.6 22 4 20.4 4 18.5c0-.2 0-.3.1-.5" fill="#9ca3af"/></svg>
+              <span style="font-size:12px; font-weight:600; color:#111827;">27&#176;</span>
+            </div>
+            <div class="flex flex-col items-center flex-1">
+              <span style="font-size:10px; color:#6b7280; font-weight:500;">Qua</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin:2px 0;"><path d="M16 13a4 4 0 1 0-5.1 3.8A4 4 0 0 0 16 13z" fill="#9ca3af"/><g stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="19" x2="8" y2="22"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="16" y1="19" x2="16" y2="22"/></g></svg>
+              <span style="font-size:12px; font-weight:600; color:#111827;">24&#176;</span>
+            </div>
+            <div class="flex flex-col items-center flex-1">
+              <span style="font-size:10px; color:#6b7280; font-weight:500;">Qui</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#facc15" style="margin:2px 0;"><circle cx="12" cy="12" r="5"/><g stroke="#facc15" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></g></svg>
+              <span style="font-size:12px; font-weight:600; color:#111827;">29&#176;</span>
+            </div>
+            <div class="flex flex-col items-center flex-1">
+              <span style="font-size:10px; color:#6b7280; font-weight:500;">Sex</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#facc15" style="margin:2px 0;"><circle cx="12" cy="12" r="5"/><g stroke="#facc15" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></g></svg>
+              <span style="font-size:12px; font-weight:600; color:#111827;">31&#176;</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+</body>
+</html>
