@@ -56,14 +56,18 @@ REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
 - Adjuvantes, espalhantes, reguladores de crescimento
 - Produtos fitossanitários em geral
 
-**remision** (Nota de Remision / Guia de Remessa) — use quando o documento diz "NOTA DE REMISION" ou "NOTA DE REMISSAO" no cabecalho:
+**remision** (Nota de Remision / Guia de Remessa) — use quando:
+- O documento diz "NOTA DE REMISION", "REMISION", "NOTA DE REMISSAO", "GUIA DE REMESSA" em QUALQUER parte do documento (cabecalho, canto superior direito, lateral, etc.)
+- REGRA ABSOLUTA: se as palavras "REMISION" ou "REMISSAO" aparecem no documento, o type DEVE SER "remision", NUNCA "invoice"
 - E um comprovante de ENTREGA de mercadoria, NAO uma fatura de compra
 - Geralmente NAO tem precos/valores, apenas produtos e quantidades
 - Pode referenciar uma fatura associada ("Facturas asociadas")
 - Tem dados de transporte (placa, motorista, km)
-- NAO confunda com fatura! Se diz "NOTA DE REMISION" NAO e invoice!
+- ATENCAO: muitos documentos tem "NOTA DE REMISION" escrito no canto superior DIREITO enquanto o restante do documento parece uma fatura — MESMO ASSIM e remision!
 
 **unknown** — quando não for possível determinar com certeza.
+
+REGRA DE PRIORIDADE PARA TIPO: Antes de classificar, verifique TODO o documento por textos como "REMISION", "REMISSAO", "NOTA DE REMISION". Se encontrar, o type OBRIGATORIAMENTE deve ser "remision". Essa regra tem prioridade sobre qualquer outra.
 
 Se for 'invoice', extraia TAMBÉM o fornecedor, o número da nota (se houver) e TODOS os produtos com quantidades, unidades e valores.
 
