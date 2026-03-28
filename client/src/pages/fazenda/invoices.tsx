@@ -127,7 +127,7 @@ export default function FarmInvoices() {
     const [confirmWarehouseId, setConfirmWarehouseId] = useState<string>("");
     const [skipConversion, setSkipConversion] = useState<Set<string>>(new Set());
     const [confirmSeasonId, setConfirmSeasonId] = useState<string>("");
-    const [confirmFrotaAmount, setConfirmFrotaAmount] = useState<string>("");
+    // confirmFrotaAmount removed — field no longer needed
     const [confirmEquipmentId, setConfirmEquipmentId] = useState<string>("");
 
     // Nova Despesa dialog state
@@ -246,12 +246,11 @@ export default function FarmInvoices() {
     };
 
     const confirmMutation = useMutation({
-        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, frotaAmount, itemConversions, equipmentId }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; frotaAmount?: string; itemConversions?: Record<string, number>; equipmentId?: string }) =>
+        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, itemConversions, equipmentId }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; itemConversions?: Record<string, number>; equipmentId?: string }) =>
             apiRequest("POST", `/api/farm/invoices/${id}/confirm`, {
                 ...(skipStockEntry ? { skipStockEntry: true } : {}),
                 ...(warehouseId ? { warehouseId } : {}),
                 ...(seasonId ? { seasonId } : {}),
-                ...(frotaAmount && parseFloat(frotaAmount) > 0 ? { frotaAmount } : {}),
                 ...(itemConversions && Object.keys(itemConversions).length > 0 ? { itemConversions } : {}),
                 ...(equipmentId ? { equipmentId } : {}),
             }),
@@ -1281,80 +1280,68 @@ export default function FarmInvoices() {
                                                 <Info className={`h-4 w-4 mt-0.5 flex-shrink-0 ${confirmSkipStock ? 'text-amber-500' : 'text-gray-400'}`} />
                                             </div>
 
-                                            {/* Item #13: Deposito destino */}
-                                            {!confirmSkipStock && (
+                                            <div className={`grid gap-3 ${confirmSkipStock ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
+                                                {/* Deposito destino */}
+                                                {!confirmSkipStock && (
+                                                    <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                        <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                            <Warehouse className="h-4 w-4 text-emerald-500" />
+                                                            Deposito
+                                                        </Label>
+                                                        <Select value={confirmWarehouseId} onValueChange={setConfirmWarehouseId}>
+                                                            <SelectTrigger className="mt-1">
+                                                                <SelectValue placeholder="Selecione..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {(deposits as any[]).map((d: any) => (
+                                                                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                )}
+
+                                                {/* Safra */}
                                                 <div className="p-3 rounded-lg border border-gray-200 bg-white">
                                                     <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                                        <Warehouse className="h-4 w-4 text-emerald-500" />
-                                                        Deposito destino dos produtos
+                                                        <Wheat className="h-4 w-4 text-emerald-500" />
+                                                        Safra
                                                     </Label>
-                                                    <Select value={confirmWarehouseId} onValueChange={setConfirmWarehouseId}>
+                                                    <Select value={confirmSeasonId || (invoiceDetail.seasonId || "")} onValueChange={setConfirmSeasonId}>
                                                         <SelectTrigger className="mt-1">
-                                                            <SelectValue placeholder="Selecione o deposito..." />
+                                                            <SelectValue placeholder="Selecione..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {(deposits as any[]).map((d: any) => (
-                                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                            {(seasons as any[]).map((s: any) => (
+                                                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
-                                            )}
 
-                                            {/* Safra selector */}
-                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
-                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                                    <Wheat className="h-4 w-4 text-emerald-500" />
-                                                    Safra
-                                                </Label>
-                                                <Select value={confirmSeasonId || (invoiceDetail.seasonId || "")} onValueChange={setConfirmSeasonId}>
-                                                    <SelectTrigger className="mt-1">
-                                                        <SelectValue placeholder="Selecione a safra..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {(seasons as any[]).map((s: any) => (
-                                                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-
-                                            {/* Vincular a veículo da frota */}
-                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
-                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                                    Vincular a veiculo (opcional)
-                                                </Label>
-                                                <Select value={confirmEquipmentId} onValueChange={setConfirmEquipmentId}>
-                                                    <SelectTrigger className="mt-1">
-                                                        <SelectValue placeholder="Selecione o veiculo..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="__none__">Nenhum (entrada no estoque)</SelectItem>
-                                                        {(equipment as any[]).filter((e: any) => e.status === "Ativo").map((e: any) => (
-                                                            <SelectItem key={e.id} value={e.id}>{e.name} ({e.type})</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <p className="text-xs text-gray-400 mt-1">
-                                                    {confirmEquipmentId && confirmEquipmentId !== "__none__"
-                                                        ? "A fatura sera registrada como despesa do veiculo (nao entra no estoque)"
-                                                        : "Produtos entrarao no estoque normalmente"
-                                                    }
-                                                </p>
-                                            </div>
-
-                                            {/* Despesa de Frota */}
-                                            <div className="p-3 rounded-lg border border-gray-200 bg-white">
-                                                <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                                                    Despesa de Frota (opcional)
-                                                </Label>
-                                                <CurrencyInput
-                                                    value={confirmFrotaAmount}
-                                                    onValueChange={setConfirmFrotaAmount}
-                                                    className="mt-1"
-                                                    placeholder="0,00"
-                                                />
-                                                <p className="text-xs text-gray-400 mt-1">Frete e transporte relacionado a esta fatura</p>
+                                                {/* Vincular a veículo */}
+                                                <div className="p-3 rounded-lg border border-gray-200 bg-white">
+                                                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                                        Veiculo (opcional)
+                                                    </Label>
+                                                    <Select value={confirmEquipmentId} onValueChange={setConfirmEquipmentId}>
+                                                        <SelectTrigger className="mt-1">
+                                                            <SelectValue placeholder="Selecione..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="__none__">Nenhum</SelectItem>
+                                                            {(equipment as any[]).filter((e: any) => e.status === "Ativo").map((e: any) => (
+                                                                <SelectItem key={e.id} value={e.id}>{e.name} ({e.type})</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <p className="text-xs text-gray-400 mt-1">
+                                                        {confirmEquipmentId && confirmEquipmentId !== "__none__"
+                                                            ? "Despesa do veiculo"
+                                                            : "Entrada no estoque"
+                                                        }
+                                                    </p>
+                                                </div>
                                             </div>
 
                                             <div className="flex justify-end">
@@ -1378,7 +1365,6 @@ export default function FarmInvoices() {
                                                             skipStockEntry: confirmSkipStock || hasEquipment || undefined,
                                                             warehouseId: !confirmSkipStock && !hasEquipment && confirmWarehouseId ? confirmWarehouseId : undefined,
                                                             seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
-                                                            frotaAmount: confirmFrotaAmount || undefined,
                                                             itemConversions: Object.keys(conversions).length > 0 ? conversions : undefined,
                                                             equipmentId: hasEquipment ? confirmEquipmentId : undefined,
                                                         });
