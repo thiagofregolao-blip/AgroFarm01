@@ -299,17 +299,18 @@ export default function FarmDashboard() {
     function fmtW(kg: number) { return kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${kg.toFixed(0)}kg`; }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // CardTitle helper — green bg strip with black text, like the reference
+    // Premium card styles
+    const cardBase = "rounded-2xl border border-gray-200/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition-all duration-300 overflow-hidden group";
     const CT = ({ children, extra }: { children: React.ReactNode; extra?: React.ReactNode }) => (
-        <div className="bg-emerald-50/80 border-b border-emerald-100 px-3 py-1.5 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-gray-800">{children}</h3>
+        <div className="bg-gradient-to-r from-emerald-50/90 to-emerald-50/40 border-b border-emerald-100/60 px-4 py-2 flex items-center justify-between">
+            <h3 className="text-[13px] font-semibold text-gray-800 tracking-tight">{children}</h3>
             {extra}
         </div>
     );
 
     return (
         <FarmLayout>
-            <div ref={containerRef} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="space-y-2">
+            <div ref={containerRef} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="space-y-3">
                 {/* Pull-to-refresh */}
                 {(pullDistance > 0 || refreshing) && (
                     <div className="flex items-center justify-center transition-all duration-200 overflow-hidden" style={{ height: refreshing ? 48 : pullDistance }}>
@@ -321,26 +322,29 @@ export default function FarmDashboard() {
                 )}
 
                 {/* Header */}
-                <div className="flex items-center justify-between mb-1">
-                    <h1 className="text-lg font-bold text-gray-800">Painel Geral</h1>
+                <div className="flex items-center justify-between mb-0.5">
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Painel Geral</h1>
+                        <p className="text-xs text-gray-400 mt-0.5">Ola, {user?.name?.split(" ")[0]}</p>
+                    </div>
                     <button onClick={handleRefresh} disabled={refreshing}
-                        className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium disabled:opacity-50">
+                        className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-medium disabled:opacity-50 shadow-sm hover:shadow-md transition-all duration-200">
                         <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
                     </button>
                 </div>
 
                 {/* ═══ ROW 1 ═══ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                     {/* Card 1: Despesas */}
                     {hasModule("invoices") && (
-                        <Card className="md:col-span-3 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                        <Card className="md:col-span-3 rounded-2xl border border-gray-200/60 bg-white shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden"
                             onClick={() => setLocation("/fazenda/faturas")}>
                             <CT extra={pctChange !== 0 ? (
                                 <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${pctChange > 0 ? "text-red-600" : "text-emerald-600"}`}>
                                     <TrendingUp className={`w-2.5 h-2.5 ${pctChange < 0 ? "rotate-180" : ""}`} /> {Math.abs(pctChange).toFixed(1)}%
                                 </span>
                             ) : undefined}>Despesas Mensais</CT>
-                            <CardContent className="p-3">
+                            <CardContent className="p-4">
                                 <div className="h-[120px]">
                                     {monthlyExpenses.length > 1 ? (
                                         <ResponsiveContainer width="100%" height="100%">
@@ -349,15 +353,15 @@ export default function FarmDashboard() {
                                                 <CartesianGrid vertical={true} horizontal={false} strokeDasharray="3 3" stroke="#e5e7eb" />
                                                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                                                 <YAxis tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={35} tickFormatter={(v: number) => fmt(v)} />
-                                                <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                                <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} contentStyle={{ fontSize: 11, borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.12)", padding: "8px 12px" }} />
                                                 <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#expGrad)" strokeWidth={2} dot={false} />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">Sem faturas</div>}
                                 </div>
-                                <div className="flex items-baseline gap-2 mt-1">
-                                    <span className="text-xl font-bold text-gray-800">{fmt(totalExpenses)}</span>
-                                    <span className="text-xs text-gray-400">Total</span>
+                                <div className="flex items-baseline gap-2 mt-2">
+                                    <span className="text-2xl font-extrabold text-gray-900 tracking-tight">{fmt(totalExpenses)}</span>
+                                    <span className="text-[11px] text-gray-400 font-medium">Total</span>
                                 </div>
                             </CardContent>
                         </Card>
@@ -365,7 +369,7 @@ export default function FarmDashboard() {
 
                     {/* Card 2: Mapa */}
                     {hasModule("properties") && (
-                        <Card className="md:col-span-5 border-gray-200 overflow-hidden">
+                        <Card className="md:col-span-5 rounded-2xl border border-gray-200/60 bg-white shadow-sm overflow-hidden">
                             <CT>Mapa dos Talhoes</CT>
                             <div className="h-[170px] relative">
                                 {plotsWithCoords.length > 0 ? (
@@ -399,24 +403,24 @@ export default function FarmDashboard() {
 
                     {/* Plot modal */}
                     {selectedPlot && (
-                        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30" onClick={() => setSelectedPlot(null)}>
-                            <Card className="w-[90%] max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setSelectedPlot(null)}>
+                            <Card className="w-[90%] max-w-md shadow-2xl rounded-2xl border-0 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                                 <CardContent className="p-5">
                                     <div className="flex justify-between mb-3"><h3 className="text-lg font-bold text-emerald-800">{selectedPlot.name}</h3><button onClick={() => setSelectedPlot(null)} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5 text-gray-400" /></button></div>
                                     {selectedPlot.crop && <p className="text-sm text-gray-600 mb-1">Cultura: <strong>{selectedPlot.crop}</strong></p>}
                                     <p className="text-sm text-gray-600">Area: <strong>{parseFloat(selectedPlot.areaHa || 0).toFixed(1)} ha</strong></p>
                                     <div className="mt-3 p-3 bg-emerald-50 rounded-lg text-center"><p className="text-3xl font-extrabold text-emerald-700">{selectedPlot.appCount}</p><p className="text-sm text-emerald-600">Aplicacoes Realizadas</p></div>
-                                    <button onClick={() => { setSelectedPlot(null); setLocation("/fazenda/aplicacoes"); }} className="mt-3 w-full py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 cursor-pointer">Ver Detalhes</button>
+                                    <button onClick={() => { setSelectedPlot(null); setLocation("/fazenda/aplicacoes"); }} className="mt-3 w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 cursor-pointer shadow-sm hover:shadow-md transition-all duration-200">Ver Detalhes</button>
                                 </CardContent>
                             </Card>
                         </div>
                     )}
 
                     {/* Card 3: Silos */}
-                    <Card className="md:col-span-4 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                    <Card className="md:col-span-4 rounded-2xl border border-gray-200/60 bg-white shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden"
                         onClick={() => setLocation("/fazenda/romaneios")}>
                         <CT extra={totalHarvest > 0 ? <span className="text-[10px] text-gray-500">{fmtW(totalHarvest)} total</span> : undefined}>Silos</CT>
-                        <CardContent className="p-2">
+                        <CardContent className="p-3">
                             {silos.length > 0 ? (
                                 <div className="flex items-end justify-center gap-2 overflow-x-auto">
                                     {silos.slice(0, 4).map((silo: any) => {
@@ -433,10 +437,10 @@ export default function FarmDashboard() {
                 </div>
 
                 {/* ═══ ROW 2 ═══ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                     {/* Card 4: Estoque */}
                     {hasModule("stock") && (
-                        <Card className="md:col-span-5 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                        <Card className="md:col-span-5 rounded-2xl border border-gray-200/60 bg-white shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden"
                             onClick={() => setLocation("/fazenda/estoque")}>
                             <CT>Niveis de Estoque</CT>
                             <CardContent className="p-3 flex items-center gap-3">
@@ -445,7 +449,7 @@ export default function FarmDashboard() {
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart><Pie data={stockByCategory} dataKey="value" nameKey="category" cx="50%" cy="50%" outerRadius={50} innerRadius={25} paddingAngle={2}>
                                                 {stockByCategory.map((e, i) => <Cell key={i} fill={CATEGORY_COLORS[e.category] || CATEGORY_COLORS.outros} />)}
-                                            </Pie><Tooltip formatter={(v: number) => [`$${Math.round(v).toLocaleString()}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 8 }} /></PieChart>
+                                            </Pie><Tooltip formatter={(v: number) => [`$${Math.round(v).toLocaleString()}`, ""]} contentStyle={{ fontSize: 11, borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.12)", padding: "8px 12px" }} /></PieChart>
                                         </ResponsiveContainer>
                                     ) : <div className="h-full flex items-center justify-center text-gray-300 text-xs">-</div>}
                                 </div>
@@ -464,17 +468,17 @@ export default function FarmDashboard() {
                     )}
 
                     {/* Card 5: Custos */}
-                    <Card className="md:col-span-7 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                    <Card className="md:col-span-7 rounded-2xl border border-gray-200/60 bg-white shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden"
                         onClick={() => setLocation("/fazenda/custos")}>
                         <CT>Custos por Talhao</CT>
-                        <CardContent className="p-3 flex gap-2" style={{ height: 160 }}>
+                        <CardContent className="p-4 flex gap-3" style={{ height: 170 }}>
                             <div className="flex-1 h-full">
                                 {plotCostBars.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={plotCostBars} layout="vertical" margin={{ left: 0, right: 5 }}>
                                             <XAxis type="number" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmt(v)} />
                                             <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "#6b7280" }} width={65} axisLine={false} tickLine={false} />
-                                            <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Custo"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                            <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Custo"]} contentStyle={{ fontSize: 11, borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.12)", padding: "8px 12px" }} />
                                             <Bar dataKey="cost" fill="#16803C" radius={[0, 4, 4, 0]} barSize={14} />
                                         </BarChart>
                                     </ResponsiveContainer>
@@ -488,7 +492,7 @@ export default function FarmDashboard() {
                                             <CartesianGrid vertical={true} horizontal={false} strokeDasharray="3 3" stroke="#e5e7eb" />
                                             <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                                             <YAxis tick={{ fontSize: 8, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={30} tickFormatter={(v: number) => fmt(v)} />
-                                            <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Gasto"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                            <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, "Gasto"]} contentStyle={{ fontSize: 11, borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.12)", padding: "8px 12px" }} />
                                             <Area type="monotone" dataKey="value" stroke="#16a34a" fill="url(#dailyGrad)" strokeWidth={2} dot={false} />
                                         </AreaChart>
                                     </ResponsiveContainer>
@@ -499,13 +503,13 @@ export default function FarmDashboard() {
                 </div>
 
                 {/* ═══ ROW 3 ═══ */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                     {/* Card 6: Equipamentos */}
                     {hasModule("fleet") && (
-                        <Card className="md:col-span-6 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                        <Card className="md:col-span-6 rounded-2xl border border-gray-200/60 bg-white shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden"
                             onClick={() => setLocation("/fazenda/equipamentos")}>
                             <CT>Equipamentos</CT>
-                            <CardContent className="p-3">
+                            <CardContent className="p-4">
                                 {equipment.length > 0 ? (
                                     <>
                                         <div className="flex flex-wrap gap-4">
@@ -526,7 +530,7 @@ export default function FarmDashboard() {
                                             })}
                                             {equipment.length > 5 && <div className="flex items-center"><span className="text-xs font-bold text-gray-400">+{equipment.length - 5}</span></div>}
                                         </div>
-                                        <div className="flex gap-4 mt-2 pt-2 border-t border-gray-100">
+                                        <div className="flex gap-4 mt-3 pt-3 border-t border-gray-100/80">
                                             <span className="text-xs text-emerald-600 font-medium">{equipByStatus.active.length} Ativos</span>
                                             {equipByStatus.maint.length > 0 && <span className="text-xs text-yellow-600 font-medium">{equipByStatus.maint.length} Manut.</span>}
                                             {dieselByEquip.length > 0 && <span className="text-xs text-amber-600 font-medium ml-auto flex items-center gap-1"><Fuel className="w-3 h-3" />{dieselByEquip.reduce((s, d) => s + d.liters, 0).toFixed(0)}L total</span>}
@@ -538,13 +542,13 @@ export default function FarmDashboard() {
                     )}
 
                     {/* Card 7: Clima */}
-                    <Card className="md:col-span-6 border-gray-200 cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                    <Card className="md:col-span-6 rounded-2xl border border-gray-200/60 bg-white shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer overflow-hidden"
                         onClick={() => setLocation("/fazenda/clima")}>
                         <CT extra={<span className="text-[10px] text-gray-500">{mainStation?.name || ""}</span>}>Previsao do Tempo</CT>
-                        <CardContent className="p-3">
+                        <CardContent className="p-4">
                             {cw ? (
                                 <div className="flex items-center gap-4">
-                                    <div className="text-center"><p className="text-3xl font-bold text-gray-800">{parseFloat(cw.temperature || 0).toFixed(1)}°C</p></div>
+                                    <div className="text-center"><p className="text-4xl font-extrabold text-gray-900 tracking-tight">{parseFloat(cw.temperature || 0).toFixed(1)}<span className="text-lg font-bold text-gray-500">°C</span></p></div>
                                     <div className="flex-1 grid grid-cols-3 gap-2 text-center">
                                         <div><Droplets className="w-4 h-4 text-blue-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{cw.humidity || 0}%</p><p className="text-[10px] text-gray-400">Umidade</p></div>
                                         <div><Wind className="w-4 h-4 text-gray-400 mx-auto mb-0.5" /><p className="text-xs font-bold text-gray-700">{parseFloat(cw.windSpeed || 0).toFixed(0)} km/h</p><p className="text-[10px] text-gray-400">Vento</p></div>
