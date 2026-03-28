@@ -854,12 +854,12 @@ export default function FarmInvoices() {
                     </TabsList>
 
                     <TabsContent value="invoices">
-                        {/* Selected invoice detail */}
-                        {selectedInvoice && invoiceDetail && (
-                            <Card className="border-emerald-200 bg-white mb-4">
-                                <CardHeader className="pb-3">
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="text-emerald-800 flex items-center gap-2">
+                        {/* Selected invoice detail — Modal */}
+                        <Dialog open={!!selectedInvoice && !!invoiceDetail} onOpenChange={(open) => { if (!open) { setSelectedInvoice(null); setSkipConversion(new Set()); setEditingInvoice(false); } }}>
+                            <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto p-0 gap-0">
+                                <div className="p-6 pb-3">
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <DialogTitle className="text-emerald-800 flex items-center gap-2 text-lg">
                                             {editingInvoice ? "Editando Fatura" : `Fatura #${invoiceDetail.invoiceNumber || "—"}`}
                                             <Badge className="ml-2" variant={invoiceDetail.status === "confirmed" ? "default" : "secondary"}>
                                                 {invoiceDetail.status === "confirmed" ? "Confirmada" : "Pendente"}
@@ -872,7 +872,7 @@ export default function FarmInvoices() {
                                                 {invoiceDetail.source === "whatsapp" ? "WhatsApp" :
                                                  invoiceDetail.source === "email_import" ? "Email" : "Import"}
                                             </Badge>
-                                        </CardTitle>
+                                        </DialogTitle>
                                         <div className="flex items-center gap-2">
                                             {canEdit && !editingInvoice && (
                                                 <Button variant="outline" size="sm" onClick={() => {
@@ -910,7 +910,6 @@ export default function FarmInvoices() {
                                                     <Eye className="mr-1 h-3 w-3" /> Ver Original
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" onClick={() => { setSelectedInvoice(null); setSkipConversion(new Set()); setEditingInvoice(false); }}>Fechar</Button>
                                         </div>
                                     </div>
                                     {editingInvoice ? (
@@ -991,8 +990,8 @@ export default function FarmInvoices() {
                                             })()}
                                         </div>
                                     )}
-                                </CardHeader>
-                                <CardContent>
+                                </div>
+                                <div className="px-6 pb-6 space-y-4">
                                     {/* Banner: matching remissions found */}
                                     {invoiceDetail.matchingRemissions && invoiceDetail.matchingRemissions.length > 0 && !invoiceDetail.linkedRemisionId && (
                                         <div className="mb-4 p-3 rounded-lg border-2 border-amber-400 bg-amber-50">
@@ -1392,9 +1391,9 @@ export default function FarmInvoices() {
                                             </div>
                                         </div>
                                     )}
-                                </CardContent>
-                            </Card>
-                        )}
+                                </div>
+                            </DialogContent>
+                        </Dialog>
 
                         {/* Invoices list */}
                         <Card className="border-emerald-100">
@@ -1582,7 +1581,7 @@ export default function FarmInvoices() {
                                                     <Eye className="mr-1 h-3 w-3" /> Ver Original
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null); setSkipConversion(new Set())}>Fechar</Button>
+                                            <Button variant="ghost" size="sm" onClick={() => { setSelectedInvoice(null); setSkipConversion(new Set()); }}>Fechar</Button>
                                         </div>
                                     </div>
                                     <p className="text-sm text-gray-500 mt-1">
