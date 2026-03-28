@@ -433,78 +433,19 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
             </div>
 
             {/* ══════════════════════════════════════════════════════════════════
-                HEADER — Green bar (both mobile & desktop)
+                MOBILE HEADER — Green bar (< md only)
                 ══════════════════════════════════════════════════════════════════ */}
-            <header className="bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-2 flex items-center gap-3">
-                {/* Mobile: hamburger */}
-                <button
-                    onClick={() => setIsMobileMenuOpen(true)}
-                    className="md:hidden p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors"
-                    aria-label="Abrir menu"
-                >
+            <header className="md:hidden bg-gradient-to-r from-[#0d2418] to-emerald-900 text-white shadow-md sticky top-0 z-30 px-3 py-2 flex items-center gap-3">
+                <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors" aria-label="Abrir menu">
                     <Menu className="w-6 h-6" />
                 </button>
-
-                {/* Desktop: Logo */}
-                <div className="hidden md:flex items-center gap-3 mr-4">
-                    <img src="/icon-512x512.png" alt="AgroFarm" className="w-9 h-9 rounded-xl object-contain" />
-                    <div className="min-w-0">
-                        <span className="font-bold text-sm leading-tight block text-white">AgroFarm</span>
-                        <span className="text-[10px] text-emerald-300 block">Gestor Rural Digital</span>
-                    </div>
-                </div>
-
-                {/* Page title */}
                 <div className="flex-1 flex items-center min-w-0">
                     <h1 className="text-lg font-bold text-white truncate">
                         {t((allNavItems.find(n => n.href === location || (n.href !== "/fazenda" && location.startsWith(n.href)))?.labelKey || "nav_home") as any) || "AgroFarm"}
                     </h1>
                 </div>
-
-                {/* Desktop: right side actions */}
-                <div className="hidden md:flex items-center gap-1">
-                    <button
-                        onClick={handleGlobalRefresh}
-                        disabled={refreshing}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50"
-                        aria-label="Atualizar página"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-                        <span>Atualizar</span>
-                    </button>
-                    <button
-                        onClick={() => setLocation("/fazenda/relatorios")}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                            ${location.startsWith("/fazenda/relatorios") ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
-                    >
-                        <FileBarChart className="w-4 h-4" />
-                        <span>Relatorios</span>
-                    </button>
-                    <button
-                        onClick={() => setLocation("/fazenda/perfil")}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                            ${location.startsWith("/fazenda/perfil") ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
-                    >
-                        <User className="w-4 h-4" />
-                        <span>Perfil</span>
-                    </button>
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors"
-                    >
-                        <LogOut className="w-4 h-4" />
-                        <span>Sair</span>
-                    </button>
-                </div>
-
-                {/* Mobile: refresh + logo */}
-                <div className="flex items-center gap-2 md:hidden">
-                    <button
-                        onClick={handleGlobalRefresh}
-                        disabled={refreshing}
-                        className="p-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors disabled:opacity-50"
-                        aria-label="Atualizar página"
-                    >
+                <div className="flex items-center gap-2">
+                    <button onClick={handleGlobalRefresh} disabled={refreshing} className="p-2 rounded-lg text-white hover:bg-white/10 active:bg-white/20 transition-colors disabled:opacity-50" aria-label="Atualizar">
                         <RefreshCw className={`w-5 h-5 ${refreshing ? "animate-spin" : ""}`} />
                     </button>
                     <img src="/logo.png" alt="AgroFarm" className="h-8 w-auto object-contain" />
@@ -512,49 +453,72 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
             </header>
 
             {/* ══════════════════════════════════════════════════════════════════
-                DESKTOP HORIZONTAL MENU BAR — White, sticky below header (>= md)
+                DESKTOP HEADER — White bar with DataGrow logo + menu integrated (>= md)
                 ══════════════════════════════════════════════════════════════════ */}
-            <nav className="hidden md:block bg-white border-b border-gray-200 sticky top-[52px] z-20 shadow-sm">
+            <header className="hidden md:block bg-white/95 backdrop-blur-md sticky top-0 z-30" style={{ boxShadow: "0 2px 20px rgba(0,0,0,0.07)" }}>
+                <div className="px-6 lg:px-8">
+                    {/* Top row: Logo + actions */}
+                    <div className="flex items-center justify-between h-[60px]">
+                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setLocation("/fazenda")}>
+                            <img src="/icon-datagrow.png" alt="" className="h-11 w-auto object-contain" />
+                            <div className="flex flex-col leading-none">
+                                <span className="font-black tracking-tight" style={{ fontSize: "1.5rem", lineHeight: 1.05 }}>
+                                    <span style={{ color: "#024177" }}>Data</span><span style={{ color: "#215F30" }}>Grow</span>
+                                </span>
+                                <span className="font-semibold tracking-widest uppercase" style={{ fontSize: "0.55rem", color: "#555", letterSpacing: "0.14em" }}>
+                                    DG Agricultura
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Menu items inline */}
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => setLocation("/fazenda")}
+                                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 text-[11px] font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
+                                    ${location === "/fazenda" ? "text-emerald-700 bg-emerald-50" : "text-gray-500 hover:text-emerald-700 hover:bg-gray-50"}`}>
+                                <Home className="w-5 h-5" /><span>Inicio</span>
+                            </button>
+                            <DesktopMenuDropdown label="Producao" icon={Sprout} items={farmNavGroups[1].items} location={location} onNavigate={setLocation} isEnabled={isEnabled} />
+                            <DesktopMenuDropdown label="Campo" icon={BookOpen} items={farmNavGroups[2].items} location={location} onNavigate={setLocation} isEnabled={isEnabled} />
+                            <DesktopMenuDropdown label="Estoque" icon={Warehouse} items={farmNavGroups[3].items} location={location} onNavigate={setLocation} isEnabled={isEnabled} />
+                            <DesktopMenuDropdown label="Inteligencia" icon={Satellite} items={farmNavGroups[4].items} location={location} onNavigate={setLocation} isEnabled={isEnabled} />
+                            <FinanceiroMegaDropdown location={location} onNavigate={setLocation} isEnabled={isEnabled} />
+                        </div>
+
+                        {/* Right actions */}
+                        <div className="flex items-center gap-1">
+                            <button onClick={handleGlobalRefresh} disabled={refreshing}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50">
+                                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
+                            </button>
+                            <button onClick={() => setLocation("/fazenda/relatorios")}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${location.startsWith("/fazenda/relatorios") ? "text-emerald-700 bg-emerald-50" : "text-gray-500 hover:text-emerald-700 hover:bg-emerald-50"}`}>
+                                <FileBarChart className="w-3.5 h-3.5" /> Relatorios
+                            </button>
+                            <button onClick={() => setLocation("/fazenda/perfil")}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${location.startsWith("/fazenda/perfil") ? "text-emerald-700 bg-emerald-50" : "text-gray-500 hover:text-emerald-700 hover:bg-emerald-50"}`}>
+                                <User className="w-3.5 h-3.5" /> Perfil
+                            </button>
+                            <button onClick={handleLogout}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">
+                                <LogOut className="w-3.5 h-3.5" /> Sair
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {/* Green decorative line */}
+                <div className="h-[3px]" style={{ background: "linear-gradient(90deg, #00450d 0%, #1b5e20 25%, #2f5c00 50%, #65a30d 75%, #16a34a 100%)" }}></div>
+            </header>
+
+            {/* ══════════════════════════════════════════════════════════════════
+                OLD DESKTOP MENU removed — now integrated into header above
+                ══════════════════════════════════════════════════════════════════ */}
+            <nav className="hidden" style={{ display: "none" }}>
                 <div className="max-w-screen-xl mx-auto px-4 lg:px-8 flex items-center justify-center gap-2 py-1">
-                    {/* Inicio — direct link, no dropdown */}
-                    <button
-                        onClick={() => setLocation("/fazenda")}
-                        className={`flex flex-col items-center gap-1 px-4 py-2 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
-                            ${location === "/fazenda" ? "text-emerald-700 bg-emerald-50" : "text-gray-600 hover:text-emerald-700 hover:bg-gray-50"}
-                        `}
-                    >
-                        <Home className="w-6 h-6" />
-                        <span>Inicio</span>
-                    </button>
-
-                    {/* Producao dropdown */}
-                    <DesktopMenuDropdown
-                        label="Producao"
-                        icon={Sprout}
-                        items={farmNavGroups[1].items}
-                        location={location}
-                        onNavigate={setLocation}
-                        isEnabled={isEnabled}
-                    />
-
-                    {/* Campo dropdown */}
-                    <DesktopMenuDropdown
-                        label="Campo"
-                        icon={BookOpen}
-                        items={farmNavGroups[2].items}
-                        location={location}
-                        onNavigate={setLocation}
-                        isEnabled={isEnabled}
-                    />
-
-                    {/* Estoque dropdown */}
-                    <DesktopMenuDropdown
-                        label="Estoque"
-                        icon={Warehouse}
-                        items={farmNavGroups[3].items}
-                        location={location}
-                        onNavigate={setLocation}
-                        isEnabled={isEnabled}
+                    <button onClick={() => setLocation("/fazenda")} className="hidden"><Home className="w-6 h-6" /><span>Inicio</span></button>
+                    <DesktopMenuDropdown label="Producao" icon={Sprout} items={farmNavGroups[1].items} location={location} onNavigate={setLocation} isEnabled={isEnabled} />
+                    <DesktopMenuDropdown label="Campo" icon={BookOpen} items={farmNavGroups[2].items} location={location} onNavigate={setLocation} isEnabled={isEnabled} />
+                    <DesktopMenuDropdown label="Estoque" icon={Warehouse} items={farmNavGroups[3].items} location={location} onNavigate={setLocation} isEnabled={isEnabled}
                     />
 
                     {/* Inteligencia dropdown */}
