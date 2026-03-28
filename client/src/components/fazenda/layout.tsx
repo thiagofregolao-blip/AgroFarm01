@@ -343,7 +343,7 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
     }
 
     return (
-        <div className="min-h-screen flex flex-col relative" style={{ background: location === "/fazenda" ? "#f5fced" : "#f3f4f6" }}>
+        <div className="min-h-screen flex flex-col relative" style={{ background: "#f5fced" }}>
 
             {/* ══════════════════════════════════════════════════════════════════
                 MOBILE DRAWER — White, wide, app-native style (< md)
