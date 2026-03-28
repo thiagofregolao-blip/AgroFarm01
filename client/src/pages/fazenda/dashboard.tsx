@@ -124,7 +124,7 @@ export default function FarmDashboard() {
     const { data: accountsPayable = [] } = useQuery<any[]>({ queryKey: ["/api/farm/accounts-payable"], queryFn: async () => (await apiRequest("GET", "/api/farm/accounts-payable")).json(), enabled: !!user });
     const { data: supplierSummary = [] } = useQuery<any[]>({ queryKey: ["/api/farm/invoices/summary/by-supplier"], queryFn: async () => (await apiRequest("GET", "/api/farm/invoices/summary/by-supplier")).json(), enabled: !!user });
 
-    // ─── Card 1: Despesas Mensais (filtrado ate mes atual) ────────────────────
+    // ─── Card 1: Despesas Mensais (filtrado ate mes atual, com ano) ─────────
     const monthlyExpenses = useMemo(() => {
         const now = new Date();
         const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -133,14 +133,15 @@ export default function FarmDashboard() {
             if (!inv.issueDate) return;
             const d = new Date(inv.issueDate);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-            if (key > currentKey) return; // filtrar meses futuros
+            if (key > currentKey) return;
             if (!map[key]) map[key] = 0;
             map[key] += parseFloat(inv.totalAmount || 0);
         });
         const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-        return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-8).map(([key, value]) => {
-            const m = parseInt(key.split("-")[1]) - 1;
-            return { month: months[m] || "?", value: Math.round(value) };
+        return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([key, value]) => {
+            const [year, m] = key.split("-");
+            const shortYear = year.slice(2);
+            return { month: `${months[parseInt(m) - 1]}/${shortYear}`, value: Math.round(value) };
         });
     }, [invoices]);
     const totalExpenses = monthlyExpenses.reduce((s, m) => s + m.value, 0);
@@ -172,15 +173,17 @@ export default function FarmDashboard() {
             .slice(0, 3);
     }, [applications]);
 
-    // ─── Card 4: Estoque por categoria (normalizado) ─────────────────────────
+    // ─── Card 4: Estoque por categoria (normalizado — tenta category, productCategory, product_name) ─
     const stockByCategory = useMemo(() => {
         const m: Record<string, { category: string; count: number; value: number }> = {};
         stock.forEach((s: any) => {
-            const cat = normalizeCategory(s.category || "outros");
+            // A API retorna 'category' do JOIN com farm_products_catalog
+            const rawCat = s.category || s.productCategory || s.product_category || "";
+            const cat = normalizeCategory(rawCat);
             const key = cat.toLowerCase();
             if (!m[key]) m[key] = { category: cat, count: 0, value: 0 };
             m[key].count += 1;
-            m[key].value += parseFloat(s.quantity || 0) * parseFloat(s.averageCost || 0);
+            m[key].value += parseFloat(s.quantity || 0) * parseFloat(s.averageCost || s.average_cost || 0);
         });
         return Object.values(m).sort((a, b) => b.count - a.count);
     }, [stock]);
@@ -371,39 +374,57 @@ export default function FarmDashboard() {
                         </div>
                     )}
 
-                    {/* ══ CARD 3: Ultimas Aplicacoes (4 col) ══ */}
+                    {/* ══ CARD 3: Ultimas Aplicacoes (4 col) — clique abre modal ══ */}
                     <section className="md:col-span-4 card-stitch p-6">
                         <h3 className="headline-font font-bold text-lg text-emerald-950 mb-4">Ultimas Aplicacoes</h3>
                         {recentApps.length > 0 ? (
                             <div className="space-y-3">
-                                {recentApps.map((app: any) => {
-                                    const isExpanded = expandedApp === app.id;
-                                    return (
-                                        <div key={app.id} className="bg-[#eff6e7] rounded-xl overflow-hidden cursor-pointer" onClick={() => setExpandedApp(isExpanded ? null : app.id)}>
-                                            <div className="p-3 flex items-center justify-between">
-                                                <div className="min-w-0">
-                                                    <div className="text-sm font-bold text-[#171d14] truncate">{app.plotName || "Talhao"}</div>
-                                                    <div className="flex items-center gap-1.5 text-[10px] text-[#41493e] font-medium">
-                                                        <Clock className="w-3 h-3" />
-                                                        {fmtDateTime(app.appliedAt || app.createdAt)}
-                                                    </div>
-                                                </div>
-                                                {isExpanded ? <ChevronUp className="w-4 h-4 text-[#41493e] shrink-0" /> : <ChevronDown className="w-4 h-4 text-[#41493e] shrink-0" />}
-                                            </div>
-                                            {isExpanded && (
-                                                <div className="px-3 pb-3 border-t border-emerald-200/50">
-                                                    <div className="text-[10px] font-bold text-[#41493e] mt-2 mb-1 uppercase tracking-wider">Produtos</div>
-                                                    <div className="text-xs text-[#171d14] font-medium">{app.productName || "—"}</div>
-                                                    {app.quantity && <div className="text-[10px] text-[#41493e]">Qtd: {parseFloat(app.quantity).toFixed(2)} {app.unit || ""}</div>}
-                                                    {app.equipmentName && <div className="text-[10px] text-[#41493e]">Equipamento: {app.equipmentName}</div>}
-                                                </div>
-                                            )}
+                                {recentApps.map((app: any) => (
+                                    <div key={app.id} className="bg-[#eff6e7] rounded-xl p-3 cursor-pointer hover:bg-[#e9f0e1] transition-colors"
+                                        onClick={() => setExpandedApp(app.id)}>
+                                        <div className="text-sm font-bold text-[#171d14] truncate">{app.plotName || "Talhao"}</div>
+                                        <div className="flex items-center gap-1.5 text-[10px] text-[#41493e] font-medium">
+                                            <Clock className="w-3 h-3" />
+                                            {fmtDateTime(app.appliedAt || app.createdAt)}
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                ))}
                             </div>
                         ) : <div className="h-32 flex items-center justify-center text-[#717a6d] text-sm">Sem aplicacoes</div>}
                     </section>
+
+                    {/* Modal flutuante da aplicacao */}
+                    {expandedApp && (() => {
+                        const app = recentApps.find((a: any) => a.id === expandedApp) || applications.find((a: any) => a.id === expandedApp);
+                        if (!app) return null;
+                        return (
+                            <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setExpandedApp(null)}>
+                                <div className="card-stitch w-[90%] max-w-md p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between mb-4">
+                                        <h3 className="text-xl font-bold text-emerald-950 headline-font">{app.plotName || "Talhao"}</h3>
+                                        <button onClick={() => setExpandedApp(null)} className="p-1 hover:bg-gray-100 rounded-lg cursor-pointer"><X className="w-5 h-5 text-[#41493e]" /></button>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2 text-sm text-[#41493e]">
+                                            <Clock className="w-4 h-4" />
+                                            {fmtDateTime(app.appliedAt || app.createdAt)}
+                                        </div>
+                                        <div className="bg-[#eff6e7] rounded-xl p-4 space-y-2">
+                                            <div className="text-[10px] font-bold text-[#41493e] uppercase tracking-wider">Produto</div>
+                                            <div className="text-base font-bold text-[#171d14]">{app.productName || "—"}</div>
+                                            {app.quantity && <div className="text-sm text-[#41493e]">Quantidade: <strong>{parseFloat(app.quantity).toFixed(2)} {app.unit || app.productUnit || ""}</strong></div>}
+                                            {app.equipmentName && <div className="text-sm text-[#41493e]">Equipamento: <strong>{app.equipmentName}</strong></div>}
+                                            {app.crop && <div className="text-sm text-[#41493e]">Cultura: <strong>{app.crop}</strong></div>}
+                                        </div>
+                                    </div>
+                                    <button onClick={() => { setExpandedApp(null); setLocation("/fazenda/aplicacoes"); }}
+                                        className="mt-4 w-full py-3 bg-gradient-to-b from-[#00450d] to-[#1b5e20] text-white rounded-full text-sm font-bold headline-font cursor-pointer hover:opacity-90 transition-opacity">
+                                        Ver Todas Aplicacoes
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* ══ CARD 4: Inventario Estoque — categorias corretas + quantidade (4 col) ══ */}
                     {hasModule("stock") && (
@@ -460,18 +481,18 @@ export default function FarmDashboard() {
                             <div className="text-right"><div className="text-[10px] text-[#41493e] font-bold uppercase">Total</div><div className="text-xl font-black text-red-700">{fmt(totalDebt)}</div></div>
                         </div>
                         {debtByCompany.length > 0 ? (
-                            <div className="space-y-3">
+                            <div className="h-44 flex items-end gap-3 px-2">
                                 {debtByCompany.map((d, i) => {
                                     const pct = (d.amount / maxDebt) * 100;
+                                    const colors = ["#1b5e20", "#1b5e20", "#204200", "#2f5c00", "#41493e", "#717a6d"];
                                     return (
-                                        <div key={d.name}>
-                                            <div className="flex justify-between items-end mb-1">
-                                                <span className="text-xs font-bold text-[#171d14] truncate max-w-[60%]">{d.name}</span>
-                                                <span className="text-sm font-black text-emerald-950">{fmt(d.amount)}</span>
+                                        <div key={d.name} className="flex-1 flex flex-col items-center gap-1">
+                                            <span className="text-[10px] font-black text-emerald-950">{fmt(d.amount)}</span>
+                                            <div className="w-full bg-[#e9f0e1] rounded-t-sm relative overflow-hidden" style={{ height: "120px" }}>
+                                                <div className="absolute bottom-0 left-0 right-0 rounded-t-sm transition-all duration-700"
+                                                    style={{ height: `${Math.max(pct, 5)}%`, background: colors[i] || "#717a6d" }}></div>
                                             </div>
-                                            <div className="h-4 bg-[#e9f0e1] rounded-sm overflow-hidden">
-                                                <div className="h-full rounded-sm transition-all duration-700" style={{ width: `${pct}%`, background: i < 2 ? "#1b5e20" : "#e9f0e1" === "#e9f0e1" ? "#204200" : "#717a6d" }}></div>
-                                            </div>
+                                            <span className="text-[8px] font-bold text-[#41493e] text-center truncate max-w-full uppercase leading-tight">{d.name.split(" ").slice(0, 2).join(" ")}</span>
                                         </div>
                                     );
                                 })}
