@@ -125,6 +125,7 @@ export default function FarmInvoices() {
     const [filterDate, setFilterDate] = useState("");
     const [confirmSkipStock, setConfirmSkipStock] = useState(false);
     const [confirmWarehouseId, setConfirmWarehouseId] = useState<string>("");
+    const [skipConversion, setSkipConversion] = useState<Set<string>>(new Set());
     const [confirmSeasonId, setConfirmSeasonId] = useState<string>("");
     const [confirmFrotaAmount, setConfirmFrotaAmount] = useState<string>("");
     const [confirmEquipmentId, setConfirmEquipmentId] = useState<string>("");
@@ -263,7 +264,7 @@ export default function FarmInvoices() {
                 : confirmSkipStock ? "Fatura confirmada (somente valor, sem estoque)."
                 : "Confirmado! Estoque atualizado."
             });
-            setSelectedInvoice(null);
+            setSelectedInvoice(null); setSkipConversion(new Set());
             setConfirmSkipStock(false);
             setConfirmWarehouseId("");
             setConfirmSeasonId("");
@@ -280,7 +281,7 @@ export default function FarmInvoices() {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
             toast({ title: data?.message || "Excluido com sucesso." });
-            setSelectedInvoice(null);
+            setSelectedInvoice(null); setSkipConversion(new Set());
         },
         onError: () => toast({ title: "Erro ao excluir", variant: "destructive" }),
     });
@@ -909,7 +910,7 @@ export default function FarmInvoices() {
                                                     <Eye className="mr-1 h-3 w-3" /> Ver Original
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" onClick={() => { setSelectedInvoice(null); setEditingInvoice(false); }}>Fechar</Button>
+                                            <Button variant="ghost" size="sm" onClick={() => { setSelectedInvoice(null); setSkipConversion(new Set()); setEditingInvoice(false); }}>Fechar</Button>
                                         </div>
                                     </div>
                                     {editingInvoice ? (
@@ -1094,9 +1095,15 @@ export default function FarmInvoices() {
                                                                 <td className="p-2 text-center">
                                                                     <div className="flex items-center justify-center gap-1">
                                                                         <button className="p-1 rounded hover:bg-emerald-200" title="Salvar"
-                                                                            onClick={() => updateInvoiceItemMutation.mutate({
-                                                                                invoiceId: selectedInvoice!, itemId: item.id, data: editItemData
-                                                                            })}>
+                                                                            onClick={() => {
+                                                                                const sanitized = { ...editItemData };
+                                                                                if (sanitized.quantity) sanitized.quantity = String(sanitized.quantity).replace(",", ".");
+                                                                                if (sanitized.unitPrice) sanitized.unitPrice = String(sanitized.unitPrice).replace(",", ".");
+                                                                                if (sanitized.totalPrice) sanitized.totalPrice = String(sanitized.totalPrice).replace(",", ".");
+                                                                                updateInvoiceItemMutation.mutate({
+                                                                                    invoiceId: selectedInvoice!, itemId: item.id, data: sanitized
+                                                                                });
+                                                                            }}>
                                                                             <Save className="h-4 w-4 text-emerald-600" />
                                                                         </button>
                                                                         <button className="p-1 rounded hover:bg-gray-200" title="Cancelar"
@@ -1127,7 +1134,7 @@ export default function FarmInvoices() {
                                                                 </td>
                                                                 <td className="text-center p-2">{item.unit}</td>
                                                                 {(() => {
-                                                                    const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products);
+                                                                    const pkgSize = skipConversion.has(item.id) ? null : shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products);
                                                                     const qty = parseFloat(item.quantity);
                                                                     const price = parseFloat(item.unitPrice);
                                                                     const realQty = pkgSize ? qty * pkgSize : qty;
@@ -1198,32 +1205,44 @@ export default function FarmInvoices() {
 
                                     {/* Conversão embalagem → litros/kg (informativo) */}
                                     {invoiceDetail.status === "pending" && invoiceDetail.items?.length > 0 && (() => {
-                                        const itemsWithPkg = invoiceDetail.items.filter((item: any) => shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products));
-                                        if (itemsWithPkg.length === 0) return null;
+                                        const itemsConvertible = invoiceDetail.items.filter((item: any) => shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products));
+                                        if (itemsConvertible.length === 0) return null;
+                                        const activeCount = itemsConvertible.filter((item: any) => !skipConversion.has(item.id)).length;
                                         return (
                                             <div className="mt-4 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <Package className="h-4 w-4 text-emerald-600" />
                                                     <span className="text-sm font-semibold text-emerald-800">
-                                                        Conversao automatica de embalagem ({itemsWithPkg.length} {itemsWithPkg.length === 1 ? "item" : "itens"})
+                                                        Conversao de embalagem ({activeCount}/{itemsConvertible.length} {activeCount === 1 ? "ativo" : "ativos"})
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-emerald-700 mb-2">
-                                                    Quantidade convertida de embalagens para litros/kg. Preco unitario ajustado proporcionalmente. Valor total inalterado.
+                                                    Clique no item para ativar/desativar a conversao. Valor total inalterado.
                                                 </p>
                                                 <div className="space-y-1">
-                                                    {itemsWithPkg.map((item: any) => {
+                                                    {itemsConvertible.map((item: any) => {
                                                         const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products)!;
                                                         const qty = parseFloat(item.quantity);
                                                         const price = parseFloat(item.unitPrice);
+                                                        const isSkipped = skipConversion.has(item.id);
                                                         return (
-                                                            <div key={item.id} className="flex items-center gap-2 p-1.5 rounded bg-white/60 text-xs">
-                                                                <Check className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
-                                                                <span className="font-medium flex-1 truncate">{item.productName}</span>
-                                                                <span className="text-emerald-700 flex-shrink-0">
+                                                            <button key={item.id}
+                                                                onClick={() => {
+                                                                    setSkipConversion(prev => {
+                                                                        const next = new Set(prev);
+                                                                        if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                                                                        return next;
+                                                                    });
+                                                                }}
+                                                                className={`w-full flex items-center gap-2 p-1.5 rounded text-xs transition-all cursor-pointer ${isSkipped ? "bg-gray-100 opacity-60" : "bg-white/60 hover:bg-white"}`}>
+                                                                <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${isSkipped ? "bg-gray-300" : "bg-emerald-500"}`}>
+                                                                    <Check className={`h-3 w-3 text-white ${isSkipped ? "hidden" : ""}`} />
+                                                                </div>
+                                                                <span className={`font-medium flex-1 truncate text-left ${isSkipped ? "line-through text-gray-400" : ""}`}>{item.productName}</span>
+                                                                <span className={`flex-shrink-0 ${isSkipped ? "text-gray-400 line-through" : "text-emerald-700"}`}>
                                                                     {qty} × {pkgSize} = {(qty * pkgSize).toFixed(0)} | ${(price / pkgSize).toFixed(2)}/un
                                                                 </span>
-                                                            </div>
+                                                            </button>
                                                         );
                                                     })}
                                                 </div>
@@ -1347,6 +1366,7 @@ export default function FarmInvoices() {
                                                         const conversions: Record<string, number> = {};
                                                         if (invoiceDetail.items) {
                                                             for (const item of invoiceDetail.items) {
+                                                                if (skipConversion.has(item.id)) continue;
                                                                 const pkgSize = shouldConvertPackage({ productName: item.productName, quantity: item.quantity, unitPrice: item.unitPrice, totalPrice: item.totalPrice, productId: item.productId }, stockData, products);
                                                                 if (pkgSize) {
                                                                     conversions[item.id] = pkgSize;
@@ -1562,7 +1582,7 @@ export default function FarmInvoices() {
                                                     <Eye className="mr-1 h-3 w-3" /> Ver Original
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null)}>Fechar</Button>
+                                            <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(null); setSkipConversion(new Set())}>Fechar</Button>
                                         </div>
                                     </div>
                                     <p className="text-sm text-gray-500 mt-1">
