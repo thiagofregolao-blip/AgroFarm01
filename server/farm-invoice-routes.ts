@@ -771,7 +771,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
 
             const { productId, productName, productCode, unit, quantity, unitPrice, discount, totalPrice, batch, expiryDate } = req.body;
             const updateData: any = {};
-            if (productId !== undefined) updateData.productId = productId;
+            if (productId !== undefined) updateData.productId = productId || null;
             if (productName !== undefined) updateData.productName = productName;
             if (productCode !== undefined) updateData.productCode = productCode;
             if (unit !== undefined) updateData.unit = unit;

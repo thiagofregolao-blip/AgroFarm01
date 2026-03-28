@@ -478,26 +478,9 @@ export default function FarmInvoices() {
                 formData.append("seasonId", selectedSeasonId);
             }
 
-            // If remission mode, post to remissions endpoint
+            // If remission mode, send to same endpoint with isRemision flag
             if (isRemission) {
-                formData.append("isRemission", "true");
-                const res = await fetch("/api/farm/remissions/import", {
-                    method: "POST",
-                    body: formData,
-                    credentials: "include",
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error("Upload failed");
-                queryClient.invalidateQueries({ queryKey: ["/api/farm/remissions"] });
-                setImportDialogOpen(false);
-                setIsRemission(false);
-                toast({ title: `Remissao importada com sucesso` });
-
-                // Auto-register supplier from remission
-                if (data.ruc && data.supplier) {
-                    await autoRegisterSupplier(data.supplier, data.ruc);
-                }
-                return;
+                formData.append("isRemision", "true");
             }
 
             if (skipStockEntry) {
@@ -528,11 +511,14 @@ export default function FarmInvoices() {
             }
 
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
-            setSelectedInvoice(data.invoice.id);
+            setSelectedInvoice(data.invoice?.id || null);
             setImportDialogOpen(false);
+            setIsRemission(false);
 
             // Show import success + remission match notification
-            if (data.matchingRemissions && data.matchingRemissions.length > 0) {
+            if (data.isRemision) {
+                toast({ title: "Remissao importada com sucesso" });
+            } else if (data.matchingRemissions && data.matchingRemissions.length > 0) {
                 toast({
                     title: "Fatura importada - Remissao encontrada!",
                     description: `${data.matchingRemissions.length} remissao(oes) do mesmo fornecedor. Abra o card da fatura para conciliar.`,
