@@ -22,8 +22,11 @@ export function enqueueBatch(error: CapturedError): void {
         analyzeSingle(error).catch(console.error);
         return;
     }
+    // Info errors tambem vao pro batch (para ir pro Notion durante testes)
     if (error.severity === "info") {
-        console.log(`[monitor] [info] ${error.message.slice(0, 80)} (sem analise IA)`);
+        batchQueue.push(error);
+        if (batchQueue.length >= BATCH_MAX_SIZE) { flushBatch(); return; }
+        if (!batchTimer) batchTimer = setTimeout(flushBatch, BATCH_WINDOW_MS);
         return;
     }
     batchQueue.push(error);
