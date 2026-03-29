@@ -18,7 +18,8 @@ import {
     Wallet, Plus, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
     Loader2, Trash2, Building2, Banknote, CreditCard, Landmark, DollarSign,
     Tag, Download, AlertTriangle, Target, Activity, ArrowLeftRight, FileText,
-    CheckCircle, XCircle, Clock, Pencil,
+    CheckCircle, XCircle, Clock, Pencil, Search, ChevronLeft, ChevronRight,
+    MoreHorizontal, Calendar,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 import { useAccessLevel } from "@/hooks/use-access-level";
@@ -193,254 +194,381 @@ export default function FarmCashFlow() {
         return points;
     }, [totalSaldo, accountsPayable, accountsReceivable]);
 
+    // ── Stitch AgriIntel KPI calculations ─────────────────────────
+    const kpiTotalBalance = useMemo(() => {
+        return allAccounts.reduce((s: number, a: any) => s + (parseFloat(a.currentBalance) || 0), 0);
+    }, [allAccounts]);
+
+    const kpiMonthIncome = useMemo(() => {
+        const now = new Date();
+        const thisMonth = now.getMonth();
+        const thisYear = now.getFullYear();
+        return transactions
+            .filter((t: any) => {
+                if (t.type !== "entrada") return false;
+                const d = new Date(t.transactionDate);
+                return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+            })
+            .reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+    }, [transactions]);
+
+    const kpiMonthExpense = useMemo(() => {
+        const now = new Date();
+        const thisMonth = now.getMonth();
+        const thisYear = now.getFullYear();
+        return transactions
+            .filter((t: any) => {
+                if (t.type === "entrada") return false;
+                const d = new Date(t.transactionDate);
+                return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+            })
+            .reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+    }, [transactions]);
+
+    // ── Monthly flow chart (last 6 months CSS bars) ────────────────
+    const monthlyFlowData = useMemo(() => {
+        const now = new Date();
+        const months: { label: string; entradas: number; saidas: number }[] = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const m = d.getMonth();
+            const y = d.getFullYear();
+            const label = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+            const entradas = transactions
+                .filter((t: any) => t.type === "entrada" && new Date(t.transactionDate).getMonth() === m && new Date(t.transactionDate).getFullYear() === y)
+                .reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+            const saidas = transactions
+                .filter((t: any) => t.type !== "entrada" && new Date(t.transactionDate).getMonth() === m && new Date(t.transactionDate).getFullYear() === y)
+                .reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+            months.push({ label, entradas, saidas });
+        }
+        return months;
+    }, [transactions]);
+
+    const flowChartMax = useMemo(() => {
+        return Math.max(1, ...monthlyFlowData.map(m => Math.max(m.entradas, m.saidas)));
+    }, [monthlyFlowData]);
+
+    // ── Period toggle state ────────────────────────────────────────
+    const [periodView, setPeriodView] = useState<"mensal" | "trimestral" | "anual">("mensal");
+    const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+
+    // ── Transaction pagination ─────────────────────────────────────
+    const [txPage, setTxPage] = useState(1);
+    const TX_PER_PAGE = 10;
+
     const deleteTransaction = useMutation({
         mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/cash-transactions/${id}`),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
-            toast({ title: "Movimentação excluída" });
+            toast({ title: "Movimentacao excluida" });
         },
     });
 
+    const currentMonthLabel = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+
     return (
         <FarmLayout>
-            <div className="space-y-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-emerald-800">Fluxo de Caixa</h1>
-                        <p className="text-emerald-600 text-sm">Controle financeiro da sua fazenda</p>
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+                .font-manrope { font-family: 'Manrope', sans-serif; }
+            `}</style>
+            <div className="font-manrope min-h-screen bg-gradient-to-br from-gray-50 via-white to-emerald-50/30">
+                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+                    {/* ═══ 1. PAGE HEADER ═══ */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest text-emerald-700 font-semibold mb-1">FINANCIAL OVERVIEW</p>
+                            <h1 className="text-4xl font-extrabold tracking-tight text-gray-900">Fluxo de Caixa</h1>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            {/* Period toggle pills */}
+                            <div className="bg-gray-100 rounded-xl p-1.5 flex gap-1">
+                                {(["mensal", "trimestral", "anual"] as const).map(p => (
+                                    <button key={p} onClick={() => setPeriodView(p)}
+                                        className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${periodView === p
+                                            ? "bg-white text-gray-900 shadow-sm"
+                                            : "text-gray-500 hover:text-gray-700"}`}>
+                                        {p === "mensal" ? "Mensal" : p === "trimestral" ? "Trimestral" : "Anual"}
+                                    </button>
+                                ))}
+                            </div>
+                            {/* Month selector */}
+                            <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+                                <Calendar className="h-4 w-4 text-emerald-600" />
+                                <span className="capitalize">{currentMonthLabel}</span>
+                            </button>
+                            {/* Action buttons */}
+                            <TransferDialog accounts={allAccounts} onSuccess={() => {
+                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+                            }} />
+                            <CreateAccountDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
+                        </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <TransferDialog accounts={allAccounts} onSuccess={() => {
-                            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
-                            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
-                        }} />
-                        <CreateAccountDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
+
+                    {/* Currency filter pills */}
+                    <div className="flex gap-1.5">
+                        {(["todos", "USD", "PYG"] as const).map(cur => (
+                            <button key={cur} onClick={() => setCurrencyFilter(cur)}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${currencyFilter === cur
+                                    ? "bg-emerald-600 text-white shadow-sm"
+                                    : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                                {cur === "todos" ? "Todas Moedas" : cur === "USD" ? "USD ($)" : "PYG (Gs.)"}
+                            </button>
+                        ))}
                     </div>
-                </div>
 
-                {/* Currency filter */}
-                <div className="flex gap-1">
-                    {(["todos", "USD", "PYG"] as const).map(cur => (
-                        <button key={cur} onClick={() => setCurrencyFilter(cur)}
-                            className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-colors ${currencyFilter === cur
-                                ? "bg-emerald-600 text-white border-emerald-600"
-                                : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                            {cur === "todos" ? "Todas Moedas" : cur === "USD" ? "USD ($)" : "PYG (Gs.)"}
-                        </button>
-                    ))}
-                </div>
+                    {isLoading ? (
+                        <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-emerald-600" /></div>
+                    ) : (
+                        <Tabs defaultValue="dashboard">
+                            <TabsList className="bg-white border border-gray-200 rounded-xl p-1.5 h-auto flex-wrap shadow-sm">
+                                {[
+                                    { value: "dashboard", label: "Painel" },
+                                    { value: "previsao", label: "Previsao" },
+                                    { value: "extrato", label: "Extrato" },
+                                    { value: "transferencias", label: "Transferencias" },
+                                    { value: "contas", label: "Contas / Bancos" },
+                                    { value: "cheques", label: "Cheques" },
+                                    { value: "categorias", label: "Categorias" },
+                                ].map(tab => (
+                                    <TabsTrigger key={tab.value} value={tab.value}
+                                        className="text-[13px] font-semibold rounded-lg px-4 py-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200">
+                                        {tab.label}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
 
-                {isLoading ? (
-                    <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
-                ) : (
-                    <Tabs defaultValue="dashboard">
-                        <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10 flex-wrap">
-                            <TabsTrigger value="dashboard" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Painel</TabsTrigger>
-                            <TabsTrigger value="previsao" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Previsao</TabsTrigger>
-                            <TabsTrigger value="extrato" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Extrato</TabsTrigger>
-                            <TabsTrigger value="transferencias" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Transferencias</TabsTrigger>
-                            <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Contas / Bancos</TabsTrigger>
-                            <TabsTrigger value="cheques" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Cheques</TabsTrigger>
-                            <TabsTrigger value="categorias" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Categorias</TabsTrigger>
-                        </TabsList>
+                            {/* ═══ DASHBOARD TAB ═══ */}
+                            <TabsContent value="dashboard" className="space-y-8 mt-6">
 
-                        {/* ── DASHBOARD ─────────────────── */}
-                        <TabsContent value="dashboard" className="space-y-6 mt-4">
-                            {/* Month KPIs - Expandable */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <Card className="border-emerald-200 bg-emerald-50 cursor-pointer transition-shadow hover:shadow-md" onClick={() => setExpandEntradas(!expandEntradas)}>
-                                    <CardContent className="p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-full bg-emerald-200 flex items-center justify-center"><ArrowUpRight className="h-5 w-5 text-emerald-700" /></div>
-                                            <div><p className="text-xs text-emerald-600 font-medium">Entradas (Mes) {expandEntradas ? "[-]" : "[+]"}</p>
-                                                {monthTotals.length > 0 ? monthTotals.map(m => (
-                                                    <p key={m.currency} className="text-xl font-bold text-emerald-800">{formatCurrency(m.entradas, m.currency)}</p>
-                                                )) : <p className="text-xl font-bold text-emerald-800">{formatCurrency(month.totalEntradas, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                {/* ═══ 2. THREE KPI CARDS ═══ */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {/* Saldo Liquido */}
+                                    <div className="bg-white p-8 rounded-xl shadow-sm hover:scale-[1.01] transition-transform duration-300 cursor-pointer group relative overflow-hidden"
+                                        onClick={() => setExpandSaldo(!expandSaldo)}>
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="h-12 w-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                                                <DollarSign className="h-6 w-6 text-emerald-600" />
                                             </div>
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                                                <TrendingUp className="h-3 w-3" /> Consolidado
+                                            </span>
                                         </div>
+                                        <p className="text-sm text-gray-500 font-medium mb-1">Saldo Liquido</p>
+                                        <p className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                                            {kpiTotalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
+                                        {expandSaldo && (
+                                            <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
+                                                {monthTotals.map(m => (
+                                                    <div key={m.currency} className="flex justify-between text-xs text-gray-600">
+                                                        <span>Liquido ({m.currency})</span>
+                                                        <span className="font-mono font-semibold">{formatCurrency(m.saldo, m.currency)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 to-emerald-600" />
+                                        <p className="text-[11px] text-gray-400 mt-4">Previsao proximo mes: <span className="font-semibold text-gray-600">{formatCurrency(predictedBalance, "USD")}</span></p>
+                                    </div>
+
+                                    {/* Entradas */}
+                                    <div className="bg-white p-8 rounded-xl shadow-sm hover:scale-[1.01] transition-transform duration-300 cursor-pointer group"
+                                        onClick={() => setExpandEntradas(!expandEntradas)}>
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="h-12 w-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                                                <ArrowUpRight className="h-6 w-6 text-emerald-600" />
+                                            </div>
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                                                <TrendingUp className="h-3 w-3" /> Receitas
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-gray-500 font-medium mb-1">Entradas</p>
+                                        <p className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                                            {kpiMonthIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
                                         {expandEntradas && (
-                                            <div className="mt-3 pt-3 border-t border-emerald-200 space-y-1">
-                                                <p className="text-xs font-medium text-emerald-700 mb-1">Ultimas 5 entradas:</p>
+                                            <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
+                                                <p className="text-[11px] font-semibold text-gray-500 mb-1">Ultimas 5 entradas:</p>
                                                 {filteredTransactions.filter(t => t.type === "entrada").slice(0, 5).map((t: any) => (
                                                     <div key={t.id} className="flex justify-between text-xs">
-                                                        <span className="text-gray-600 truncate max-w-[60%]">{t.description || t.category || "Entrada"}</span>
-                                                        <span className="font-mono text-emerald-700">+{formatCurrency(parseFloat(t.amount), t.currency || "USD")}</span>
+                                                        <span className="text-gray-500 truncate max-w-[60%]">{t.description || t.category || "Entrada"}</span>
+                                                        <span className="font-mono text-emerald-700 font-semibold">+{formatCurrency(parseFloat(t.amount), t.currency || "USD")}</span>
                                                     </div>
                                                 ))}
                                                 {filteredTransactions.filter(t => t.type === "entrada").length === 0 && <p className="text-xs text-gray-400">Nenhuma entrada</p>}
                                             </div>
                                         )}
-                                    </CardContent>
-                                </Card>
-                                <Card className="border-red-200 bg-red-50 cursor-pointer transition-shadow hover:shadow-md" onClick={() => setExpandSaidas(!expandSaidas)}>
-                                    <CardContent className="p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-full bg-red-200 flex items-center justify-center"><ArrowDownRight className="h-5 w-5 text-red-700" /></div>
-                                            <div><p className="text-xs text-red-600 font-medium">Saidas (Mes) {expandSaidas ? "[-]" : "[+]"}</p>
-                                                {monthTotals.length > 0 ? monthTotals.map(m => (
-                                                    <p key={m.currency} className="text-xl font-bold text-red-800">{formatCurrency(m.saidas, m.currency)}</p>
-                                                )) : <p className="text-xl font-bold text-red-800">{formatCurrency(month.totalSaidas, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                    </div>
+
+                                    {/* Saidas */}
+                                    <div className="bg-white p-8 rounded-xl shadow-sm hover:scale-[1.01] transition-transform duration-300 cursor-pointer group"
+                                        onClick={() => setExpandSaidas(!expandSaidas)}>
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="h-12 w-12 rounded-2xl bg-red-100 flex items-center justify-center">
+                                                <ArrowDownRight className="h-6 w-6 text-red-500" />
                                             </div>
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                                <TrendingDown className="h-3 w-3" /> Despesas
+                                            </span>
                                         </div>
+                                        <p className="text-sm text-gray-500 font-medium mb-1">Saidas</p>
+                                        <p className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                                            {kpiMonthExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </p>
                                         {expandSaidas && (
-                                            <div className="mt-3 pt-3 border-t border-red-200 space-y-1">
-                                                <p className="text-xs font-medium text-red-700 mb-1">Ultimas 5 saidas:</p>
+                                            <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
+                                                <p className="text-[11px] font-semibold text-gray-500 mb-1">Ultimas 5 saidas:</p>
                                                 {filteredTransactions.filter(t => t.type !== "entrada").slice(0, 5).map((t: any) => (
                                                     <div key={t.id} className="flex justify-between text-xs">
-                                                        <span className="text-gray-600 truncate max-w-[60%]">{t.description || t.category || "Saida"}</span>
-                                                        <span className="font-mono text-red-700">-{formatCurrency(parseFloat(t.amount), t.currency || "USD")}</span>
+                                                        <span className="text-gray-500 truncate max-w-[60%]">{t.description || t.category || "Saida"}</span>
+                                                        <span className="font-mono text-red-600 font-semibold">-{formatCurrency(parseFloat(t.amount), t.currency || "USD")}</span>
                                                     </div>
                                                 ))}
                                                 {filteredTransactions.filter(t => t.type !== "entrada").length === 0 && <p className="text-xs text-gray-400">Nenhuma saida</p>}
                                             </div>
                                         )}
-                                    </CardContent>
-                                </Card>
-                                <Card className={`border-${month.saldoLiquido >= 0 ? "blue" : "amber"}-200 bg-${month.saldoLiquido >= 0 ? "blue" : "amber"}-50 cursor-pointer transition-shadow hover:shadow-md`} onClick={() => setExpandSaldo(!expandSaldo)}>
-                                    <CardContent className="p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`h-10 w-10 rounded-full ${month.saldoLiquido >= 0 ? "bg-blue-200" : "bg-amber-200"} flex items-center justify-center`}><DollarSign className={`h-5 w-5 ${month.saldoLiquido >= 0 ? "text-blue-700" : "text-amber-700"}`} /></div>
-                                            <div><p className={`text-xs ${month.saldoLiquido >= 0 ? "text-blue-600" : "text-amber-600"} font-medium`}>Saldo Liquido (Mes) {expandSaldo ? "[-]" : "[+]"}</p>
-                                                {monthTotals.length > 0 ? monthTotals.map(m => (
-                                                    <p key={m.currency} className={`text-xl font-bold ${m.saldo >= 0 ? "text-blue-800" : "text-amber-800"}`}>{formatCurrency(m.saldo, m.currency)}</p>
-                                                )) : <p className={`text-xl font-bold ${month.saldoLiquido >= 0 ? "text-blue-800" : "text-amber-800"}`}>{formatCurrency(month.saldoLiquido, currencyFilter === "todos" ? "USD" : currencyFilter)}</p>}
+                                    </div>
+                                </div>
+
+                                {/* ═══ 3. MIDDLE SECTION — Accounts + Flow Chart ═══ */}
+                                <div className="grid grid-cols-12 gap-6">
+                                    {/* Left: Bank Accounts (3 cols) */}
+                                    <div className="col-span-12 lg:col-span-3 space-y-4">
+                                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold">CONTAS BANCARIAS</p>
+                                        {accounts.length === 0 ? (
+                                            <div className="bg-white rounded-xl shadow-sm p-6 text-center">
+                                                <Wallet className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                                                <p className="text-sm text-gray-400">Nenhuma conta</p>
                                             </div>
-                                        </div>
-                                        {expandSaldo && (
-                                            <div className="mt-3 pt-3 border-t border-blue-200 space-y-1">
-                                                <p className="text-xs font-medium text-blue-700 mb-1">Resumo do saldo:</p>
-                                                {monthTotals.map(m => (
-                                                    <div key={m.currency} className="text-xs space-y-0.5">
-                                                        <div className="flex justify-between"><span className="text-emerald-600">Entradas ({m.currency})</span><span className="font-mono">+{formatCurrency(m.entradas, m.currency)}</span></div>
-                                                        <div className="flex justify-between"><span className="text-red-600">Saidas ({m.currency})</span><span className="font-mono">-{formatCurrency(m.saidas, m.currency)}</span></div>
-                                                        <div className="flex justify-between font-semibold"><span>Liquido</span><span className="font-mono">{formatCurrency(m.saldo, m.currency)}</span></div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {accounts.map((acc: any) => {
+                                                    const balance = parseFloat(acc.currentBalance) || 0;
+                                                    const accType = ACCOUNT_TYPES.find(t => t.value === acc.accountType);
+                                                    const AccIcon = accType?.icon || Wallet;
+                                                    const isActive = selectedAccountId === acc.id;
+                                                    return (
+                                                        <div key={acc.id}
+                                                            onClick={() => setSelectedAccountId(isActive ? null : acc.id)}
+                                                            className={`bg-white rounded-xl shadow-sm p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${isActive ? "border-l-4 border-emerald-600" : "border-l-4 border-transparent"}`}>
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`h-10 w-10 rounded-xl ${isActive ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500"} flex items-center justify-center shrink-0 transition-colors`}>
+                                                                    <AccIcon className="h-5 w-5" />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="font-semibold text-gray-800 text-sm truncate">{acc.name}</p>
+                                                                    <p className="text-[11px] text-gray-400">{accType?.label} - {acc.currency}</p>
+                                                                </div>
+                                                            </div>
+                                                            <p className={`text-lg font-bold mt-2 ${balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                                                                {formatCurrency(balance, acc.currency)}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Right: Flow Analysis Chart (9 cols) */}
+                                    <div className="col-span-12 lg:col-span-9">
+                                        <div className="bg-white rounded-xl shadow-sm p-6">
+                                            <div className="flex items-center justify-between mb-6">
+                                                <div>
+                                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold mb-1">Analise de Fluxo</p>
+                                                    <p className="text-sm text-gray-400">Comparativo dos ultimos 6 meses</p>
+                                                </div>
+                                                <div className="flex items-center gap-4 text-xs">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="w-3 h-3 rounded-sm bg-emerald-500" />
+                                                        <span className="text-gray-500 font-medium">Entradas</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="w-3 h-3 rounded-sm bg-gray-300" />
+                                                        <span className="text-gray-500 font-medium">Saidas</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {/* CSS Bar Chart */}
+                                            <div className="flex items-end gap-4 h-[220px]">
+                                                {monthlyFlowData.map((m, i) => (
+                                                    <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                                                        <div className="flex gap-1 items-end w-full justify-center h-full">
+                                                            <div className="flex flex-col items-center justify-end h-full flex-1 max-w-[28px]">
+                                                                <div
+                                                                    className="w-full bg-emerald-500 rounded-t-md transition-all duration-500"
+                                                                    style={{ height: `${Math.max(2, (m.entradas / flowChartMax) * 180)}px` }}
+                                                                    title={`Entradas: ${m.entradas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                                                                />
+                                                            </div>
+                                                            <div className="flex flex-col items-center justify-end h-full flex-1 max-w-[28px]">
+                                                                <div
+                                                                    className="w-full bg-gray-300 rounded-t-md transition-all duration-500"
+                                                                    style={{ height: `${Math.max(2, (m.saidas / flowChartMax) * 180)}px` }}
+                                                                    title={`Saidas: ${m.saidas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-[11px] text-gray-400 font-medium capitalize mt-2">{m.label}</p>
                                                     </div>
                                                 ))}
                                             </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            {/* Account balances */}
-                            <Card className="border-emerald-100">
-                                <CardHeader><CardTitle className="text-emerald-800">Saldos por Conta</CardTitle></CardHeader>
-                                <CardContent>
-                                    {accounts.length === 0 ? (
-                                        <div className="py-6 text-center"><Wallet className="h-10 w-10 text-gray-300 mx-auto mb-2" /><p className="text-gray-500 text-sm">Nenhuma conta cadastrada.</p></div>
-                                    ) : (
-                                        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                            {accounts.map((acc: any) => {
-                                                const balance = parseFloat(acc.currentBalance) || 0;
-                                                const accType = ACCOUNT_TYPES.find(t => t.value === acc.accountType);
-                                                const AccIcon = accType?.icon || Wallet;
-                                                return (
-                                                    <div key={acc.id} className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 bg-white">
-                                                        <div className="h-10 w-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><AccIcon className="h-5 w-5" /></div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-gray-800 truncate">{acc.name}</p>
-                                                            <p className="text-xs text-gray-500">{accType?.label} · {acc.currency}</p>
-                                                        </div>
-                                                        <p className={`font-bold text-lg ${balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(balance, acc.currency)}</p>
-                                                    </div>
-                                                );
-                                            })}
                                         </div>
-                                    )}
-                                </CardContent>
-                            </Card>
+                                    </div>
+                                </div>
 
-                            {/* Charts */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                <Card className="border-emerald-100">
-                                    <CardHeader><CardTitle className="text-emerald-800 text-base">Entradas vs Saídas (6 meses)</CardTitle></CardHeader>
-                                    <CardContent>
-                                        {chartData.length > 0 ? (
-                                            <ResponsiveContainer width="100%" height={250}>
-                                                <BarChart data={chartData}>
-                                                    <CartesianGrid strokeDasharray="3 3" />
-                                                    <XAxis dataKey="month" /><YAxis />
-                                                    <Tooltip formatter={(v: number) => formatCurrency(v, "USD")} /><Legend />
-                                                    <Bar dataKey="entradas" name="Entradas" fill="#059669" radius={[4, 4, 0, 0]} />
-                                                    <Bar dataKey="saidas" name="Saídas" fill="#dc2626" radius={[4, 4, 0, 0]} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        ) : <p className="text-center text-gray-400 py-8 text-sm">Sem dados para exibir</p>}
-                                    </CardContent>
-                                </Card>
-                                <Card className="border-emerald-100">
-                                    <CardHeader><CardTitle className="text-emerald-800 text-base">Saídas por Categoria (Mês)</CardTitle></CardHeader>
-                                    <CardContent>
-                                        {byCategory.length > 0 ? (
-                                            <ResponsiveContainer width="100%" height={250}>
-                                                <PieChart>
-                                                    <Pie data={byCategory} dataKey="value" nameKey="category" cx="50%" cy="50%" outerRadius={90} label={({ category, value }) => `${category}: ${formatCurrency(value, "USD")}`}>
-                                                        {byCategory.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                                                    </Pie>
-                                                    <Tooltip formatter={(v: number) => formatCurrency(v, "USD")} />
-                                                </PieChart>
-                                            </ResponsiveContainer>
-                                        ) : <p className="text-center text-gray-400 py-8 text-sm">Sem saídas neste mês</p>}
-                                    </CardContent>
-                                </Card>
-                            </div>
+                                {/* ═══ 4. TRANSACTIONS TABLE ═══ */}
+                                <TransactionTable
+                                    transactions={filteredTransactions}
+                                    accounts={accounts}
+                                    onDelete={(id) => deleteTransaction.mutate(id)}
+                                    deleting={deleteTransaction.isPending}
+                                />
+                            </TabsContent>
 
-                            {/* Last transactions */}
-                            <Card className="border-emerald-100">
-                                <CardHeader><CardTitle className="text-emerald-800">Últimas Movimentações</CardTitle></CardHeader>
-                                <CardContent>
-                                    <TransactionTable transactions={filteredTransactions.slice(0, 10)} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
+                            {/* ═══ PREDICTIVE TAB ═══ */}
+                            <TabsContent value="previsao" className="space-y-6 mt-6">
+                                {/* Indicator cards */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="bg-white p-6 rounded-xl shadow-sm">
+                                        <div className="flex items-center gap-2 mb-2"><Activity className="h-4 w-4 text-emerald-600" /><p className="text-xs text-gray-500 font-medium">Saldo Total Atual</p></div>
+                                        <p className="text-2xl font-extrabold text-gray-900">{formatCurrency(totalSaldo, "USD")}</p>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm">
+                                        <div className="flex items-center gap-2 mb-2">{upcomingAP > 0 ? <AlertTriangle className="h-4 w-4 text-red-500" /> : <DollarSign className="h-4 w-4 text-gray-400" />}<p className="text-xs text-gray-500 font-medium">A Pagar (30 dias)</p></div>
+                                        <p className={`text-2xl font-extrabold ${upcomingAP > 0 ? "text-red-600" : "text-gray-400"}`}>{formatCurrency(upcomingAP, "USD")}</p>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm">
+                                        <div className="flex items-center gap-2 mb-2"><TrendingUp className={`h-4 w-4 ${upcomingAR > 0 ? "text-blue-600" : "text-gray-400"}`} /><p className="text-xs text-gray-500 font-medium">A Receber (30 dias)</p></div>
+                                        <p className={`text-2xl font-extrabold ${upcomingAR > 0 ? "text-blue-700" : "text-gray-400"}`}>{formatCurrency(upcomingAR, "USD")}</p>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm">
+                                        <div className="flex items-center gap-2 mb-2"><Target className={`h-4 w-4 ${predictedBalance >= 0 ? "text-emerald-600" : "text-red-500"}`} /><p className="text-xs text-gray-500 font-medium">Saldo Projetado (30d)</p></div>
+                                        <p className={`text-2xl font-extrabold ${predictedBalance >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(predictedBalance, "USD")}</p>
+                                        {predictedBalance < 0 && <p className="text-xs text-red-500 mt-1">Possivel saldo negativo!</p>}
+                                    </div>
+                                </div>
 
-                        {/* ── PREDICTIVE TAB ─────────────────── */}
-                        <TabsContent value="previsao" className="space-y-6 mt-4">
-                            {/* Indicator cards */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <Card className="border-emerald-200 bg-emerald-50"><CardContent className="p-5">
-                                    <div className="flex items-center gap-2 mb-1"><Activity className="h-4 w-4 text-emerald-600" /><p className="text-xs text-emerald-600 font-medium">Saldo Total Atual</p></div>
-                                    <p className="text-xl font-bold text-emerald-800">{formatCurrency(totalSaldo, "USD")}</p>
-                                </CardContent></Card>
-
-                                <Card className={`border-${upcomingAP > 0 ? "red" : "gray"}-200 bg-${upcomingAP > 0 ? "red" : "gray"}-50`}><CardContent className="p-5">
-                                    <div className="flex items-center gap-2 mb-1">{upcomingAP > 0 ? <AlertTriangle className="h-4 w-4 text-red-600" /> : <DollarSign className="h-4 w-4 text-gray-400" />}<p className={`text-xs font-medium ${upcomingAP > 0 ? "text-red-600" : "text-gray-500"}`}>A Pagar (30 dias)</p></div>
-                                    <p className={`text-xl font-bold ${upcomingAP > 0 ? "text-red-700" : "text-gray-500"}`}>{formatCurrency(upcomingAP, "USD")}</p>
-                                </CardContent></Card>
-
-                                <Card className={`border-${upcomingAR > 0 ? "blue" : "gray"}-200 bg-${upcomingAR > 0 ? "blue" : "gray"}-50`}><CardContent className="p-5">
-                                    <div className="flex items-center gap-2 mb-1"><TrendingUp className={`h-4 w-4 ${upcomingAR > 0 ? "text-blue-600" : "text-gray-400"}`} /><p className={`text-xs font-medium ${upcomingAR > 0 ? "text-blue-600" : "text-gray-500"}`}>A Receber (30 dias)</p></div>
-                                    <p className={`text-xl font-bold ${upcomingAR > 0 ? "text-blue-700" : "text-gray-500"}`}>{formatCurrency(upcomingAR, "USD")}</p>
-                                </CardContent></Card>
-
-                                <Card className={`border-${predictedBalance >= 0 ? "emerald" : "red"}-200 bg-${predictedBalance >= 0 ? "emerald" : "red"}-50`}><CardContent className="p-5">
-                                    <div className="flex items-center gap-2 mb-1"><Target className={`h-4 w-4 ${predictedBalance >= 0 ? "text-emerald-600" : "text-red-600"}`} /><p className={`text-xs font-medium ${predictedBalance >= 0 ? "text-emerald-600" : "text-red-600"}`}>Saldo Projetado (30d)</p></div>
-                                    <p className={`text-xl font-bold ${predictedBalance >= 0 ? "text-emerald-800" : "text-red-700"}`}>{formatCurrency(predictedBalance, "USD")}</p>
-                                    {predictedBalance < 0 && <p className="text-xs text-red-500 mt-1">⚠ Possível saldo negativo!</p>}
-                                </CardContent></Card>
-                            </div>
-
-                            {daysUntilZero !== null && daysUntilZero < 60 && (
-                                <Card className={`border-${daysUntilZero < 15 ? "red" : "amber"}-200 bg-${daysUntilZero < 15 ? "red" : "amber"}-50`}>
-                                    <CardContent className="p-4 flex items-center gap-3">
-                                        <AlertTriangle className={`h-6 w-6 ${daysUntilZero < 15 ? "text-red-600" : "text-amber-600"} shrink-0`} />
+                                {daysUntilZero !== null && daysUntilZero < 60 && (
+                                    <div className={`bg-white rounded-xl shadow-sm p-5 flex items-center gap-4 border-l-4 ${daysUntilZero < 15 ? "border-red-500" : "border-amber-500"}`}>
+                                        <AlertTriangle className={`h-6 w-6 ${daysUntilZero < 15 ? "text-red-500" : "text-amber-500"} shrink-0`} />
                                         <div>
-                                            <p className={`font-semibold ${daysUntilZero < 15 ? "text-red-700" : "text-amber-700"}`}>
-                                                ⚠ Alerta de Fluxo de Caixa
-                                            </p>
-                                            <p className={`text-sm ${daysUntilZero < 15 ? "text-red-600" : "text-amber-600"}`}>
+                                            <p className={`font-bold ${daysUntilZero < 15 ? "text-red-700" : "text-amber-700"}`}>Alerta de Fluxo de Caixa</p>
+                                            <p className="text-sm text-gray-600">
                                                 Com o ritmo de gastos atual ({formatCurrency(burnRate, "USD")}/dia), o caixa pode zerar em aproximadamente <strong>{daysUntilZero} dias</strong>. Considere reduzir despesas ou antecipar recebimentos.
                                             </p>
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            )}
+                                    </div>
+                                )}
 
-                            {/* Projection chart */}
-                            <Card className="border-emerald-100">
-                                <CardHeader><CardTitle className="text-emerald-800 text-base">Projeção de Saldo – Próximos 30 dias</CardTitle></CardHeader>
-                                <CardContent>
+                                {/* Projection chart */}
+                                <div className="bg-white rounded-xl shadow-sm p-6">
+                                    <p className="text-base font-bold text-gray-900 mb-4">Projecao de Saldo - Proximos 30 dias</p>
                                     {projectionData.length > 0 ? (
                                         <ResponsiveContainer width="100%" height={300}>
                                             <AreaChart data={projectionData}>
@@ -450,128 +578,119 @@ export default function FarmCashFlow() {
                                                         <stop offset="95%" stopColor="#059669" stopOpacity={0} />
                                                     </linearGradient>
                                                 </defs>
-                                                <CartesianGrid strokeDasharray="3 3" />
-                                                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                                                <YAxis tick={{ fontSize: 11 }} />
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                                <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#9ca3af" }} />
+                                                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} />
                                                 <Tooltip formatter={(v: number) => formatCurrency(v, "USD")} />
                                                 <Legend />
                                                 <Area type="monotone" dataKey="saldo" name="Saldo" stroke="#059669" fill="url(#gradSaldo)" strokeWidth={2} />
                                                 {projectionData.some(p => p.entradas > 0) && <Bar dataKey="entradas" name="Entradas previstas" fill="#3b82f6" radius={[4, 4, 0, 0]} />}
-                                                {projectionData.some(p => p.saidas > 0) && <Bar dataKey="saidas" name="Saídas previstas" fill="#ef4444" radius={[4, 4, 0, 0]} />}
+                                                {projectionData.some(p => p.saidas > 0) && <Bar dataKey="saidas" name="Saidas previstas" fill="#ef4444" radius={[4, 4, 0, 0]} />}
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     ) : (
                                         <div className="py-10 text-center text-gray-400 text-sm">
                                             <Target className="h-10 w-10 mx-auto mb-2 text-gray-300" />
-                                            <p>Cadastre contas a pagar e a receber para gerar a projeção</p>
+                                            <p>Cadastre contas a pagar e a receber para gerar a projecao</p>
                                         </div>
                                     )}
-                                </CardContent>
-                            </Card>
+                                </div>
 
-                            {/* Upcoming obligations */}
-                            {((accountsPayable as any[]).filter((ap: any) => ap.status !== "pago").length > 0 || (accountsReceivable as any[]).filter((ar: any) => ar.status !== "recebido").length > 0) && (
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    {(accountsPayable as any[]).filter((ap: any) => ap.status !== "pago").length > 0 && (
-                                        <Card className="border-red-100">
-                                            <CardHeader><CardTitle className="text-red-700 text-sm flex items-center gap-2"><TrendingDown className="h-4 w-4" /> Próximas Saídas (A Pagar)</CardTitle></CardHeader>
-                                            <CardContent>
-                                                <div className="space-y-2">
+                                {/* Upcoming obligations */}
+                                {((accountsPayable as any[]).filter((ap: any) => ap.status !== "pago").length > 0 || (accountsReceivable as any[]).filter((ar: any) => ar.status !== "recebido").length > 0) && (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {(accountsPayable as any[]).filter((ap: any) => ap.status !== "pago").length > 0 && (
+                                            <div className="bg-white rounded-xl shadow-sm p-6">
+                                                <p className="text-sm font-bold text-red-700 flex items-center gap-2 mb-4"><TrendingDown className="h-4 w-4" /> Proximas Saidas (A Pagar)</p>
+                                                <div className="space-y-3">
                                                     {(accountsPayable as any[]).filter((ap: any) => ap.status !== "pago").slice(0, 5).map((ap: any) => (
-                                                        <div key={ap.id} className="flex justify-between items-center text-sm py-1.5 border-b border-gray-100">
+                                                        <div key={ap.id} className="flex justify-between items-center text-sm py-2 border-b border-gray-50">
                                                             <div>
                                                                 <p className="font-medium text-gray-800">{ap.supplier || ap.description}</p>
-                                                                <p className="text-xs text-gray-500">{new Date(ap.dueDate).toLocaleDateString("pt-BR")}</p>
+                                                                <p className="text-xs text-gray-400">{new Date(ap.dueDate).toLocaleDateString("pt-BR")}</p>
                                                             </div>
-                                                            <span className="font-mono font-semibold text-red-600">- {formatCurrency(parseFloat(ap.totalAmount || ap.amount || 0), ap.currency || "USD")}</span>
+                                                            <span className="font-mono font-bold text-red-600">- {formatCurrency(parseFloat(ap.totalAmount || ap.amount || 0), ap.currency || "USD")}</span>
                                                         </div>
                                                     ))}
                                                 </div>
-                                            </CardContent>
-                                        </Card>
-                                    )}
-                                    {(accountsReceivable as any[]).filter((ar: any) => ar.status !== "recebido").length > 0 && (
-                                        <Card className="border-blue-100">
-                                            <CardHeader><CardTitle className="text-blue-700 text-sm flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Próximas Entradas (A Receber)</CardTitle></CardHeader>
-                                            <CardContent>
-                                                <div className="space-y-2">
+                                            </div>
+                                        )}
+                                        {(accountsReceivable as any[]).filter((ar: any) => ar.status !== "recebido").length > 0 && (
+                                            <div className="bg-white rounded-xl shadow-sm p-6">
+                                                <p className="text-sm font-bold text-blue-700 flex items-center gap-2 mb-4"><TrendingUp className="h-4 w-4" /> Proximas Entradas (A Receber)</p>
+                                                <div className="space-y-3">
                                                     {(accountsReceivable as any[]).filter((ar: any) => ar.status !== "recebido").slice(0, 5).map((ar: any) => (
-                                                        <div key={ar.id} className="flex justify-between items-center text-sm py-1.5 border-b border-gray-100">
+                                                        <div key={ar.id} className="flex justify-between items-center text-sm py-2 border-b border-gray-50">
                                                             <div>
                                                                 <p className="font-medium text-gray-800">{ar.buyer}</p>
-                                                                <p className="text-xs text-gray-500">{new Date(ar.dueDate).toLocaleDateString("pt-BR")} · {ar.description || ""}</p>
+                                                                <p className="text-xs text-gray-400">{new Date(ar.dueDate).toLocaleDateString("pt-BR")} - {ar.description || ""}</p>
                                                             </div>
-                                                            <span className="font-mono font-semibold text-blue-600">+ {formatCurrency(parseFloat(ar.totalAmount) - parseFloat(ar.receivedAmount || 0), ar.currency || "USD")}</span>
+                                                            <span className="font-mono font-bold text-blue-600">+ {formatCurrency(parseFloat(ar.totalAmount) - parseFloat(ar.receivedAmount || 0), ar.currency || "USD")}</span>
                                                         </div>
                                                     ))}
                                                 </div>
-                                            </CardContent>
-                                        </Card>
-                                    )}
-                                </div>
-                            )}
-                        </TabsContent>
-
-                        {/* ── EXTRATO (full) ───────────────── */}
-                        <TabsContent value="extrato" className="mt-4 space-y-4">
-                            <div className="flex flex-wrap gap-3 items-end justify-between">
-                                <div className="flex flex-wrap gap-3 items-end">
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Data de</Label>
-                                        <Input type="date" value={extratoFrom} onChange={e => setExtratoFrom(e.target.value)} className="w-40 h-8 text-sm" />
+                                            </div>
+                                        )}
                                     </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">ate</Label>
-                                        <Input type="date" value={extratoTo} onChange={e => setExtratoTo(e.target.value)} className="w-40 h-8 text-sm" />
+                                )}
+                            </TabsContent>
+
+                            {/* ═══ EXTRATO TAB ═══ */}
+                            <TabsContent value="extrato" className="mt-6 space-y-4">
+                                <div className="flex flex-wrap gap-3 items-end justify-between">
+                                    <div className="flex flex-wrap gap-3 items-end">
+                                        <div>
+                                            <Label className="text-xs text-gray-400 font-medium">Data de</Label>
+                                            <Input type="date" value={extratoFrom} onChange={e => setExtratoFrom(e.target.value)} className="w-40 h-9 text-sm rounded-lg" />
+                                        </div>
+                                        <div>
+                                            <Label className="text-xs text-gray-400 font-medium">ate</Label>
+                                            <Input type="date" value={extratoTo} onChange={e => setExtratoTo(e.target.value)} className="w-40 h-9 text-sm rounded-lg" />
+                                        </div>
+                                        {(extratoFrom || extratoTo) && (
+                                            <Button variant="ghost" size="sm" className="text-gray-400 h-9 text-xs hover:text-gray-600" onClick={() => { setExtratoFrom(""); setExtratoTo(""); }}>
+                                                Limpar datas
+                                            </Button>
+                                        )}
                                     </div>
-                                    {(extratoFrom || extratoTo) && (
-                                        <Button variant="ghost" size="sm" className="text-gray-500 h-8 text-xs" onClick={() => { setExtratoFrom(""); setExtratoTo(""); }}>
-                                            Limpar datas
-                                        </Button>
-                                    )}
+                                    <Button variant="outline" className="border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50" onClick={() => exportTransactionsCSV(
+                                        filteredTransactions.filter((t: any) => {
+                                            if (extratoFrom && new Date(t.transactionDate) < new Date(extratoFrom)) return false;
+                                            if (extratoTo && new Date(t.transactionDate) > new Date(extratoTo)) return false;
+                                            return true;
+                                        }), accounts)}>
+                                        <Download className="mr-2 h-4 w-4" /> Exportar CSV
+                                    </Button>
                                 </div>
-                                <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportTransactionsCSV(
-                                    filteredTransactions.filter((t: any) => {
-                                        if (extratoFrom && new Date(t.transactionDate) < new Date(extratoFrom)) return false;
-                                        if (extratoTo && new Date(t.transactionDate) > new Date(extratoTo)) return false;
-                                        return true;
-                                    }), accounts)}>
-                                    <Download className="mr-2 h-4 w-4" /> Exportar CSV
-                                </Button>
-                            </div>
-                            <Card className="border-emerald-100">
-                                <CardHeader><CardTitle className="text-emerald-800">Extrato Completo</CardTitle></CardHeader>
-                                <CardContent>
-                                    <TransactionTable transactions={filteredTransactions.filter((t: any) => {
-                                        if (extratoFrom && new Date(t.transactionDate) < new Date(extratoFrom)) return false;
-                                        if (extratoTo && new Date(t.transactionDate) > new Date(extratoTo)) return false;
-                                        return true;
-                                    })} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
+                                <TransactionTable transactions={filteredTransactions.filter((t: any) => {
+                                    if (extratoFrom && new Date(t.transactionDate) < new Date(extratoFrom)) return false;
+                                    if (extratoTo && new Date(t.transactionDate) > new Date(extratoTo)) return false;
+                                    return true;
+                                })} accounts={accounts} onDelete={(id) => deleteTransaction.mutate(id)} deleting={deleteTransaction.isPending} />
+                            </TabsContent>
 
-                        {/* ── TRANSFERENCIAS ───────────────── */}
-                        <TabsContent value="transferencias" className="mt-4">
-                            <TransferenciasTab transactions={filteredTransactions} accounts={allAccounts} onRefresh={() => {
-                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
-                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
-                            }} />
-                        </TabsContent>
+                            {/* ═══ TRANSFERENCIAS TAB ═══ */}
+                            <TabsContent value="transferencias" className="mt-6">
+                                <TransferenciasTab transactions={filteredTransactions} accounts={allAccounts} onRefresh={() => {
+                                    queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+                                }} />
+                            </TabsContent>
 
-                        {/* ── CHEQUES ───────────────── */}
-                        <TabsContent value="cheques" className="mt-4">
-                            <ChequesTab accounts={allAccounts} />
-                        </TabsContent>
+                            {/* ═══ CHEQUES TAB ═══ */}
+                            <TabsContent value="cheques" className="mt-6">
+                                <ChequesTab accounts={allAccounts} />
+                            </TabsContent>
 
-                        <TabsContent value="contas" className="mt-4">
-                            <AccountsManager accounts={accounts} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
-                        </TabsContent>
-                        <TabsContent value="categorias" className="mt-4">
-                            <CategoriesManager categories={customCategories} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/expense-categories"] })} />
-                        </TabsContent>
-                    </Tabs>
-                )}
+                            <TabsContent value="contas" className="mt-6">
+                                <AccountsManager accounts={accounts} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
+                            </TabsContent>
+                            <TabsContent value="categorias" className="mt-6">
+                                <CategoriesManager categories={customCategories} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/expense-categories"] })} />
+                            </TabsContent>
+                        </Tabs>
+                    )}
+                </div>
             </div>
         </FarmLayout>
     );
@@ -581,6 +700,8 @@ export default function FarmCashFlow() {
 function TransactionTable({ transactions, accounts, onDelete, deleting }: { transactions: any[]; accounts: any[]; onDelete: (id: string) => void; deleting: boolean }) {
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("todos");
+    const [page, setPage] = useState(1);
+    const PER_PAGE = 10;
 
     const filtered = transactions.filter((t: any) => {
         if (typeFilter !== "todos" && t.type !== typeFilter) return false;
@@ -593,92 +714,183 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
         return true;
     });
 
+    const totalPages = Math.ceil(filtered.length / PER_PAGE);
+    const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+    // Category color mapping for pill badges
+    const getCategoryColor = (category: string, type: string) => {
+        if (type === "entrada") return "bg-emerald-100 text-emerald-700";
+        const colorMap: Record<string, string> = {
+            insumos: "bg-blue-100 text-blue-700",
+            pecas: "bg-orange-100 text-orange-700",
+            diesel: "bg-amber-100 text-amber-700",
+            mao_de_obra: "bg-purple-100 text-purple-700",
+            frete: "bg-cyan-100 text-cyan-700",
+            energia: "bg-yellow-100 text-yellow-700",
+            arrendamento: "bg-pink-100 text-pink-700",
+            financiamento: "bg-indigo-100 text-indigo-700",
+            impostos: "bg-red-100 text-red-700",
+            pro_labore: "bg-violet-100 text-violet-700",
+        };
+        return colorMap[category] || "bg-gray-100 text-gray-700";
+    };
+
+    // Account color for small avatar
+    const getAccountColor = (accType: string) => {
+        const colors: Record<string, string> = {
+            caixa_fisico: "bg-amber-500",
+            conta_corrente: "bg-blue-500",
+            poupanca: "bg-emerald-500",
+            carteira_digital: "bg-purple-500",
+        };
+        return colors[accType] || "bg-gray-500";
+    };
+
     return (
-        <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-                <Input placeholder="Buscar por descrição, categoria, conta..." value={search} onChange={e => setSearch(e.target.value)} className="flex-1 min-w-48 max-w-sm h-8 text-sm" />
-                <div className="flex gap-1">
-                    {["todos", "entrada", "saida"].map(t => (
-                        <button key={t} onClick={() => setTypeFilter(t)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${typeFilter === t
-                                ? t === "todos" ? "bg-gray-600 text-white border-gray-600"
-                                    : t === "entrada" ? "bg-emerald-600 text-white border-emerald-600"
-                                        : "bg-red-600 text-white border-red-600"
-                                : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                            {t === "todos" ? "Todos" : t === "entrada" ? "Entradas" : "Saídas"}
-                        </button>
-                    ))}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <p className="text-base font-bold text-gray-900">Ultimas Movimentacoes</p>
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar movimentacoes..."
+                            value={search}
+                            onChange={e => { setSearch(e.target.value); setPage(1); }}
+                            className="pl-9 pr-4 py-2 rounded-lg border border-gray-200 text-sm bg-gray-50 focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 outline-none transition-all w-56"
+                        />
+                    </div>
+                    <div className="flex gap-1">
+                        {["todos", "entrada", "saida"].map(t => (
+                            <button key={t} onClick={() => { setTypeFilter(t); setPage(1); }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${typeFilter === t
+                                    ? t === "todos" ? "bg-gray-800 text-white"
+                                        : t === "entrada" ? "bg-emerald-600 text-white"
+                                            : "bg-red-500 text-white"
+                                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                                {t === "todos" ? "Todos" : t === "entrada" ? "Entradas" : "Saidas"}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        onClick={() => exportTransactionsCSV(filtered, accounts)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                        <Download className="h-3.5 w-3.5" /> Exportar CSV
+                    </button>
                 </div>
             </div>
+
+            {/* Table */}
             {filtered.length === 0 ? (
-                <div className="py-6 text-center"><Wallet className="h-10 w-10 text-gray-300 mx-auto mb-2" /><p className="text-gray-500 text-sm">Nenhuma movimentação encontrada</p></div>
+                <div className="py-12 text-center">
+                    <Wallet className="h-12 w-12 text-gray-200 mx-auto mb-3" />
+                    <p className="text-gray-400 text-sm">Nenhuma movimentacao encontrada</p>
+                </div>
             ) : (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="text-left p-3 font-semibold text-gray-600">Data</th>
-                                <th className="text-left p-3 font-semibold text-gray-600">Tipo</th>
-                                <th className="text-left p-3 font-semibold text-gray-600">Categoria</th>
-                                <th className="text-left p-3 font-semibold text-gray-600">Descrição</th>
-                                <th className="text-left p-3 font-semibold text-gray-600">Conta</th>
-                                <th className="text-right p-3 font-semibold text-gray-600">Valor</th>
-                                <th className="text-center p-3 font-semibold text-gray-600">Recibo</th>
-                                <th className="text-center p-3 font-semibold text-gray-600">Origem</th>
-                                <th className="text-center p-3 font-semibold text-gray-600">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map((t: any) => {
-                                const acc = accounts.find((a: any) => a.id === t.accountId);
-                                const cat = ALL_CATEGORIES.find(c => c.value === t.category);
-                                const isEntrada = t.type === "entrada";
-                                return (
-                                    <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50">
-                                        <td className="p-3">{t.transactionDate ? new Date(t.transactionDate).toLocaleDateString("pt-BR") : "—"}</td>
-                                        <td className="p-3">
-                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${isEntrada ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                                {isEntrada ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}{isEntrada ? "Entrada" : "Saída"}
-                                            </span>
-                                        </td>
-                                        <td className="p-3">{cat?.label || t.category}</td>
-                                        <td className="p-3 max-w-[200px] truncate">{t.description || "—"}</td>
-                                        <td className="p-3 text-gray-600">{acc?.name || "—"}</td>
-                                        <td className={`text-right p-3 font-mono font-semibold ${isEntrada ? "text-emerald-700" : "text-red-600"}`}>
-                                            {isEntrada ? "+" : "-"}{formatCurrency(parseFloat(t.amount), t.currency || "USD")}
-                                        </td>
-                                        <td className="text-center p-3">
-                                            {t.receipt_id ? (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 font-mono">
-                                                    <FileText className="h-3 w-3" />{t.receipt_id}
+                <>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-gray-100">
+                                    <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Data</th>
+                                    <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Categoria</th>
+                                    <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Descricao</th>
+                                    <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Banco</th>
+                                    <th className="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Valor</th>
+                                    <th className="text-center px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Status</th>
+                                    <th className="text-center px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {paginated.map((t: any) => {
+                                    const acc = accounts.find((a: any) => a.id === t.accountId);
+                                    const cat = ALL_CATEGORIES.find(c => c.value === t.category);
+                                    const isEntrada = t.type === "entrada";
+                                    return (
+                                        <tr key={t.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors">
+                                            <td className="px-5 py-3.5 text-gray-600 font-medium">
+                                                {t.transactionDate ? new Date(t.transactionDate).toLocaleDateString("pt-BR") : "--"}
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${getCategoryColor(t.category, t.type)}`}>
+                                                    {cat?.label || t.category}
                                                 </span>
-                                            ) : <span className="text-gray-300">--</span>}
-                                        </td>
-                                        <td className="text-center p-3">
-                                            <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                                                {t.referenceType === "manual" ? "Manual" : t.referenceType === "whatsapp" ? "WhatsApp" : t.referenceType === "aprovacao_despesa" ? "Despesa" : "Fatura"}
-                                            </span>
-                                        </td>
-                                        <td className="text-center p-3">
-                                            {t.referenceType === "manual" && (
-                                                <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 h-7 w-7 p-0" onClick={() => onDelete(t.id)} disabled={deleting}>
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                            )}
-                                        </td>
-                                    </tr>
+                                            </td>
+                                            <td className="px-5 py-3.5 text-gray-700 max-w-[200px] truncate">{t.description || "--"}</td>
+                                            <td className="px-5 py-3.5">
+                                                {acc ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`h-6 w-6 rounded-md ${getAccountColor(acc.accountType)} text-white flex items-center justify-center text-[10px] font-bold`}>
+                                                            {acc.name.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <span className="text-gray-600 text-xs">{acc.name}</span>
+                                                    </div>
+                                                ) : <span className="text-gray-300">--</span>}
+                                            </td>
+                                            <td className={`px-5 py-3.5 text-right font-mono font-bold ${isEntrada ? "text-emerald-600" : "text-red-500"}`}>
+                                                {isEntrada ? "+" : "-"}{parseFloat(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-center">
+                                                <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                                                    <span className={`h-1.5 w-1.5 rounded-full ${isEntrada ? "bg-emerald-500" : "bg-red-400"}`} />
+                                                    {t.referenceType === "manual" ? "Manual" : t.referenceType === "whatsapp" ? "WhatsApp" : t.referenceType === "aprovacao_despesa" ? "Despesa" : "Fatura"}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3.5 text-center">
+                                                {t.referenceType === "manual" && (
+                                                    <Button size="sm" variant="ghost" className="text-gray-400 hover:text-red-500 h-7 w-7 p-0 rounded-lg" onClick={() => onDelete(t.id)} disabled={deleting} aria-label="Excluir movimentacao">
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    {/* Pagination footer */}
+                    <div className="px-5 py-3.5 border-t border-gray-100 flex items-center justify-between">
+                        <p className="text-xs text-gray-400">
+                            Mostrando {((page - 1) * PER_PAGE) + 1}-{Math.min(page * PER_PAGE, filtered.length)} de {filtered.length} movimentacoes
+                        </p>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                                aria-label="Pagina anterior">
+                                <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                let pageNum: number;
+                                if (totalPages <= 5) pageNum = i + 1;
+                                else if (page <= 3) pageNum = i + 1;
+                                else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+                                else pageNum = page - 2 + i;
+                                return (
+                                    <button key={pageNum} onClick={() => setPage(pageNum)}
+                                        className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-semibold transition-colors ${page === pageNum ? "bg-emerald-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
+                                        {pageNum}
+                                    </button>
                                 );
                             })}
-                        </tbody>
-                    </table>
-                    <div className="p-3 bg-gray-50 border-t border-gray-100 text-sm text-gray-600 flex justify-between">
-                        <span>{filtered.length} movimentações</span>
-                        <span>
-                            Entradas: <strong className="text-emerald-600">{formatCurrency(filtered.filter(t => t.type === "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0), "USD")}</strong>
-                            {" "}· Saidas: <strong className="text-red-600">{formatCurrency(filtered.filter(t => t.type !== "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0), "USD")}</strong>
-                        </span>
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages || totalPages === 0}
+                                className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                                aria-label="Proxima pagina">
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                            Entradas: <strong className="text-emerald-600">{filtered.filter(t => t.type === "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong>
+                            {" "} - Saidas: <strong className="text-red-500">{filtered.filter(t => t.type !== "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong>
+                        </p>
                     </div>
-                </div>
+                </>
             )}
         </div>
     );
