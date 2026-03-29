@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency } from "@/lib/format-currency";
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil, History, Search, CreditCard, RefreshCw } from "lucide-react";
+import { Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil, History, Search, CreditCard, RefreshCw, BarChart3, CalendarDays, DollarSign, TrendingUp } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
 function exportToCSV(data: any[], filename: string) {
@@ -159,169 +159,305 @@ export default function AccountsPayable() {
         onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
     });
 
+    // ─── Search state for main tab ─────────────────────────────────────────
+    const [searchTerm, setSearchTerm] = useState("");
+
+    const searchFiltered = filtered.filter((i: any) =>
+        !searchTerm ||
+        i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        i.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // ─── KPI Calculations ───────────────────────────────────────────────────
+    const kpiTotalPayable = useMemo(() => {
+        return (items as any[])
+            .filter((i: any) => i.status === "aberto" || i.status === "parcial")
+            .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0);
+    }, [items]);
+
+    const kpiOverdue = useMemo(() => {
+        const overdueItems = (items as any[]).filter((i: any) => isItemOverdue(i));
+        return {
+            count: overdueItems.length,
+            sum: overdueItems.reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0),
+        };
+    }, [items]);
+
+    const kpiPaidThisMonth = useMemo(() => {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        return (items as any[])
+            .filter((i: any) => i.status === "pago" && i.paidDate && new Date(i.paidDate) >= monthStart)
+            .reduce((s: number, i: any) => s + parseFloat(i.paidAmount || i.totalAmount || 0), 0);
+    }, [items]);
+
+    const kpiNext7Days = useMemo(() => {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
+        return (items as any[])
+            .filter((i: any) => {
+                if (i.status === "pago") return false;
+                const d = new Date(i.dueDate); d.setHours(0, 0, 0, 0);
+                return d >= today && d <= in7;
+            })
+            .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    }, [items]);
+
+    const kpiMonthlyFlow = useMemo(() => {
+        const months: { label: string; total: number }[] = [];
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const label = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+            const monthItems = (items as any[]).filter((it: any) => {
+                const due = new Date(it.dueDate);
+                return due.getMonth() === d.getMonth() && due.getFullYear() === d.getFullYear();
+            });
+            const total = monthItems.reduce((s: number, it: any) => s + parseFloat(it.totalAmount || 0), 0);
+            months.push({ label, total });
+        }
+        return months;
+    }, [items]);
+
+    const maxMonthly = useMemo(() => Math.max(...kpiMonthlyFlow.map(m => m.total), 1), [kpiMonthlyFlow]);
+
     const statusBadge = (s: string) => {
-        const map: any = {
-            aberto: { bg: "bg-blue-100 text-blue-700", icon: <Clock className="h-3 w-3" />, label: "Aberto" },
-            parcial: { bg: "bg-amber-100 text-amber-700", icon: <AlertTriangle className="h-3 w-3" />, label: "Parcial" },
-            pago: { bg: "bg-green-100 text-green-700", icon: <CheckCircle className="h-3 w-3" />, label: "Pago" },
-            vencido: { bg: "bg-red-100 text-red-700", icon: <AlertTriangle className="h-3 w-3" />, label: "Vencido" },
+        const map: Record<string, { dot: string; bg: string; label: string }> = {
+            aberto: { dot: "bg-red-500", bg: "bg-red-50 text-red-700 ring-1 ring-red-200", label: "ABERTO" },
+            parcial: { dot: "bg-yellow-500", bg: "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200", label: "PARCIAL" },
+            pago: { dot: "bg-green-500", bg: "bg-green-50 text-green-700 ring-1 ring-green-200", label: "PAGO" },
+            vencido: { dot: "bg-red-500", bg: "bg-red-50 text-red-700 ring-1 ring-red-200", label: "VENCIDO" },
         };
         const cfg = map[s] || map.aberto;
-        return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg}`}>{cfg.icon} {cfg.label}</span>;
+        return (
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${cfg.bg}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+                {cfg.label}
+            </span>
+        );
+    };
+
+    // Avatar color from supplier name
+    const avatarColor = (name: string) => {
+        const colors = ["bg-emerald-600", "bg-blue-600", "bg-purple-600", "bg-amber-600", "bg-rose-600", "bg-teal-600", "bg-indigo-600", "bg-orange-600"];
+        let hash = 0;
+        for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
     };
 
     return (
         <FarmLayout>
-            <div className="space-y-6">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-emerald-800">Contas a Pagar</h1>
-                        <p className="text-sm text-emerald-600">
-                            A pagar: <strong className="text-red-600">{formatCurrency(totalAberto)}</strong>
-                            {totalVencido > 0 && <span className="ml-2 text-red-600">Vencido: {formatCurrency(totalVencido)}</span>}
-                        </p>
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                        <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700" onClick={() => queryClient.invalidateQueries()}>
-                            <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
-                        </Button>
-                        <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportToCSV(filtered, "contas-a-pagar.csv")}>
-                            <Download className="mr-2 h-4 w-4" /> Exportar CSV
-                        </Button>
-                    </div>
-                </div>
+            {/* Manrope font */}
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap'); .font-headline { font-family: 'Manrope', sans-serif; }`}</style>
 
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                        { label: "Total em Aberto", value: totalAberto, color: "text-blue-700" },
-                        { label: "Vencidos", value: totalVencido, color: "text-red-600" },
-                        { label: "Total de Titulos", value: (items as any[]).length, color: "text-gray-700", isCurrency: false },
-                        { label: "Pagos", value: (items as any[]).filter((i: any) => i.status === "pago").length, color: "text-green-700", isCurrency: false },
-                    ].map((c, idx) => (
-                        <Card key={idx} className="border-emerald-100"><CardContent className="p-4">
-                            <p className="text-xs text-gray-500">{c.label}</p>
-                            <p className={`text-xl font-bold ${c.color}`}>
-                                {c.isCurrency !== false ? formatCurrency(c.value as number) : c.value}
+            <div className="space-y-6">
+                {/* ── SECTION 1: PAGE HEADER ─────────────────────────────── */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* Left: Title */}
+                    <div className="lg:col-span-4">
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-emerald-600 mb-1">OPERACOES FINANCEIRAS</p>
+                        <h1 className="text-4xl font-extrabold font-headline text-gray-900 leading-tight">Contas a Pagar</h1>
+                        <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                            Gerencie suas obrigacoes financeiras, acompanhe vencimentos e registre pagamentos.
+                        </p>
+                        <div className="flex gap-2 mt-4">
+                            <Button variant="outline" size="sm" className="text-gray-600 h-8 text-xs" onClick={() => queryClient.invalidateQueries()}>
+                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Atualizar
+                            </Button>
+                            <Button variant="outline" size="sm" className="text-gray-600 h-8 text-xs" onClick={() => exportToCSV(filtered, "contas-a-pagar.csv")}>
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> CSV
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Right: KPI Cards */}
+                    <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {/* Total a Pagar */}
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-800 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <DollarSign className="h-4 w-4 text-emerald-700" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Total a Pagar</span>
+                            </div>
+                            <p className="text-2xl font-extrabold font-headline text-gray-900">
+                                {kpiTotalPayable.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
                             </p>
-                        </CardContent></Card>
-                    ))}
+                            <p className="text-xs text-gray-400 mt-1">{(items as any[]).filter((i: any) => i.status !== "pago").length} titulos pendentes</p>
+                        </div>
+
+                        {/* Vencidos */}
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Vencidos</span>
+                            </div>
+                            <p className="text-2xl font-extrabold font-headline text-red-600">
+                                {kpiOverdue.sum.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
+                            </p>
+                            <p className="text-xs text-red-400 mt-1">{kpiOverdue.count} titulo(s) em atraso</p>
+                        </div>
+
+                        {/* Pagos (Mes) */}
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-green-600 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Pagos (Mes)</span>
+                            </div>
+                            <p className="text-2xl font-extrabold font-headline text-green-600">
+                                {kpiPaidThisMonth.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">no mes atual</p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Tabs: Contas / Pagamento / Recibo de Provedores */}
                 <Tabs defaultValue="contas">
-                    <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
-                        <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Contas</TabsTrigger>
-                        <TabsTrigger value="pagamento" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Pagamento</TabsTrigger>
-                        <TabsTrigger value="historico" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Recibo de Provedores</TabsTrigger>
+                    <TabsList className="bg-gray-100 p-1 h-10 rounded-lg">
+                        <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm px-5 rounded-md">Contas</TabsTrigger>
+                        <TabsTrigger value="pagamento" className="text-[13px] font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm px-5 rounded-md">Pagamento</TabsTrigger>
+                        <TabsTrigger value="historico" className="text-[13px] font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm px-5 rounded-md">Recibo de Provedores</TabsTrigger>
                     </TabsList>
 
                     {/* ── CONTAS TAB ─────────────────────────────────────────── */}
-                    <TabsContent value="contas" className="space-y-4 mt-4">
-                        {/* Filters */}
-                        <Card className="border-emerald-100">
-                            <CardContent className="p-4">
-                                <div className="flex flex-wrap gap-3 items-end">
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Status</Label>
-                                        <Select value={filterStatus} onValueChange={setFilterStatus}>
-                                            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="todos">Todos</SelectItem>
-                                                <SelectItem value="aberto">Aberto</SelectItem>
-                                                <SelectItem value="parcial">Parcial</SelectItem>
-                                                <SelectItem value="pago">Pago</SelectItem>
-                                                <SelectItem value="vencido">Vencido</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                    <TabsContent value="contas" className="space-y-5 mt-5">
+
+                        {/* ── SECTION 2: FILTERS BAR ──────────────────────────── */}
+                        <div className="bg-gray-100 rounded-xl p-5">
+                            <div className="flex flex-wrap gap-3 items-end">
+                                <div className="flex-1 min-w-[200px]">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                        <Input
+                                            placeholder="Buscar fornecedor ou descricao..."
+                                            value={searchTerm}
+                                            onChange={e => setSearchTerm(e.target.value)}
+                                            className="pl-10 bg-white border-0 shadow-sm h-10"
+                                        />
                                     </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Vencimento de</Label>
-                                        <Input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="w-36" />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">ate</Label>
-                                        <Input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="w-36" />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Fornecedor</Label>
-                                        <Select value={filterSupplier} onValueChange={setFilterSupplier}>
-                                            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="todos">Todos</SelectItem>
-                                                {(suppliers as any[]).map((s: any) => (
-                                                    <SelectItem key={s.id || s.name} value={s.name}>{s.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Safra</Label>
-                                        <Select value={filterSeason} onValueChange={setFilterSeason}>
-                                            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="todos">Todas</SelectItem>
-                                                {(seasons as any[]).map((s: any) => (
-                                                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <Button variant="ghost" size="sm" className="text-gray-500" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); setFilterSupplier("todos"); setFilterSeason("todos"); }}>
+                                </div>
+                                <div>
+                                    <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                        <SelectTrigger className="w-36 bg-white border-0 shadow-sm h-10"><SelectValue placeholder="Status" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="todos">Todos</SelectItem>
+                                            <SelectItem value="aberto">Pendente</SelectItem>
+                                            <SelectItem value="parcial">Parcial</SelectItem>
+                                            <SelectItem value="pago">Pago</SelectItem>
+                                            <SelectItem value="vencido">Vencido</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                                        <SelectTrigger className="w-44 bg-white border-0 shadow-sm h-10"><SelectValue placeholder="Fornecedor" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="todos">Todos</SelectItem>
+                                            {(suppliers as any[]).map((s: any) => (
+                                                <SelectItem key={s.id || s.name} value={s.name}>{s.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Select value={filterSeason} onValueChange={setFilterSeason}>
+                                        <SelectTrigger className="w-40 bg-white border-0 shadow-sm h-10"><SelectValue placeholder="Safra" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="todos">Todas Safras</SelectItem>
+                                            {(seasons as any[]).map((s: any) => (
+                                                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {(filterStatus !== "todos" || filterSupplier !== "todos" || filterSeason !== "todos" || searchTerm) && (
+                                    <Button variant="ghost" size="sm" className="text-gray-500 h-10" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); setFilterSupplier("todos"); setFilterSeason("todos"); setSearchTerm(""); }}>
                                         Limpar
                                     </Button>
-                                    <span className="text-xs text-gray-400 ml-auto self-center">{filtered.length} de {(items as any[]).length} registros</span>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                )}
+                                <span className="text-xs text-gray-400 ml-auto self-center">{searchFiltered.length} de {(items as any[]).length}</span>
+                            </div>
+                        </div>
 
+                        {/* ── SECTION 3: DATA TABLE ───────────────────────────── */}
                         {isLoading ? (
-                            <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
-                        ) : filtered.length === 0 ? (
-                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                            <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
+                        ) : searchFiltered.length === 0 ? (
+                            <div className="bg-white rounded-xl shadow-sm py-16 text-center">
                                 <Receipt className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">Nenhuma conta a pagar</p>
-                            </CardContent></Card>
+                                <p className="text-gray-500 font-medium">Nenhuma conta a pagar encontrada</p>
+                                <p className="text-xs text-gray-400 mt-1">Tente ajustar os filtros</p>
+                            </div>
                         ) : (
-                            <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-emerald-50">
-                                        <tr>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Cadastrado</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Pago</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filtered.slice(0, pageSize).map((item: any) => {
-                                            const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
-                                            const today = new Date(); today.setHours(0, 0, 0, 0);
-                                            const isOverdue = (item.status === "aberto" || item.status === "parcial") && due < today;
-                                            return (
-                                                <tr key={item.id} className={`border-t border-gray-100 ${isOverdue ? "bg-red-50" : ""}`}>
-                                                    <td className="p-3 font-medium">{item.supplier}</td>
-                                                    <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
-                                                    <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
-                                                    <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
-                                                    <td className="p-3 text-gray-500 text-xs">{item.createdAt ? new Date(item.createdAt).toLocaleDateString("pt-BR") : "—"}</td>
-                                                    <td className="p-3">{statusBadge(isOverdue && item.status !== "pago" ? "vencido" : item.status)}</td>
-                                                    <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount, item.currency || "USD")}</td>
-                                                    <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.paidAmount || 0, item.currency || "USD")}</td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="bg-gray-50">
+                                                <th className="text-left px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Fornecedor</th>
+                                                <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Descricao</th>
+                                                <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Parcela</th>
+                                                <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Vencimento</th>
+                                                <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Status</th>
+                                                <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Valor</th>
+                                                <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Acoes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {searchFiltered.slice(0, pageSize).map((item: any) => {
+                                                const due = new Date(item.dueDate); due.setHours(0, 0, 0, 0);
+                                                const today = new Date(); today.setHours(0, 0, 0, 0);
+                                                const isOverdue = (item.status === "aberto" || item.status === "parcial") && due < today;
+                                                return (
+                                                    <tr key={item.id} className="hover:bg-emerald-50/20 transition-colors">
+                                                        {/* Fornecedor with avatar */}
+                                                        <td className="px-5 py-3.5">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`h-8 w-8 rounded-full ${avatarColor(item.supplier)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                                                                    {(item.supplier || "?")[0].toUpperCase()}
+                                                                </div>
+                                                                <span className="font-semibold text-gray-900 truncate max-w-[160px]">{item.supplier}</span>
+                                                            </div>
+                                                        </td>
+                                                        {/* Descricao */}
+                                                        <td className="px-4 py-3.5 text-gray-500 max-w-[180px] truncate">{item.description || "--"}</td>
+                                                        {/* Parcela */}
+                                                        <td className="px-3 py-3.5 text-center">
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-medium">
+                                                                {item.installmentNumber}/{item.totalInstallments}
+                                                            </span>
+                                                        </td>
+                                                        {/* Vencimento */}
+                                                        <td className={`px-4 py-3.5 text-sm ${isOverdue ? "text-red-600 font-semibold" : "text-gray-700"}`}>
+                                                            {item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "--"}
+                                                        </td>
+                                                        {/* Status */}
+                                                        <td className="px-3 py-3.5 text-center">{statusBadge(isOverdue && item.status !== "pago" ? "vencido" : item.status)}</td>
+                                                        {/* Valor */}
+                                                        <td className="px-5 py-3.5 text-right font-extrabold text-gray-900 font-headline">
+                                                            {formatCurrency(item.totalAmount, item.currency || "USD")}
+                                                        </td>
+                                                        {/* Acoes */}
+                                                        <td className="px-5 py-3.5 text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => setEditingItem(item)} aria-label="Editar">
+                                                                    <Pencil className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" onClick={() => { if (confirm("Excluir esta conta?")) del.mutate(item.id); }} aria-label="Excluir">
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                                 {(items as any[]).length > 15 && (
-                                    <div className="flex items-center justify-center gap-3 p-3 border-t border-gray-100">
-                                        <span className="text-xs text-gray-400">Mostrando {Math.min(pageSize, filtered.length)} de {filtered.length}</span>
+                                    <div className="flex items-center justify-center gap-3 px-5 py-3 border-t border-gray-100">
+                                        <span className="text-xs text-gray-400">Mostrando {Math.min(pageSize, searchFiltered.length)} de {searchFiltered.length}</span>
                                         <Select value={String(pageSize)} onValueChange={v => setPageSize(parseInt(v))}>
-                                            <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
+                                            <SelectTrigger className="w-20 h-7 text-xs border-0 bg-gray-100"><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="15">15</SelectItem>
                                                 <SelectItem value="30">30</SelectItem>
@@ -333,6 +469,69 @@ export default function AccountsPayable() {
                                 )}
                             </div>
                         )}
+
+                        {/* ── SECTION 4: BOTTOM INSIGHTS ──────────────────────── */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            {/* Proximos 7 Dias */}
+                            <div className="bg-white rounded-xl shadow-sm p-5">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <CalendarDays className="h-4 w-4 text-emerald-600" />
+                                    <h3 className="font-headline font-bold text-gray-900">Proximos 7 Dias</h3>
+                                    {kpiNext7Days.length > 0 && (
+                                        <span className="ml-auto text-[10px] uppercase tracking-wider font-bold text-gray-400">{kpiNext7Days.length} titulo(s)</span>
+                                    )}
+                                </div>
+                                {kpiNext7Days.length === 0 ? (
+                                    <p className="text-sm text-gray-400 text-center py-6">Nenhum vencimento nos proximos 7 dias</p>
+                                ) : (
+                                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                                        {kpiNext7Days.slice(0, 8).map((item: any) => (
+                                            <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`h-6 w-6 rounded-full ${avatarColor(item.supplier)} flex items-center justify-center text-white text-[10px] font-bold`}>
+                                                        {(item.supplier || "?")[0].toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-800 truncate max-w-[140px]">{item.supplier}</p>
+                                                        <p className="text-[10px] text-gray-400">{new Date(item.dueDate).toLocaleDateString("pt-BR")}</p>
+                                                    </div>
+                                                </div>
+                                                <span className="font-headline font-bold text-gray-900 text-sm">
+                                                    {formatCurrency(parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0), item.currency || "USD")}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Fluxo de Caixa */}
+                            <div className="bg-emerald-950 rounded-xl shadow-sm p-5 relative overflow-hidden">
+                                {/* Decorative blur circle */}
+                                <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl" />
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <BarChart3 className="h-4 w-4 text-emerald-400" />
+                                        <h3 className="font-headline font-bold text-white">Fluxo de Caixa</h3>
+                                        <span className="ml-auto text-[10px] uppercase tracking-wider font-bold text-emerald-400/60">Ultimos 6 meses</span>
+                                    </div>
+                                    <div className="flex items-end gap-3 h-[140px]">
+                                        {kpiMonthlyFlow.map((m, idx) => (
+                                            <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full">
+                                                <span className="text-[10px] text-emerald-300 font-bold mb-1">
+                                                    {m.total > 0 ? (m.total / 1000).toFixed(0) + "k" : "0"}
+                                                </span>
+                                                <div
+                                                    className="w-full rounded-t-md bg-emerald-500/40 hover:bg-emerald-400/60 transition-colors"
+                                                    style={{ height: `${Math.max((m.total / maxMonthly) * 100, 4)}%` }}
+                                                />
+                                                <span className="text-[10px] text-emerald-400/80 mt-2 capitalize">{m.label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </TabsContent>
 
                     {/* ── PAGAMENTO TAB ──────────────────────────────────────── */}
