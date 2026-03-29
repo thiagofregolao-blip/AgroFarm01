@@ -905,9 +905,7 @@ app.use((req, res, next) => {
     } catch { res.json({ active: false }); }
   });
 
-  app.use(errorHandler);
-
-  // ── Monitor middleware (depois do error handler) ──
+  // ── Monitor middleware (ANTES do error handler para capturar erros) ──
   try {
     const { monitorMiddleware, setupGlobalHandlers } = await import("./monitor/monitor-middleware");
     app.use(monitorMiddleware());
@@ -915,6 +913,8 @@ app.use((req, res, next) => {
   } catch (err) {
     log("⚠️  Monitor middleware nao carregou: " + (err as Error).message);
   }
+
+  app.use(errorHandler);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
