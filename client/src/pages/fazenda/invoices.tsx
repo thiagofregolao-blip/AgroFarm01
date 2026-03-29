@@ -586,70 +586,62 @@ export default function FarmInvoices() {
         <FarmLayout>
             <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
             <div className="space-y-6" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                {/* PAGE HEADER - Stitch AgriIntel */}
-                <div className="flex items-start justify-between flex-wrap gap-4">
-                    <div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">FINANCEIRO</span>
-                            <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">&gt;</span>
-                            <span className="text-[10px] uppercase tracking-widest text-emerald-600 font-bold">FATURAS</span>
+                {/* PAGE HEADER + KPI — grid 12 cols */}
+                <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* Left: Title */}
+                    <div className="lg:col-span-4">
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-emerald-700 mb-1">FINANCEIRO &gt; FATURAS</p>
+                        <h1 className="text-4xl font-extrabold tracking-tight text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>Importacao de Faturas</h1>
+                        <p className="text-gray-500 text-sm mt-3 leading-relaxed max-w-sm">Gerencie e processe seus documentos fiscais com inteligencia agronomica.</p>
+                    </div>
+                    {/* Right: KPI Cards */}
+                    <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-600 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <FileText className="h-4 w-4 text-emerald-700" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Total Faturas</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>{kpiData.totalCount}</p>
+                            <p className="text-xs text-gray-400 mt-1">no periodo atual</p>
                         </div>
-                        <h1 className="text-4xl font-black tracking-tight text-gray-900">Importacao de Faturas</h1>
-                        <p className="text-gray-500 mt-1">Gerencie e processe seus documentos fiscais com inteligencia agronomica.</p>
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-800 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <DollarSign className="h-4 w-4 text-emerald-700" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Valor Total</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>$ {kpiData.totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xs text-gray-400 mt-1">auditado</p>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Pendentes</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>{kpiData.pendingCount}</p>
+                            <p className="text-xs text-red-400 mt-1">acao necessaria</p>
+                        </div>
                     </div>
-                    {canEdit && (
-                    <div className="flex gap-3 items-center">
-                        <button
-                            className="bg-emerald-100 text-emerald-800 font-bold rounded-lg px-6 py-3 text-sm hover:bg-emerald-200 transition-colors cursor-pointer inline-flex items-center gap-2"
-                            onClick={() => setExpenseDialogOpen(true)}
-                        >
-                            <Plus className="h-4 w-4" />
-                            Nova Despesa
-                        </button>
-                        <button
-                            className="bg-gradient-to-br from-emerald-900 to-emerald-800 text-white font-bold rounded-lg px-6 py-3 text-sm shadow-lg hover:shadow-xl transition-all cursor-pointer inline-flex items-center gap-2"
-                            onClick={() => setImportDialogOpen(true)}
-                        >
-                            <Upload className="h-4 w-4" />
-                            Importar PDF
-                        </button>
-                    </div>
-                    )}
-                </div>
+                </section>
 
-                {/* KPI CARDS */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-white p-6 rounded-xl border-l-4 border-l-emerald-600 shadow-sm">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                                <FileText className="h-5 w-5 text-emerald-700" />
-                            </div>
-                            <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded">MES ATUAL</span>
-                        </div>
-                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-1">Total Faturas</p>
-                        <p className="text-3xl font-black text-gray-900">{kpiData.totalCount}</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl border-l-4 border-l-emerald-800 shadow-sm">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                                <DollarSign className="h-5 w-5 text-emerald-700" />
-                            </div>
-                            <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded">AUDITADO</span>
-                        </div>
-                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-1">Valor Total</p>
-                        <p className="text-3xl font-black text-gray-900">$ {kpiData.totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl border-l-4 border-l-red-500 shadow-sm">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                                <AlertTriangle className="h-5 w-5 text-red-600" />
-                            </div>
-                            <span className="text-[10px] uppercase tracking-widest font-bold text-red-600 bg-red-50 px-2 py-1 rounded">ACAO NECESSARIA</span>
-                        </div>
-                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-1">Pendentes</p>
-                        <p className="text-3xl font-black text-gray-900">{kpiData.pendingCount}</p>
-                    </div>
+                {/* Action buttons */}
+                {canEdit && (
+                <div className="flex gap-3 items-center">
+                    <button
+                        className="bg-emerald-100 text-emerald-800 font-bold rounded-lg px-6 py-3 text-sm hover:bg-emerald-200 transition-colors cursor-pointer inline-flex items-center gap-2"
+                        onClick={() => setExpenseDialogOpen(true)}
+                    >
+                        <Plus className="h-4 w-4" />
+                        Nova Despesa
+                    </button>
+                    <button
+                        className="bg-gradient-to-br from-emerald-900 to-emerald-800 text-white font-bold rounded-lg px-6 py-3 text-sm shadow-lg hover:shadow-xl transition-all cursor-pointer inline-flex items-center gap-2"
+                        onClick={() => setImportDialogOpen(true)}
+                    >
+                        <Upload className="h-4 w-4" />
+                        Importar PDF
+                    </button>
                 </div>
+                )}
 
                 {/* Import Modal */}
                 <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>

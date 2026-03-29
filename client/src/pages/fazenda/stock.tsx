@@ -301,59 +301,51 @@ export default function FarmStock() {
                 .font-manrope { font-family: 'Manrope', sans-serif; }
             `}</style>
             <div className="space-y-6 font-manrope">
-                {/* BREADCRUMB + HEADER */}
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-600 mb-1">
-                            ESTOQUE &gt; GESTAO DE DEPOSITO
-                        </p>
-                        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900">
-                            Deposito / Estoque
-                        </h1>
+                {/* PAGE HEADER + KPI — grid 12 cols */}
+                <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* Left: Title */}
+                    <div className="lg:col-span-4">
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-emerald-700 mb-1">ESTOQUE &gt; GESTAO DE DEPOSITO</p>
+                        <h1 className="text-4xl font-extrabold tracking-tight text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>Deposito / Estoque</h1>
+                        <p className="text-gray-500 text-sm mt-3 leading-relaxed max-w-sm">Gerencie seu inventario de insumos e produtos agricolas.</p>
                     </div>
-                    {canEdit && (
-                    <div className="flex gap-2 flex-wrap items-center">
-                        <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/deposits"] })} />
-                        <DieselEntryDialog onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] }); queryClient.invalidateQueries({ queryKey: ["/api/farm/stock/movements"] }); }} />
-                        <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
+                    {/* Right: KPI Cards */}
+                    <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-600 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Package className="h-4 w-4 text-emerald-700" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Total Itens</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>{stock.length}</p>
+                            <p className="text-xs text-gray-400 mt-1">produtos cadastrados</p>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-800 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <DollarSign className="h-4 w-4 text-emerald-700" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Valor do Estoque</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>{formatCurrency(totalValue)}</p>
+                            <p className="text-xs text-gray-400 mt-1">valor total estimado</p>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Alerta Estoque Baixo</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-red-600" style={{ fontFamily: "'Manrope', sans-serif" }}>{kpiData.lowStockCount}</p>
+                            <p className="text-xs text-red-400 mt-1">itens com qtd &lt; 5 ou negativa</p>
+                        </div>
                     </div>
-                    )}
-                </div>
+                </section>
 
-                {/* THREE KPI CARDS */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* Total Itens */}
-                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                            <Package className="h-6 w-6 text-emerald-700" />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-400">Total Itens</p>
-                            <p className="text-3xl font-extrabold text-gray-900">{stock.length}</p>
-                        </div>
-                    </div>
-                    {/* Valor do Estoque */}
-                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                            <DollarSign className="h-6 w-6 text-green-700" />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-400">Valor do Estoque</p>
-                            <p className="text-2xl font-extrabold text-gray-900">{formatCurrency(totalValue)}</p>
-                        </div>
-                    </div>
-                    {/* Alerta Estoque Baixo */}
-                    <div className="bg-red-50 rounded-xl border border-red-100 border-l-4 border-l-red-500 p-5 shadow-sm flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                            <AlertTriangle className="h-6 w-6 text-red-600" />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-red-400">Alerta Estoque Baixo</p>
-                            <p className="text-3xl font-extrabold text-red-700">{kpiData.lowStockCount}</p>
-                            <p className="text-[11px] text-red-400">Itens com qtd &lt; 5 ou negativa</p>
-                        </div>
-                    </div>
+                {/* Action buttons */}
+                {canEdit && (
+                <div className="flex gap-2 flex-wrap items-center">
+                    <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/deposits"] })} />
+                    <DieselEntryDialog onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] }); queryClient.invalidateQueries({ queryKey: ["/api/farm/stock/movements"] }); }} />
+                    <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
                 </div>
+                )}
 
                 <Tabs defaultValue="stock">
                     <TabsList>

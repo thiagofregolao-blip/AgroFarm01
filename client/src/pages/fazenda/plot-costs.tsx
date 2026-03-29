@@ -78,36 +78,47 @@ export default function PlotCosts() {
     return (
         <FazendaLayout>
             <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-                {/* Header */}
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Custo por Talhao</h1>
-                    <p className="text-sm text-gray-500 mt-1">Analise de custos de insumos aplicados</p>
-                </div>
+                {/* PAGE HEADER + KPI — grid 12 cols */}
+                <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* Left: Title */}
+                    <div className="lg:col-span-4">
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-emerald-700 mb-1">PRODUCAO &gt; CUSTOS</p>
+                        <h1 className="text-4xl font-extrabold tracking-tight text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>Custo por Talhao</h1>
+                        <p className="text-gray-500 text-sm mt-3 leading-relaxed max-w-sm">Analise de custos de insumos aplicados por talhao e safra.</p>
+                    </div>
+                    {/* Right: KPI Cards */}
+                    <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-600 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <DollarSign className="h-4 w-4 text-emerald-700" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Custo Total</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>{fmt(filteredTotalCost)}</p>
+                            <p className="text-xs text-gray-400 mt-1">{filteredTotalArea.toFixed(1)} ha de area total</p>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-800 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <TrendingUp className="h-4 w-4 text-emerald-700" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Custo/ha</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>{filteredTotalArea > 0 ? fmt(filteredTotalCost / filteredTotalArea) : "—"}</p>
+                            <p className="text-xs text-gray-400 mt-1">media por hectare</p>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <MapPin className="h-4 w-4 text-red-500" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Talhoes</span>
+                            </div>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>{filtered.length}</p>
+                            <p className="text-xs text-gray-400 mt-1">com aplicacoes registradas</p>
+                        </div>
+                    </div>
+                </section>
 
                 {isLoading ? (
                     <div className="flex items-center justify-center py-32"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600"></div></div>
                 ) : (
                     <>
-                        {/* KPI Cards — com cores */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-l-orange-500">
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1"><DollarSign className="h-3.5 w-3.5 text-orange-500" /> Custo Total</div>
-                                <p className="text-2xl font-black text-gray-900">{fmt(filteredTotalCost)}</p>
-                            </div>
-                            <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-l-emerald-500">
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1"><TrendingUp className="h-3.5 w-3.5 text-emerald-500" /> Custo/ha</div>
-                                <p className="text-2xl font-black text-gray-900">{filteredTotalArea > 0 ? fmt(filteredTotalCost / filteredTotalArea) : "—"}</p>
-                            </div>
-                            <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-l-blue-500">
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1"><Layers className="h-3.5 w-3.5 text-blue-500" /> Area Total</div>
-                                <p className="text-2xl font-black text-gray-900">{filteredTotalArea.toFixed(1)} ha</p>
-                            </div>
-                            <div className="bg-white rounded-xl p-5 shadow-sm border-l-4 border-l-purple-500">
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1"><MapPin className="h-3.5 w-3.5 text-purple-500" /> Talhoes</div>
-                                <p className="text-2xl font-black text-gray-900">{filtered.length}</p>
-                            </div>
-                        </div>
-
                         {/* Filtros */}
                         <div className="flex flex-wrap gap-2">
                             {seasons.length > 0 && (

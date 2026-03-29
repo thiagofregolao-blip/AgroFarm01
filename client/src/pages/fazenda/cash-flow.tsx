@@ -276,36 +276,70 @@ export default function FarmCashFlow() {
             `}</style>
             <div className="font-manrope space-y-8">
 
-                    {/* ═══ 1. PAGE HEADER ═══ */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div>
-                            <p className="text-[10px] uppercase tracking-widest text-emerald-700 font-semibold mb-1">FINANCIAL OVERVIEW</p>
-                            <h1 className="text-4xl font-extrabold tracking-tight text-gray-900">Fluxo de Caixa</h1>
+                    {/* ═══ 1. PAGE HEADER + KPI — grid 12 cols ═══ */}
+                    <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        {/* Left: Title */}
+                        <div className="lg:col-span-4">
+                            <p className="text-[10px] uppercase font-bold tracking-widest text-emerald-700 mb-1">FINANCIAL OVERVIEW</p>
+                            <h1 className="text-4xl font-extrabold tracking-tight text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>Fluxo de Caixa</h1>
+                            <p className="text-gray-500 text-sm mt-3 leading-relaxed max-w-sm">Acompanhe entradas, saidas e saldo das suas contas bancarias.</p>
                         </div>
-                        <div className="flex items-center gap-3">
-                            {/* Period toggle pills */}
-                            <div className="bg-gray-100 rounded-xl p-1.5 flex gap-1">
-                                {(["mensal", "trimestral", "anual"] as const).map(p => (
-                                    <button key={p} onClick={() => setPeriodView(p)}
-                                        className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${periodView === p
-                                            ? "bg-white text-gray-900 shadow-sm"
-                                            : "text-gray-500 hover:text-gray-700"}`}>
-                                        {p === "mensal" ? "Mensal" : p === "trimestral" ? "Trimestral" : "Anual"}
-                                    </button>
-                                ))}
+                        {/* Right: KPI Cards */}
+                        <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-600 p-5">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <DollarSign className="h-4 w-4 text-emerald-700" />
+                                    <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Saldo Liquido</span>
+                                </div>
+                                <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>
+                                    {kpiTotalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">consolidado</p>
                             </div>
-                            {/* Month selector */}
-                            <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-                                <Calendar className="h-4 w-4 text-emerald-600" />
-                                <span className="capitalize">{currentMonthLabel}</span>
-                            </button>
-                            {/* Action buttons */}
-                            <TransferDialog accounts={allAccounts} onSuccess={() => {
-                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
-                                queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
-                            }} />
-                            <CreateAccountDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
+                            <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-800 p-5">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <ArrowUpRight className="h-4 w-4 text-emerald-700" />
+                                    <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Entradas</span>
+                                </div>
+                                <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>
+                                    {kpiMonthIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">receitas do mes</p>
+                            </div>
+                            <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <ArrowDownRight className="h-4 w-4 text-red-500" />
+                                    <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Saidas</span>
+                                </div>
+                                <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>
+                                    {kpiMonthExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-xs text-red-400 mt-1">despesas do mes</p>
+                            </div>
                         </div>
+                    </section>
+
+                    {/* Period toggles + action buttons */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="bg-gray-100 rounded-xl p-1.5 flex gap-1">
+                            {(["mensal", "trimestral", "anual"] as const).map(p => (
+                                <button key={p} onClick={() => setPeriodView(p)}
+                                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${periodView === p
+                                        ? "bg-white text-gray-900 shadow-sm"
+                                        : "text-gray-500 hover:text-gray-700"}`}>
+                                    {p === "mensal" ? "Mensal" : p === "trimestral" ? "Trimestral" : "Anual"}
+                                </button>
+                            ))}
+                        </div>
+                        <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+                            <Calendar className="h-4 w-4 text-emerald-600" />
+                            <span className="capitalize">{currentMonthLabel}</span>
+                        </button>
+                        <TransferDialog accounts={allAccounts} onSuccess={() => {
+                            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+                            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+                        }} />
+                        <CreateAccountDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
                     </div>
 
                     {/* Currency filter pills */}
@@ -343,96 +377,6 @@ export default function FarmCashFlow() {
 
                             {/* ═══ DASHBOARD TAB ═══ */}
                             <TabsContent value="dashboard" className="space-y-8 mt-6">
-
-                                {/* ═══ 2. THREE KPI CARDS ═══ */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {/* Saldo Liquido */}
-                                    <div className="bg-white p-8 rounded-xl shadow-sm hover:scale-[1.01] transition-transform duration-300 cursor-pointer group relative overflow-hidden"
-                                        onClick={() => setExpandSaldo(!expandSaldo)}>
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="h-12 w-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
-                                                <DollarSign className="h-6 w-6 text-emerald-600" />
-                                            </div>
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
-                                                <TrendingUp className="h-3 w-3" /> Consolidado
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-500 font-medium mb-1">Saldo Liquido</p>
-                                        <p className="text-3xl font-extrabold text-gray-900 tracking-tight">
-                                            {kpiTotalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </p>
-                                        {expandSaldo && (
-                                            <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
-                                                {monthTotals.map(m => (
-                                                    <div key={m.currency} className="flex justify-between text-xs text-gray-600">
-                                                        <span>Liquido ({m.currency})</span>
-                                                        <span className="font-mono font-semibold">{formatCurrency(m.saldo, m.currency)}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 to-emerald-600" />
-                                        <p className="text-[11px] text-gray-400 mt-4">Previsao proximo mes: <span className="font-semibold text-gray-600">{formatCurrency(predictedBalance, "USD")}</span></p>
-                                    </div>
-
-                                    {/* Entradas */}
-                                    <div className="bg-white p-8 rounded-xl shadow-sm hover:scale-[1.01] transition-transform duration-300 cursor-pointer group"
-                                        onClick={() => setExpandEntradas(!expandEntradas)}>
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="h-12 w-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
-                                                <ArrowUpRight className="h-6 w-6 text-emerald-600" />
-                                            </div>
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
-                                                <TrendingUp className="h-3 w-3" /> Receitas
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-500 font-medium mb-1">Entradas</p>
-                                        <p className="text-3xl font-extrabold text-gray-900 tracking-tight">
-                                            {kpiMonthIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </p>
-                                        {expandEntradas && (
-                                            <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
-                                                <p className="text-[11px] font-semibold text-gray-500 mb-1">Ultimas 5 entradas:</p>
-                                                {filteredTransactions.filter(t => t.type === "entrada").slice(0, 5).map((t: any) => (
-                                                    <div key={t.id} className="flex justify-between text-xs">
-                                                        <span className="text-gray-500 truncate max-w-[60%]">{t.description || t.category || "Entrada"}</span>
-                                                        <span className="font-mono text-emerald-700 font-semibold">+{formatCurrency(parseFloat(t.amount), t.currency || "USD")}</span>
-                                                    </div>
-                                                ))}
-                                                {filteredTransactions.filter(t => t.type === "entrada").length === 0 && <p className="text-xs text-gray-400">Nenhuma entrada</p>}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Saidas */}
-                                    <div className="bg-white p-8 rounded-xl shadow-sm hover:scale-[1.01] transition-transform duration-300 cursor-pointer group"
-                                        onClick={() => setExpandSaidas(!expandSaidas)}>
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="h-12 w-12 rounded-2xl bg-red-100 flex items-center justify-center">
-                                                <ArrowDownRight className="h-6 w-6 text-red-500" />
-                                            </div>
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                                                <TrendingDown className="h-3 w-3" /> Despesas
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-500 font-medium mb-1">Saidas</p>
-                                        <p className="text-3xl font-extrabold text-gray-900 tracking-tight">
-                                            {kpiMonthExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </p>
-                                        {expandSaidas && (
-                                            <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
-                                                <p className="text-[11px] font-semibold text-gray-500 mb-1">Ultimas 5 saidas:</p>
-                                                {filteredTransactions.filter(t => t.type !== "entrada").slice(0, 5).map((t: any) => (
-                                                    <div key={t.id} className="flex justify-between text-xs">
-                                                        <span className="text-gray-500 truncate max-w-[60%]">{t.description || t.category || "Saida"}</span>
-                                                        <span className="font-mono text-red-600 font-semibold">-{formatCurrency(parseFloat(t.amount), t.currency || "USD")}</span>
-                                                    </div>
-                                                ))}
-                                                {filteredTransactions.filter(t => t.type !== "entrada").length === 0 && <p className="text-xs text-gray-400">Nenhuma saida</p>}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
 
                                 {/* ═══ 3. MIDDLE SECTION — Accounts + Flow Chart ═══ */}
                                 <div className="grid grid-cols-12 gap-6">
