@@ -871,6 +871,23 @@ app.use((req, res, next) => {
   const { botChatHandler } = await import("./bot/chat-handler");
   app.post("/api/bot/chat", botChatHandler);
 
+  // ── Monitor status endpoint ──
+  app.get("/api/monitor/status", async (_req, res) => {
+    try {
+      const { getRecentErrors } = await import("./monitor/error-filter");
+      const errors = getRecentErrors(24, "all");
+      res.json({
+        active: true,
+        anthropicKey: !!process.env.ANTHROPIC_API_KEY,
+        notionToken: !!process.env.NOTION_TOKEN,
+        errors24h: errors.length,
+        critical: errors.filter(e => e.severity === "critical").length,
+        warnings: errors.filter(e => e.severity === "warning").length,
+        lastError: errors[0] ? { message: errors[0].message.slice(0, 80), severity: errors[0].severity, module: errors[0].module, time: errors[0].lastSeen } : null,
+      });
+    } catch { res.json({ active: false }); }
+  });
+
   app.use(errorHandler);
 
   // ── Monitor middleware (depois do error handler) ──
