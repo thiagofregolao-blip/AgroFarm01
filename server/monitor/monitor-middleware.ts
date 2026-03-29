@@ -37,9 +37,12 @@ export function monitorMiddleware() {
                 },
             });
 
-            if (!shouldProcess(hash)) {
+            // Sempre processa o primeiro erro de cada hash, ou erros de teste
+            const isTest = message.includes("[TEST]");
+            if (!shouldProcess(hash) && !isTest && tracked.count > 1) {
                 console.log(`[monitor] [dedup] ${message.slice(0, 60)} (${tracked.count}x)`);
             } else {
+                console.log(`[monitor] [processing] ${message.slice(0, 60)} severity=${severity} module=${mod}`);
                 enqueueBatch(tracked);
             }
         } catch (monitorErr) {
