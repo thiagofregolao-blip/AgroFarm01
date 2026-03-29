@@ -8,6 +8,7 @@ import type { Express } from "express";
 import { db } from "./db";
 import { farmPriceHistory } from "../shared/schema";
 import { desc } from "drizzle-orm";
+import { getEffectiveFarmerId, requireFarmer } from "./farm-middleware";
 
 function normalizeProductName(name: string): string {
     return name
@@ -21,14 +22,12 @@ function normalizeProductName(name: string): string {
 }
 
 export function registerQuotationNetworkRoutes(app: Express) {
-    const getFarmerId = (req: any) => {
-        return req.session?.passport?.user?.toString() || req.user?.id?.toString();
-    };
 
     // GET /api/farm/quotation-network — ALL products with regional prices
-    app.get("/api/farm/quotation-network", async (req: any, res) => {
-        const farmerId = getFarmerId(req);
+    app.get("/api/farm/quotation-network", requireFarmer, async (req: any, res) => {
+        const farmerId = await getEffectiveFarmerId(req);
         if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
+        console.log(`[QUOTATION] farmerId=${farmerId} user=${req.user?.id} role=${req.user?.role}`);
 
         try {
             const allPrices = await db.select({
@@ -134,8 +133,8 @@ export function registerQuotationNetworkRoutes(app: Express) {
     });
 
     // POST /api/farm/quotation-network/simulate — purchase simulator
-    app.post("/api/farm/quotation-network/simulate", async (req: any, res) => {
-        const farmerId = getFarmerId(req);
+    app.post("/api/farm/quotation-network/simulate", requireFarmer, async (req: any, res) => {
+        const farmerId = await getEffectiveFarmerId(req);
         if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
 
         const { productName, offeredPrice } = req.body;
@@ -217,8 +216,8 @@ export function registerQuotationNetworkRoutes(app: Express) {
     });
 
     // Debug endpoint
-    app.get("/api/farm/quotation-network/debug", async (req: any, res) => {
-        const farmerId = getFarmerId(req);
+    app.get("/api/farm/quotation-network/debug", requireFarmer, async (req: any, res) => {
+        const farmerId = await getEffectiveFarmerId(req);
         if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
         try {
             const allPrices = await db.select({
