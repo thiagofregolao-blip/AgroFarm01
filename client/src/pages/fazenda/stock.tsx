@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel, User, Eye, AlertTriangle, TrendingUp, DollarSign, BarChart3 } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel, User, Eye, AlertTriangle, TrendingUp, DollarSign, BarChart3, Leaf, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { useState, useRef, useMemo } from "react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -44,8 +44,8 @@ const CAT_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 const CAT_PILL_COLORS: Record<string, string> = {
-    Herbicida: "#dc2626",
-    Fungicida: "#eab308",
+    Herbicida: "#064e3b",
+    Fungicida: "#ca8a04",
     Inseticida: "#2563eb",
     Fertilizante: "#16a34a",
     Semente: "#92400e",
@@ -54,6 +54,20 @@ const CAT_PILL_COLORS: Record<string, string> = {
     Diesel: "#6b7280",
     Outros: "#9ca3af",
 };
+
+const CAT_BADGE_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+    Herbicida: { bg: "bg-emerald-900", text: "text-white", border: "border-emerald-800" },
+    Fungicida: { bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-200" },
+    Inseticida: { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-200" },
+    Fertilizante: { bg: "bg-green-100", text: "text-green-800", border: "border-green-200" },
+    Semente: { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-200" },
+    Adjuvante: { bg: "bg-purple-100", text: "text-purple-800", border: "border-purple-200" },
+    Biologico: { bg: "bg-lime-100", text: "text-lime-800", border: "border-lime-200" },
+    Diesel: { bg: "bg-gray-200", text: "text-gray-700", border: "border-gray-300" },
+    Outros: { bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-200" },
+};
+
+const ITEMS_PER_PAGE = 15;
 
 export default function FarmStock() {
     const [, setLocation] = useLocation();
@@ -66,6 +80,7 @@ export default function FarmStock() {
 
     const { user } = useAuth();
     const { canEdit } = useAccessLevel("stock");
+    const [currentPage, setCurrentPage] = useState(1);
 
     const { data: stock = [], isLoading } = useQuery({
         queryKey: ["/api/farm/stock"],
@@ -222,6 +237,7 @@ export default function FarmStock() {
     // KPI computations
     const kpiData = useMemo(() => {
         const negativeCount = stock.filter((s: any) => parseFloat(s.quantity) < 0).length;
+        const lowStockCount = stock.filter((s: any) => parseFloat(s.quantity) < 5).length;
         const catCounts: Record<string, number> = {};
         stock.forEach((s: any) => {
             const cat = normalizeCategory(s.productCategory);
@@ -232,7 +248,11 @@ export default function FarmStock() {
             ? allCategories.reduce((a, b) => catCounts[a] >= catCounts[b] ? a : b)
             : "—";
         const topCategoryCount = catCounts[topCategory] || 0;
-        return { negativeCount, catCounts, allCategories, topCategory, topCategoryCount };
+        // Lowest stock items for restock analysis
+        const lowestStockItems = [...stock]
+            .sort((a: any, b: any) => parseFloat(a.quantity) - parseFloat(b.quantity))
+            .slice(0, 3);
+        return { negativeCount, lowStockCount, catCounts, allCategories, topCategory, topCategoryCount, lowestStockItems };
     }, [stock]);
 
     // Check if Lote/Validade columns should be shown (>20% filled)
@@ -260,18 +280,39 @@ export default function FarmStock() {
         s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0
     );
 
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+    const safePage = Math.min(currentPage, totalPages);
+    const paginatedItems = filtered.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
+    const showingFrom = filtered.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
+    const showingTo = Math.min(safePage * ITEMS_PER_PAGE, filtered.length);
+
+    // Space utilization for warehouse optimization
+    const warehouseUtilization = useMemo(() => {
+        const withDeposit = stock.filter((s: any) => s.depositId).length;
+        const pct = stock.length > 0 ? Math.round((withDeposit / stock.length) * 100) : 0;
+        return { pct, withDeposit, total: stock.length };
+    }, [stock]);
+
     return (
         <FarmLayout>
-            <div className="space-y-6">
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+                .font-manrope { font-family: 'Manrope', sans-serif; }
+            `}</style>
+            <div className="space-y-6 font-manrope">
+                {/* BREADCRUMB + HEADER */}
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-emerald-800">Depósito / Estoque</h1>
-                        <p className="text-emerald-600 text-sm">
-                            {stock.length} itens — Valor total: <strong>{formatCurrency(totalValue)}</strong>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-600 mb-1">
+                            ESTOQUE &gt; GESTAO DE DEPOSITO
                         </p>
+                        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900">
+                            Deposito / Estoque
+                        </h1>
                     </div>
                     {canEdit && (
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 flex-wrap items-center">
                         <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/deposits"] })} />
                         <DieselEntryDialog onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] }); queryClient.invalidateQueries({ queryKey: ["/api/farm/stock/movements"] }); }} />
                         <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
@@ -279,37 +320,38 @@ export default function FarmStock() {
                     )}
                 </div>
 
-                {/* KPI Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white rounded-xl border border-gray-100 border-l-4 border-l-emerald-500 p-4 shadow-sm">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Package className="h-4 w-4 text-emerald-600" />
-                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Itens</span>
+                {/* THREE KPI CARDS */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Total Itens */}
+                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                            <Package className="h-6 w-6 text-emerald-700" />
                         </div>
-                        <p className="text-2xl font-bold text-gray-900">{stock.length}</p>
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-400">Total Itens</p>
+                            <p className="text-3xl font-extrabold text-gray-900">{stock.length}</p>
+                        </div>
                     </div>
-                    <div className="bg-white rounded-xl border border-gray-100 border-l-4 border-l-blue-500 p-4 shadow-sm">
-                        <div className="flex items-center gap-2 mb-1">
-                            <DollarSign className="h-4 w-4 text-blue-600" />
-                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Valor Total</span>
+                    {/* Valor do Estoque */}
+                    <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                            <DollarSign className="h-6 w-6 text-green-700" />
                         </div>
-                        <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalValue)}</p>
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-400">Valor do Estoque</p>
+                            <p className="text-2xl font-extrabold text-gray-900">{formatCurrency(totalValue)}</p>
+                        </div>
                     </div>
-                    <div className="bg-white rounded-xl border border-gray-100 border-l-4 border-l-red-500 p-4 shadow-sm">
-                        <div className="flex items-center gap-2 mb-1">
-                            <AlertTriangle className="h-4 w-4 text-red-500" />
-                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Alertas</span>
+                    {/* Alerta Estoque Baixo */}
+                    <div className="bg-red-50 rounded-xl border border-red-100 border-l-4 border-l-red-500 p-5 shadow-sm flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                            <AlertTriangle className="h-6 w-6 text-red-600" />
                         </div>
-                        <p className="text-2xl font-bold text-gray-900">{kpiData.negativeCount}</p>
-                        <p className="text-[11px] text-gray-400">Itens com qtd negativa</p>
-                    </div>
-                    <div className="bg-white rounded-xl border border-gray-100 border-l-4 border-l-purple-500 p-4 shadow-sm">
-                        <div className="flex items-center gap-2 mb-1">
-                            <BarChart3 className="h-4 w-4 text-purple-600" />
-                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Top Categoria</span>
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-red-400">Alerta Estoque Baixo</p>
+                            <p className="text-3xl font-extrabold text-red-700">{kpiData.lowStockCount}</p>
+                            <p className="text-[11px] text-red-400">Itens com qtd &lt; 5 ou negativa</p>
                         </div>
-                        <p className="text-2xl font-bold text-gray-900">{kpiData.topCategory}</p>
-                        <p className="text-[11px] text-gray-400">{kpiData.topCategoryCount} itens</p>
                     </div>
                 </div>
 
@@ -323,124 +365,168 @@ export default function FarmStock() {
                         <TabsTrigger value="diesel"><Fuel className="h-4 w-4 mr-1" />Diesel</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="stock" className="mt-4">
-                        <div className="relative mb-3">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                            <Input className="pl-10" placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
-                        </div>
-
-                        {/* Category filter pills */}
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            <button
-                                type="button"
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                                    !categoryFilter
-                                        ? "bg-emerald-600 text-white shadow-sm"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                }`}
-                                onClick={() => setCategoryFilter("")}
-                            >
-                                Todos
-                            </button>
-                            {kpiData.allCategories
-                                .filter(c => c !== "Outros")
-                                .sort((a, b) => (kpiData.catCounts[b] || 0) - (kpiData.catCounts[a] || 0))
-                                .map(cat => {
-                                    const pillColor = CAT_PILL_COLORS[cat] || "#9ca3af";
-                                    const isActive = categoryFilter === cat;
-                                    return (
+                    <TabsContent value="stock" className="mt-4 space-y-4">
+                        {/* CATEGORY FILTER PILLS + SEARCH */}
+                        <div className="bg-gray-100 rounded-xl p-4">
+                            <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                <div className="flex flex-wrap gap-2 flex-1">
+                                    <button
+                                        type="button"
+                                        className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+                                            !categoryFilter
+                                                ? "bg-emerald-900 text-white shadow-sm"
+                                                : "bg-white text-gray-600 hover:bg-gray-50 shadow-sm"
+                                        }`}
+                                        onClick={() => { setCategoryFilter(""); setCurrentPage(1); }}
+                                    >
+                                        Todos ({stock.length})
+                                    </button>
+                                    {kpiData.allCategories
+                                        .filter(c => c !== "Outros")
+                                        .sort((a, b) => (kpiData.catCounts[b] || 0) - (kpiData.catCounts[a] || 0))
+                                        .map(cat => {
+                                            const isActive = categoryFilter === cat;
+                                            return (
+                                                <button
+                                                    key={cat}
+                                                    type="button"
+                                                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all shadow-sm ${
+                                                        isActive
+                                                            ? "bg-emerald-900 text-white"
+                                                            : "bg-white text-gray-600 hover:bg-gray-50"
+                                                    }`}
+                                                    onClick={() => { setCategoryFilter(isActive ? "" : cat); setCurrentPage(1); }}
+                                                >
+                                                    {cat} ({kpiData.catCounts[cat]})
+                                                </button>
+                                            );
+                                        })}
+                                    {kpiData.catCounts["Outros"] > 0 && (
                                         <button
-                                            key={cat}
                                             type="button"
-                                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                                                isActive
-                                                    ? "text-white shadow-sm"
-                                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all shadow-sm ${
+                                                categoryFilter === "Outros"
+                                                    ? "bg-emerald-900 text-white"
+                                                    : "bg-white text-gray-600 hover:bg-gray-50"
                                             }`}
-                                            style={isActive ? { backgroundColor: pillColor } : undefined}
-                                            onClick={() => setCategoryFilter(isActive ? "" : cat)}
+                                            onClick={() => { setCategoryFilter(categoryFilter === "Outros" ? "" : "Outros"); setCurrentPage(1); }}
                                         >
-                                            {cat} ({kpiData.catCounts[cat]})
+                                            Outros ({kpiData.catCounts["Outros"]})
                                         </button>
-                                    );
-                                })}
-                            {kpiData.catCounts["Outros"] > 0 && (
-                                <button
-                                    type="button"
-                                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                                        categoryFilter === "Outros"
-                                            ? "bg-gray-500 text-white shadow-sm"
-                                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    }`}
-                                    onClick={() => setCategoryFilter(categoryFilter === "Outros" ? "" : "Outros")}
-                                >
-                                    Outros ({kpiData.catCounts["Outros"]})
-                                </button>
-                            )}
+                                    )}
+                                </div>
+                                <div className="flex gap-2 items-center">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                        <Input
+                                            className="pl-10 bg-white border-0 shadow-sm rounded-lg h-10 w-full md:w-56"
+                                            placeholder="Buscar produto..."
+                                            value={search}
+                                            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                                        />
+                                    </div>
+                                    <Button variant="outline" size="sm" className="bg-white border-0 shadow-sm h-10 px-4 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                                        <Download className="h-4 w-4 mr-1.5" />
+                                        Export PDF
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
 
                         {isLoading ? (
                             <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
                         ) : filtered.length === 0 ? (
-                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
-                                <Warehouse className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">Estoque vazio</p>
-                            </CardContent></Card>
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 py-16 text-center">
+                                <Warehouse className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                                <p className="text-gray-400 text-sm font-medium">Estoque vazio</p>
+                            </div>
                         ) : (<>
-                            {/* Desktop: table */}
-                            <div className="hidden md:block bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                            {/* DATA TABLE — Desktop */}
+                            <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                                 <table className="w-full text-sm">
-                                    <thead className="bg-emerald-50">
-                                        <tr>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Produto</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
-                                            {showLoteColumn && <th className="text-left p-3 font-semibold text-emerald-800">Lote</th>}
-                                            {showValidadeColumn && <th className="text-left p-3 font-semibold text-emerald-800">Validade</th>}
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Quantidade</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Custo Medio</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Valor Total</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Acoes</th>
+                                    <thead>
+                                        <tr className="bg-gray-50 border-b border-gray-100">
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Produto</th>
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Categoria</th>
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Especificacao</th>
+                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Quantidade</th>
+                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Valor Total</th>
+                                            <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Status</th>
+                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Acoes</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filtered.map((s: any) => {
+                                        {paginatedItems.map((s: any) => {
                                             const qty = parseFloat(s.quantity);
                                             const cost = parseFloat(s.averageCost);
                                             const isNegative = qty < 0;
+                                            const isLow = qty >= 0 && qty < 5;
                                             const cat = normalizeCategory(s.productCategory);
-                                            const catColor = CAT_COLORS[cat] || CAT_COLORS.Outros;
-                                            const displayName = s.productName?.length > 60
-                                                ? s.productName.substring(0, 60) + "..."
+                                            const badge = CAT_BADGE_STYLES[cat] || CAT_BADGE_STYLES.Outros;
+                                            const displayName = s.productName?.length > 50
+                                                ? s.productName.substring(0, 50) + "..."
                                                 : s.productName;
                                             return (
-                                                <tr key={s.id} className={`border-t border-gray-100 transition-colors duration-150 hover:bg-gray-50 ${isNegative ? "bg-red-50" : ""}`}>
-                                                    <td className="p-3">
-                                                        <span className="font-medium" title={s.productName}>{displayName}</span>
-                                                        {s.activeIngredient && (
-                                                            <p className="text-xs text-gray-400 mt-0.5">{s.activeIngredient}</p>
-                                                        )}
+                                                <tr key={s.id} className={`border-b border-gray-50 transition-colors duration-150 hover:bg-emerald-50/30 group ${isNegative ? "bg-red-50/40" : ""}`}>
+                                                    {/* Produto */}
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                                                                <Leaf className="h-5 w-5 text-emerald-600" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="font-bold text-sm text-gray-900 truncate" title={s.productName}>{displayName}</p>
+                                                                {s.activeIngredient ? (
+                                                                    <p className="text-[11px] text-gray-400 truncate">{s.activeIngredient}</p>
+                                                                ) : (
+                                                                    <p className="text-[11px] text-gray-300">ID: {String(s.productId || s.id).substring(0, 8)}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </td>
-                                                    <td className="p-3">
-                                                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${catColor.bg} ${catColor.text}`}>
+                                                    {/* Categoria */}
+                                                    <td className="px-4 py-3">
+                                                        <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide ${badge.bg} ${badge.text}`}>
                                                             {cat}
                                                         </span>
                                                     </td>
-                                                    {showLoteColumn && <td className="p-3 text-sm text-gray-600">{s.lote || "—"}</td>}
-                                                    {showValidadeColumn && <td className="p-3 text-sm text-gray-600">
-                                                        {s.expiryDate ? new Date(s.expiryDate).toLocaleDateString("pt-BR") : "—"}
-                                                    </td>}
-                                                    <td className="text-right p-3 font-mono">
-                                                        <span className={`inline-flex items-center gap-1 ${isNegative ? "text-red-600 font-bold" : ""}`}>
-                                                            {isNegative && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
+                                                    {/* Especificacao */}
+                                                    <td className="px-4 py-3 text-sm text-gray-500">
+                                                        {s.productUnit || "—"}
+                                                        {s.lote && <span className="ml-2 text-[10px] text-gray-300">Lote: {s.lote}</span>}
+                                                    </td>
+                                                    {/* Quantidade */}
+                                                    <td className="text-right px-4 py-3">
+                                                        <span className={`font-bold text-sm font-mono ${isNegative ? "text-red-600" : isLow ? "text-amber-600" : "text-gray-900"}`}>
+                                                            {isNegative && <AlertTriangle className="h-3.5 w-3.5 text-red-500 inline mr-1" />}
                                                             {qty.toFixed(2)} {s.productUnit}
                                                         </span>
                                                     </td>
-                                                    <td className="text-right p-3 font-mono">{formatCurrency(cost)}</td>
-                                                    <td className="text-right p-3 font-mono font-semibold">{formatCurrency(qty * cost)}</td>
-                                                    <td className="text-right p-3">
-                                                        {canEdit && <div className="flex justify-end gap-2">
+                                                    {/* Valor Total */}
+                                                    <td className="text-right px-4 py-3">
+                                                        <span className="font-extrabold text-sm text-gray-900">{formatCurrency(qty * cost)}</span>
+                                                    </td>
+                                                    {/* Status */}
+                                                    <td className="text-center px-4 py-3">
+                                                        {isNegative ? (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                                                NEGATIVO
+                                                            </span>
+                                                        ) : isLow ? (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                                                                LOW STOCK
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                                                IN STOCK
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    {/* Acoes */}
+                                                    <td className="text-right px-4 py-3">
+                                                        {canEdit && <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
                                                                 {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                                             </Button>
                                                         </div>}
@@ -452,67 +538,175 @@ export default function FarmStock() {
                                 </table>
                             </div>
 
-                            {/* Mobile: cards */}
-                            <div className="md:hidden flex flex-col gap-2">
-                                {filtered.map((s: any) => {
+                            {/* DATA TABLE — Mobile cards */}
+                            <div className="md:hidden flex flex-col gap-3">
+                                {paginatedItems.map((s: any) => {
                                     const qty = parseFloat(s.quantity);
                                     const cost = parseFloat(s.averageCost);
                                     const isNegative = qty < 0;
+                                    const isLow = qty >= 0 && qty < 5;
                                     const cat = normalizeCategory(s.productCategory);
-                                    const catColor = CAT_COLORS[cat] || CAT_COLORS.Outros;
+                                    const badge = CAT_BADGE_STYLES[cat] || CAT_BADGE_STYLES.Outros;
                                     return (
-                                        <div key={s.id} className={`rounded-xl border p-4 shadow-sm ${isNegative ? "bg-red-50 border-red-200" : "bg-white border-emerald-100"}`}>
-                                            <div className="flex justify-between items-start mb-1">
-                                                <div className="flex-1 mr-2">
-                                                    <div className="font-bold text-sm text-gray-900" title={s.productName}>
-                                                        {s.productName?.length > 50 ? s.productName.substring(0, 50) + "..." : s.productName}
-                                                    </div>
-                                                    {s.activeIngredient && (
-                                                        <div className="text-[11px] text-gray-400">{s.activeIngredient}</div>
-                                                    )}
+                                        <div key={s.id} className={`rounded-xl border p-4 shadow-sm ${isNegative ? "bg-red-50 border-red-200" : "bg-white border-gray-100"}`}>
+                                            <div className="flex items-start gap-3 mb-3">
+                                                <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                                                    <Leaf className="h-5 w-5 text-emerald-600" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold text-sm text-gray-900 truncate">{s.productName}</p>
+                                                    {s.activeIngredient && <p className="text-[11px] text-gray-400">{s.activeIngredient}</p>}
+                                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${badge.bg} ${badge.text}`}>{cat}</span>
                                                 </div>
                                                 {canEdit && (
-                                                <div className="flex gap-1.5 flex-shrink-0">
-                                                    <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
-                                                        {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                                    </Button>
-                                                </div>
+                                                    <div className="flex gap-1 flex-shrink-0">
+                                                        <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
+                                                            {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                        </Button>
+                                                    </div>
                                                 )}
                                             </div>
-                                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide mb-3 ${catColor.bg} ${catColor.text}`}>
-                                                {cat}
-                                            </span>
-                                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                            <div className="grid grid-cols-2 gap-3 text-sm">
                                                 <div>
-                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Quantidade</div>
-                                                    <div className={`text-[15px] font-bold flex items-center gap-1 ${isNegative ? "text-red-600" : "text-emerald-700"}`}>
-                                                        {isNegative && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Quantidade</p>
+                                                    <p className={`font-bold ${isNegative ? "text-red-600" : isLow ? "text-amber-600" : "text-gray-900"}`}>
                                                         {qty.toFixed(2)} {s.productUnit}
-                                                    </div>
+                                                    </p>
                                                 </div>
                                                 <div>
-                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Custo Médio</div>
-                                                    <div className="text-xs font-mono text-gray-700">{formatCurrency(cost)}</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Lote</div>
-                                                    <div className={`text-xs ${s.lote ? "text-gray-700" : "text-gray-300"}`}>{s.lote || "—"}</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Validade</div>
-                                                    <div className={`text-xs ${s.expiryDate ? "text-gray-700" : "text-gray-300"}`}>
-                                                        {s.expiryDate ? new Date(s.expiryDate).toLocaleDateString("pt-BR") : "—"}
-                                                    </div>
+                                                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Valor Total</p>
+                                                    <p className="font-extrabold text-gray-900">{formatCurrency(qty * cost)}</p>
                                                 </div>
                                             </div>
-                                            <div className="border-t border-gray-100 mt-3 pt-2 flex justify-between items-center">
-                                                <span className="text-[10px] text-gray-400 uppercase font-medium">Valor Total</span>
-                                                <span className="text-sm font-bold font-mono text-gray-900">{formatCurrency(qty * cost)}</span>
+                                            <div className="mt-3 flex justify-between items-center">
+                                                <span className="text-[10px] uppercase text-gray-400 font-semibold">Status</span>
+                                                {isNegative ? (
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">NEGATIVO</span>
+                                                ) : isLow ? (
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">LOW STOCK</span>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">IN STOCK</span>
+                                                )}
                                             </div>
                                         </div>
                                     );
                                 })}
+                            </div>
+
+                            {/* PAGINATION */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-between pt-2">
+                                    <p className="text-xs text-gray-400">
+                                        Showing <span className="font-semibold text-gray-600">{showingFrom}</span> to <span className="font-semibold text-gray-600">{showingTo}</span> of <span className="font-semibold text-gray-600">{filtered.length}</span> items
+                                    </p>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            type="button"
+                                            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                                            disabled={safePage <= 1}
+                                            onClick={() => setCurrentPage(safePage - 1)}
+                                            aria-label="Pagina anterior"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </button>
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                            .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                                            .map((p, idx, arr) => {
+                                                const prev = arr[idx - 1];
+                                                const showEllipsis = prev != null && p - prev > 1;
+                                                return (
+                                                    <span key={p} className="flex items-center">
+                                                        {showEllipsis && <span className="px-1 text-gray-300 text-xs">...</span>}
+                                                        <button
+                                                            type="button"
+                                                            className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
+                                                                safePage === p
+                                                                    ? "bg-emerald-900 text-white shadow-sm"
+                                                                    : "text-gray-500 hover:bg-gray-100"
+                                                            }`}
+                                                            onClick={() => setCurrentPage(p)}
+                                                        >
+                                                            {p}
+                                                        </button>
+                                                    </span>
+                                                );
+                                            })}
+                                        <button
+                                            type="button"
+                                            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                                            disabled={safePage >= totalPages}
+                                            onClick={() => setCurrentPage(safePage + 1)}
+                                            aria-label="Proxima pagina"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* BOTTOM INSIGHTS */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                {/* Restock Analysis */}
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                                    <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                        <TrendingUp className="h-4 w-4 text-amber-500" />
+                                        Restock Analysis
+                                    </h3>
+                                    <p className="text-[11px] text-gray-400 mb-3">Top 3 itens com menor estoque</p>
+                                    <div className="space-y-2">
+                                        {kpiData.lowestStockItems.map((item: any) => {
+                                            const q = parseFloat(item.quantity);
+                                            return (
+                                                <div key={item.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <div className="w-7 h-7 rounded bg-amber-50 flex items-center justify-center flex-shrink-0">
+                                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                                        </div>
+                                                        <span className="text-sm text-gray-700 font-medium truncate">{item.productName}</span>
+                                                    </div>
+                                                    <span className={`text-sm font-bold font-mono ml-2 flex-shrink-0 ${q < 0 ? "text-red-600" : q < 5 ? "text-amber-600" : "text-gray-900"}`}>
+                                                        {q.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {kpiData.lowestStockItems.length > 0 && (
+                                        <button type="button" className="mt-3 text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition-colors flex items-center gap-1">
+                                            Review Order <ArrowUpRight className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Warehouse Optimization */}
+                                <div className="bg-emerald-950 rounded-xl shadow-sm p-5 text-white">
+                                    <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                                        <Warehouse className="h-4 w-4 text-emerald-300" />
+                                        Warehouse Optimization
+                                    </h3>
+                                    <p className="text-[11px] text-emerald-300/70 mb-4">Utilizacao de espaco e alocacao de itens em depositos</p>
+                                    <div className="flex items-end gap-6 mb-4">
+                                        <div>
+                                            <p className="text-3xl font-extrabold">{warehouseUtilization.pct}%</p>
+                                            <p className="text-[11px] text-emerald-300/60">Space Utilization</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-2xl font-bold">{warehouseUtilization.total}</p>
+                                            <p className="text-[11px] text-emerald-300/60">Total Itens</p>
+                                        </div>
+                                    </div>
+                                    {/* Progress bar */}
+                                    <div className="w-full bg-emerald-900 rounded-full h-2 mb-4">
+                                        <div
+                                            className="bg-emerald-400 h-2 rounded-full transition-all duration-500"
+                                            style={{ width: `${warehouseUtilization.pct}%` }}
+                                        />
+                                    </div>
+                                    <button type="button" className="text-xs font-semibold text-emerald-300 hover:text-white transition-colors flex items-center gap-1">
+                                        Generate Load Map <ArrowUpRight className="h-3 w-3" />
+                                    </button>
+                                </div>
                             </div>
                         </>)}
                     </TabsContent>
