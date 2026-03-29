@@ -10,6 +10,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/i18n";
+import ChatBot from "@/components/fazenda/chat-bot";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface NavItem {
@@ -542,6 +543,9 @@ export default function FarmLayout({ children }: { children: ReactNode }) {
                     {children}
                 </div>
             </main>
+
+            {/* ── Chat Bot flutuante ── */}
+            <ChatBot userRole={user?.role} />
         </div>
     );
 }

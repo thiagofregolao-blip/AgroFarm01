@@ -867,7 +867,20 @@ app.use((req, res, next) => {
     });
   });
 
+  // ── Bot chat route (antes do error handler) ──
+  const { botChatHandler } = await import("./bot/chat-handler");
+  app.post("/api/bot/chat", botChatHandler);
+
   app.use(errorHandler);
+
+  // ── Monitor middleware (depois do error handler) ──
+  try {
+    const { monitorMiddleware, setupGlobalHandlers } = await import("./monitor/monitor-middleware");
+    app.use(monitorMiddleware());
+    setupGlobalHandlers();
+  } catch (err) {
+    log("⚠️  Monitor middleware nao carregou: " + (err as Error).message);
+  }
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
