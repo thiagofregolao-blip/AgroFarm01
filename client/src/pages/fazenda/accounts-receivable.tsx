@@ -16,7 +16,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
     Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare,
-    PlusCircle, Trash2, Pencil, History, Search, CreditCard, Plus, Printer, Settings, RefreshCw
+    PlusCircle, Trash2, Pencil, History, Search, CreditCard, Plus, Printer, Settings, RefreshCw,
+    BarChart3, CalendarDays, DollarSign
 } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
@@ -224,15 +225,90 @@ export default function AccountsReceivable() {
         },
     });
 
+    // ─── Search state for main tab ─────────────────────────────────────────
+    const [searchTerm, setSearchTerm] = useState("");
+
+    const searchFiltered = filtered.filter((i: any) =>
+        !searchTerm ||
+        i.buyer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        i.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // ─── KPI Calculations ───────────────────────────────────────────────────
+    const kpiTotalReceivable = useMemo(() => {
+        return activeItems
+            .filter((i: any) => i.status === "pendente" || i.status === "parcial")
+            .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0);
+    }, [items]);
+
+    const kpiOverdue = useMemo(() => {
+        const overdueItems = activeItems.filter((i: any) => isItemOverdue(i));
+        return {
+            count: overdueItems.length,
+            sum: overdueItems.reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0),
+        };
+    }, [items]);
+
+    const kpiReceivedThisMonth = useMemo(() => {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        return activeItems
+            .filter((i: any) => i.status === "recebido" && i.updatedAt && new Date(i.updatedAt) >= monthStart)
+            .reduce((s: number, i: any) => s + parseFloat(i.receivedAmount || i.totalAmount || 0), 0);
+    }, [items]);
+
+    const kpiNext7Days = useMemo(() => {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const in7 = new Date(today); in7.setDate(in7.getDate() + 7);
+        return activeItems
+            .filter((i: any) => {
+                if (i.status === "recebido") return false;
+                const d = new Date(i.dueDate); d.setHours(0, 0, 0, 0);
+                return d >= today && d <= in7;
+            })
+            .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    }, [items]);
+
+    const kpiMonthlyFlow = useMemo(() => {
+        const months: { label: string; total: number }[] = [];
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const label = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+            const monthItems = activeItems.filter((it: any) => {
+                const due = new Date(it.dueDate);
+                return due.getMonth() === d.getMonth() && due.getFullYear() === d.getFullYear();
+            });
+            const total = monthItems.reduce((s: number, it: any) => s + parseFloat(it.totalAmount || 0), 0);
+            months.push({ label, total });
+        }
+        return months;
+    }, [items]);
+
+    const maxMonthly = useMemo(() => Math.max(...kpiMonthlyFlow.map(m => m.total), 1), [kpiMonthlyFlow]);
+
     const statusBadge = (s: string) => {
-        const map: any = {
-            pendente: { bg: "bg-blue-100 text-blue-700", icon: <Clock className="h-3 w-3" />, label: "Pendente" },
-            parcial: { bg: "bg-amber-100 text-amber-700", icon: <AlertTriangle className="h-3 w-3" />, label: "Parcial" },
-            recebido: { bg: "bg-green-100 text-green-700", icon: <CheckCircle className="h-3 w-3" />, label: "Recebido" },
-            vencido: { bg: "bg-red-100 text-red-700", icon: <AlertTriangle className="h-3 w-3" />, label: "Vencido" },
+        const map: Record<string, { dot: string; bg: string; label: string }> = {
+            pendente: { dot: "bg-red-500", bg: "bg-red-50 text-red-700 ring-1 ring-red-200", label: "ABERTO" },
+            parcial: { dot: "bg-yellow-500", bg: "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200", label: "PARCIAL" },
+            recebido: { dot: "bg-green-500", bg: "bg-green-50 text-green-700 ring-1 ring-green-200", label: "PAGO" },
+            vencido: { dot: "bg-red-500", bg: "bg-red-50 text-red-700 ring-1 ring-red-200", label: "VENCIDO" },
         };
         const cfg = map[s] || map.pendente;
-        return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg}`}>{cfg.icon} {cfg.label}</span>;
+        return (
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${cfg.bg}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+                {cfg.label}
+            </span>
+        );
+    };
+
+    // Avatar color from buyer name
+    const avatarColor = (name: string) => {
+        const colors = ["bg-emerald-600", "bg-blue-600", "bg-purple-600", "bg-amber-600", "bg-rose-600", "bg-teal-600", "bg-indigo-600", "bg-orange-600"];
+        let hash = 0;
+        for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
     };
 
     // Unique buyer names for filter
@@ -240,178 +316,234 @@ export default function AccountsReceivable() {
 
     return (
         <FarmLayout>
-            <div className="space-y-6">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-emerald-800">Contas a Receber</h1>
-                        <p className="text-sm text-emerald-600">
-                            A receber: <strong className="text-blue-600">{formatCurrency(totalPendente)}</strong>
-                            {totalVencido > 0 && <span className="ml-2 text-red-600">Vencido: {formatCurrency(totalVencido)}</span>}
-                        </p>
-                    </div>
-                    <div className="flex gap-2 flex-wrap">
-                        <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700" onClick={() => queryClient.invalidateQueries()}>
-                            <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
-                        </Button>
-                        <Button variant="outline" size="sm" className="border-gray-200 text-gray-600" onClick={() => setTimbradoConfigOpen(true)}>
-                            <Settings className="mr-1 h-4 w-4" /> Timbrado
-                        </Button>
-                        <Button variant="outline" className="border-emerald-200 text-emerald-700" onClick={() => exportToCSV(filtered, "contas-a-receber.csv")}>
-                            <Download className="mr-2 h-4 w-4" /> Exportar CSV
-                        </Button>
-                        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setOpenCreate(true)}>
-                            <Plus className="mr-2 h-4 w-4" /> Nova Conta a Receber
-                        </Button>
-                    </div>
-                </div>
+            {/* Manrope font */}
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap'); .font-headline { font-family: 'Manrope', sans-serif; }`}</style>
 
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                        { label: "Total Pendente", value: totalPendente, color: "text-blue-700" },
-                        { label: "Vencidos", value: totalVencido, color: "text-red-600" },
-                        { label: "Total de Titulos", value: activeItems.length, color: "text-gray-700", isCurrency: false },
-                        { label: "Recebidos", value: activeItems.filter((i: any) => i.status === "recebido").length, color: "text-green-700", isCurrency: false },
-                    ].map((c, idx) => (
-                        <Card key={idx} className="border-emerald-100"><CardContent className="p-4">
-                            <p className="text-xs text-gray-500">{c.label}</p>
-                            <p className={`text-xl font-bold ${c.color}`}>
-                                {c.isCurrency !== false ? formatCurrency(c.value as number) : c.value}
+            <div className="space-y-6">
+                {/* ── SECTION 1: PAGE HEADER ─────────────────────────────── */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* Left: Title */}
+                    <div className="lg:col-span-4">
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-700 mb-1">FINANCEIRO {'>'} CONTAS A RECEBER</p>
+                        <h1 className="text-4xl font-extrabold font-headline text-gray-900 leading-tight">Contas a Receber</h1>
+                        <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                            Gerencie seus recebimentos, acompanhe vencimentos e registre pagamentos recebidos.
+                        </p>
+                        <div className="flex gap-2 mt-4 flex-wrap">
+                            <Button variant="outline" size="sm" className="text-gray-600 h-8 text-xs" onClick={() => queryClient.invalidateQueries()}>
+                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Atualizar
+                            </Button>
+                            <Button variant="outline" size="sm" className="text-gray-600 h-8 text-xs" onClick={() => exportToCSV(filtered, "contas-a-receber.csv")}>
+                                <Download className="mr-1.5 h-3.5 w-3.5" /> CSV
+                            </Button>
+                            <Button variant="outline" size="sm" className="text-gray-600 h-8 text-xs" onClick={() => setTimbradoConfigOpen(true)}>
+                                <Settings className="mr-1.5 h-3.5 w-3.5" /> Timbrado
+                            </Button>
+                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-8 text-xs" onClick={() => setOpenCreate(true)}>
+                                <Plus className="mr-1.5 h-3.5 w-3.5" /> Nova Conta
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Right: KPI Cards */}
+                    <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {/* Total a Receber */}
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-600 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <DollarSign className="h-4 w-4 text-emerald-700" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Total a Receber</span>
+                            </div>
+                            <p className="text-2xl font-extrabold font-headline text-gray-900">
+                                {kpiTotalReceivable.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
                             </p>
-                        </CardContent></Card>
-                    ))}
+                            <p className="text-xs text-gray-400 mt-1">{activeItems.filter((i: any) => i.status !== "recebido").length} titulos pendentes</p>
+                        </div>
+
+                        {/* Vencidos */}
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Vencidos</span>
+                            </div>
+                            <p className="text-2xl font-extrabold font-headline text-red-600">
+                                {kpiOverdue.sum.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
+                            </p>
+                            <p className="text-xs text-red-400 mt-1">{kpiOverdue.count} titulo(s) em atraso</p>
+                        </div>
+
+                        {/* Recebidos (Mes) */}
+                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-green-600 p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Recebidos (Mes)</span>
+                            </div>
+                            <p className="text-2xl font-extrabold font-headline text-green-600">
+                                {kpiReceivedThisMonth.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">no mes atual</p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Tabs: Contas / Recebimento / Historico */}
                 <Tabs defaultValue="contas">
-                    <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
-                        <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Contas</TabsTrigger>
-                        <TabsTrigger value="recebimento" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Recebimento</TabsTrigger>
-                        <TabsTrigger value="historico" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Histórico e Recibos</TabsTrigger>
+                    <TabsList className="bg-gray-100 p-1 h-10 rounded-lg">
+                        <TabsTrigger value="contas" className="text-[13px] font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm px-5 rounded-md">Contas</TabsTrigger>
+                        <TabsTrigger value="recebimento" className="text-[13px] font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm px-5 rounded-md">Recebimento</TabsTrigger>
+                        <TabsTrigger value="historico" className="text-[13px] font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm px-5 rounded-md">Historico e Recibos</TabsTrigger>
                     </TabsList>
 
                     {/* ── CONTAS TAB ─────────────────────────────────────────── */}
-                    <TabsContent value="contas" className="space-y-4 mt-4">
-                        {/* Filters */}
-                        <Card className="border-emerald-100">
-                            <CardContent className="p-4">
-                                <div className="flex flex-wrap gap-3 items-end">
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Status</Label>
-                                        <Select value={filterStatus} onValueChange={setFilterStatus}>
-                                            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="todos">Todos</SelectItem>
-                                                <SelectItem value="pendente">Pendente</SelectItem>
-                                                <SelectItem value="parcial">Parcial</SelectItem>
-                                                <SelectItem value="recebido">Recebido</SelectItem>
-                                                <SelectItem value="vencido">Vencido</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                    <TabsContent value="contas" className="space-y-5 mt-5">
+
+                        {/* ── SECTION 2: FILTERS BAR ──────────────────────────── */}
+                        <div className="bg-gray-100 rounded-xl p-5">
+                            <div className="flex flex-wrap gap-3 items-end">
+                                <div className="flex-1 min-w-[200px]">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                        <Input
+                                            placeholder="Buscar comprador ou descricao..."
+                                            value={searchTerm}
+                                            onChange={e => setSearchTerm(e.target.value)}
+                                            className="pl-10 bg-white border-0 shadow-sm h-10"
+                                        />
                                     </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Vencimento de</Label>
-                                        <Input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="w-36" />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">ate</Label>
-                                        <Input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="w-36" />
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Cliente</Label>
-                                        <Select value={filterSupplier} onValueChange={setFilterSupplier}>
-                                            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="todos">Todos</SelectItem>
-                                                {buyerNames.map((name) => (
-                                                    <SelectItem key={name} value={name}>{name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Safra</Label>
-                                        <Select value={filterSeason} onValueChange={setFilterSeason}>
-                                            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="todos">Todas</SelectItem>
-                                                {(seasons as any[]).map((s: any) => (
-                                                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <Button variant="ghost" size="sm" className="text-gray-500" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); setFilterSupplier("todos"); setFilterSeason("todos"); }}>
+                                </div>
+                                <div>
+                                    <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                        <SelectTrigger className="w-36 bg-white border-0 shadow-sm h-10"><SelectValue placeholder="Status" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="todos">Todos</SelectItem>
+                                            <SelectItem value="pendente">Pendente</SelectItem>
+                                            <SelectItem value="parcial">Parcial</SelectItem>
+                                            <SelectItem value="recebido">Recebido</SelectItem>
+                                            <SelectItem value="vencido">Vencido</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                                        <SelectTrigger className="w-44 bg-white border-0 shadow-sm h-10"><SelectValue placeholder="Cliente" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="todos">Todos</SelectItem>
+                                            {buyerNames.map((name) => (
+                                                <SelectItem key={name} value={name}>{name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <Select value={filterSeason} onValueChange={setFilterSeason}>
+                                        <SelectTrigger className="w-40 bg-white border-0 shadow-sm h-10"><SelectValue placeholder="Safra" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="todos">Todas Safras</SelectItem>
+                                            {(seasons as any[]).map((s: any) => (
+                                                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {(filterStatus !== "todos" || filterSupplier !== "todos" || filterSeason !== "todos" || searchTerm) && (
+                                    <Button variant="ghost" size="sm" className="text-gray-500 h-10" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); setFilterSupplier("todos"); setFilterSeason("todos"); setSearchTerm(""); }}>
                                         Limpar
                                     </Button>
-                                    <span className="text-xs text-gray-400 ml-auto self-center">{filtered.length} de {activeItems.length} registros</span>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                )}
+                                <span className="text-xs text-gray-400 ml-auto self-center">{searchFiltered.length} de {activeItems.length}</span>
+                            </div>
+                        </div>
 
+                        {/* ── SECTION 3: DATA TABLE ───────────────────────────── */}
                         {isLoading ? (
-                            <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
-                        ) : filtered.length === 0 ? (
-                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                            <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
+                        ) : searchFiltered.length === 0 ? (
+                            <div className="bg-white rounded-xl shadow-sm py-16 text-center">
                                 <Receipt className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">Nenhuma conta a receber</p>
-                            </CardContent></Card>
+                                <p className="text-gray-500 font-medium">Nenhuma conta a receber encontrada</p>
+                                <p className="text-xs text-gray-400 mt-1">Tente ajustar os filtros</p>
+                            </div>
                         ) : (
-                            <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-emerald-50">
-                                        <tr>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Comprador</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Nro. Fatura</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Cadastrado</th>
-                                            <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
-                                            <th className="text-right p-3 font-semibold text-emerald-800">Recebido</th>
-                                            <th className="p-3"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filtered.slice(0, pageSize).map((item: any) => {
-                                            const today = new Date(); today.setHours(0, 0, 0, 0);
-                                            const due = item.dueDate ? new Date(item.dueDate) : null;
-                                            if (due) due.setHours(0, 0, 0, 0);
-                                            const isOverdue = !!due && (item.status === "pendente" || item.status === "parcial") && due < today;
-                                            return (
-                                                <tr key={item.id} className={`border-t border-gray-100 ${isOverdue ? "bg-red-50" : ""}`}>
-                                                    <td className="p-3 font-medium">{item.buyer}</td>
-                                                    <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
-                                                    <td className="p-3">{item.installmentNumber || 1}/{item.totalInstallments || 1}</td>
-                                                    <td className="p-3 text-gray-600 font-mono text-xs">{item.invoiceNumber || "--"}</td>
-                                                    <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
-                                                    <td className="p-3 text-gray-500 text-xs">{item.createdAt ? new Date(item.createdAt).toLocaleDateString("pt-BR") : "—"}</td>
-                                                    <td className="p-3">{statusBadge(isOverdue && item.status !== "recebido" ? "vencido" : item.status)}</td>
-                                                    <td className="text-right p-3 font-mono font-semibold">{formatCurrency(item.totalAmount)}</td>
-                                                    <td className="text-right p-3 font-mono text-green-600">{formatCurrency(item.receivedAmount || 0)}</td>
-                                                    <td className="p-3 flex gap-1 justify-end">
-                                                        {item.invoiceNumber && (
-                                                            <Button variant="outline" size="sm" className="h-7 text-xs border-gray-200 text-gray-600 hover:bg-gray-50"
-                                                                onClick={() => setPrintingId(item.id)} aria-label="Imprimir fatura">
-                                                                <Printer className="h-3 w-3 mr-1" />Imprimir
-                                                            </Button>
-                                                        )}
-                                                        <Button variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                                                            onClick={() => setViewingNotasId(item.id)} aria-label="Ver notas emitidas">
-                                                            <Receipt className="h-3 w-3 mr-1" />Notas
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="bg-gray-50">
+                                                <th className="text-left px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Comprador</th>
+                                                <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Descricao</th>
+                                                <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Parcela</th>
+                                                <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Vencimento</th>
+                                                <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Status</th>
+                                                <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Valor</th>
+                                                <th className="text-right px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Recebido</th>
+                                                <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Acoes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {searchFiltered.slice(0, pageSize).map((item: any) => {
+                                                const today = new Date(); today.setHours(0, 0, 0, 0);
+                                                const due = item.dueDate ? new Date(item.dueDate) : null;
+                                                if (due) due.setHours(0, 0, 0, 0);
+                                                const isOverdue = !!due && (item.status === "pendente" || item.status === "parcial") && due < today;
+                                                return (
+                                                    <tr key={item.id} className="hover:bg-emerald-50/20 transition-colors">
+                                                        {/* Comprador with avatar */}
+                                                        <td className="px-5 py-3.5">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`h-8 w-8 rounded-full ${avatarColor(item.buyer || "")} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                                                                    {(item.buyer || "?")[0].toUpperCase()}
+                                                                </div>
+                                                                <span className="font-semibold text-gray-900 truncate max-w-[160px]">{item.buyer}</span>
+                                                            </div>
+                                                        </td>
+                                                        {/* Descricao */}
+                                                        <td className="px-4 py-3.5 text-gray-500 max-w-[180px] truncate">{item.description || "--"}</td>
+                                                        {/* Parcela */}
+                                                        <td className="px-3 py-3.5 text-center">
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-medium">
+                                                                {item.installmentNumber || 1}/{item.totalInstallments || 1}
+                                                            </span>
+                                                        </td>
+                                                        {/* Vencimento */}
+                                                        <td className={`px-4 py-3.5 text-sm ${isOverdue ? "text-red-600 font-semibold" : "text-gray-700"}`}>
+                                                            {item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "--"}
+                                                        </td>
+                                                        {/* Status */}
+                                                        <td className="px-3 py-3.5 text-center">{statusBadge(isOverdue && item.status !== "recebido" ? "vencido" : item.status)}</td>
+                                                        {/* Valor */}
+                                                        <td className="px-5 py-3.5 text-right font-extrabold text-gray-900 font-headline">
+                                                            {formatCurrency(item.totalAmount)}
+                                                        </td>
+                                                        {/* Recebido */}
+                                                        <td className="px-4 py-3.5 text-right font-semibold text-green-600">
+                                                            {parseFloat(item.receivedAmount || 0) > 0 ? formatCurrency(item.receivedAmount) : <span className="text-gray-300">--</span>}
+                                                        </td>
+                                                        {/* Acoes */}
+                                                        <td className="px-5 py-3.5 text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                {item.invoiceNumber && (
+                                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600" onClick={() => setPrintingId(item.id)} aria-label="Imprimir fatura">
+                                                                        <Printer className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                )}
+                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => setViewingNotasId(item.id)} aria-label="Ver notas">
+                                                                    <Receipt className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => openEdit(item)} aria-label="Editar">
+                                                                    <Pencil className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                                 {activeItems.length > 15 && (
-                                    <div className="flex items-center justify-center gap-3 p-3 border-t border-gray-100">
-                                        <span className="text-xs text-gray-400">Mostrando {Math.min(pageSize, filtered.length)} de {filtered.length}</span>
+                                    <div className="flex items-center justify-center gap-3 px-5 py-3 border-t border-gray-100">
+                                        <span className="text-xs text-gray-400">Mostrando {Math.min(pageSize, searchFiltered.length)} de {searchFiltered.length}</span>
                                         <Select value={String(pageSize)} onValueChange={v => setPageSize(parseInt(v))}>
-                                            <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
+                                            <SelectTrigger className="w-20 h-7 text-xs border-0 bg-gray-100"><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="15">15</SelectItem>
                                                 <SelectItem value="30">30</SelectItem>
@@ -423,6 +555,69 @@ export default function AccountsReceivable() {
                                 )}
                             </div>
                         )}
+
+                        {/* ── SECTION 4: BOTTOM INSIGHTS ──────────────────────── */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            {/* Proximos Vencimentos */}
+                            <div className="bg-white rounded-xl shadow-sm p-5">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <CalendarDays className="h-4 w-4 text-emerald-600" />
+                                    <h3 className="font-headline font-bold text-gray-900">Proximos Vencimentos</h3>
+                                    {kpiNext7Days.length > 0 && (
+                                        <span className="ml-auto text-[10px] uppercase tracking-wider font-bold text-gray-400">{kpiNext7Days.length} titulo(s)</span>
+                                    )}
+                                </div>
+                                {kpiNext7Days.length === 0 ? (
+                                    <p className="text-sm text-gray-400 text-center py-6">Nenhum vencimento nos proximos 7 dias</p>
+                                ) : (
+                                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                                        {kpiNext7Days.slice(0, 8).map((item: any) => (
+                                            <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`h-6 w-6 rounded-full ${avatarColor(item.buyer || "")} flex items-center justify-center text-white text-[10px] font-bold`}>
+                                                        {(item.buyer || "?")[0].toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-800 truncate max-w-[140px]">{item.buyer}</p>
+                                                        <p className="text-[10px] text-gray-400">{new Date(item.dueDate).toLocaleDateString("pt-BR")}</p>
+                                                    </div>
+                                                </div>
+                                                <span className="font-headline font-bold text-gray-900 text-sm">
+                                                    {formatCurrency(parseFloat(item.totalAmount) - parseFloat(item.receivedAmount || 0))}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Fluxo de Receitas */}
+                            <div className="bg-emerald-950 rounded-xl shadow-sm p-5 relative overflow-hidden">
+                                {/* Decorative blur circle */}
+                                <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl" />
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <BarChart3 className="h-4 w-4 text-emerald-400" />
+                                        <h3 className="font-headline font-bold text-white">Fluxo de Receitas</h3>
+                                        <span className="ml-auto text-[10px] uppercase tracking-wider font-bold text-emerald-400/60">Ultimos 6 meses</span>
+                                    </div>
+                                    <div className="flex items-end gap-3 h-[140px]">
+                                        {kpiMonthlyFlow.map((m, idx) => (
+                                            <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full">
+                                                <span className="text-[10px] text-emerald-300 font-bold mb-1">
+                                                    {m.total > 0 ? (m.total / 1000).toFixed(0) + "k" : "0"}
+                                                </span>
+                                                <div
+                                                    className="w-full rounded-t-md bg-emerald-500/40 hover:bg-emerald-400/60 transition-colors"
+                                                    style={{ height: `${Math.max((m.total / maxMonthly) * 100, 4)}%` }}
+                                                />
+                                                <span className="text-[10px] text-emerald-400/80 mt-2 capitalize">{m.label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </TabsContent>
 
                     {/* ── RECEBIMENTO TAB ──────────────────────────────────── */}
@@ -470,7 +665,7 @@ export default function AccountsReceivable() {
                     </DialogContent>
                 </Dialog>
 
-                {/* Edit Dialog — reuses CreateARForm pre-populated */}
+                {/* Edit Dialog -- reuses CreateARForm pre-populated */}
                 <Dialog open={!!editingItem} onOpenChange={(o) => { if (!o) { setEditingItem(null); setEditingItemId(null); } }}>
                     <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
                         <DialogHeader className="px-6 pt-5 pb-3 border-b">
@@ -528,6 +723,7 @@ function CreateARForm({ suppliers, seasons, products, stockByDeposit, grainStock
     suppliers: any[]; seasons: any[]; products: any[]; stockByDeposit?: any[]; grainStock?: any[]; invoiceConfig: any; onSave: (data: any) => void; saving: boolean;
     initialData?: any;
 }) {
+    const { toast } = useToast();
     const ed = initialData;
     const [buyer, setBuyer] = useState(ed?.buyer || "");
     const [buyerSearch, setBuyerSearch] = useState("");
@@ -1180,104 +1376,122 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
         return (item.status === "pendente" || item.status === "parcial") && due < today;
     };
 
+    // Avatar color from buyer name
+    const avatarColor = (name: string) => {
+        const colors = ["bg-emerald-600", "bg-blue-600", "bg-purple-600", "bg-amber-600", "bg-rose-600", "bg-teal-600", "bg-indigo-600", "bg-orange-600"];
+        let hash = 0;
+        for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    };
+
     return (
         <>
             {/* Filters + Pay button */}
-            <Card className="border-emerald-100">
-                <CardContent className="p-4">
-                    <div className="flex flex-wrap gap-3 items-end">
-                        <div className="flex-1 min-w-[200px]">
-                            <Label className="text-xs text-gray-500">Buscar</Label>
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                                <Input placeholder="Comprador ou descricao..." value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
-                            </div>
+            <div className="bg-gray-100 rounded-xl p-5">
+                <div className="flex flex-wrap gap-3 items-end">
+                    <div className="flex-1 min-w-[200px]">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input placeholder="Buscar comprador ou descricao..." value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)} className="pl-10 bg-white border-0 shadow-sm h-10" />
                         </div>
-                        <div>
-                            <Label className="text-xs text-gray-500">Vencimento de</Label>
-                            <Input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-36" />
-                        </div>
-                        <div>
-                            <Label className="text-xs text-gray-500">ate</Label>
-                            <Input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-36" />
-                        </div>
-                        <div>
-                            <Label className="text-xs text-gray-500">Safra</Label>
-                            <Select value={filterSeason} onValueChange={setFilterSeason}>
-                                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="todos">Todas</SelectItem>
-                                    {seasons.map((s: any) => (
-                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <Button className="bg-blue-600 hover:bg-blue-700" disabled={checkedIds.size === 0} onClick={openPayModal}>
-                            <CreditCard className="mr-2 h-4 w-4" />
-                            Receber Pagamento {checkedIds.size > 0 && `(${checkedIds.size})`}
-                        </Button>
                     </div>
-                </CardContent>
-            </Card>
+                    <div>
+                        <Input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-36 bg-white border-0 shadow-sm h-10" placeholder="De" />
+                    </div>
+                    <div>
+                        <Input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-36 bg-white border-0 shadow-sm h-10" placeholder="Ate" />
+                    </div>
+                    <div>
+                        <Select value={filterSeason} onValueChange={setFilterSeason}>
+                            <SelectTrigger className="w-40 bg-white border-0 shadow-sm h-10"><SelectValue placeholder="Safra" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todas</SelectItem>
+                                {seasons.map((s: any) => (
+                                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Button className="bg-blue-600 hover:bg-blue-700 h-10" disabled={checkedIds.size === 0} onClick={openPayModal}>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Receber Pagamento {checkedIds.size > 0 && `(${checkedIds.size})`}
+                    </Button>
+                </div>
+            </div>
 
             {/* Pending items list with checkboxes */}
             {filteredPending.length === 0 ? (
-                <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                <div className="bg-white rounded-xl shadow-sm py-16 text-center">
                     <Receipt className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">Nenhuma conta pendente encontrada</p>
-                </CardContent></Card>
+                    <p className="text-gray-500 font-medium">Nenhuma conta pendente encontrada</p>
+                    <p className="text-xs text-gray-400 mt-1">Tente ajustar os filtros</p>
+                </div>
             ) : (
-                <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-emerald-50">
-                            <tr>
-                                <th className="p-3 w-10">
-                                    <input type="checkbox" className="rounded"
-                                        checked={checkedIds.size === filteredPending.length && filteredPending.length > 0}
-                                        onChange={toggleAll} />
-                                </th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Comprador</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
-                                <th className="text-right p-3 font-semibold text-emerald-800">Recebido</th>
-                                <th className="text-right p-3 font-semibold text-emerald-800">Saldo</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredPending.map((item: any) => {
-                                const received = parseFloat(item.receivedAmount || 0);
-                                const remaining = parseFloat(item.totalAmount) - received;
-                                const overdue = isOverdue(item);
-                                return (
-                                    <tr key={item.id}
-                                        className={`border-t border-gray-100 cursor-pointer transition-colors ${checkedIds.has(item.id) ? "bg-blue-50" : overdue ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}`}
-                                        onClick={() => toggleCheck(item.id)}>
-                                        <td className="p-3" onClick={e => e.stopPropagation()}>
-                                            <input type="checkbox" className="rounded" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} />
-                                        </td>
-                                        <td className="p-3 font-medium">{item.buyer}</td>
-                                        <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
-                                        <td className="p-3">{item.installmentNumber || 1}/{item.totalInstallments || 1}</td>
-                                        <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
-                                        <td className="p-3">
-                                            {overdue
-                                                ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3" /> Vencido</span>
-                                                : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><Clock className="h-3 w-3" /> {item.status === "parcial" ? "Parcial" : "Pendente"}</span>
-                                            }
-                                        </td>
-                                        <td className="text-right p-3 font-mono text-green-600">{received > 0 ? formatCurrency(received) : <span className="text-gray-300">—</span>}</td>
-                                        <td className="text-right p-3 font-mono font-semibold text-blue-600">{formatCurrency(remaining)}</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-50">
+                                    <th className="px-4 py-3.5 w-10">
+                                        <input type="checkbox" className="rounded"
+                                            checked={checkedIds.size === filteredPending.length && filteredPending.length > 0}
+                                            onChange={toggleAll} />
+                                    </th>
+                                    <th className="text-left px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Comprador</th>
+                                    <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Descricao</th>
+                                    <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Parcela</th>
+                                    <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Vencimento</th>
+                                    <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Status</th>
+                                    <th className="text-right px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Recebido</th>
+                                    <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Saldo</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredPending.map((item: any) => {
+                                    const received = parseFloat(item.receivedAmount || 0);
+                                    const remaining = parseFloat(item.totalAmount) - received;
+                                    const overdue = isOverdue(item);
+                                    return (
+                                        <tr key={item.id}
+                                            className={`cursor-pointer transition-colors ${checkedIds.has(item.id) ? "bg-blue-50" : overdue ? "bg-red-50/50 hover:bg-red-50" : "hover:bg-emerald-50/20"}`}
+                                            onClick={() => toggleCheck(item.id)}>
+                                            <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                                                <input type="checkbox" className="rounded" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} />
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`h-8 w-8 rounded-full ${avatarColor(item.buyer || "")} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                                                        {(item.buyer || "?")[0].toUpperCase()}
+                                                    </div>
+                                                    <span className="font-semibold text-gray-900 truncate max-w-[160px]">{item.buyer}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-gray-500 max-w-[180px] truncate">{item.description || "--"}</td>
+                                            <td className="px-3 py-3.5 text-center">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-medium">
+                                                    {item.installmentNumber || 1}/{item.totalInstallments || 1}
+                                                </span>
+                                            </td>
+                                            <td className={`px-4 py-3.5 text-sm ${overdue ? "text-red-600 font-semibold" : "text-gray-700"}`}>
+                                                {item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "--"}
+                                            </td>
+                                            <td className="px-3 py-3.5 text-center">
+                                                {overdue
+                                                    ? <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-red-50 text-red-700 ring-1 ring-red-200"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />VENCIDO</span>
+                                                    : <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${item.status === "parcial" ? "bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200" : "bg-red-50 text-red-700 ring-1 ring-red-200"}`}><span className={`h-1.5 w-1.5 rounded-full ${item.status === "parcial" ? "bg-yellow-500" : "bg-red-500"}`} />{item.status === "parcial" ? "PARCIAL" : "ABERTO"}</span>
+                                                }
+                                            </td>
+                                            <td className="text-right px-4 py-3.5 font-semibold text-green-600">{received > 0 ? formatCurrency(received) : <span className="text-gray-300">--</span>}</td>
+                                            <td className="text-right px-5 py-3.5 font-extrabold text-blue-600">{formatCurrency(remaining)}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                     {checkedIds.size > 0 && (
-                        <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-t border-blue-200">
+                        <div className="flex items-center justify-between px-5 py-3 bg-blue-50 border-t border-blue-200">
                             <span className="text-sm font-medium text-blue-800">{checkedIds.size} conta(s) selecionada(s)</span>
                             <span className="text-sm font-bold text-blue-800">Total: {formatCurrency(totalChecked)}</span>
                         </div>
@@ -1455,59 +1669,68 @@ function HistoricoTab({ items }: { items: any[] }) {
         return next;
     });
 
+    // Avatar color from buyer name
+    const avatarColor = (name: string) => {
+        const colors = ["bg-emerald-600", "bg-blue-600", "bg-purple-600", "bg-amber-600", "bg-rose-600", "bg-teal-600", "bg-indigo-600", "bg-orange-600"];
+        let hash = 0;
+        for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    };
+
     return (
-        <div className="space-y-4">
-            <Card className="border-emerald-100">
-                <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                        <div className="relative flex-1 max-w-sm">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                            <Input placeholder="Buscar no historico..." value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)} className="pl-9" />
-                        </div>
-                        <span className="text-xs text-gray-400">{groups.length} grupo(s) / {filtered.length} recebimento(s)</span>
+        <div className="space-y-5">
+            <div className="bg-gray-100 rounded-xl p-5">
+                <div className="flex items-center gap-3">
+                    <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input placeholder="Buscar no historico..." value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)} className="pl-10 bg-white border-0 shadow-sm h-10" />
                     </div>
-                </CardContent>
-            </Card>
+                    <span className="text-xs text-gray-400">{groups.length} grupo(s) / {filtered.length} recebimento(s)</span>
+                </div>
+            </div>
 
             {isLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+                <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
             ) : groups.length === 0 ? (
-                <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                <div className="bg-white rounded-xl shadow-sm py-16 text-center">
                     <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">Nenhum recebimento registrado</p>
-                </CardContent></Card>
+                    <p className="text-gray-500 font-medium">Nenhum recebimento registrado</p>
+                    <p className="text-xs text-gray-400 mt-1">Os recebimentos aparecerao aqui</p>
+                </div>
             ) : (
                 <div className="space-y-2">
                     {groups.map(group => (
-                        <Card key={group.key} className="border-emerald-100 overflow-hidden">
+                        <div key={group.key} className="bg-white rounded-xl shadow-sm overflow-hidden">
                             <div
-                                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-emerald-50/20 transition-colors"
                                 onClick={() => toggleGroup(group.key)}
                             >
                                 <div className="flex items-center gap-3">
-                                    <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
+                                    <div className={`h-8 w-8 rounded-full ${avatarColor(group.buyer)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                                        {(group.buyer || "?")[0].toUpperCase()}
+                                    </div>
                                     <div>
-                                        <p className="font-semibold text-gray-800">{group.buyer}</p>
-                                        <p className="text-xs text-gray-500">{group.date} · {group.items.length} recebimento(s)</p>
+                                        <p className="font-semibold text-gray-900">{group.buyer}</p>
+                                        <p className="text-xs text-gray-400">{group.date} -- {group.items.length} recebimento(s)</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
-                                    <span className="font-mono font-bold text-green-600 text-sm">{formatCurrency(group.total)}</span>
+                                    <span className="font-extrabold text-green-600 text-sm">{formatCurrency(group.total)}</span>
                                     {group.receiptId && (
-                                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono">
+                                        <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold ring-1 ring-blue-200">
                                             Recibo #{group.receiptNumber || group.receiptId}
                                         </span>
                                     )}
                                     <Button
-                                        variant="outline" size="sm"
-                                        className="h-7 text-xs border-gray-200 text-gray-600 hover:bg-gray-50"
+                                        variant="ghost" size="sm"
+                                        className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600"
                                         onClick={() => window.print()}
                                         aria-label="Imprimir recibo"
                                     >
-                                        <Printer className="h-3 w-3 mr-1" />Recibo
+                                        <Printer className="h-3.5 w-3.5" />
                                     </Button>
-                                    <span className="text-xs text-gray-400" onClick={() => toggleGroup(group.key)}>
+                                    <span className="text-xs text-gray-400 cursor-pointer" onClick={() => toggleGroup(group.key)}>
                                         {expandedGroups.has(group.key) ? "▲" : "▼"}
                                     </span>
                                 </div>
@@ -1515,19 +1738,19 @@ function HistoricoTab({ items }: { items: any[] }) {
                             {expandedGroups.has(group.key) && (
                                 <div className="border-t border-gray-100">
                                     <table className="w-full text-sm">
-                                        <tbody>
+                                        <tbody className="divide-y divide-gray-50">
                                             {group.items.map((t: any) => (
-                                                <tr key={t.id} className="border-t border-gray-50">
-                                                    <td className="px-4 py-2 text-gray-600 max-w-[300px] truncate">{t.description || "--"}</td>
-                                                    <td className="px-4 py-2 text-gray-500 capitalize">{t.paymentMethod || t.payment_method || "—"}</td>
-                                                    <td className="text-right px-4 py-2 font-mono text-green-600">{formatCurrency(parseFloat(t.amount))}</td>
+                                                <tr key={t.id} className="hover:bg-gray-50/50 transition-colors">
+                                                    <td className="px-5 py-2.5 text-gray-600 max-w-[300px] truncate">{t.description || "--"}</td>
+                                                    <td className="px-4 py-2.5 text-gray-500 capitalize">{t.paymentMethod || t.payment_method || "--"}</td>
+                                                    <td className="text-right px-5 py-2.5 font-semibold text-green-600">{formatCurrency(parseFloat(t.amount))}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
                             )}
-                        </Card>
+                        </div>
                     ))}
                 </div>
             )}
