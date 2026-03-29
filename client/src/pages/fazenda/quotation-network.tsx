@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import FarmLayout from "@/components/fazenda/layout";
 import { TrendingUp, TrendingDown, Minus, ArrowDownUp, Package, Users, Search, Calculator, Loader2 } from "lucide-react";
@@ -9,17 +9,35 @@ export default function QuotationNetwork() {
     const [simProduct, setSimProduct] = useState("");
     const [simPrice, setSimPrice] = useState("");
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, error } = useQuery({
         queryKey: ["/api/farm/quotation-network"],
-        queryFn: async () => (await apiRequest("GET", "/api/farm/quotation-network")).json(),
-    });
-
-    const simulate = useMutation({
-        mutationFn: async () => {
-            const res = await apiRequest("POST", "/api/farm/quotation-network/simulate", { productName: simProduct, offeredPrice: parseFloat(simPrice) });
-            return res.json();
+        queryFn: async () => {
+            try {
+                const res = await apiRequest("GET", "/api/farm/quotation-network");
+                return res.json();
+            } catch (err) {
+                console.error("[quotation] fetch error:", err);
+                return { comparisons: [], summary: {} };
+            }
         },
     });
+
+    const [simResult, setSimResult] = useState<any>(null);
+    const [simLoading, setSimLoading] = useState(false);
+
+    const handleSimulate = async () => {
+        if (!simProduct || !simPrice) return;
+        setSimLoading(true);
+        try {
+            const res = await apiRequest("POST", "/api/farm/quotation-network/simulate", { productName: simProduct, offeredPrice: parseFloat(simPrice) });
+            setSimResult(await res.json());
+        } catch (err) {
+            console.error("[quotation] simulate error:", err);
+            setSimResult({ found: false, message: "Erro ao simular. Tente novamente." });
+        } finally {
+            setSimLoading(false);
+        }
+    };
 
     const comparisons = data?.comparisons || [];
     const summary = data?.summary || {};
@@ -93,37 +111,37 @@ export default function QuotationNetwork() {
                             <input type="number" step="0.01" value={simPrice} onChange={e => setSimPrice(e.target.value)} placeholder="0.00"
                                 className="w-full h-11 px-4 bg-gray-100 border-none rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-200" />
                         </div>
-                        <button onClick={() => simulate.mutate()} disabled={!simProduct || !simPrice || simulate.isPending}
+                        <button onClick={() => handleSimulate()} disabled={!simProduct || !simPrice || simLoading}
                             className="h-11 px-6 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-40 flex items-center gap-2 cursor-pointer">
-                            {simulate.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            {simLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                             Simular
                         </button>
                     </div>
 
                     {/* Resultado do simulador */}
-                    {simulate.data && (
-                        <div className={`mt-4 p-4 rounded-xl ${simulate.data.found ? "bg-gray-50" : "bg-amber-50"}`}>
-                            {simulate.data.found ? (
+                    {simResult && (
+                        <div className={`mt-4 p-4 rounded-xl ${simResult.found ? "bg-gray-50" : "bg-amber-50"}`}>
+                            {simResult.found ? (
                                 <div className="flex flex-wrap items-center gap-6">
                                     <div>
-                                        <span className="text-2xl mr-2">{simulate.data.emoji}</span>
-                                        <span className="text-sm font-bold text-gray-800">{simulate.data.productName}</span>
+                                        <span className="text-2xl mr-2">{simResult.emoji}</span>
+                                        <span className="text-sm font-bold text-gray-800">{simResult.productName}</span>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-xs text-gray-500">Seu preco: <strong className="text-gray-900">{fmt(simulate.data.offeredPrice)}</strong></p>
-                                        <p className="text-xs text-gray-500">Media regiao: <strong className="text-gray-900">{fmt(simulate.data.averagePrice)}</strong></p>
-                                        <p className="text-xs text-gray-500">Menor: <strong className="text-emerald-600">{fmt(simulate.data.minPrice)}</strong> | Maior: <strong className="text-red-600">{fmt(simulate.data.maxPrice)}</strong></p>
+                                        <p className="text-xs text-gray-500">Seu preco: <strong className="text-gray-900">{fmt(simResult.offeredPrice)}</strong></p>
+                                        <p className="text-xs text-gray-500">Media regiao: <strong className="text-gray-900">{fmt(simResult.averagePrice)}</strong></p>
+                                        <p className="text-xs text-gray-500">Menor: <strong className="text-emerald-600">{fmt(simResult.minPrice)}</strong> | Maior: <strong className="text-red-600">{fmt(simResult.maxPrice)}</strong></p>
                                     </div>
                                     <div className="flex-1 min-w-[200px]">
-                                        <p className={`text-sm font-bold ${simulate.data.diffPercentage > 5 ? "text-red-600" : simulate.data.diffPercentage < -5 ? "text-emerald-600" : "text-amber-600"}`}>
-                                            {simulate.data.diffPercentage > 0 ? "+" : ""}{simulate.data.diffPercentage}% vs media
+                                        <p className={`text-sm font-bold ${simResult.diffPercentage > 5 ? "text-red-600" : simResult.diffPercentage < -5 ? "text-emerald-600" : "text-amber-600"}`}>
+                                            {simResult.diffPercentage > 0 ? "+" : ""}{simResult.diffPercentage}% vs media
                                         </p>
-                                        <p className="text-xs text-gray-600 mt-0.5">{simulate.data.verdict}</p>
-                                        <p className="text-[10px] text-gray-400 mt-1">{simulate.data.totalSamples} amostras de {simulate.data.uniqueSuppliers} fornecedores</p>
+                                        <p className="text-xs text-gray-600 mt-0.5">{simResult.verdict}</p>
+                                        <p className="text-[10px] text-gray-400 mt-1">{simResult.totalSamples} amostras de {simResult.uniqueSuppliers} fornecedores</p>
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-sm text-amber-700">{simulate.data.message}</p>
+                                <p className="text-sm text-amber-700">{simResult.message}</p>
                             )}
                         </div>
                     )}
