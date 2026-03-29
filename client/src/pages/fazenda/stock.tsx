@@ -441,6 +441,8 @@ export default function FarmStock() {
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Produto</th>
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Categoria</th>
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Especificacao</th>
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Lote</th>
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Validade</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Quantidade</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Valor Total</th>
                                             <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Status</th>
@@ -485,7 +487,23 @@ export default function FarmStock() {
                                                     {/* Especificacao */}
                                                     <td className="px-4 py-3 text-sm text-gray-500">
                                                         {s.productUnit || "—"}
-                                                        {s.lote && <span className="ml-2 text-[10px] text-gray-300">Lote: {s.lote}</span>}
+                                                    </td>
+                                                    {/* Lote */}
+                                                    <td className="px-4 py-3 text-sm text-gray-500">
+                                                        {s.lote || "—"}
+                                                    </td>
+                                                    {/* Validade */}
+                                                    <td className="px-4 py-3 text-sm">
+                                                        {(() => {
+                                                            if (!s.expiryDate) return <span className="text-gray-500">—</span>;
+                                                            const exp = new Date(s.expiryDate);
+                                                            const now = new Date();
+                                                            const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                                                            const formatted = exp.toLocaleDateString("pt-BR");
+                                                            if (diffDays < 0) return <span className="text-red-600 font-bold">{formatted}</span>;
+                                                            if (diffDays <= 30) return <span className="text-amber-600 font-bold">{formatted}</span>;
+                                                            return <span className="text-gray-500">{formatted}</span>;
+                                                        })()}
                                                     </td>
                                                     {/* Quantidade */}
                                                     <td className="text-right px-4 py-3">
@@ -723,34 +741,54 @@ export default function FarmStock() {
 
                     <TabsContent value="movements" className="mt-4">
                         {movements.length === 0 ? (
-                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
-                                <p className="text-gray-500">Nenhuma movimentação registrada</p>
-                            </CardContent></Card>
+                            <div className="bg-white rounded-xl shadow-sm py-16 text-center">
+                                <ArrowLeftRight className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                                <p className="text-gray-400 text-sm font-medium">Nenhuma movimentacao registrada</p>
+                            </div>
                         ) : (
-                            <div className="space-y-2">
-                                {movements.map((m: any) => (
-                                    <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-100">
-                                        {m.type === "entry" ? (
-                                            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                                                <ArrowUpRight className="h-4 w-4 text-green-600" />
-                                            </div>
-                                        ) : (
-                                            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                                                <ArrowDownRight className="h-4 w-4 text-red-600" />
-                                            </div>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-medium text-sm">{m.productName}</p>
-                                            <p className="text-xs text-gray-500">{m.notes} • {m.referenceType}</p>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <p className={`font-semibold text-sm font-mono ${m.type === "entry" ? "text-green-600" : "text-red-600"}`}>
-                                                {m.type === "entry" ? "+" : ""}{parseFloat(m.quantity).toFixed(2)}
-                                            </p>
-                                            <p className="text-xs text-gray-400">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</p>
-                                        </div>
-                                    </div>
-                                ))}
+                            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="bg-gray-50 border-b border-gray-100">
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Data</th>
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Produto</th>
+                                            <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Tipo</th>
+                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Quantidade</th>
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Referencia</th>
+                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Notas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {movements.map((m: any) => (
+                                            <tr key={m.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors">
+                                                <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
+                                                <td className="px-4 py-3 font-bold text-sm text-gray-900">{m.productName}</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    {m.type === "entry" ? (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                                            <ArrowUpRight className="h-3 w-3" /> Entrada
+                                                        </span>
+                                                    ) : m.type === "exit" ? (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                                            <ArrowDownRight className="h-3 w-3" /> Saida
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                                                            <RefreshCw className="h-3 w-3" /> Ajuste
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="text-right px-4 py-3">
+                                                    <span className={`font-extrabold text-sm font-mono ${m.type === "entry" ? "text-emerald-600" : m.type === "exit" ? "text-red-600" : "text-amber-600"}`}>
+                                                        {m.type === "entry" ? "+" : ""}{parseFloat(m.quantity).toFixed(2)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-xs text-gray-400">{m.referenceType || "—"}</td>
+                                                <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{m.notes || "—"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         )}
                     </TabsContent>
@@ -758,102 +796,100 @@ export default function FarmStock() {
                     {/* Extrato de Estoque tab */}
                     <TabsContent value="extrato" className="mt-4 space-y-4">
                         {/* Extrato filters */}
-                        <Card className="border-emerald-100">
-                            <CardContent className="py-3 px-4">
-                                <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
-                                    <div className="w-full sm:min-w-[180px] sm:w-auto">
-                                        <Label className="text-xs text-gray-500">Produto</Label>
-                                        <Select value={extratoProduct} onValueChange={setExtratoProduct}>
-                                            <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
-                                            <SelectContent>
-                                                {productNames.map((p: string) => (
-                                                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="w-full sm:min-w-[130px] sm:w-auto">
-                                        <Label className="text-xs text-gray-500">Tipo</Label>
-                                        <Select value={extratoType} onValueChange={setExtratoType}>
-                                            <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="entry">Entrada</SelectItem>
-                                                <SelectItem value="exit">Saida</SelectItem>
-                                                <SelectItem value="adjustment">Ajuste</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="w-full sm:min-w-[150px] sm:w-auto">
-                                        <Label className="text-xs text-gray-500">Depósito</Label>
-                                        <Select value={extratoDeposit} onValueChange={setExtratoDeposit}>
-                                            <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="__none__">Sem depósito</SelectItem>
-                                                {(depositsMain as any[]).map((d: any) => (
-                                                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="w-full sm:min-w-[130px] sm:w-auto">
-                                        <Label className="text-xs text-gray-500">Data Inicio</Label>
-                                        <Input type="date" value={extratoStartDate} onChange={e => setExtratoStartDate(e.target.value)} className="h-9" />
-                                    </div>
-                                    <div className="w-full sm:min-w-[130px] sm:w-auto">
-                                        <Label className="text-xs text-gray-500">Data Fim</Label>
-                                        <Input type="date" value={extratoEndDate} onChange={e => setExtratoEndDate(e.target.value)} className="h-9" />
-                                    </div>
-                                    {(extratoProduct || extratoType || extratoDeposit || extratoStartDate || extratoEndDate) && (
-                                        <Button variant="ghost" size="sm" className="h-9 text-red-500 hover:text-red-700" onClick={() => { setExtratoProduct(""); setExtratoType(""); setExtratoDeposit(""); setExtratoStartDate(""); setExtratoEndDate(""); }}>
-                                            Limpar
-                                        </Button>
-                                    )}
+                        <div className="bg-white rounded-xl shadow-sm p-4">
+                            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-2 sm:gap-3">
+                                <div className="w-full sm:min-w-[180px] sm:w-auto">
+                                    <Label className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Produto</Label>
+                                    <Select value={extratoProduct} onValueChange={setExtratoProduct}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            {productNames.map((p: string) => (
+                                                <SelectItem key={p} value={p}>{p}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            </CardContent>
-                        </Card>
+                                <div className="w-full sm:min-w-[130px] sm:w-auto">
+                                    <Label className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Tipo</Label>
+                                    <Select value={extratoType} onValueChange={setExtratoType}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="entry">Entrada</SelectItem>
+                                            <SelectItem value="exit">Saida</SelectItem>
+                                            <SelectItem value="adjustment">Ajuste</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="w-full sm:min-w-[150px] sm:w-auto">
+                                    <Label className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Deposito</Label>
+                                    <Select value={extratoDeposit} onValueChange={setExtratoDeposit}>
+                                        <SelectTrigger className="h-9"><SelectValue placeholder="Todos" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">Sem deposito</SelectItem>
+                                            {(depositsMain as any[]).map((d: any) => (
+                                                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="w-full sm:min-w-[130px] sm:w-auto">
+                                    <Label className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Data Inicio</Label>
+                                    <Input type="date" value={extratoStartDate} onChange={e => setExtratoStartDate(e.target.value)} className="h-9" />
+                                </div>
+                                <div className="w-full sm:min-w-[130px] sm:w-auto">
+                                    <Label className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Data Fim</Label>
+                                    <Input type="date" value={extratoEndDate} onChange={e => setExtratoEndDate(e.target.value)} className="h-9" />
+                                </div>
+                                {(extratoProduct || extratoType || extratoDeposit || extratoStartDate || extratoEndDate) && (
+                                    <Button variant="ghost" size="sm" className="h-9 text-red-500 hover:text-red-700" onClick={() => { setExtratoProduct(""); setExtratoType(""); setExtratoDeposit(""); setExtratoStartDate(""); setExtratoEndDate(""); }}>
+                                        Limpar
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
 
                         {extratoLoading ? (
                             <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
                         ) : extratoMovements.length === 0 ? (
-                            <Card className="border-emerald-100"><CardContent className="py-12 text-center">
-                                <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">Nenhuma movimentação encontrada</p>
-                            </CardContent></Card>
+                            <div className="bg-white rounded-xl shadow-sm py-16 text-center">
+                                <FileText className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                                <p className="text-gray-400 text-sm font-medium">Nenhuma movimentacao encontrada</p>
+                            </div>
                         ) : (
-                            <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
+                            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
-                                        <thead className="bg-emerald-50">
-                                            <tr>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Data</th>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Produto</th>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Depósito</th>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Tipo</th>
-                                                <th className="text-right p-3 font-semibold text-emerald-800 text-xs">Quantidade</th>
-                                                <th className="text-right p-3 font-semibold text-emerald-800 text-xs">Custo Unit.</th>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Referencia</th>
-                                                <th className="text-left p-3 font-semibold text-emerald-800 text-xs">Notas</th>
+                                        <thead>
+                                            <tr className="bg-gray-50 border-b border-gray-100">
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Data</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Produto</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Deposito</th>
+                                                <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Tipo</th>
+                                                <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Quantidade</th>
+                                                <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Custo Unit.</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Referencia</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Notas</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {extratoMovements.map((m: any) => (
-                                                <tr key={m.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
-                                                    <td className="p-3 whitespace-nowrap text-sm">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
-                                                    <td className="p-3 font-medium">{m.productName}</td>
-                                                    <td className="p-3 text-xs text-gray-500">{m.depositName || "—"}</td>
-                                                    <td className="p-3">
-                                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${m.type === "entry" ? "bg-green-50 text-green-700" : m.type === "exit" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>
+                                                <tr key={m.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
+                                                    <td className="px-4 py-3 font-bold text-sm text-gray-900">{m.productName}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-500">{m.depositName || "—"}</td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${m.type === "entry" ? "bg-emerald-100 text-emerald-700" : m.type === "exit" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
                                                             {m.type === "entry" ? "Entrada" : m.type === "exit" ? "Saida" : "Ajuste"}
                                                         </span>
                                                     </td>
-                                                    <td className="text-right p-3 font-mono">
-                                                        <span className={m.type === "entry" ? "text-green-600" : m.type === "exit" ? "text-red-600" : "text-amber-600"}>
+                                                    <td className="text-right px-4 py-3">
+                                                        <span className={`font-extrabold font-mono ${m.type === "entry" ? "text-emerald-600" : m.type === "exit" ? "text-red-600" : "text-amber-600"}`}>
                                                             {m.type === "entry" ? "+" : ""}{parseFloat(m.quantity).toFixed(2)}
                                                         </span>
                                                     </td>
-                                                    <td className="text-right p-3 font-mono">{m.unitCost ? formatCurrency(m.unitCost) : "--"}</td>
-                                                    <td className="p-3 text-gray-500 text-xs">{m.referenceType || "--"}</td>
-                                                    <td className="p-3 text-gray-500 text-xs max-w-[200px] truncate">{m.notes || "--"}</td>
+                                                    <td className="text-right px-4 py-3 font-mono font-bold text-gray-900">{m.unitCost ? formatCurrency(m.unitCost) : "—"}</td>
+                                                    <td className="px-4 py-3 text-gray-400 text-xs">{m.referenceType || "—"}</td>
+                                                    <td className="px-4 py-3 text-gray-400 text-xs max-w-[200px] truncate">{m.notes || "—"}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -864,16 +900,15 @@ export default function FarmStock() {
                     </TabsContent>
 
                     <TabsContent value="transferencias" className="mt-4 space-y-6">
-                        <Card className="border-emerald-100">
-                            <CardHeader>
-                                <CardTitle className="text-emerald-800 flex items-center gap-2">
-                                    <ArrowLeftRight className="h-5 w-5" /> Nova Transferencia
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
+                        <div className="bg-white rounded-xl shadow-sm p-6">
+                            <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <ArrowLeftRight className="h-4 w-4 text-emerald-600" />
+                                Nova Transferencia
+                            </h3>
+                            <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="transfer-product">Produto</Label>
+                                        <Label htmlFor="transfer-product" className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Produto</Label>
                                         <Select value={transferProductId} onValueChange={setTransferProductId}>
                                             <SelectTrigger id="transfer-product">
                                                 <SelectValue placeholder="Selecione o produto" />
@@ -889,7 +924,7 @@ export default function FarmStock() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="transfer-qty">Quantidade</Label>
+                                        <Label htmlFor="transfer-qty" className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Quantidade</Label>
                                         <Input
                                             id="transfer-qty"
                                             type="number"
@@ -902,7 +937,7 @@ export default function FarmStock() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="transfer-from">Deposito Origem</Label>
+                                        <Label htmlFor="transfer-from" className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Deposito Origem</Label>
                                         <Select value={transferFromWarehouse} onValueChange={setTransferFromWarehouse}>
                                             <SelectTrigger id="transfer-from">
                                                 <SelectValue placeholder="Selecione origem" />
@@ -919,7 +954,7 @@ export default function FarmStock() {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="transfer-to">Deposito Destino</Label>
+                                        <Label htmlFor="transfer-to" className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Deposito Destino</Label>
                                         <Select value={transferToWarehouse} onValueChange={setTransferToWarehouse}>
                                             <SelectTrigger id="transfer-to">
                                                 <SelectValue placeholder="Selecione destino" />
@@ -937,7 +972,7 @@ export default function FarmStock() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="transfer-notes">Observacao (opcional)</Label>
+                                    <Label htmlFor="transfer-notes" className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Observacao (opcional)</Label>
                                     <Input
                                         id="transfer-notes"
                                         placeholder="Motivo da transferencia..."
@@ -954,56 +989,57 @@ export default function FarmStock() {
                                     {transferMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowLeftRight className="h-4 w-4 mr-2" />}
                                     Transferir
                                 </Button>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
 
-                        <Card className="border-emerald-100">
-                            <CardHeader>
-                                <CardTitle className="text-emerald-800 text-base">Historico de Transferencias</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {transferMovements.length === 0 ? (
-                                    <p className="text-gray-500 text-sm text-center py-6">Nenhuma transferencia registrada.</p>
-                                ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-emerald-50">
-                                                <tr>
-                                                    <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
-                                                    <th className="text-left p-3 font-semibold text-emerald-800">Produto</th>
-                                                    <th className="text-center p-3 font-semibold text-emerald-800">Tipo</th>
-                                                    <th className="text-right p-3 font-semibold text-emerald-800">Quantidade</th>
-                                                    <th className="text-left p-3 font-semibold text-emerald-800">Deposito</th>
-                                                    <th className="text-left p-3 font-semibold text-emerald-800">Observacao</th>
+                        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-100">
+                                <h3 className="text-sm font-bold text-gray-900">Historico de Transferencias</h3>
+                            </div>
+                            {transferMovements.length === 0 ? (
+                                <div className="py-16 text-center">
+                                    <ArrowLeftRight className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                                    <p className="text-gray-400 text-sm font-medium">Nenhuma transferencia registrada</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="bg-gray-50 border-b border-gray-100">
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Data</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Produto</th>
+                                                <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Tipo</th>
+                                                <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Quantidade</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Deposito</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Observacao</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {transferMovements.map((m: any) => (
+                                                <tr key={m.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors">
+                                                    <td className="px-4 py-3 text-sm text-gray-500">{new Date(m.date || m.createdAt).toLocaleDateString("pt-BR")}</td>
+                                                    <td className="px-4 py-3 font-bold text-sm text-gray-900">{m.productName || m.product_name || "—"}</td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {m.type === "entrada" || m.type === "entry" ? (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                                                <ArrowDownRight className="h-3 w-3" /> Entrada
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                                                                <ArrowUpRight className="h-3 w-3" /> Saida
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="text-right px-4 py-3 font-extrabold font-mono text-gray-900">{parseFloat(m.quantity).toFixed(2)}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-500">{m.warehouseName || m.warehouse_name || "—"}</td>
+                                                    <td className="px-4 py-3 text-gray-400 text-xs max-w-[200px] truncate">{m.notes || "—"}</td>
                                                 </tr>
-                                            </thead>
-                                            <tbody>
-                                                {transferMovements.map((m: any) => (
-                                                    <tr key={m.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
-                                                        <td className="p-3 text-gray-600">{new Date(m.date || m.createdAt).toLocaleDateString("pt-BR")}</td>
-                                                        <td className="p-3 font-medium">{m.productName || m.product_name || "--"}</td>
-                                                        <td className="p-3 text-center">
-                                                            {m.type === "entrada" || m.type === "entry" ? (
-                                                                <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
-                                                                    <ArrowDownRight className="h-3 w-3" /> Entrada
-                                                                </span>
-                                                            ) : (
-                                                                <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium">
-                                                                    <ArrowUpRight className="h-3 w-3" /> Saida
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td className="text-right p-3 font-mono">{parseFloat(m.quantity).toFixed(2)}</td>
-                                                        <td className="p-3 text-gray-600">{m.warehouseName || m.warehouse_name || "--"}</td>
-                                                        <td className="p-3 text-gray-500 text-xs max-w-[200px] truncate">{m.notes || "--"}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
                     </TabsContent>
 
                     <TabsContent value="diesel" className="mt-4 space-y-4">
@@ -1020,113 +1056,114 @@ export default function FarmStock() {
                             return (
                                 <>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                        <Card className="border-emerald-100">
-                                            <CardContent className="p-4 text-center">
-                                                <Fuel className="h-8 w-8 text-amber-600 mx-auto mb-2" />
-                                                <p className="text-2xl font-bold text-gray-900">{fmtNum(totalDieselL)} L</p>
-                                                <p className="text-sm text-gray-500">Estoque Atual</p>
-                                            </CardContent>
-                                        </Card>
-                                        <Card className="border-emerald-100">
-                                            <CardContent className="p-4 text-center">
-                                                <p className="text-2xl font-bold text-emerald-700 mt-4">{formatCurrency(totalDieselValue)}</p>
-                                                <p className="text-sm text-gray-500">Valor em Estoque</p>
-                                            </CardContent>
-                                        </Card>
-                                        <Card className="border-emerald-100">
-                                            <CardContent className="p-4 text-center">
-                                                <p className="text-2xl font-bold text-gray-900 mt-4">{dieselMovements.length}</p>
-                                                <p className="text-sm text-gray-500">Movimentações</p>
-                                            </CardContent>
-                                        </Card>
+                                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-amber-500 p-5">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Fuel className="h-4 w-4 text-amber-600" />
+                                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Estoque Atual</span>
+                                            </div>
+                                            <p className="text-2xl font-extrabold text-gray-900">{fmtNum(totalDieselL)} L</p>
+                                            <p className="text-xs text-gray-400 mt-1">litros disponiveis</p>
+                                        </div>
+                                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-600 p-5">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <DollarSign className="h-4 w-4 text-emerald-600" />
+                                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Valor em Estoque</span>
+                                            </div>
+                                            <p className="text-2xl font-extrabold text-emerald-700">{formatCurrency(totalDieselValue)}</p>
+                                            <p className="text-xs text-gray-400 mt-1">valor total estimado</p>
+                                        </div>
+                                        <div className="bg-white rounded-xl shadow-sm border-l-4 border-blue-500 p-5">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <BarChart3 className="h-4 w-4 text-blue-500" />
+                                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Movimentacoes</span>
+                                            </div>
+                                            <p className="text-2xl font-extrabold text-gray-900">{dieselMovements.length}</p>
+                                            <p className="text-xs text-gray-400 mt-1">registros de diesel</p>
+                                        </div>
                                     </div>
 
-                                    <Card className="border-emerald-100">
-                                        <CardHeader>
-                                            <CardTitle className="text-emerald-800 flex items-center gap-2">
-                                                <Fuel className="h-5 w-5" />
-                                                Movimentações de Diesel
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            {dieselMovements.length === 0 ? (
-                                                <div className="py-8 text-center">
-                                                    <Fuel className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                                                    <p className="text-gray-500">Nenhuma movimentação de diesel registrada</p>
-                                                    <p className="text-sm text-gray-400 mt-1">Use o botão "Adicionar Diesel" para cadastrar entradas</p>
-                                                </div>
-                                            ) : (
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-sm">
-                                                        <thead>
-                                                            <tr className="border-b border-gray-200">
-                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Data</th>
-                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Tipo</th>
-                                                                <th className="text-right py-3 px-2 font-semibold text-emerald-700">Quantidade (L)</th>
-                                                                <th className="text-right py-3 px-2 font-semibold text-emerald-700">Custo Unit.</th>
-                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Equipamento</th>
-                                                                <th className="text-left py-3 px-2 font-semibold text-emerald-700">Funcionário</th>
-                                                                <th className="text-right py-3 px-2 font-semibold text-emerald-700">Horímetro/Km</th>
-                                                                <th className="text-center py-3 px-2 font-semibold text-emerald-700">Comprov.</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {dieselMovements.map((m: any) => (
-                                                                <tr key={m.id} className="border-b border-gray-100">
-                                                                    <td className="py-2 px-2">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
-                                                                    <td className="py-2 px-2">
-                                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${m.type === "entry" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                                                            {m.type === "entry" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                                                                            {m.type === "entry" ? "Entrada" : "Saída"}
+                                    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                                            <Fuel className="h-4 w-4 text-amber-600" />
+                                            <h3 className="text-sm font-bold text-gray-900">Movimentacoes de Diesel</h3>
+                                        </div>
+                                        {dieselMovements.length === 0 ? (
+                                            <div className="py-16 text-center">
+                                                <Fuel className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                                                <p className="text-gray-400 text-sm font-medium">Nenhuma movimentacao de diesel registrada</p>
+                                                <p className="text-xs text-gray-300 mt-1">Use o botao "Adicionar Diesel" para cadastrar entradas</p>
+                                            </div>
+                                        ) : (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm">
+                                                    <thead>
+                                                        <tr className="bg-gray-50 border-b border-gray-100">
+                                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Data</th>
+                                                            <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Tipo</th>
+                                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Quantidade (L)</th>
+                                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Custo Unit.</th>
+                                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Equipamento</th>
+                                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Funcionario</th>
+                                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Horimetro/Km</th>
+                                                            <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Comprov.</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {dieselMovements.map((m: any) => (
+                                                            <tr key={m.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors">
+                                                                <td className="px-4 py-3 text-sm text-gray-500">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
+                                                                <td className="px-4 py-3 text-center">
+                                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${m.type === "entry" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                                                                        {m.type === "entry" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                                                                        {m.type === "entry" ? "Entrada" : "Saida"}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-right font-extrabold font-mono text-gray-900">{fmtNum(parseFloat(m.quantity))}</td>
+                                                                <td className="px-4 py-3 text-right font-bold font-mono text-gray-900">{m.unitCost ? formatCurrency(parseFloat(m.unitCost)) : "—"}</td>
+                                                                <td className="px-4 py-3 text-sm text-gray-700">{m.equipmentName || "—"}</td>
+                                                                <td className="px-4 py-3">
+                                                                    {m.employeeName ? (
+                                                                        <span className="inline-flex items-center gap-1 text-xs text-gray-700">
+                                                                            <User className="h-3 w-3 text-emerald-600" />
+                                                                            {m.employeeName}
                                                                         </span>
-                                                                    </td>
-                                                                    <td className="py-2 px-2 text-right font-mono">{fmtNum(parseFloat(m.quantity))}</td>
-                                                                    <td className="py-2 px-2 text-right font-mono">{m.unitCost ? formatCurrency(parseFloat(m.unitCost)) : "—"}</td>
-                                                                    <td className="py-2 px-2">{m.equipmentName || "—"}</td>
-                                                                    <td className="py-2 px-2">
-                                                                        {m.employeeName ? (
-                                                                            <span className="inline-flex items-center gap-1 text-xs">
-                                                                                <User className="h-3 w-3 text-emerald-600" />
-                                                                                {m.employeeName}
-                                                                            </span>
-                                                                        ) : "—"}
-                                                                    </td>
-                                                                    <td className="py-2 px-2 text-right font-mono">{(() => {
-                                                                        const match = m.notes?.match(/\(([^)]+)\)/);
-                                                                        return match ? match[1] : "—";
-                                                                    })()}</td>
-                                                                    <td className="py-2 px-2 text-center">
-                                                                        {m.referenceType === "pdv" && m.referenceId ? (
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="sm"
-                                                                                className="h-7 w-7 p-0"
-                                                                                disabled={loadingReceiptId === m.referenceId}
-                                                                                onClick={async () => {
-                                                                                    setLoadingReceiptId(m.referenceId);
-                                                                                    try {
-                                                                                        const res = await apiRequest("GET", `/api/farm/stock/receipt/${m.referenceId}`);
-                                                                                        const data = await res.json();
-                                                                                        setDieselReceipt(data);
-                                                                                    } catch {
-                                                                                        toast({ title: "Erro", description: "Não foi possível carregar o comprovante", variant: "destructive" });
-                                                                                    } finally {
-                                                                                        setLoadingReceiptId(null);
-                                                                                    }
-                                                                                }}
-                                                                            >
-                                                                                {loadingReceiptId === m.referenceId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4 text-emerald-600" />}
-                                                                            </Button>
-                                                                        ) : "—"}
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
+                                                                    ) : <span className="text-sm text-gray-400">—</span>}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-right font-mono text-sm text-gray-500">{(() => {
+                                                                    const match = m.notes?.match(/\(([^)]+)\)/);
+                                                                    return match ? match[1] : "—";
+                                                                })()}</td>
+                                                                <td className="px-4 py-3 text-center">
+                                                                    {m.referenceType === "pdv" && m.referenceId ? (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="sm"
+                                                                            className="h-7 w-7 p-0 hover:bg-emerald-50"
+                                                                            disabled={loadingReceiptId === m.referenceId}
+                                                                            onClick={async () => {
+                                                                                setLoadingReceiptId(m.referenceId);
+                                                                                try {
+                                                                                    const res = await apiRequest("GET", `/api/farm/stock/receipt/${m.referenceId}`);
+                                                                                    const data = await res.json();
+                                                                                    setDieselReceipt(data);
+                                                                                } catch {
+                                                                                    toast({ title: "Erro", description: "Nao foi possivel carregar o comprovante", variant: "destructive" });
+                                                                                } finally {
+                                                                                    setLoadingReceiptId(null);
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            {loadingReceiptId === m.referenceId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4 text-emerald-600" />}
+                                                                        </Button>
+                                                                    ) : <span className="text-sm text-gray-400">—</span>}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {/* Modal de Comprovante de Abastecimento */}
                                     {dieselReceipt && (
@@ -1874,100 +1911,106 @@ function DepositTabsView({ depositsMain, properties, stockByProperty, onDeleteDe
     const [activeDeposit, setActiveDeposit] = useState(depositEntries[0]?.name || "");
 
     if (depositEntries.length === 0) return (
-        <Card className="border-emerald-100"><CardContent className="py-12 text-center">
-            <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">Nenhum deposito cadastrado</p>
-        </CardContent></Card>
+        <div className="bg-white rounded-xl shadow-sm py-16 text-center">
+            <Building2 className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+            <p className="text-gray-400 text-sm font-medium">Nenhum deposito cadastrado</p>
+        </div>
     );
 
     const active = depositEntries.find(d => d.name === activeDeposit) || depositEntries[0];
 
     return (
-        <div>
+        <div className="space-y-4">
             {/* Horizontal tab buttons */}
-            <div className="flex gap-2 overflow-x-auto pb-2 border-b border-gray-200">
+            <div className="flex gap-2 overflow-x-auto pb-2">
                 {depositEntries.map(({ name: depName, items: depItems, depType }) => (
                     <button key={depName} type="button"
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all shadow-sm ${
                             activeDeposit === depName
-                                ? "bg-white border border-b-white border-gray-200 -mb-px text-emerald-700"
-                                : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                                ? "bg-emerald-900 text-white"
+                                : "bg-white text-gray-600 hover:bg-gray-50"
                         }`}
                         onClick={() => setActiveDeposit(depName)}>
-                        <Building2 className="h-4 w-4" />
+                        <Building2 className="h-3.5 w-3.5" />
                         {depName}
                         {depType && (
-                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${depType === "comercial" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                                activeDeposit === depName
+                                    ? "bg-emerald-800 text-emerald-200"
+                                    : depType === "comercial" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
+                            }`}>
                                 {depType === "comercial" ? "COM" : "FAZ"}
                             </span>
                         )}
-                        <span className="text-[10px] text-gray-400 ml-1">({depItems.length})</span>
+                        <span className={`text-[10px] ml-1 ${activeDeposit === depName ? "text-emerald-300" : "text-gray-400"}`}>({depItems.length})</span>
                     </button>
                 ))}
             </div>
 
             {/* Active deposit content */}
-            <Card className="border-emerald-100 border-t-0 rounded-t-none">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <Building2 className="h-5 w-5 text-emerald-600" />
-                        {active.name}
-                        {active.depType && (
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${active.depType === "comercial" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
-                                {active.depType === "comercial" ? "Comercial" : "Fazenda"}
-                            </span>
-                        )}
-                        <span className="ml-auto text-sm font-normal text-gray-500">
-                            {active.items.length > 0
-                                ? `${active.items.length} itens — ${formatCurrency(active.items.reduce((s: number, i: any) => s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0))}`
-                                : "Vazio"}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-emerald-600" />
+                    <h3 className="text-sm font-bold text-gray-900">{active.name}</h3>
+                    {active.depType && (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${active.depType === "comercial" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                            {active.depType === "comercial" ? "Comercial" : "Fazenda"}
                         </span>
-                        {active.depId && active.name !== "Sem deposito" && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => onDeleteDeposit(active.depId, active.name, active.items.length > 0)}
-                                disabled={deletingDeposit}>
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        )}
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                    {active.items.length === 0 ? (
-                        <p className="text-sm text-gray-400 py-6 text-center">Nenhum produto neste deposito. Use "Adicionar Produto" para dar entrada.</p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead className="bg-emerald-50">
-                                    <tr>
-                                        <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Produto</th>
-                                        <th className="text-left p-2 font-semibold text-emerald-800 text-xs">Categoria</th>
-                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Qtd</th>
-                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Custo Medio</th>
-                                        <th className="text-right p-2 font-semibold text-emerald-800 text-xs">Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {active.items.map((s: any) => {
-                                        const q = parseFloat(s.quantity);
-                                        const c = parseFloat(s.averageCost);
-                                        return (
-                                            <tr key={s.id} className="border-t border-gray-100 hover:bg-emerald-50/30">
-                                                <td className="p-2 font-medium">{s.productName}</td>
-                                                <td className="p-2">
-                                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">{s.productCategory || "--"}</span>
-                                                </td>
-                                                <td className="text-right p-2 font-mono">{q.toFixed(2)} {s.productUnit}</td>
-                                                <td className="text-right p-2 font-mono">{formatCurrency(c)}</td>
-                                                <td className="text-right p-2 font-mono font-semibold">{formatCurrency(q * c)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
                     )}
-                </CardContent>
-            </Card>
+                    <span className="ml-auto text-sm font-normal text-gray-400">
+                        {active.items.length > 0
+                            ? `${active.items.length} itens — ${formatCurrency(active.items.reduce((s: number, i: any) => s + (parseFloat(i.quantity) * parseFloat(i.averageCost)), 0))}`
+                            : "Vazio"}
+                    </span>
+                    {active.depId && active.name !== "Sem deposito" && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                            onClick={() => onDeleteDeposit(active.depId, active.name, active.items.length > 0)}
+                            disabled={deletingDeposit}>
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+                {active.items.length === 0 ? (
+                    <div className="py-16 text-center">
+                        <Package className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                        <p className="text-gray-400 text-sm font-medium">Nenhum produto neste deposito</p>
+                        <p className="text-xs text-gray-300 mt-1">Use "Adicionar Produto" para dar entrada</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Produto</th>
+                                    <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Categoria</th>
+                                    <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Qtd</th>
+                                    <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Custo Medio</th>
+                                    <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {active.items.map((s: any) => {
+                                    const q = parseFloat(s.quantity);
+                                    const c = parseFloat(s.averageCost);
+                                    const cat = normalizeCategory(s.productCategory);
+                                    const badge = CAT_BADGE_STYLES[cat] || CAT_BADGE_STYLES.Outros;
+                                    return (
+                                        <tr key={s.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors">
+                                            <td className="px-4 py-3 font-bold text-sm text-gray-900">{s.productName}</td>
+                                            <td className="px-4 py-3">
+                                                <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${badge.bg} ${badge.text}`}>{cat}</span>
+                                            </td>
+                                            <td className="text-right px-4 py-3 font-bold font-mono text-gray-900">{q.toFixed(2)} {s.productUnit}</td>
+                                            <td className="text-right px-4 py-3 font-mono text-gray-500">{formatCurrency(c)}</td>
+                                            <td className="text-right px-4 py-3 font-extrabold font-mono text-gray-900">{formatCurrency(q * c)}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
