@@ -708,121 +708,154 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
         return (item.status === "aberto" || item.status === "parcial") && due < today;
     };
 
+    // Avatar color from supplier name
+    const avatarColor = (name: string) => {
+        const colors = ["bg-emerald-600", "bg-blue-600", "bg-purple-600", "bg-amber-600", "bg-rose-600", "bg-teal-600", "bg-indigo-600", "bg-orange-600"];
+        let hash = 0;
+        for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    };
+
+    const statusBadgePay = (item: any) => {
+        const overdue = isOverdue(item);
+        if (overdue) return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-red-50 text-red-700 ring-1 ring-red-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />VENCIDO
+            </span>
+        );
+        if (item.status === "parcial") return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />PARCIAL
+            </span>
+        );
+        return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-blue-50 text-blue-700 ring-1 ring-blue-200">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />ABERTO
+            </span>
+        );
+    };
+
     return (
         <>
             {/* Filters + Pay button */}
-            <Card className="border-emerald-100">
-                <CardContent className="p-4">
-                    <div className="flex flex-wrap gap-3 items-end">
-                        <div className="flex-1 min-w-[200px]">
-                            <Label className="text-xs text-gray-500">Buscar</Label>
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                                <Input
-                                    placeholder="Fornecedor ou descricao..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    className="pl-9"
-                                />
-                            </div>
+            <div className="bg-gray-100 rounded-xl p-5">
+                <div className="flex flex-wrap gap-3 items-end">
+                    <div className="flex-1 min-w-[200px]">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                                placeholder="Fornecedor ou descricao..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="pl-10 bg-white border-0 shadow-sm h-10"
+                            />
                         </div>
-                        <div>
-                            <Label className="text-xs text-gray-500">Vencimento de</Label>
-                            <Input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-36" />
-                        </div>
-                        <div>
-                            <Label className="text-xs text-gray-500">ate</Label>
-                            <Input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-36" />
-                        </div>
-                        <div>
-                            <Label className="text-xs text-gray-500">Safra</Label>
-                            <Select value={filterSeason} onValueChange={setFilterSeason}>
-                                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="todos">Todas</SelectItem>
-                                    {seasons.map((s: any) => (
-                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <Button
-                            className="bg-green-600 hover:bg-green-700"
-                            disabled={checkedIds.size === 0}
-                            onClick={openPayModal}
-                        >
-                            <CreditCard className="mr-2 h-4 w-4" />
-                            Realizar Pagamento {checkedIds.size > 0 && `(${checkedIds.size})`}
-                        </Button>
                     </div>
-                </CardContent>
-            </Card>
+                    <div>
+                        <Input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-36 bg-white border-0 shadow-sm h-10" />
+                    </div>
+                    <div>
+                        <Input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-36 bg-white border-0 shadow-sm h-10" />
+                    </div>
+                    <div>
+                        <Select value={filterSeason} onValueChange={setFilterSeason}>
+                            <SelectTrigger className="w-40 bg-white border-0 shadow-sm h-10"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todas Safras</SelectItem>
+                                {seasons.map((s: any) => (
+                                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Button
+                        className="bg-emerald-700 hover:bg-emerald-800 h-10 shadow-sm"
+                        disabled={checkedIds.size === 0}
+                        onClick={openPayModal}
+                    >
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Realizar Pagamento {checkedIds.size > 0 && `(${checkedIds.size})`}
+                    </Button>
+                    <span className="text-xs text-gray-400 ml-auto self-center">{filteredPending.length} pendente(s)</span>
+                </div>
+            </div>
 
             {/* Pending items list with checkboxes */}
             {filteredPending.length === 0 ? (
-                <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                <div className="bg-white rounded-xl shadow-sm py-16 text-center">
                     <Receipt className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">Nenhuma conta pendente encontrada</p>
-                </CardContent></Card>
+                    <p className="text-gray-500 font-medium">Nenhuma conta pendente encontrada</p>
+                    <p className="text-xs text-gray-400 mt-1">Tente ajustar os filtros</p>
+                </div>
             ) : (
-                <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead className="bg-emerald-50">
-                            <tr>
-                                <th className="p-3 w-10">
-                                    <input
-                                        type="checkbox"
-                                        className="rounded"
-                                        checked={checkedIds.size === filteredPending.length && filteredPending.length > 0}
-                                        onChange={toggleAll}
-                                    />
-                                </th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Descricao</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Parcela</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Cadastrado</th>
-                                <th className="text-left p-3 font-semibold text-emerald-800">Status</th>
-                                <th className="text-right p-3 font-semibold text-emerald-800">Pago</th>
-                                <th className="text-right p-3 font-semibold text-emerald-800">Saldo</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredPending.map((item: any) => {
-                                const paid = parseFloat(item.paidAmount || 0);
-                                const remaining = parseFloat(item.totalAmount) - paid;
-                                const overdue = isOverdue(item);
-                                return (
-                                    <tr
-                                        key={item.id}
-                                        className={`border-t border-gray-100 cursor-pointer transition-colors ${checkedIds.has(item.id) ? "bg-amber-50" : overdue ? "bg-red-50 hover:bg-red-100" : "hover:bg-gray-50"}`}
-                                        onClick={() => toggleCheck(item.id)}
-                                    >
-                                        <td className="p-3" onClick={e => e.stopPropagation()}>
-                                            <input type="checkbox" className="rounded" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} />
-                                        </td>
-                                        <td className="p-3 font-medium">{item.supplier}</td>
-                                        <td className="p-3 text-gray-600 max-w-[200px] truncate">{item.description || "--"}</td>
-                                        <td className="p-3">{item.installmentNumber}/{item.totalInstallments}</td>
-                                        <td className="p-3">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
-                                        <td className="p-3 text-gray-500 text-xs">{item.createdAt ? new Date(item.createdAt).toLocaleDateString("pt-BR") : "—"}</td>
-                                        <td className="p-3">
-                                            {overdue
-                                                ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3" /> Vencido</span>
-                                                : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><Clock className="h-3 w-3" /> {item.status === "parcial" ? "Parcial" : "Aberto"}</span>
-                                            }
-                                        </td>
-                                        <td className="text-right p-3 font-mono text-green-600">{paid > 0 ? formatCurrency(paid, item.currency || "USD") : <span className="text-gray-300">—</span>}</td>
-                                        <td className="text-right p-3 font-mono font-semibold text-red-600">{formatCurrency(remaining, item.currency || "USD")}</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-50">
+                                    <th className="px-4 py-3.5 w-10">
+                                        <input
+                                            type="checkbox"
+                                            className="rounded"
+                                            checked={checkedIds.size === filteredPending.length && filteredPending.length > 0}
+                                            onChange={toggleAll}
+                                        />
+                                    </th>
+                                    <th className="text-left px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Fornecedor</th>
+                                    <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Descricao</th>
+                                    <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Parcela</th>
+                                    <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Vencimento</th>
+                                    <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Cadastrado</th>
+                                    <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Status</th>
+                                    <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Pago</th>
+                                    <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Saldo</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredPending.map((item: any) => {
+                                    const paid = parseFloat(item.paidAmount || 0);
+                                    const remaining = parseFloat(item.totalAmount) - paid;
+                                    const overdue = isOverdue(item);
+                                    return (
+                                        <tr
+                                            key={item.id}
+                                            className={`cursor-pointer transition-colors ${checkedIds.has(item.id) ? "bg-amber-50/60" : "hover:bg-emerald-50/20"}`}
+                                            onClick={() => toggleCheck(item.id)}
+                                        >
+                                            <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                                                <input type="checkbox" className="rounded" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} />
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`h-8 w-8 rounded-full ${avatarColor(item.supplier)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                                                        {(item.supplier || "?")[0].toUpperCase()}
+                                                    </div>
+                                                    <span className="font-semibold text-gray-900 truncate max-w-[160px]">{item.supplier}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-gray-500 max-w-[180px] truncate">{item.description || "--"}</td>
+                                            <td className="px-3 py-3.5 text-center">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-medium">
+                                                    {item.installmentNumber}/{item.totalInstallments}
+                                                </span>
+                                            </td>
+                                            <td className={`px-4 py-3.5 text-sm ${overdue ? "text-red-600 font-semibold" : "text-gray-700"}`}>
+                                                {item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : "--"}
+                                            </td>
+                                            <td className="px-4 py-3.5 text-xs text-gray-400">{item.createdAt ? new Date(item.createdAt).toLocaleDateString("pt-BR") : "--"}</td>
+                                            <td className="px-3 py-3.5 text-center">{statusBadgePay(item)}</td>
+                                            <td className="px-5 py-3.5 text-right font-extrabold font-headline text-green-600">{paid > 0 ? formatCurrency(paid, item.currency || "USD") : <span className="text-gray-300">--</span>}</td>
+                                            <td className="px-5 py-3.5 text-right font-extrabold font-headline text-gray-900">{formatCurrency(remaining, item.currency || "USD")}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                     {checkedIds.size > 0 && (
-                        <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border-t border-amber-200">
-                            <span className="text-sm font-medium text-amber-800">{checkedIds.size} conta(s) selecionada(s)</span>
-                            <span className="text-sm font-bold text-amber-800">Total: {formatCurrency(totalChecked)}</span>
+                        <div className="flex items-center justify-between px-5 py-3 bg-amber-50/80 border-t border-gray-100">
+                            <span className="text-sm font-semibold text-amber-800">{checkedIds.size} conta(s) selecionada(s)</span>
+                            <span className="text-sm font-extrabold font-headline text-amber-900">Total: {formatCurrency(totalChecked)}</span>
                         </div>
                     )}
                 </div>
@@ -1137,110 +1170,116 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
         return next;
     });
 
+    // Avatar color from supplier name
+    const avatarColor = (name: string) => {
+        const colors = ["bg-emerald-600", "bg-blue-600", "bg-purple-600", "bg-amber-600", "bg-rose-600", "bg-teal-600", "bg-indigo-600", "bg-orange-600"];
+        let hash = 0;
+        for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    };
+
+    const methodLabel = (m: string) => {
+        const map: Record<string, { label: string; bg: string }> = {
+            transferencia: { label: "TRANSFERENCIA", bg: "bg-blue-50 text-blue-700 ring-1 ring-blue-200" },
+            dinheiro: { label: "DINHEIRO", bg: "bg-green-50 text-green-700 ring-1 ring-green-200" },
+            cheque: { label: "CHEQUE", bg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200" },
+        };
+        const cfg = map[m] || { label: m?.toUpperCase() || "--", bg: "bg-gray-50 text-gray-600 ring-1 ring-gray-200" };
+        return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${cfg.bg}`}>{cfg.label}</span>;
+    };
+
     return (
-        <div className="space-y-4">
-            <Card className="border-emerald-100">
-                <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                        <div className="relative flex-1 max-w-sm">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                            <Input
-                                placeholder="Buscar no historico..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="pl-9"
-                            />
-                        </div>
-                        <span className="text-xs text-gray-400">{groups.length} grupo(s) / {filteredPaid.length} pagamento(s)</span>
+        <div className="space-y-5">
+            <div className="bg-gray-100 rounded-xl p-5">
+                <div className="flex items-center gap-3">
+                    <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                            placeholder="Buscar no historico..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="pl-10 bg-white border-0 shadow-sm h-10"
+                        />
                     </div>
-                </CardContent>
-            </Card>
+                    <span className="text-xs text-gray-400 ml-auto">{groups.length} pagamento(s)</span>
+                </div>
+            </div>
 
             {groups.length === 0 ? (
-                <Card className="border-emerald-100"><CardContent className="py-12 text-center">
+                <div className="bg-white rounded-xl shadow-sm py-16 text-center">
                     <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">Nenhum pagamento registrado</p>
-                </CardContent></Card>
+                    <p className="text-gray-500 font-medium">Nenhum pagamento registrado</p>
+                    <p className="text-xs text-gray-400 mt-1">Os pagamentos realizados aparecerao aqui</p>
+                </div>
             ) : (
-                <div className="space-y-2">
-                    {groups.map(group => (
-                        <Card key={group.key} className="border-emerald-100 overflow-hidden">
-                            <div
-                                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                                onClick={() => toggleGroup(group.key)}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
-                                    <div>
-                                        <p className="font-semibold text-gray-800">
-                                            {group.receiptNumber && (
-                                                <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono mr-2">
-                                                    #{group.receiptNumber}
-                                                </span>
-                                            )}
-                                            {group.supplier}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                            {group.date}
-                                            {group.items[0]?.apDescription && ` · ${group.items[0].apDescription}`}
-                                            {group.items[0]?.installmentNumber && ` (${group.items[0].installmentNumber}/${group.items[0].totalInstallments})`}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
-                                    <span className="font-mono font-bold text-green-600 text-sm">{formatCurrency(group.total, group.currency)}</span>
-                                    <Button
-                                        variant="outline" size="sm"
-                                        className="h-7 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
-                                        onClick={() => openEditModal(group.items[0])}
-                                    >
-                                        <Pencil className="h-3 w-3 mr-1" />Editar
-                                    </Button>
-                                    <Button
-                                        variant="outline" size="sm"
-                                        className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-50"
-                                        disabled={reversing}
-                                        onClick={() => onReverse(group.items[0].payableId || group.items[0].id)}
-                                    >
-                                        <Trash2 className="h-3 w-3 mr-1" />Excluir
-                                    </Button>
-                                    <span className="text-xs text-gray-400">{expandedGroups.has(group.key) ? "▲" : "▼"}</span>
-                                </div>
-                            </div>
-                            {expandedGroups.has(group.key) && (
-                                <div className="border-t border-gray-100 px-4 py-3 space-y-2 bg-gray-50">
-                                    {group.items.map((item: any) => (
-                                        <div key={item.id} className="flex flex-wrap items-center gap-3 text-sm">
-                                            {item.paymentMethod && (
-                                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                                                    {item.paymentMethod === "transferencia" ? "Transferencia" : item.paymentMethod === "dinheiro" ? "Dinheiro" : item.paymentMethod === "cheque" ? "Cheque" : item.paymentMethod}
-                                                </span>
-                                            )}
-                                            {item.receiptNumber && (
-                                                <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono">
-                                                    Recibo: {item.receiptNumber}
-                                                </span>
-                                            )}
-                                            {item.receiptFileUrl && (
-                                                <a href={item.receiptFileUrl} target="_blank" rel="noopener noreferrer"
-                                                    className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-1">
-                                                    <Receipt className="h-3 w-3" /> Ver recibo
-                                                </a>
-                                            )}
-                                            {item.totalAmount && (
-                                                <span className="text-xs text-gray-500">
-                                                    Valor da conta: {formatCurrency(parseFloat(item.totalAmount), item.currency || "USD")}
-                                                </span>
-                                            )}
-                                            <span className="text-right font-mono font-semibold text-green-600 ml-auto">
-                                                Pago: {formatCurrency(parseFloat(item.amount), item.currency || "USD")}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </Card>
-                    ))}
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-50">
+                                    <th className="text-left px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Fornecedor</th>
+                                    <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Descricao</th>
+                                    <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Data Pgto</th>
+                                    <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Parcela</th>
+                                    <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Metodo</th>
+                                    <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Recibo</th>
+                                    <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Valor Pago</th>
+                                    <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {groups.map(group => {
+                                    const item = group.items[0];
+                                    return (
+                                        <tr key={group.key} className="hover:bg-emerald-50/20 transition-colors">
+                                            <td className="px-5 py-3.5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`h-8 w-8 rounded-full ${avatarColor(group.supplier)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                                                        {(group.supplier || "?")[0].toUpperCase()}
+                                                    </div>
+                                                    <span className="font-semibold text-gray-900 truncate max-w-[160px]">{group.supplier}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-gray-500 max-w-[180px] truncate">{item?.apDescription || "--"}</td>
+                                            <td className="px-4 py-3.5 text-sm text-gray-700">{group.date}</td>
+                                            <td className="px-3 py-3.5 text-center">
+                                                {item?.installmentNumber ? (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-medium">
+                                                        {item.installmentNumber}/{item.totalInstallments}
+                                                    </span>
+                                                ) : <span className="text-gray-300">--</span>}
+                                            </td>
+                                            <td className="px-3 py-3.5 text-center">{methodLabel(item?.paymentMethod)}</td>
+                                            <td className="px-3 py-3.5 text-center">
+                                                {group.receiptNumber ? (
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />#{group.receiptNumber}
+                                                    </span>
+                                                ) : item?.receiptFileUrl ? (
+                                                    <a href={item.receiptFileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-1">
+                                                        <Receipt className="h-3 w-3" /> Ver
+                                                    </a>
+                                                ) : <span className="text-gray-300">--</span>}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-right font-extrabold text-green-600 font-headline">
+                                                {formatCurrency(group.total, group.currency)}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => openEditModal(item)} aria-label="Editar">
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" disabled={reversing} onClick={() => onReverse(item.payableId || item.id)} aria-label="Excluir">
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
