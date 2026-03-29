@@ -3,7 +3,7 @@ import { requireFarmer, getEffectiveFarmerId, upload } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql, eq, and } from "drizzle-orm";
-import { farmProductsCatalog, farmStockMovements, farmDeposits } from "@shared/schema";
+import { farmProductsCatalog, farmStockMovements, farmDeposits, farmPriceHistory } from "@shared/schema";
 
 export function registerFarmStockRoutes(app: Express) {
 
@@ -179,6 +179,21 @@ export function registerFarmStockRoutes(app: Express) {
                 packageSize: parsedPkg ? String(parsedPkg) : null,
                 notes: `Entrada manual avulsa${depId ? ' (deposito: ' + depId + ')' : ''}`,
             });
+
+            // 6. Register price history (para rede de cotacao)
+            if (parsedCost > 0) {
+                try {
+                    await db.insert(farmPriceHistory).values({
+                        farmerId,
+                        purchaseDate: new Date(),
+                        supplier: "Entrada Manual",
+                        productName: name.toUpperCase(),
+                        quantity: String(parsedQty),
+                        unitPrice: String(parsedCost),
+                        activeIngredient: activeIngredient || null,
+                    });
+                } catch (phErr) { console.error("[PRICE_HISTORY_MANUAL]", phErr); }
+            }
 
             // Activity log for manual stock entry
             try {
