@@ -1,87 +1,31 @@
 /**
  * Quotation Network Routes — Anonymous price comparison across farmers
- * Normaliza nomes de produtos para matching fuzzy
- * Minimo 2 agricultores (era 3) para gerar comparativos
+ * Shows ALL products with regional average prices
+ * Includes purchase simulator
  */
 
 import type { Express } from "express";
 import { db } from "./db";
 import { farmPriceHistory } from "../shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 
-// Normaliza nome do produto para matching fuzzy
-// "ROUNDUP ULTRA 20L" e "RoundUp Ultra 20 L" viram "ROUNDUP ULTRA"
 function normalizeProductName(name: string): string {
     return name
         .toUpperCase()
-        .replace(/\d+\s*(LTS?|KG|ML|GR?|UN|SC)\b/gi, "") // remove quantidade + unidade
+        .replace(/\d+\s*(LTS?|KG|ML|GR?|UN|SC)\b/gi, "")
         .replace(/\b\d+\s*(L|KG)\b/gi, "")
         .replace(/\b(20LTS|10LTS|5LTS|1LT|20L|10L|5L|1L)\b/gi, "")
-        .replace(/[^A-Z0-9\s]/g, "") // remove pontuacao
+        .replace(/[^A-Z0-9\s]/g, "")
         .replace(/\s+/g, " ")
         .trim();
 }
-
-const MIN_FARMERS = 2; // Minimo de agricultores para comparacao (era 3)
 
 export function registerQuotationNetworkRoutes(app: Express) {
     const getFarmerId = (req: any) => {
         return req.session?.passport?.user?.toString() || req.user?.id?.toString();
     };
 
-    // GET /api/farm/quotation-network/debug — diagnostico
-    app.get("/api/farm/quotation-network/debug", async (req: any, res) => {
-        const farmerId = getFarmerId(req);
-        if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
-
-        try {
-            const allPrices = await db.select({
-                farmerId: farmPriceHistory.farmerId,
-                productName: farmPriceHistory.productName,
-                unitPrice: farmPriceHistory.unitPrice,
-                purchaseDate: farmPriceHistory.purchaseDate,
-            }).from(farmPriceHistory).orderBy(desc(farmPriceHistory.purchaseDate));
-
-            const uniqueFarmers = new Set(allPrices.map((p: any) => p.farmerId));
-            const uniqueProducts = new Set(allPrices.map((p: any) => p.productName));
-            const normalizedProducts = new Set(allPrices.map((p: any) => normalizeProductName(p.productName)));
-
-            // Produtos com mais de 1 agricultor
-            const productFarmerMap: Record<string, Set<string>> = {};
-            for (const p of allPrices) {
-                const norm = normalizeProductName(p.productName);
-                if (!productFarmerMap[norm]) productFarmerMap[norm] = new Set();
-                productFarmerMap[norm].add(p.farmerId);
-            }
-            const productsWithMultipleFarmers = Object.entries(productFarmerMap)
-                .filter(([, farmers]) => farmers.size >= MIN_FARMERS)
-                .map(([name, farmers]) => ({ product: name, farmerCount: farmers.size }));
-
-            res.json({
-                totalRecords: allPrices.length,
-                uniqueFarmers: uniqueFarmers.size,
-                farmerIds: Array.from(uniqueFarmers),
-                uniqueProducts: uniqueProducts.size,
-                normalizedUniqueProducts: normalizedProducts.size,
-                productsWithMultipleFarmers,
-                minFarmersRequired: MIN_FARMERS,
-                myFarmerId: farmerId,
-                myProducts: allPrices.filter((p: any) => p.farmerId === farmerId).length,
-                sampleRecords: allPrices.slice(0, 10).map((p: any) => ({
-                    farmer: p.farmerId.slice(0, 8) + "...",
-                    product: p.productName,
-                    normalized: normalizeProductName(p.productName),
-                    price: p.unitPrice,
-                    date: p.purchaseDate,
-                })),
-            });
-        } catch (error) {
-            console.error("[QUOTATION-DEBUG]", error);
-            res.status(500).json({ error: "Debug failed" });
-        }
-    });
-
-    // GET /api/farm/quotation-network — anonymous price comparisons
+    // GET /api/farm/quotation-network — ALL products with regional prices
     app.get("/api/farm/quotation-network", async (req: any, res) => {
         const farmerId = getFarmerId(req);
         if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
@@ -91,41 +35,38 @@ export function registerQuotationNetworkRoutes(app: Express) {
                 farmerId: farmPriceHistory.farmerId,
                 productName: farmPriceHistory.productName,
                 unitPrice: farmPriceHistory.unitPrice,
+                supplier: farmPriceHistory.supplier,
                 purchaseDate: farmPriceHistory.purchaseDate,
             }).from(farmPriceHistory).orderBy(desc(farmPriceHistory.purchaseDate));
 
-            // Agrupa por nome NORMALIZADO do produto (matching fuzzy)
+            // Group by normalized product name
             const productGroups: Record<string, {
                 displayName: string;
                 prices: number[];
-                farmerPrices: { farmerId: string; price: number; date: Date }[];
+                farmerPrices: { farmerId: string; price: number; date: Date; supplier: string }[];
             }> = {};
 
             for (const p of allPrices) {
                 const normalized = normalizeProductName(p.productName);
                 if (!normalized) continue;
+                const price = parseFloat(p.unitPrice || "0");
+                if (price <= 0) continue;
 
                 if (!productGroups[normalized]) {
                     productGroups[normalized] = { displayName: p.productName, prices: [], farmerPrices: [] };
                 }
-                const price = parseFloat(p.unitPrice || "0");
-                if (price > 0) {
-                    productGroups[normalized].prices.push(price);
-                    productGroups[normalized].farmerPrices.push({
-                        farmerId: p.farmerId,
-                        price,
-                        date: new Date(p.purchaseDate),
-                    });
-                }
+                productGroups[normalized].prices.push(price);
+                productGroups[normalized].farmerPrices.push({
+                    farmerId: p.farmerId,
+                    price,
+                    date: new Date(p.purchaseDate),
+                    supplier: p.supplier || "Desconhecido",
+                });
             }
 
             const comparisons: any[] = [];
 
             for (const [normalizedName, group] of Object.entries(productGroups)) {
-                // Minimo de agricultores unicos para privacidade
-                const uniqueFarmers = new Set(group.farmerPrices.map(fp => fp.farmerId));
-                if (uniqueFarmers.size < MIN_FARMERS) continue;
-
                 const prices = group.prices;
                 const sorted = [...prices].sort((a, b) => a - b);
                 const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
@@ -134,21 +75,24 @@ export function registerQuotationNetworkRoutes(app: Express) {
                     : sorted[Math.floor(sorted.length / 2)];
                 const min = sorted[0];
                 const max = sorted[sorted.length - 1];
+                const uniqueFarmers = new Set(group.farmerPrices.map(fp => fp.farmerId));
 
+                // Get THIS farmer's latest price (may not exist)
                 const myPrices = group.farmerPrices
                     .filter(fp => fp.farmerId === farmerId)
                     .sort((a, b) => b.date.getTime() - a.date.getTime());
 
-                if (myPrices.length === 0) continue;
+                const myPrice = myPrices.length > 0 ? myPrices[0].price : null;
+                const diffFromAvg = myPrice ? ((myPrice - avg) / avg) * 100 : 0;
+                const position = myPrice ? sorted.filter(p => p < myPrice).length + 1 : null;
 
-                const myPrice = myPrices[0].price;
-                const diffFromAvg = ((myPrice - avg) / avg) * 100;
-                const position = sorted.filter(p => p < myPrice).length + 1;
+                // Latest purchase info
+                const latestPurchase = group.farmerPrices.sort((a, b) => b.date.getTime() - a.date.getTime())[0];
 
                 comparisons.push({
                     productName: group.displayName,
                     normalizedName,
-                    myPrice: Math.round(myPrice * 100) / 100,
+                    myPrice: myPrice ? Math.round(myPrice * 100) / 100 : null,
                     averagePrice: Math.round(avg * 100) / 100,
                     medianPrice: Math.round(median * 100) / 100,
                     minPrice: Math.round(min * 100) / 100,
@@ -157,24 +101,140 @@ export function registerQuotationNetworkRoutes(app: Express) {
                     position,
                     totalFarmers: uniqueFarmers.size,
                     totalSamples: prices.length,
-                    status: diffFromAvg > 5 ? "above" : diffFromAvg < -5 ? "below" : "average",
+                    status: !myPrice ? "sem_dados" : diffFromAvg > 5 ? "above" : diffFromAvg < -5 ? "below" : "average",
+                    lastSupplier: latestPurchase?.supplier || null,
+                    lastDate: latestPurchase?.date || null,
                 });
             }
 
-            comparisons.sort((a, b) => b.diffPercentage - a.diffPercentage);
+            // Sort: products I bought first, then by total samples
+            comparisons.sort((a, b) => {
+                if (a.myPrice && !b.myPrice) return -1;
+                if (!a.myPrice && b.myPrice) return 1;
+                return b.totalSamples - a.totalSamples;
+            });
+
+            const myProducts = comparisons.filter(c => c.myPrice !== null);
 
             res.json({
                 comparisons,
                 summary: {
                     totalProducts: comparisons.length,
-                    aboveAverage: comparisons.filter(c => c.status === "above").length,
-                    belowAverage: comparisons.filter(c => c.status === "below").length,
-                    atAverage: comparisons.filter(c => c.status === "average").length,
+                    myProducts: myProducts.length,
+                    aboveAverage: myProducts.filter(c => c.status === "above").length,
+                    belowAverage: myProducts.filter(c => c.status === "below").length,
+                    atAverage: myProducts.filter(c => c.status === "average").length,
+                    totalFarmersInNetwork: new Set(allPrices.map((p: any) => p.farmerId)).size,
                 },
             });
         } catch (error) {
             console.error("[QUOTATION-NETWORK] Error:", error);
             res.status(500).json({ error: "Failed to load quotation network" });
         }
+    });
+
+    // POST /api/farm/quotation-network/simulate — purchase simulator
+    app.post("/api/farm/quotation-network/simulate", async (req: any, res) => {
+        const farmerId = getFarmerId(req);
+        if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
+
+        const { productName, offeredPrice } = req.body;
+        if (!productName || !offeredPrice) return res.status(400).json({ error: "productName e offeredPrice obrigatorios" });
+
+        try {
+            const allPrices = await db.select({
+                farmerId: farmPriceHistory.farmerId,
+                productName: farmPriceHistory.productName,
+                unitPrice: farmPriceHistory.unitPrice,
+                supplier: farmPriceHistory.supplier,
+                purchaseDate: farmPriceHistory.purchaseDate,
+            }).from(farmPriceHistory).orderBy(desc(farmPriceHistory.purchaseDate));
+
+            const searchNorm = normalizeProductName(productName);
+            const offered = parseFloat(offeredPrice);
+
+            // Find matching products (fuzzy)
+            const matches: { name: string; prices: number[]; suppliers: string[] }[] = [];
+
+            const productGroups: Record<string, { name: string; prices: number[]; suppliers: string[] }> = {};
+            for (const p of allPrices) {
+                const norm = normalizeProductName(p.productName);
+                const price = parseFloat(p.unitPrice || "0");
+                if (price <= 0) continue;
+                if (!productGroups[norm]) productGroups[norm] = { name: p.productName, prices: [], suppliers: [] };
+                productGroups[norm].prices.push(price);
+                if (p.supplier) productGroups[norm].suppliers.push(p.supplier);
+            }
+
+            // Find exact or partial matches
+            for (const [norm, group] of Object.entries(productGroups)) {
+                if (norm.includes(searchNorm) || searchNorm.includes(norm) ||
+                    norm.split(" ").some(w => searchNorm.includes(w) && w.length > 3)) {
+                    matches.push(group);
+                }
+            }
+
+            if (matches.length === 0) {
+                return res.json({
+                    found: false,
+                    message: `Nenhum registro encontrado para "${productName}". Seja o primeiro a registrar!`,
+                    offeredPrice: offered,
+                });
+            }
+
+            // Use best match (most samples)
+            const best = matches.sort((a, b) => b.prices.length - a.prices.length)[0];
+            const avg = best.prices.reduce((a, b) => a + b, 0) / best.prices.length;
+            const min = Math.min(...best.prices);
+            const max = Math.max(...best.prices);
+            const diff = ((offered - avg) / avg) * 100;
+
+            let verdict: string;
+            let emoji: string;
+            if (diff > 15) { verdict = "Muito acima da media regional. Negocie!"; emoji = "🔴"; }
+            else if (diff > 5) { verdict = "Acima da media. Pode conseguir melhor."; emoji = "🟠"; }
+            else if (diff > -5) { verdict = "Na media da regiao. Preco justo."; emoji = "🟡"; }
+            else if (diff > -15) { verdict = "Abaixo da media. Bom preco!"; emoji = "🟢"; }
+            else { verdict = "Muito abaixo da media. Excelente negocio!"; emoji = "💚"; }
+
+            res.json({
+                found: true,
+                productName: best.name,
+                offeredPrice: offered,
+                averagePrice: Math.round(avg * 100) / 100,
+                minPrice: Math.round(min * 100) / 100,
+                maxPrice: Math.round(max * 100) / 100,
+                diffPercentage: Math.round(diff * 10) / 10,
+                totalSamples: best.prices.length,
+                uniqueSuppliers: Array.from(new Set(best.suppliers)).length,
+                verdict,
+                emoji,
+            });
+        } catch (error) {
+            console.error("[QUOTATION-SIMULATE] Error:", error);
+            res.status(500).json({ error: "Failed to simulate" });
+        }
+    });
+
+    // Debug endpoint
+    app.get("/api/farm/quotation-network/debug", async (req: any, res) => {
+        const farmerId = getFarmerId(req);
+        if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
+        try {
+            const allPrices = await db.select({
+                farmerId: farmPriceHistory.farmerId,
+                productName: farmPriceHistory.productName,
+                unitPrice: farmPriceHistory.unitPrice,
+                purchaseDate: farmPriceHistory.purchaseDate,
+            }).from(farmPriceHistory).orderBy(desc(farmPriceHistory.purchaseDate));
+            const uniqueFarmers = new Set(allPrices.map((p: any) => p.farmerId));
+            res.json({
+                totalRecords: allPrices.length,
+                uniqueFarmers: uniqueFarmers.size,
+                farmerIds: Array.from(uniqueFarmers),
+                myFarmerId: farmerId,
+                myProducts: allPrices.filter((p: any) => p.farmerId === farmerId).length,
+            });
+        } catch (error) { res.status(500).json({ error: "Debug failed" }); }
     });
 }
