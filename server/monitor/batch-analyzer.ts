@@ -14,7 +14,7 @@ export interface AnalysisResult {
 // ─── Fila de batch ──────────────────────────────────────────────────────────
 const batchQueue: CapturedError[] = [];
 let batchTimer: NodeJS.Timeout | null = null;
-const BATCH_WINDOW_MS = 2 * 60 * 1000;
+const BATCH_WINDOW_MS = 15 * 1000; // 15 segundos (era 2 min) — mais rapido para testes
 const BATCH_MAX_SIZE = 8;
 
 export function enqueueBatch(error: CapturedError): void {
