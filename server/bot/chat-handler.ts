@@ -134,7 +134,9 @@ export async function botChatHandler(req: Request, res: Response) {
         });
 
         // Agentic loop — executa tools
-        while (response.stop_reason === "tool_use") {
+        let loops = 0;
+        while (response.stop_reason === "tool_use" && loops < 5) {
+            loops++;
             const toolBlocks = response.content.filter(b => b.type === "tool_use");
             const toolResults = await Promise.all(
                 toolBlocks.map(async (block) => {
@@ -144,7 +146,8 @@ export async function botChatHandler(req: Request, res: Response) {
                 })
             );
 
-            messages.push({ role: "assistant", content: JSON.stringify(response.content) });
+            // Formato correto: assistant content = array de blocks, user content = array de tool_results
+            messages.push({ role: "assistant", content: response.content as any });
             messages.push({ role: "user", content: toolResults as any });
 
             response = await client.messages.create({
@@ -165,6 +168,13 @@ export async function botChatHandler(req: Request, res: Response) {
         res.json({ reply: replyText, mode: session.mode });
     } catch (err: any) {
         console.error("[bot] erro:", err);
-        res.status(500).json({ error: "Erro interno do bot." });
+        const errMsg = err?.error?.error?.message || err?.message || "Erro desconhecido";
+        // Mensagem amigavel pro usuario
+        let userMsg = "Desculpe, tive um problema tecnico. Tente novamente.";
+        if (errMsg.includes("credit balance")) userMsg = "⚠️ Creditos da API esgotados. Recarregue em console.anthropic.com/settings/billing";
+        else if (errMsg.includes("rate limit")) userMsg = "⏳ Muitas requisicoes. Aguarde alguns segundos e tente novamente.";
+        else if (errMsg.includes("overloaded")) userMsg = "🔄 Servidor da IA sobrecarregado. Tente em 30 segundos.";
+        session.history.push({ role: "assistant", content: userMsg });
+        res.json({ reply: userMsg, mode: session.mode });
     }
 }
