@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
     Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare,
     PlusCircle, Trash2, Pencil, History, Search, CreditCard, Plus, Printer, Settings, RefreshCw,
-    BarChart3, CalendarDays, DollarSign
+    BarChart3, CalendarDays, DollarSign, Wallet, ShieldCheck, Upload, Info, Check, X
 } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
@@ -1499,104 +1499,255 @@ function RecebimentoTab({ items, accounts, seasons, onReceive, receiving }: {
                 </div>
             )}
 
-            {/* Payment Modal */}
+            {/* Payment Modal — Premium 2-Column Design */}
             <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
-                <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0">
-                    <DialogHeader className="px-6 pt-5 pb-3 border-b">
-                        <DialogTitle>Receber Pagamento</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                        {/* Summary */}
-                        <div className="bg-gray-50 rounded-lg border p-3">
-                            <p className="text-xs font-semibold text-gray-500 mb-2">Contas selecionadas ({checkedItems.length})</p>
-                            <div className="space-y-1 max-h-32 overflow-y-auto">
-                                {checkedItems.map((item: any) => {
-                                    const remaining = parseFloat(item.totalAmount) - parseFloat(item.receivedAmount || 0);
-                                    return (
-                                        <div key={item.id} className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-700">{item.buyer} - {item.description || "Sem descricao"} ({item.installmentNumber || 1}/{item.totalInstallments || 1})</span>
-                                            <span className="font-mono font-semibold text-blue-600">{formatCurrency(remaining)}</span>
-                                        </div>
-                                    );
-                                })}
+                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                    {/* Header */}
+                    <DialogHeader className="px-8 pt-6 pb-4 border-b border-gray-100 bg-white">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-200">
+                                <CreditCard className="h-5 w-5 text-white" />
                             </div>
-                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
-                                <span className="text-sm font-bold text-gray-800">Total a receber</span>
-                                <span className="text-lg font-bold text-blue-600">{formatCurrency(totalChecked)}</span>
+                            <div>
+                                <DialogTitle className="text-xl font-black font-headline tracking-tight text-gray-900">Receber Pagamento</DialogTitle>
+                                <p className="text-xs text-gray-400 mt-0.5">{checkedItems.length} conta(s) selecionada(s) para processamento</p>
                             </div>
                         </div>
+                    </DialogHeader>
 
-                        {/* Payment methods */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <Label className="font-semibold text-emerald-800">Forma de Recebimento</Label>
-                                <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700" onClick={addRow}>
-                                    <PlusCircle className="mr-1 h-3 w-3" /> Adicionar metodo
-                                </Button>
-                            </div>
-                            {paymentRows.map((row, idx) => (
-                                <div key={idx} className="grid grid-cols-3 gap-3 items-end">
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Conta Bancaria *</Label>
-                                        <Select value={row.accountId} onValueChange={v => updateRow(idx, "accountId", v)}>
-                                            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                            <SelectContent>
-                                                {accounts.map((a: any) => (
-                                                    <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.currency})</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                    {/* Body — 2 column layout */}
+                    <div className="flex-1 overflow-y-auto">
+                        <div className="grid grid-cols-12 gap-0 min-h-[420px]">
+
+                            {/* LEFT COLUMN — 7/12 */}
+                            <div className="col-span-12 lg:col-span-7 p-8 space-y-6">
+
+                                {/* Total Amount Card */}
+                                <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-emerald-600 p-5 flex items-center gap-4 shadow-sm">
+                                    <div className="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                                        <Wallet className="h-6 w-6 text-emerald-600" />
                                     </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Valor *</Label>
-                                        <CurrencyInput value={row.amount} onValueChange={v => updateRow(idx, "amount", v)} />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total Selecionado</p>
+                                        <p className="text-3xl font-black font-headline text-gray-900 tracking-tight leading-none mt-1">{formatCurrency(totalChecked)}</p>
                                     </div>
-                                    <div className="flex gap-2 items-end">
-                                        <div className="flex-1">
-                                            <Label className="text-xs text-gray-500">Metodo</Label>
-                                            <Select value={row.paymentMethod} onValueChange={v => updateRow(idx, "paymentMethod", v)}>
-                                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="transferencia">Transferencia</SelectItem>
-                                                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                                                    <SelectItem value="cheque">Cheque</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                    {checkedItems.length > 1 && (
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full shrink-0">
+                                            {checkedItems.length} itens
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Form Section */}
+                                <div className="bg-gray-50 rounded-xl p-6 space-y-5">
+
+                                    {/* Add method button row */}
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Dados do Recebimento</p>
+                                        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50" onClick={addRow}>
+                                            <PlusCircle className="mr-1 h-3 w-3" /> Adicionar conta
+                                        </Button>
+                                    </div>
+
+                                    {paymentRows.map((row, idx) => (
+                                        <div key={idx} className="space-y-3">
+                                            {paymentRows.length > 1 && (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Metodo {idx + 1}</span>
+                                                    <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-300 hover:text-red-500" onClick={() => removeRow(idx)}>
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                            )}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Conta Bancaria *</label>
+                                                    <Select value={row.accountId} onValueChange={v => updateRow(idx, "accountId", v)}>
+                                                        <SelectTrigger className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 text-sm">
+                                                            <SelectValue placeholder="Selecione a conta..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {accounts.map((a: any) => (
+                                                                <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.currency})</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Valor *</label>
+                                                    <CurrencyInput value={row.amount} onValueChange={v => updateRow(idx, "amount", v)} className="bg-gray-100 border-none rounded-lg h-11 font-bold text-lg font-headline focus:ring-2 focus:ring-emerald-200 px-4" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Metodo</label>
+                                                    <Select value={row.paymentMethod} onValueChange={v => updateRow(idx, "paymentMethod", v)}>
+                                                        <SelectTrigger className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 text-sm">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="transferencia">Transferencia</SelectItem>
+                                                            <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                                                            <SelectItem value="cheque">Cheque</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">N. Recibo</label>
+                                                    <Input
+                                                        placeholder="001-001-0000123"
+                                                        className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 px-4 text-sm"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                        {paymentRows.length > 1 && (
-                                            <Button type="button" variant="ghost" size="sm" className="text-red-400 hover:text-red-600 h-10" onClick={() => removeRow(idx)}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        )}
+                                    ))}
+
+                                    {/* Cheque fields */}
+                                    {hasChequeMethod && (
+                                        <div className="p-4 bg-blue-50/80 rounded-lg border border-blue-100 space-y-3">
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Banco *</label>
+                                                    <Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} placeholder="Nome do banco" className="bg-white/80 border-blue-200 rounded-lg h-11" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Numero *</label>
+                                                    <Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="000000" className="bg-white/80 border-blue-200 rounded-lg h-11" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Titular</label>
+                                                    <Input value={chequeTitular} onChange={e => setChequeTitular(e.target.value)} placeholder="Nome" className="bg-white/80 border-blue-200 rounded-lg h-11" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {paymentRows.length > 1 && (
+                                        <div className={`text-xs font-semibold px-3 py-2 rounded-lg ${Math.abs(totalAllocated - totalChecked) < 0.01 ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
+                                            Alocado: {formatCurrency(totalAllocated)} / Selecionado: {formatCurrency(totalChecked)}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Attach Receipt Area */}
+                                <div className="relative">
+                                    <label
+                                        className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-gray-200 hover:border-emerald-300 bg-white hover:bg-emerald-50/30 transition-colors cursor-pointer group"
+                                    >
+                                        <input
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            className="sr-only"
+                                        />
+                                        <Upload className="h-5 w-5 text-gray-300 group-hover:text-emerald-400 transition-colors" />
+                                        <p className="text-xs font-semibold text-gray-500">Clique para enviar ou arraste</p>
+                                        <p className="text-[10px] text-gray-400">PDF, JPG ou PNG</p>
+                                    </label>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center justify-between pt-2">
+                                    <button
+                                        type="button"
+                                        className="text-sm font-semibold text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                        onClick={() => setPayModalOpen(false)}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <Button
+                                        className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-emerald-200 transition-all hover:shadow-xl hover:shadow-emerald-200 text-sm"
+                                        disabled={receiving || !allRowsValid || checkedIds.size === 0 || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
+                                        onClick={handleConfirmReceive}
+                                    >
+                                        {receiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                                        Confirmar Recebimento
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* RIGHT COLUMN — 5/12 */}
+                            <div className="col-span-12 lg:col-span-5 bg-gray-50/50 border-l border-gray-100 p-8 space-y-5">
+
+                                {/* Security Card */}
+                                <div className="relative bg-emerald-950 text-white p-6 rounded-xl overflow-hidden">
+                                    {/* Decorative blur circle */}
+                                    <div className="absolute -top-8 -right-8 h-28 w-28 rounded-full bg-emerald-400/20 blur-2xl" />
+                                    <div className="relative z-10">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                                            <h3 className="text-sm font-bold font-headline tracking-tight">Seguranca do Recebimento</h3>
+                                        </div>
+                                        <p className="text-emerald-300/70 text-xs leading-relaxed mb-5">
+                                            Todas as transacoes sao registradas com rastreabilidade completa e vinculadas ao seu historico financeiro.
+                                        </p>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 rounded-lg bg-emerald-800/60 flex items-center justify-center shrink-0">
+                                                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-semibold text-white">Transacao Protegida</p>
+                                                    <p className="text-[10px] text-emerald-400/60">Registro auditavel completo</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 rounded-lg bg-emerald-800/60 flex items-center justify-center shrink-0">
+                                                    <CheckCircle className="h-4 w-4 text-emerald-400" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-semibold text-white">Comprador Verificado</p>
+                                                    <p className="text-[10px] text-emerald-400/60">Cadastro validado no sistema</p>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
 
-                        {/* Cheque fields */}
-                        {hasChequeMethod && (
-                            <div className="grid grid-cols-3 gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                                <div><Label className="text-xs text-blue-700">Banco *</Label><Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} placeholder="Nome do banco" /></div>
-                                <div><Label className="text-xs text-blue-700">Numero *</Label><Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="000000" /></div>
-                                <div><Label className="text-xs text-blue-700">Titular</Label><Input value={chequeTitular} onChange={e => setChequeTitular(e.target.value)} placeholder="Nome" /></div>
+                                {/* Transaction Details */}
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Detalhes da Transacao</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Categoria</p>
+                                            <p className="text-xs font-semibold text-gray-800 mt-1 truncate">{checkedItems[0]?.description || "Conta a Receber"}</p>
+                                        </div>
+                                        <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Comprador</p>
+                                            <p className="text-xs font-semibold text-gray-800 mt-1 truncate">{checkedItems[0]?.buyer || "--"}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Selected Items Summary */}
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Contas Incluidas</p>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                        {checkedItems.map((item: any) => {
+                                            const remaining = parseFloat(item.totalAmount) - parseFloat(item.receivedAmount || 0);
+                                            return (
+                                                <div key={item.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-gray-100">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-semibold text-gray-800 truncate">{item.buyer}</p>
+                                                        <p className="text-[10px] text-gray-400 truncate">{item.description || "Sem descricao"} - {item.installmentNumber || 1}/{item.totalInstallments || 1}</p>
+                                                    </div>
+                                                    <span className="text-xs font-bold font-headline text-gray-900 shrink-0 ml-2">{formatCurrency(remaining)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Info Banner */}
+                                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex gap-3">
+                                    <Info className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-xs font-semibold text-emerald-800">Recebimento parcial disponivel</p>
+                                        <p className="text-[10px] text-emerald-600/70 leading-relaxed mt-0.5">
+                                            Voce pode informar um valor menor que o total para registrar um recebimento parcial. O saldo restante permanecera em aberto.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
-                        )}
-
-                        {paymentRows.length > 1 && (
-                            <p className={`text-xs font-medium ${Math.abs(totalAllocated - totalChecked) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
-                                Total alocado: {formatCurrency(totalAllocated)} / Total selecionado: {formatCurrency(totalChecked)}
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="px-6 py-3 border-t bg-gray-50 flex items-center justify-end gap-3">
-                        <Button variant="outline" onClick={() => setPayModalOpen(false)}>Cancelar</Button>
-                        <Button className="bg-blue-600 hover:bg-blue-700"
-                            disabled={receiving || !allRowsValid || checkedIds.size === 0 || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
-                            onClick={handleConfirmReceive}>
-                            {receiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckSquare className="mr-2 h-4 w-4" />}
-                            Confirmar Recebimento ({checkedIds.size} conta(s))
-                        </Button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>
