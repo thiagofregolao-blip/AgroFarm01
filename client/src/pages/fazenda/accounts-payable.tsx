@@ -867,7 +867,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                     {/* Header */}
                     <DialogHeader className="px-8 pt-6 pb-4 border-b border-gray-100 bg-white">
                         <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-200">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center shadow-lg shadow-red-200">
                                 <CreditCard className="h-5 w-5 text-white" />
                             </div>
                             <div>
@@ -885,16 +885,16 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                             <div className="col-span-12 lg:col-span-7 p-8 space-y-6">
 
                                 {/* Total Amount Card */}
-                                <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-emerald-600 p-5 flex items-center gap-4 shadow-sm">
-                                    <div className="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
-                                        <Wallet className="h-6 w-6 text-emerald-600" />
+                                <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-red-500 p-5 flex items-center gap-4 shadow-sm">
+                                    <div className="h-12 w-12 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                                        <Wallet className="h-6 w-6 text-red-600" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total Selecionado</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total a Pagar</p>
                                         <p className="text-3xl font-black font-headline text-gray-900 tracking-tight leading-none mt-1">{formatCurrency(totalChecked)}</p>
                                     </div>
                                     {checkedItems.length > 1 && (
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full shrink-0">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-red-700 bg-red-50 px-2.5 py-1 rounded-full shrink-0">
                                             {checkedItems.length} itens
                                         </span>
                                     )}
@@ -1072,7 +1072,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                         Cancelar
                                     </button>
                                     <Button
-                                        className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-emerald-200 transition-all hover:shadow-xl hover:shadow-emerald-200 text-sm"
+                                        className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-red-200 transition-all hover:shadow-xl hover:shadow-red-200 text-sm"
                                         disabled={paying || !allRowsValid || checkedIds.size === 0 || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
                                         onClick={handleConfirmPayment}
                                     >
@@ -1086,34 +1086,34 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                             <div className="col-span-12 lg:col-span-5 bg-gray-50/50 border-l border-gray-100 p-8 space-y-5">
 
                                 {/* Security Card */}
-                                <div className="relative bg-emerald-950 text-white p-6 rounded-xl overflow-hidden">
+                                <div className="relative bg-red-950 text-white p-6 rounded-xl overflow-hidden">
                                     {/* Decorative blur circle */}
-                                    <div className="absolute -top-8 -right-8 h-28 w-28 rounded-full bg-emerald-400/20 blur-2xl" />
+                                    <div className="absolute -top-8 -right-8 h-28 w-28 rounded-full bg-red-400/20 blur-2xl" />
                                     <div className="relative z-10">
                                         <div className="flex items-center gap-2 mb-3">
-                                            <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                                            <ShieldCheck className="h-5 w-5 text-red-400" />
                                             <h3 className="text-sm font-bold font-headline tracking-tight">Seguranca do Pagamento</h3>
                                         </div>
-                                        <p className="text-emerald-300/70 text-xs leading-relaxed mb-5">
+                                        <p className="text-red-300/70 text-xs leading-relaxed mb-5">
                                             Todas as transacoes sao registradas com rastreabilidade completa e vinculadas ao seu historico financeiro.
                                         </p>
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-emerald-800/60 flex items-center justify-center shrink-0">
-                                                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                                                <div className="h-8 w-8 rounded-lg bg-red-800/60 flex items-center justify-center shrink-0">
+                                                    <ShieldCheck className="h-4 w-4 text-red-400" />
                                                 </div>
                                                 <div>
                                                     <p className="text-xs font-semibold text-white">Transacao Protegida</p>
-                                                    <p className="text-[10px] text-emerald-400/60">Registro auditavel completo</p>
+                                                    <p className="text-[10px] text-red-400/60">Registro auditavel completo</p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-emerald-800/60 flex items-center justify-center shrink-0">
-                                                    <CheckCircle className="h-4 w-4 text-emerald-400" />
+                                                <div className="h-8 w-8 rounded-lg bg-red-800/60 flex items-center justify-center shrink-0">
+                                                    <CheckCircle className="h-4 w-4 text-red-400" />
                                                 </div>
                                                 <div>
                                                     <p className="text-xs font-semibold text-white">Fornecedor Verificado</p>
-                                                    <p className="text-[10px] text-emerald-400/60">Cadastro validado no sistema</p>
+                                                    <p className="text-[10px] text-red-400/60">Cadastro validado no sistema</p>
                                                 </div>
                                             </div>
                                         </div>
