@@ -19,7 +19,7 @@ export default function ChatBot({ userRole }: { userRole?: string }) {
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Quem pode usar modo agente (digitando /agente)
-    const canUseAgent = ["administrador", "admin_agricultor", "agricultor", "consultor", "gerente", "director"].includes(userRole || "");
+    const canUseAgent = ["administrador", "admin_agricultor", "agricultor"].includes(userRole || "");
     // Quem VE a dica no rodape (so admin real)
     const isAdmin = ["administrador", "admin_agricultor"].includes(userRole || "");
 
