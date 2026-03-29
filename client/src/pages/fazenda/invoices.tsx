@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -11,7 +11,7 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText, Search, Warehouse, Plus, DollarSign, Wheat, RefreshCw } from "lucide-react";
+import { Upload, FileText, Check, AlertTriangle, Loader2, Eye, Package, Trash2, Sprout, Info, Download, Wallet, Pencil, Save, X, ReceiptText, Search, Warehouse, Plus, DollarSign, Wheat, RefreshCw, Cloud, Mail, ChevronLeft, ChevronRight, Filter, ArrowDownToLine, Clock } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -400,6 +400,53 @@ export default function FarmInvoices() {
         { value: "outro", label: "Outro" },
     ];
 
+    // Stitch AgriIntel: status filter for invoice tab pills
+    const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<"all" | "confirmed" | "pending">("all");
+    const [invoiceSearch, setInvoiceSearch] = useState("");
+    const [invoicePage, setInvoicePage] = useState(1);
+    const INVOICES_PER_PAGE = 15;
+
+    // KPI calculations
+    const kpiData = useMemo(() => {
+        const invArr = invoices as any[];
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const thisMonthInvoices = invArr.filter((inv: any) => {
+            if (!inv.createdAt) return false;
+            const d = new Date(inv.createdAt);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+        const totalCount = thisMonthInvoices.length;
+        const totalAmount = invArr.reduce((acc: number, inv: any) => acc + parseFloat(inv.totalAmount || "0"), 0);
+        const pendingCount = invArr.filter((inv: any) => inv.status === "pending" || inv.status === "pendente").length;
+        return { totalCount, totalAmount, pendingCount };
+    }, [invoices]);
+
+    // Filtered invoices for Stitch table
+    const filteredStitchInvoices = useMemo(() => {
+        let arr = invoices as any[];
+        // Status filter
+        if (invoiceStatusFilter === "confirmed") arr = arr.filter((inv: any) => inv.status === "confirmed");
+        else if (invoiceStatusFilter === "pending") arr = arr.filter((inv: any) => inv.status === "pending" || inv.status === "pendente");
+        // Search filter
+        if (invoiceSearch.trim()) {
+            const term = invoiceSearch.toLowerCase().trim();
+            arr = arr.filter((inv: any) =>
+                (inv.supplier || "").toLowerCase().includes(term) ||
+                (inv.invoiceNumber || "").toLowerCase().includes(term)
+            );
+        }
+        return arr;
+    }, [invoices, invoiceStatusFilter, invoiceSearch]);
+
+    const paginatedInvoices = useMemo(() => {
+        const start = (invoicePage - 1) * INVOICES_PER_PAGE;
+        return filteredStitchInvoices.slice(start, start + INVOICES_PER_PAGE);
+    }, [filteredStitchInvoices, invoicePage]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredStitchInvoices.length / INVOICES_PER_PAGE));
+
     const createExpenseMutation = useMutation({
         mutationFn: (data: any) => apiRequest("POST", "/api/farm/expenses", data),
         onSuccess: () => {
@@ -537,31 +584,71 @@ export default function FarmInvoices() {
 
     return (
         <FarmLayout>
-            <div className="space-y-6">
-                <div className="flex items-center justify-between flex-wrap gap-4">
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
+            <div className="space-y-6" style={{ fontFamily: "'Manrope', sans-serif" }}>
+                {/* PAGE HEADER - Stitch AgriIntel */}
+                <div className="flex items-start justify-between flex-wrap gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-emerald-800">Importação de Faturas</h1>
-                        <p className="text-emerald-600 text-sm">Importe faturas PDF para registrar entrada no estoque</p>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">FINANCEIRO</span>
+                            <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">&gt;</span>
+                            <span className="text-[10px] uppercase tracking-widest text-emerald-600 font-bold">FATURAS</span>
+                        </div>
+                        <h1 className="text-4xl font-black tracking-tight text-gray-900">Importacao de Faturas</h1>
+                        <p className="text-gray-500 mt-1">Gerencie e processe seus documentos fiscais com inteligencia agronomica.</p>
                     </div>
                     {canEdit && (
-                    <div className="flex gap-2">
-                        <Button
-                            className="bg-emerald-600 hover:bg-emerald-700"
-                            onClick={() => setImportDialogOpen(true)}
-                        >
-                            <Upload className="mr-2 h-4 w-4" />
-                            Importar PDF
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    <div className="flex gap-3 items-center">
+                        <button
+                            className="bg-emerald-100 text-emerald-800 font-bold rounded-lg px-6 py-3 text-sm hover:bg-emerald-200 transition-colors cursor-pointer inline-flex items-center gap-2"
                             onClick={() => setExpenseDialogOpen(true)}
                         >
-                            <Plus className="mr-2 h-4 w-4" />
+                            <Plus className="h-4 w-4" />
                             Nova Despesa
-                        </Button>
+                        </button>
+                        <button
+                            className="bg-gradient-to-br from-emerald-900 to-emerald-800 text-white font-bold rounded-lg px-6 py-3 text-sm shadow-lg hover:shadow-xl transition-all cursor-pointer inline-flex items-center gap-2"
+                            onClick={() => setImportDialogOpen(true)}
+                        >
+                            <Upload className="h-4 w-4" />
+                            Importar PDF
+                        </button>
                     </div>
                     )}
+                </div>
+
+                {/* KPI CARDS */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white p-6 rounded-xl border-l-4 border-l-emerald-600 shadow-sm">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                                <FileText className="h-5 w-5 text-emerald-700" />
+                            </div>
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded">MES ATUAL</span>
+                        </div>
+                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-1">Total Faturas</p>
+                        <p className="text-3xl font-black text-gray-900">{kpiData.totalCount}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl border-l-4 border-l-emerald-800 shadow-sm">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                                <DollarSign className="h-5 w-5 text-emerald-700" />
+                            </div>
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded">AUDITADO</span>
+                        </div>
+                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-1">Valor Total</p>
+                        <p className="text-3xl font-black text-gray-900">$ {kpiData.totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl border-l-4 border-l-red-500 shadow-sm">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                                <AlertTriangle className="h-5 w-5 text-red-600" />
+                            </div>
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-red-600 bg-red-50 px-2 py-1 rounded">ACAO NECESSARIA</span>
+                        </div>
+                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-1">Pendentes</p>
+                        <p className="text-3xl font-black text-gray-900">{kpiData.pendingCount}</p>
+                    </div>
                 </div>
 
                 {/* Import Modal */}
@@ -831,11 +918,11 @@ export default function FarmInvoices() {
                 </Dialog>
 
                 <Tabs defaultValue="invoices" className="space-y-4">
-                    <TabsList className="bg-emerald-50 border border-emerald-200 p-1 h-10">
-                        <TabsTrigger value="invoices" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Faturas</TabsTrigger>
-                        <TabsTrigger value="remissions" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Remissoes</TabsTrigger>
-                        <TabsTrigger value="receipts" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Recibos de Frota</TabsTrigger>
-                        <TabsTrigger value="expenses-nofatura" className="text-[13px] font-semibold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-4">Despesas s/ Fatura</TabsTrigger>
+                    <TabsList className="bg-gray-100 border border-gray-200 p-1 h-10 rounded-lg">
+                        <TabsTrigger value="invoices" className="text-[13px] font-bold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5 rounded-md transition-all">Faturas</TabsTrigger>
+                        <TabsTrigger value="remissions" className="text-[13px] font-bold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5 rounded-md transition-all">Remissoes</TabsTrigger>
+                        <TabsTrigger value="receipts" className="text-[13px] font-bold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5 rounded-md transition-all">Recibos de Frota</TabsTrigger>
+                        <TabsTrigger value="expenses-nofatura" className="text-[13px] font-bold data-[state=active]:bg-emerald-600 data-[state=active]:text-white px-5 rounded-md transition-all">Despesas s/ Fatura</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="invoices">
@@ -1367,165 +1454,209 @@ export default function FarmInvoices() {
                             </DialogContent>
                         </Dialog>
 
-                        {/* Invoices list */}
-                        <Card className="border-emerald-100">
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-emerald-800">Faturas Importadas</CardTitle>
-                                    <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700" onClick={() => queryClient.invalidateQueries()}>
-                                        <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
-                                    </Button>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-                                    <div className="relative">
-                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                        <Input
-                                            placeholder="Buscar fornecedor..."
-                                            className="pl-8 h-9 text-sm"
-                                            value={filterSupplier}
-                                            onChange={(e) => setFilterSupplier(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="relative">
-                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                        <Input
-                                            placeholder="Buscar nro. fatura..."
-                                            className="pl-8 h-9 text-sm"
-                                            value={filterNumber}
-                                            onChange={(e) => setFilterNumber(e.target.value)}
-                                        />
-                                    </div>
-                                    <Input
-                                        type="date"
-                                        className="h-9 text-sm"
-                                        value={filterDate}
-                                        onChange={(e) => setFilterDate(e.target.value)}
+                        {/* Invoices list - Stitch AgriIntel */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                            {/* Filter row */}
+                            <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
+                                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por fornecedor ou NF..."
+                                        className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                                        value={invoiceSearch}
+                                        onChange={(e) => { setInvoiceSearch(e.target.value); setInvoicePage(1); }}
                                     />
                                 </div>
-                            </CardHeader>
-                            <CardContent>
-                                {isLoading ? (
-                                    <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
-                                ) : invoices.length === 0 ? (
-                                    <div className="py-8 text-center">
-                                        <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                        <p className="text-gray-500">Nenhuma fatura importada</p>
-                                    </div>
-                                ) : (() => {
-                                    const filteredInvoices = (invoices as any[]).filter((inv: any) => {
-                                        if (filterSupplier && !(inv.supplier || "").toLowerCase().includes(filterSupplier.toLowerCase())) return false;
-                                        if (filterNumber && !(inv.invoiceNumber || "").toLowerCase().includes(filterNumber.toLowerCase())) return false;
-                                        if (filterDate && inv.issueDate) {
-                                            const invDate = new Date(inv.issueDate).toISOString().split("T")[0];
-                                            if (invDate !== filterDate) return false;
-                                        } else if (filterDate && !inv.issueDate) {
-                                            return false;
-                                        }
-                                        return true;
-                                    });
-                                    return filteredInvoices.length === 0 ? (
-                                        <div className="py-8 text-center">
-                                            <Search className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                                            <p className="text-gray-500">Nenhuma fatura encontrada com os filtros aplicados</p>
-                                        </div>
-                                    ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm min-w-[800px]">
-                                            <thead className="bg-emerald-50">
-                                                <tr>
-                                                    <th className="text-left p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Nro. Fatura</th>
-                                                    <th className="text-left p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Safra</th>
-                                                    <th className="text-left p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Fornecedor</th>
-                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Emissao</th>
-                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Vencimento</th>
-                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Status</th>
-                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Origem</th>
-                                                    <th className="text-center p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Entrada</th>
-                                                    <th className="text-right p-2.5 font-semibold text-emerald-800 whitespace-nowrap">Valor</th>
-                                                    <th className="p-2.5"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {filteredInvoices.map((inv: any) => {
-                                                    const season = inv.seasonId ? (seasons as any[]).find((s: any) => s.id === inv.seasonId) : null;
-                                                    return (
-                                                    <tr
-                                                        key={inv.id}
-                                                        className={`border-t cursor-pointer transition-colors ${
-                                                            selectedInvoice === inv.id ? "bg-emerald-50 border-emerald-200" : "border-gray-100 hover:bg-gray-50"
-                                                        }`}
-                                                        onClick={() => setSelectedInvoice(inv.id)}
-                                                    >
-                                                        <td className="p-2.5 font-medium whitespace-nowrap">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <FileText className={`h-3.5 w-3.5 shrink-0 ${inv.status === "confirmed" ? "text-green-500" : "text-orange-500"}`} />
-                                                                #{inv.invoiceNumber || "—"}
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-2.5 whitespace-nowrap">
-                                                            {season ? (
-                                                                <Badge variant="outline" className="text-[10px] px-2 py-0 h-5 border-emerald-400 text-emerald-700 bg-emerald-50">
-                                                                    {season.name}
-                                                                </Badge>
-                                                            ) : <span className="text-gray-400 text-xs">--</span>}
-                                                        </td>
-                                                        <td className="p-2.5 whitespace-nowrap truncate max-w-[180px]">{inv.supplier || "—"}</td>
-                                                        <td className="p-2.5 text-center whitespace-nowrap text-xs">{inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "—"}</td>
-                                                        <td className="p-2.5 text-center whitespace-nowrap text-xs">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}</td>
-                                                        <td className="p-2.5 text-center">
-                                                            <Badge variant={inv.status === "confirmed" ? "default" : "secondary"} className="text-[10px] px-2 py-0 h-5">
-                                                                {inv.status === "confirmed" ? "Confirmada" : "Pendente"}
-                                                            </Badge>
-                                                            {inv.linkedRemisionId && (
-                                                                <Badge className="ml-1 bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0 h-4">Conciliada</Badge>
+                                <button className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                                    <Filter className="h-4 w-4" />
+                                    Filtros Avancados
+                                </button>
+                                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                                    <button
+                                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${invoiceStatusFilter === "all" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+                                        onClick={() => { setInvoiceStatusFilter("all"); setInvoicePage(1); }}
+                                    >
+                                        Todos
+                                    </button>
+                                    <button
+                                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${invoiceStatusFilter === "confirmed" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+                                        onClick={() => { setInvoiceStatusFilter("confirmed"); setInvoicePage(1); }}
+                                    >
+                                        Confirmados
+                                    </button>
+                                    <button
+                                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${invoiceStatusFilter === "pending" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+                                        onClick={() => { setInvoiceStatusFilter("pending"); setInvoicePage(1); }}
+                                    >
+                                        Pendentes
+                                    </button>
+                                </div>
+                                <button
+                                    className="p-2.5 text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                                    title="Exportar"
+                                >
+                                    <ArrowDownToLine className="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            {/* Table */}
+                            {isLoading ? (
+                                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+                            ) : filteredStitchInvoices.length === 0 ? (
+                                <div className="py-12 text-center">
+                                    <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                                    <p className="text-gray-500 font-medium">Nenhuma fatura encontrada</p>
+                                    <p className="text-gray-400 text-sm mt-1">Tente ajustar os filtros ou importe uma nova fatura</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm min-w-[900px]">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">NF #</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Safra</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Fornecedor</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Emissao</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Vencimento</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Origem</th>
+                                                <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Valor</th>
+                                                <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Acoes</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {paginatedInvoices.map((inv: any) => {
+                                                const season = inv.seasonId ? (seasons as any[]).find((s: any) => s.id === inv.seasonId) : null;
+                                                return (
+                                                <tr
+                                                    key={inv.id}
+                                                    className="border-t border-gray-100 hover:bg-emerald-50/30 transition-colors cursor-pointer group"
+                                                    onClick={() => setSelectedInvoice(inv.id)}
+                                                >
+                                                    <td className="px-4 py-3 font-bold text-gray-900 whitespace-nowrap">
+                                                        NF-{inv.invoiceNumber || "---"}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        {season ? (
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                                                                {season.name}
+                                                            </span>
+                                                        ) : <span className="text-gray-300 text-xs">--</span>}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap max-w-[200px]">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                                                            <span className="truncate text-gray-700">{inv.supplier || "--"}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">
+                                                        {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "--"}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">
+                                                        {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "--"}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        {inv.status === "confirmed" ? (
+                                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                                CONFIRMADA
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                                                PENDENTE
+                                                            </span>
+                                                        )}
+                                                        {inv.linkedRemisionId && (
+                                                            <span className="ml-1.5 inline-flex items-center text-[9px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                                                                Conciliada
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <div className="flex items-center gap-1.5 text-gray-500 text-xs">
+                                                            {inv.source === "whatsapp" ? (
+                                                                <><Cloud className="h-3.5 w-3.5 text-green-500" /><span>WhatsApp</span></>
+                                                            ) : inv.source === "email_import" ? (
+                                                                <><Mail className="h-3.5 w-3.5 text-blue-500" /><span>Email</span></>
+                                                            ) : (
+                                                                <><Upload className="h-3.5 w-3.5 text-gray-400" /><span>Import</span></>
                                                             )}
-                                                        </td>
-                                                        <td className="p-2.5 text-center">
-                                                            <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 ${
-                                                                inv.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
-                                                                inv.source === "email_import" ? "border-blue-400 text-blue-700 bg-blue-50" :
-                                                                "border-gray-300 text-gray-600 bg-gray-50"
-                                                            }`}>
-                                                                {inv.source === "whatsapp" ? "WhatsApp" :
-                                                                 inv.source === "email_import" ? "Email" : "Import"}
-                                                            </Badge>
-                                                        </td>
-                                                        <td className="p-2.5 text-center whitespace-nowrap text-xs text-gray-500">
-                                                            {inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("pt-BR") + " " + new Date(inv.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}
-                                                        </td>
-                                                        <td className="p-2.5 text-right font-mono font-semibold whitespace-nowrap">
-                                                            ${parseFloat(inv.totalAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                                                        </td>
-                                                        <td className="p-2.5">
-                                                            <div className="flex items-center gap-1">
-                                                                {inv.hasFile && (
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); window.open(`/api/farm/invoices/${inv.id}/file`, '_blank'); }}
-                                                                        className="p-1 rounded hover:bg-blue-100 transition-colors"
-                                                                        title="Ver arquivo original"
-                                                                    >
-                                                                        <Eye className="h-3.5 w-3.5 text-blue-400 hover:text-blue-600" />
-                                                                    </button>
-                                                                )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-black text-gray-900 whitespace-nowrap">
+                                                        $ {parseFloat(inv.totalAmount || "0").toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            {inv.hasFile && (
                                                                 <button
-                                                                    onClick={(e) => { e.stopPropagation(); if (confirm("Excluir esta fatura?")) deleteMutation.mutate(inv.id); }}
-                                                                    className="p-1 rounded hover:bg-red-100 transition-colors"
-                                                                    title="Excluir fatura"
+                                                                    onClick={(e) => { e.stopPropagation(); window.open(`/api/farm/invoices/${inv.id}/file`, '_blank'); }}
+                                                                    className="p-1.5 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                                                                    title="Ver arquivo original"
                                                                 >
-                                                                    <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-600" />
+                                                                    <Eye className="h-4 w-4 text-blue-500" />
                                                                 </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
+                                                            )}
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); if (confirm("Excluir esta fatura?")) deleteMutation.mutate(inv.id); }}
+                                                                className="p-1.5 rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
+                                                                title="Excluir fatura"
+                                                            >
+                                                                <Trash2 className="h-4 w-4 text-red-400" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {/* Pagination */}
+                            {filteredStitchInvoices.length > 0 && (
+                                <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+                                    <span className="text-xs text-gray-500">
+                                        Mostrando {Math.min((invoicePage - 1) * INVOICES_PER_PAGE + 1, filteredStitchInvoices.length)}-{Math.min(invoicePage * INVOICES_PER_PAGE, filteredStitchInvoices.length)} de {filteredStitchInvoices.length} faturas
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                            disabled={invoicePage <= 1}
+                                            onClick={() => setInvoicePage(p => Math.max(1, p - 1))}
+                                        >
+                                            <ChevronLeft className="h-4 w-4 text-gray-600" />
+                                        </button>
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
+                                            Math.max(0, invoicePage - 3),
+                                            Math.min(totalPages, invoicePage + 2)
+                                        ).map(page => (
+                                            <button
+                                                key={page}
+                                                className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                                                    page === invoicePage
+                                                        ? "bg-emerald-600 text-white"
+                                                        : "text-gray-600 hover:bg-gray-100"
+                                                }`}
+                                                onClick={() => setInvoicePage(page)}
+                                            >
+                                                {page}
+                                            </button>
+                                        ))}
+                                        <button
+                                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                            disabled={invoicePage >= totalPages}
+                                            onClick={() => setInvoicePage(p => Math.min(totalPages, p + 1))}
+                                        >
+                                            <ChevronRight className="h-4 w-4 text-gray-600" />
+                                        </button>
                                     </div>
-                                );
-                                })()}
-                            </CardContent>
-                        </Card>
+                                </div>
+                            )}
+                        </div>
                     </TabsContent>
 
                     <TabsContent value="remissions">
@@ -2036,6 +2167,23 @@ export default function FarmInvoices() {
                         </Card>
                     </TabsContent>
                 </Tabs>
+
+                {/* Bottom monitoring bar */}
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-100 shadow-sm px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            MONITORAMENTO EM TEMPO REAL
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <Clock className="h-3.5 w-3.5" />
+                        Proxima sincronizacao automatica em 5 minutos
+                    </div>
+                </div>
             </div>
 
             <Dialog open={!!approveExpenseId} onOpenChange={(open) => { if (!open) { setApproveExpenseId(null); setApproveAccountId(""); setApprovePayStatus("pago"); setApprovePayType("a_vista"); setApproveDueDate(""); setApproveInstallments("1"); } }}>
