@@ -6,11 +6,10 @@ import type { AnalysisResult } from "./batch-analyzer";
 import type { CapturedError } from "./error-filter";
 import crypto from "crypto";
 
-// Liga listener de analises concluidas → cria task no Notion
+// Liga listener de analises concluidas → cria task no Notion (TODOS os erros vao pro Notion)
 process.on("monitor:analyzed" as any, async (result: AnalysisResult, error: CapturedError) => {
-    if (error.severity === "critical" || !result.corrigivel) {
-        await createErrorTask(result, error);
-    }
+    // Envia TODOS os erros pro Notion para facilitar debug durante testes
+    await createErrorTask(result, error);
     console.log(JSON.stringify({
         level: "monitor", errorId: error.id, severity: error.severity,
         module: result.modulo, prioridade: result.prioridade,
