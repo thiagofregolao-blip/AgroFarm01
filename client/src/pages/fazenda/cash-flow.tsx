@@ -274,8 +274,7 @@ export default function FarmCashFlow() {
                 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
                 .font-manrope { font-family: 'Manrope', sans-serif; }
             `}</style>
-            <div className="font-manrope min-h-screen bg-gradient-to-br from-gray-50 via-white to-emerald-50/30">
-                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+            <div className="font-manrope space-y-8">
 
                     {/* ═══ 1. PAGE HEADER ═══ */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -455,7 +454,7 @@ export default function FarmCashFlow() {
                                                     return (
                                                         <div key={acc.id}
                                                             onClick={() => setSelectedAccountId(isActive ? null : acc.id)}
-                                                            className={`bg-white rounded-xl shadow-sm p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${isActive ? "border-l-4 border-emerald-600" : "border-l-4 border-transparent"}`}>
+                                                            className={`bg-white rounded-xl shadow-sm p-4 cursor-pointer transition-all duration-200 hover:shadow-md border-l-4 ${balance >= 0 ? "border-l-emerald-600" : "border-l-red-500"} ${isActive ? "ring-2 ring-emerald-200" : ""}`}>
                                                             <div className="flex items-center gap-3">
                                                                 <div className={`h-10 w-10 rounded-xl ${isActive ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-500"} flex items-center justify-center shrink-0 transition-colors`}>
                                                                     <AccIcon className="h-5 w-5" />
@@ -690,7 +689,6 @@ export default function FarmCashFlow() {
                             </TabsContent>
                         </Tabs>
                     )}
-                </div>
             </div>
         </FarmLayout>
     );
