@@ -18,20 +18,23 @@ export default function ChatBot({ userRole }: { userRole?: string }) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const isAdmin = ["administrador", "admin_agricultor", "agricultor", "consultor", "gerente", "director"].includes(userRole || "");
+    // Quem pode usar modo agente (digitando /agente)
+    const canUseAgent = ["administrador", "admin_agricultor", "agricultor", "consultor", "gerente", "director"].includes(userRole || "");
+    // Quem VE a dica no rodape (so admin real)
+    const isAdmin = ["administrador", "admin_agricultor"].includes(userRole || "");
 
     useEffect(() => {
         if (open && messages.length === 0) {
             setMessages([{
                 role: "assistant",
-                content: isAdmin
+                content: canUseAgent
                     ? "🤖 Ola! Sou o assistente do AgroFarm. Estou em modo agente — posso consultar o banco, ver erros e executar acoes. Como posso ajudar?"
                     : "👋 Ola! Sou o assistente do AgroFarm. Posso ajudar com duvidas sobre o sistema. O que precisa?",
                 ts: new Date(),
             }]);
-            setMode(isAdmin ? "agent" : "user");
+            setMode(canUseAgent ? "agent" : "user");
         }
-    }, [open, isAdmin, messages.length]);
+    }, [open, canUseAgent, messages.length]);
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
