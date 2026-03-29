@@ -7,7 +7,7 @@ import { sql } from "drizzle-orm";
 const sessions = new Map<string, { mode: "user" | "agent"; history: Array<{ role: string; content: string }> }>();
 
 // Roles que ativam modo agente automaticamente
-const AGENT_ROLES = ["administrador", "admin_agricultor"];
+const AGENT_ROLES = ["administrador", "admin_agricultor", "agricultor", "admin", "consultor", "rtv", "director", "gerente"];
 
 // ─── Tools disponiveis no modo agente ────────────────────────────────────────
 const AGENT_TOOLS = [
