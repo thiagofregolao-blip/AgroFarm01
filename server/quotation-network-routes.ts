@@ -6,8 +6,8 @@
 
 import type { Express } from "express";
 import { db } from "./db";
-import { farmPriceHistory } from "../shared/schema";
-import { desc } from "drizzle-orm";
+import { farmPriceHistory, farmStock, farmProductsCatalog } from "../shared/schema";
+import { desc, eq, and, sql } from "drizzle-orm";
 import { getEffectiveFarmerId, requireFarmer } from "./farm-middleware";
 
 function normalizeProductName(name: string): string {
@@ -30,6 +30,50 @@ export function registerQuotationNetworkRoutes(app: Express) {
         console.log(`[QUOTATION] farmerId=${farmerId} user=${req.user?.id} role=${req.user?.role}`);
 
         try {
+            // Lazy sync: ensure existing stock with averageCost is in farmPriceHistory
+            try {
+                const stockItems = await db.select({
+                    productId: farmStock.productId,
+                    productName: farmProductsCatalog.name,
+                    averageCost: farmStock.averageCost,
+                    activeIngredient: farmProductsCatalog.activeIngredient,
+                }).from(farmStock)
+                  .innerJoin(farmProductsCatalog, eq(farmProductsCatalog.id, farmStock.productId))
+                  .where(and(
+                      eq(farmStock.farmerId, farmerId),
+                      sql`CAST(${farmStock.averageCost} AS numeric) > 0`
+                  ));
+
+                let synced = 0;
+                for (const item of stockItems) {
+                    const existing = await db.select({ id: farmPriceHistory.id })
+                        .from(farmPriceHistory)
+                        .where(and(
+                            eq(farmPriceHistory.farmerId, farmerId),
+                            eq(farmPriceHistory.productName, item.productName)
+                        ))
+                        .limit(1);
+
+                    if (existing.length === 0) {
+                        await db.insert(farmPriceHistory).values({
+                            farmerId,
+                            productName: item.productName,
+                            unitPrice: item.averageCost,
+                            quantity: "1",
+                            purchaseDate: new Date(),
+                            supplier: "Estoque Existente",
+                            activeIngredient: item.activeIngredient,
+                        });
+                        synced++;
+                    }
+                }
+                if (synced > 0) {
+                    console.log(`[QUOTATION] Synced ${synced} products to price history for farmer ${farmerId}`);
+                }
+            } catch (syncErr) {
+                console.error("[QUOTATION] Sync error (non-fatal):", syncErr);
+            }
+
             const allPrices = await db.select({
                 farmerId: farmPriceHistory.farmerId,
                 productName: farmPriceHistory.productName,

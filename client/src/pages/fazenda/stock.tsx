@@ -443,6 +443,7 @@ export default function FarmStock() {
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Especificacao</th>
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Lote</th>
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Validade</th>
+                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Custo Medio</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Quantidade</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Valor Total</th>
                                             <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Status</th>
@@ -504,6 +505,12 @@ export default function FarmStock() {
                                                             if (diffDays <= 30) return <span className="text-amber-600 font-bold">{formatted}</span>;
                                                             return <span className="text-gray-500">{formatted}</span>;
                                                         })()}
+                                                    </td>
+                                                    {/* Custo Medio */}
+                                                    <td className="text-right px-4 py-3">
+                                                        <span className="text-sm font-semibold text-gray-600">
+                                                            {cost > 0 ? `$ ${cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                                                        </span>
                                                     </td>
                                                     {/* Quantidade */}
                                                     <td className="text-right px-4 py-3">
