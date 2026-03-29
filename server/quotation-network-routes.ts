@@ -1,5 +1,7 @@
 /**
  * Quotation Network Routes — Anonymous price comparison across farmers
+ * Normaliza nomes de produtos para matching fuzzy
+ * Minimo 2 agricultores (era 3) para gerar comparativos
  */
 
 import type { Express } from "express";
@@ -7,10 +9,77 @@ import { db } from "./db";
 import { farmPriceHistory } from "../shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 
+// Normaliza nome do produto para matching fuzzy
+// "ROUNDUP ULTRA 20L" e "RoundUp Ultra 20 L" viram "ROUNDUP ULTRA"
+function normalizeProductName(name: string): string {
+    return name
+        .toUpperCase()
+        .replace(/\d+\s*(LTS?|KG|ML|GR?|UN|SC)\b/gi, "") // remove quantidade + unidade
+        .replace(/\b\d+\s*(L|KG)\b/gi, "")
+        .replace(/\b(20LTS|10LTS|5LTS|1LT|20L|10L|5L|1L)\b/gi, "")
+        .replace(/[^A-Z0-9\s]/g, "") // remove pontuacao
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+const MIN_FARMERS = 2; // Minimo de agricultores para comparacao (era 3)
+
 export function registerQuotationNetworkRoutes(app: Express) {
     const getFarmerId = (req: any) => {
         return req.session?.passport?.user?.toString() || req.user?.id?.toString();
     };
+
+    // GET /api/farm/quotation-network/debug — diagnostico
+    app.get("/api/farm/quotation-network/debug", async (req: any, res) => {
+        const farmerId = getFarmerId(req);
+        if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
+
+        try {
+            const allPrices = await db.select({
+                farmerId: farmPriceHistory.farmerId,
+                productName: farmPriceHistory.productName,
+                unitPrice: farmPriceHistory.unitPrice,
+                purchaseDate: farmPriceHistory.purchaseDate,
+            }).from(farmPriceHistory).orderBy(desc(farmPriceHistory.purchaseDate));
+
+            const uniqueFarmers = new Set(allPrices.map((p: any) => p.farmerId));
+            const uniqueProducts = new Set(allPrices.map((p: any) => p.productName));
+            const normalizedProducts = new Set(allPrices.map((p: any) => normalizeProductName(p.productName)));
+
+            // Produtos com mais de 1 agricultor
+            const productFarmerMap: Record<string, Set<string>> = {};
+            for (const p of allPrices) {
+                const norm = normalizeProductName(p.productName);
+                if (!productFarmerMap[norm]) productFarmerMap[norm] = new Set();
+                productFarmerMap[norm].add(p.farmerId);
+            }
+            const productsWithMultipleFarmers = Object.entries(productFarmerMap)
+                .filter(([, farmers]) => farmers.size >= MIN_FARMERS)
+                .map(([name, farmers]) => ({ product: name, farmerCount: farmers.size }));
+
+            res.json({
+                totalRecords: allPrices.length,
+                uniqueFarmers: uniqueFarmers.size,
+                farmerIds: Array.from(uniqueFarmers),
+                uniqueProducts: uniqueProducts.size,
+                normalizedUniqueProducts: normalizedProducts.size,
+                productsWithMultipleFarmers,
+                minFarmersRequired: MIN_FARMERS,
+                myFarmerId: farmerId,
+                myProducts: allPrices.filter((p: any) => p.farmerId === farmerId).length,
+                sampleRecords: allPrices.slice(0, 10).map((p: any) => ({
+                    farmer: p.farmerId.slice(0, 8) + "...",
+                    product: p.productName,
+                    normalized: normalizeProductName(p.productName),
+                    price: p.unitPrice,
+                    date: p.purchaseDate,
+                })),
+            });
+        } catch (error) {
+            console.error("[QUOTATION-DEBUG]", error);
+            res.status(500).json({ error: "Debug failed" });
+        }
+    });
 
     // GET /api/farm/quotation-network — anonymous price comparisons
     app.get("/api/farm/quotation-network", async (req: any, res) => {
@@ -18,31 +87,31 @@ export function registerQuotationNetworkRoutes(app: Express) {
         if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
 
         try {
-            // Get all price history for ALL farmers (for anonymous comparison)
             const allPrices = await db.select({
                 farmerId: farmPriceHistory.farmerId,
                 productName: farmPriceHistory.productName,
                 unitPrice: farmPriceHistory.unitPrice,
                 purchaseDate: farmPriceHistory.purchaseDate,
-            })
-                .from(farmPriceHistory)
-                .orderBy(desc(farmPriceHistory.purchaseDate));
+            }).from(farmPriceHistory).orderBy(desc(farmPriceHistory.purchaseDate));
 
-            // Group by product name
+            // Agrupa por nome NORMALIZADO do produto (matching fuzzy)
             const productGroups: Record<string, {
+                displayName: string;
                 prices: number[];
                 farmerPrices: { farmerId: string; price: number; date: Date }[];
             }> = {};
 
             for (const p of allPrices) {
-                const name = p.productName;
-                if (!productGroups[name]) {
-                    productGroups[name] = { prices: [], farmerPrices: [] };
+                const normalized = normalizeProductName(p.productName);
+                if (!normalized) continue;
+
+                if (!productGroups[normalized]) {
+                    productGroups[normalized] = { displayName: p.productName, prices: [], farmerPrices: [] };
                 }
                 const price = parseFloat(p.unitPrice || "0");
                 if (price > 0) {
-                    productGroups[name].prices.push(price);
-                    productGroups[name].farmerPrices.push({
+                    productGroups[normalized].prices.push(price);
+                    productGroups[normalized].farmerPrices.push({
                         farmerId: p.farmerId,
                         price,
                         date: new Date(p.purchaseDate),
@@ -50,13 +119,12 @@ export function registerQuotationNetworkRoutes(app: Express) {
                 }
             }
 
-            // Build comparison data for each product
             const comparisons: any[] = [];
 
-            for (const [productName, group] of Object.entries(productGroups)) {
-                // Need at least 3 unique farmers for privacy
+            for (const [normalizedName, group] of Object.entries(productGroups)) {
+                // Minimo de agricultores unicos para privacidade
                 const uniqueFarmers = new Set(group.farmerPrices.map(fp => fp.farmerId));
-                if (uniqueFarmers.size < 3) continue;
+                if (uniqueFarmers.size < MIN_FARMERS) continue;
 
                 const prices = group.prices;
                 const sorted = [...prices].sort((a, b) => a - b);
@@ -67,21 +135,19 @@ export function registerQuotationNetworkRoutes(app: Express) {
                 const min = sorted[0];
                 const max = sorted[sorted.length - 1];
 
-                // Get this farmer's latest price for this product
                 const myPrices = group.farmerPrices
                     .filter(fp => fp.farmerId === farmerId)
                     .sort((a, b) => b.date.getTime() - a.date.getTime());
 
-                if (myPrices.length === 0) continue; // Farmer hasn't bought this product
+                if (myPrices.length === 0) continue;
 
                 const myPrice = myPrices[0].price;
                 const diffFromAvg = ((myPrice - avg) / avg) * 100;
-
-                // Position ranking (1 = cheapest)
                 const position = sorted.filter(p => p < myPrice).length + 1;
 
                 comparisons.push({
-                    productName,
+                    productName: group.displayName,
+                    normalizedName,
                     myPrice: Math.round(myPrice * 100) / 100,
                     averagePrice: Math.round(avg * 100) / 100,
                     medianPrice: Math.round(median * 100) / 100,
@@ -95,7 +161,6 @@ export function registerQuotationNetworkRoutes(app: Express) {
                 });
             }
 
-            // Sort by diff percentage (most above average first)
             comparisons.sort((a, b) => b.diffPercentage - a.diffPercentage);
 
             res.json({
