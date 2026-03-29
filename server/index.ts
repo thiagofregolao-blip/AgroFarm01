@@ -871,6 +871,17 @@ app.use((req, res, next) => {
   const { botChatHandler } = await import("./bot/chat-handler");
   app.post("/api/bot/chat", botChatHandler);
 
+  // ── Monitor test error endpoint (gera erro proposital pra testar) ──
+  app.post("/api/monitor/test-error", async (req, res) => {
+    const level = (req.body?.level || req.query?.level || "warning") as string;
+    const message = (req.body?.message || req.query?.message || "Erro de teste simulado pelo admin") as string;
+    // Gera erro que sera capturado pelo monitor middleware
+    const err = new Error(`[TEST] ${message}`);
+    (err as any).testLevel = level;
+    // Forca o erro a passar pelo middleware
+    throw err;
+  });
+
   // ── Monitor status endpoint ──
   app.get("/api/monitor/status", async (_req, res) => {
     try {
