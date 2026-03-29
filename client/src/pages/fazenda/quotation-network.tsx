@@ -1,13 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import FarmLayout from "@/components/fazenda/layout";
-import { TrendingUp, TrendingDown, Minus, ArrowDownUp, Package, Users } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, ArrowDownUp, Package, Users, Search, Calculator, Loader2 } from "lucide-react";
 
 export default function QuotationNetwork() {
+    const [search, setSearch] = useState("");
+    const [simProduct, setSimProduct] = useState("");
+    const [simPrice, setSimPrice] = useState("");
+
     const { data, isLoading } = useQuery({
         queryKey: ["/api/farm/quotation-network"],
-        queryFn: async () => {
-            const res = await fetch("/api/farm/quotation-network", { credentials: "include" });
-            if (!res.ok) throw new Error("Failed");
+        queryFn: async () => (await apiRequest("GET", "/api/farm/quotation-network")).json(),
+    });
+
+    const simulate = useMutation({
+        mutationFn: async () => {
+            const res = await apiRequest("POST", "/api/farm/quotation-network/simulate", { productName: simProduct, offeredPrice: parseFloat(simPrice) });
             return res.json();
         },
     });
@@ -15,137 +24,177 @@ export default function QuotationNetwork() {
     const comparisons = data?.comparisons || [];
     const summary = data?.summary || {};
 
+    const filtered = search
+        ? comparisons.filter((c: any) => c.productName.toLowerCase().includes(search.toLowerCase()))
+        : comparisons;
+
     const getStatusIcon = (status: string) => {
-        if (status === "above") return <TrendingUp size={16} color="#DC2626" />;
-        if (status === "below") return <TrendingDown size={16} color="#16A34A" />;
-        return <Minus size={16} color="#D97706" />;
+        if (status === "above") return <TrendingUp className="w-4 h-4 text-red-500" />;
+        if (status === "below") return <TrendingDown className="w-4 h-4 text-emerald-500" />;
+        if (status === "sem_dados") return <Minus className="w-4 h-4 text-gray-300" />;
+        return <Minus className="w-4 h-4 text-amber-500" />;
     };
 
-    const getStatusColor = (status: string) => {
-        if (status === "above") return "#DC2626";
-        if (status === "below") return "#16A34A";
-        return "#D97706";
+    const getStatusLabel = (c: any) => {
+        if (c.status === "sem_dados") return <span className="text-gray-400 text-xs">Sem compra</span>;
+        if (c.status === "above") return <span className="text-red-600 text-xs font-bold">{c.diffPercentage}% acima</span>;
+        if (c.status === "below") return <span className="text-emerald-600 text-xs font-bold">{Math.abs(c.diffPercentage)}% abaixo</span>;
+        return <span className="text-amber-600 text-xs font-bold">Na media</span>;
     };
 
-    const getStatusLabel = (status: string, diff: number) => {
-        if (status === "above") return `${Math.abs(diff)}% acima`;
-        if (status === "below") return `${Math.abs(diff)}% abaixo`;
-        return "Na média";
-    };
+    const fmt = (v: number | null) => v !== null ? `$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—";
 
     return (
         <FarmLayout>
-            <div style={{ padding: 24 }}>
+            <div className="w-full space-y-6" style={{ fontFamily: "'Inter', sans-serif" }}>
                 {/* Header */}
-                <div style={{ marginBottom: 24 }}>
-                    <h1 style={{ fontSize: 24, fontWeight: 700, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
-                        <ArrowDownUp size={28} color="#367C2B" />
-                        Rede de Cotação
-                    </h1>
-                    <p style={{ color: "#6B7280", margin: "4px 0 0", fontSize: 14 }}>
-                        Compare anonimamente seus preços com outros agricultores do sistema
-                    </p>
-                </div>
-
-                {/* Summary Cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginBottom: 24 }}>
-                    {[
-                        { icon: Package, label: "Produtos Comparados", value: summary.totalProducts || 0, color: "#367C2B" },
-                        { icon: TrendingUp, label: "Acima da Média", value: summary.aboveAverage || 0, color: "#DC2626" },
-                        { icon: TrendingDown, label: "Abaixo da Média", value: summary.belowAverage || 0, color: "#16A34A" },
-                        { icon: Users, label: "Na Média", value: summary.atAverage || 0, color: "#D97706" },
-                    ].map((card, i) => {
-                        const Icon = card.icon;
-                        return (
-                            <div key={i} style={{
-                                background: "#fff", borderRadius: 12, padding: 20,
-                                border: "1px solid #E5E7EB",
-                                display: "flex", alignItems: "center", gap: 16,
-                            }}>
-                                <div style={{ background: `${card.color}15`, borderRadius: 10, padding: 10 }}>
-                                    <Icon size={22} color={card.color} />
+                <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    <div className="lg:col-span-4">
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-emerald-700 mb-1">INTELIGENCIA &gt; COTACOES</p>
+                        <h1 className="text-4xl font-extrabold tracking-tight text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>Rede de Cotacao</h1>
+                        <p className="text-gray-500 text-sm mt-3 leading-relaxed max-w-sm">Compare anonimamente seus precos com outros agricultores da regiao.</p>
+                    </div>
+                    <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {[
+                            { label: "Produtos", value: summary.totalProducts || 0, icon: Package, color: "emerald-600" },
+                            { label: "Agricultores", value: summary.totalFarmersInNetwork || 0, icon: Users, color: "blue-600" },
+                            { label: "Acima Media", value: summary.aboveAverage || 0, icon: TrendingUp, color: "red-500" },
+                            { label: "Abaixo Media", value: summary.belowAverage || 0, icon: TrendingDown, color: "emerald-500" },
+                        ].map((card, i) => {
+                            const Icon = card.icon;
+                            return (
+                                <div key={i} className={`bg-white rounded-xl shadow-sm border-l-4 border-${card.color} p-4`}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Icon className={`h-4 w-4 text-${card.color}`} />
+                                        <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">{card.label}</span>
+                                    </div>
+                                    <p className="text-2xl font-extrabold text-gray-900">{card.value}</p>
                                 </div>
-                                <div>
-                                    <div style={{ fontSize: 24, fontWeight: 700, color: "#111827" }}>{card.value}</div>
-                                    <div style={{ fontSize: 12, color: "#6B7280" }}>{card.label}</div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
+                </section>
 
-                {/* Comparison Table */}
-                {isLoading ? (
-                    <div style={{ textAlign: "center", padding: 60, color: "#6B7280" }}>Carregando comparativos...</div>
-                ) : comparisons.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: 60, color: "#6B7280" }}>
-                        <ArrowDownUp size={48} color="#D1D5DB" style={{ marginBottom: 12 }} />
-                        <div style={{ fontSize: 16, fontWeight: 600 }}>Dados insuficientes</div>
-                        <div style={{ fontSize: 13, marginTop: 4 }}>
-                            É necessário pelo menos 3 agricultores com o mesmo produto para gerar comparativos
+                {/* Simulador de Compra */}
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                    <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                        <Calculator className="w-4 h-4 text-emerald-600" />
+                        Simulador de Compra
+                    </h3>
+                    <p className="text-xs text-gray-400 mb-4">Digite o produto e o preco oferecido para saber se e um bom negocio.</p>
+                    <div className="flex flex-wrap gap-3 items-end">
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Produto</label>
+                            <input value={simProduct} onChange={e => setSimProduct(e.target.value)} placeholder="Ex: ROUNDUP, GLIFOSATO..."
+                                className="w-full h-11 px-4 bg-gray-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-emerald-200" />
                         </div>
+                        <div className="w-[150px]">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block mb-1">Preco Oferecido ($)</label>
+                            <input type="number" step="0.01" value={simPrice} onChange={e => setSimPrice(e.target.value)} placeholder="0.00"
+                                className="w-full h-11 px-4 bg-gray-100 border-none rounded-lg text-sm font-bold focus:ring-2 focus:ring-emerald-200" />
+                        </div>
+                        <button onClick={() => simulate.mutate()} disabled={!simProduct || !simPrice || simulate.isPending}
+                            className="h-11 px-6 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-40 flex items-center gap-2 cursor-pointer">
+                            {simulate.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                            Simular
+                        </button>
+                    </div>
+
+                    {/* Resultado do simulador */}
+                    {simulate.data && (
+                        <div className={`mt-4 p-4 rounded-xl ${simulate.data.found ? "bg-gray-50" : "bg-amber-50"}`}>
+                            {simulate.data.found ? (
+                                <div className="flex flex-wrap items-center gap-6">
+                                    <div>
+                                        <span className="text-2xl mr-2">{simulate.data.emoji}</span>
+                                        <span className="text-sm font-bold text-gray-800">{simulate.data.productName}</span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-gray-500">Seu preco: <strong className="text-gray-900">{fmt(simulate.data.offeredPrice)}</strong></p>
+                                        <p className="text-xs text-gray-500">Media regiao: <strong className="text-gray-900">{fmt(simulate.data.averagePrice)}</strong></p>
+                                        <p className="text-xs text-gray-500">Menor: <strong className="text-emerald-600">{fmt(simulate.data.minPrice)}</strong> | Maior: <strong className="text-red-600">{fmt(simulate.data.maxPrice)}</strong></p>
+                                    </div>
+                                    <div className="flex-1 min-w-[200px]">
+                                        <p className={`text-sm font-bold ${simulate.data.diffPercentage > 5 ? "text-red-600" : simulate.data.diffPercentage < -5 ? "text-emerald-600" : "text-amber-600"}`}>
+                                            {simulate.data.diffPercentage > 0 ? "+" : ""}{simulate.data.diffPercentage}% vs media
+                                        </p>
+                                        <p className="text-xs text-gray-600 mt-0.5">{simulate.data.verdict}</p>
+                                        <p className="text-[10px] text-gray-400 mt-1">{simulate.data.totalSamples} amostras de {simulate.data.uniqueSuppliers} fornecedores</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-amber-700">{simulate.data.message}</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Busca */}
+                <div className="bg-gray-100 rounded-xl p-4 flex items-center gap-4">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar produto..."
+                            className="w-full pl-10 pr-4 h-11 bg-white border-none rounded-lg text-sm shadow-sm focus:ring-2 focus:ring-emerald-200" />
+                    </div>
+                    <span className="text-xs text-gray-400 shrink-0">{filtered.length} de {comparisons.length} produtos</span>
+                </div>
+
+                {/* Tabela */}
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
+                ) : filtered.length === 0 ? (
+                    <div className="bg-white rounded-xl shadow-sm py-16 text-center">
+                        <ArrowDownUp className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500 font-semibold">Nenhum dado disponivel</p>
+                        <p className="text-xs text-gray-400 mt-1">Importe faturas para popular o historico de precos</p>
                     </div>
                 ) : (
-                    <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E5E7EB", overflow: "hidden" }}>
-                        {/* Table Header */}
-                        <div style={{
-                            display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr",
-                            padding: "12px 16px", background: "#F9FAFB",
-                            fontSize: 12, fontWeight: 600, color: "#6B7280",
-                            borderBottom: "1px solid #E5E7EB",
-                        }}>
-                            <div>Produto</div>
-                            <div style={{ textAlign: "right" }}>Seu Preço</div>
-                            <div style={{ textAlign: "right" }}>Média</div>
-                            <div style={{ textAlign: "right" }}>Menor</div>
-                            <div style={{ textAlign: "right" }}>Maior</div>
-                            <div style={{ textAlign: "center" }}>Status</div>
-                        </div>
-
-                        {/* Table Rows */}
-                        {comparisons.map((comp: any, i: number) => (
-                            <div key={i} style={{
-                                display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr",
-                                padding: "14px 16px", alignItems: "center",
-                                borderBottom: i < comparisons.length - 1 ? "1px solid #F3F4F6" : "none",
-                                fontSize: 14,
-                            }}>
-                                <div>
-                                    <div style={{ fontWeight: 600, color: "#111827" }}>{comp.productName}</div>
-                                    <div style={{ fontSize: 11, color: "#9CA3AF" }}>{comp.totalFarmers} agricultores • {comp.totalSamples} amostras</div>
-                                </div>
-                                <div style={{ textAlign: "right", fontWeight: 700, color: getStatusColor(comp.status) }}>
-                                    {comp.myPrice.toFixed(2)}
-                                </div>
-                                <div style={{ textAlign: "right", color: "#374151" }}>{comp.averagePrice.toFixed(2)}</div>
-                                <div style={{ textAlign: "right", color: "#16A34A" }}>{comp.minPrice.toFixed(2)}</div>
-                                <div style={{ textAlign: "right", color: "#DC2626" }}>{comp.maxPrice.toFixed(2)}</div>
-                                <div style={{ textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                                    {getStatusIcon(comp.status)}
-                                    <span style={{
-                                        fontSize: 12, fontWeight: 600,
-                                        color: getStatusColor(comp.status),
-                                        background: `${getStatusColor(comp.status)}10`,
-                                        padding: "2px 8px", borderRadius: 12,
-                                    }}>
-                                        {getStatusLabel(comp.status, comp.diffPercentage)}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="bg-gray-50">
+                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Produto</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Seu Preco</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Media</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Menor</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Maior</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center">Amostras</th>
+                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {filtered.map((c: any) => (
+                                    <tr key={c.normalizedName} className="hover:bg-emerald-50/20 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <p className="text-sm font-bold text-gray-900">{c.productName}</p>
+                                            <p className="text-[10px] text-gray-400">{c.totalFarmers} agricultor{c.totalFarmers > 1 ? "es" : ""}</p>
+                                        </td>
+                                        <td className={`px-6 py-4 text-sm font-extrabold text-right ${c.myPrice ? (c.status === "above" ? "text-red-600" : c.status === "below" ? "text-emerald-600" : "text-amber-600") : "text-gray-300"}`}>
+                                            {c.myPrice ? fmt(c.myPrice) : "—"}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm font-semibold text-gray-700 text-right">{fmt(c.averagePrice)}</td>
+                                        <td className="px-6 py-4 text-sm font-semibold text-emerald-600 text-right">{fmt(c.minPrice)}</td>
+                                        <td className="px-6 py-4 text-sm font-semibold text-red-500 text-right">{fmt(c.maxPrice)}</td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{c.totalSamples}</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                {getStatusIcon(c.status)}
+                                                {getStatusLabel(c)}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 )}
 
-                {/* Privacy notice */}
-                <div style={{
-                    marginTop: 24, padding: 16, background: "#F3F4F6", borderRadius: 12,
-                    fontSize: 13, color: "#6B7280", display: "flex", alignItems: "flex-start", gap: 10,
-                }}>
-                    <span style={{ fontSize: 18 }}>🔒</span>
-                    <div>
-                        <strong>Privacidade garantida:</strong> Todos os dados são anônimos. Nenhum nome de agricultor é revelado.
-                        O comparativo só é exibido quando pelo menos 3 agricultores possuem dados do mesmo produto.
-                    </div>
+                {/* Privacidade */}
+                <div className="flex items-center gap-2 text-xs text-gray-400 px-2">
+                    <span>🔒</span>
+                    <span><strong>Privacidade garantida:</strong> Todos os dados sao anonimos. Nenhum nome de agricultor e revelado.</span>
                 </div>
             </div>
         </FarmLayout>
