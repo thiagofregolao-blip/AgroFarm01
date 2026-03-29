@@ -872,14 +872,20 @@ app.use((req, res, next) => {
   app.post("/api/bot/chat", botChatHandler);
 
   // ── Monitor test error endpoint (gera erro proposital pra testar) ──
-  app.post("/api/monitor/test-error", async (req, res) => {
+  app.post("/api/monitor/test-error", (req: any, res: any, next: any) => {
     const level = (req.body?.level || req.query?.level || "warning") as string;
     const message = (req.body?.message || req.query?.message || "Erro de teste simulado pelo admin") as string;
-    // Gera erro que sera capturado pelo monitor middleware
     const err = new Error(`[TEST] ${message}`);
     (err as any).testLevel = level;
-    // Forca o erro a passar pelo middleware
-    throw err;
+    next(err);
+  });
+  // GET version for easy browser testing
+  app.get("/api/monitor/test-error", (req: any, res: any, next: any) => {
+    const level = (req.query?.level || "warning") as string;
+    const message = (req.query?.message || "Erro de teste via browser") as string;
+    const err = new Error(`[TEST] ${message}`);
+    (err as any).testLevel = level;
+    next(err);
   });
 
   // ── Monitor status endpoint ──
