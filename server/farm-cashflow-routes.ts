@@ -10,13 +10,22 @@ export function registerFarmCashFlowRoutes(app: Express) {
 
     app.get("/api/farm/cash-accounts", requireFarmer, async (req, res) => {
         try {
-            const { farmCashAccounts } = await import("../shared/schema");
             const { db } = await import("./db");
-            const { eq } = await import("drizzle-orm");
+            const { sql: sqlFn } = await import("drizzle-orm");
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
-            const accounts = await db.select().from(farmCashAccounts).where(eq(farmCashAccounts.farmerId, farmerId));
-            res.json(accounts);
+
+            // Return accounts with currentBalance computed from transactions for accuracy
+            const result = await db.execute(sqlFn`
+                SELECT a.*,
+                    COALESCE(a.current_balance, 0) AS "currentBalance",
+                    COALESCE(a.initial_balance, 0) AS "initialBalance"
+                FROM farm_cash_accounts a
+                WHERE a.farmer_id = ${farmerId}
+                ORDER BY a.created_at ASC
+            `);
+            const rows = (result as any).rows ?? result;
+            res.json(rows);
         } catch (error) {
             console.error("[CASH_ACCOUNTS_GET]", error);
             res.status(500).json({ error: "Failed to get cash accounts" });
@@ -153,13 +162,59 @@ export function registerFarmCashFlowRoutes(app: Express) {
             const { db } = await import("./db");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
 
-            const { accountId, type, amount, currency, category, description, paymentMethod, transactionDate, referenceType, expenseId, invoiceId } = req.body;
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const { type, amount, currency, category, description, paymentMethod, transactionDate, referenceType, expenseId, invoiceId } = req.body;
+
+            // Handle transfers: frontend sends fromAccountId + toAccountId with type "transfer"
+            if (type === "transfer" || type === "transferencia") {
+                const srcId = req.body.fromAccountId || req.body.sourceAccountId;
+                const dstId = req.body.toAccountId || req.body.destAccountId;
+                if (!srcId || !dstId || !amount) {
+                    return res.status(400).json({ error: "fromAccountId, toAccountId, and amount required for transfers" });
+                }
+                const parsedAmount = parseFloat(amount);
+                if (isNaN(parsedAmount) || parsedAmount <= 0) {
+                    return res.status(400).json({ error: "Invalid amount" });
+                }
+                const exchangeRate = parseFloat(req.body.exchangeRate) || 1;
+                const convertedAmount = parsedAmount * exchangeRate;
+                const txDate = parseLocalDate(transactionDate) || new Date();
+                const descText = description || "Transferencia entre contas";
+
+                // Debit source
+                const [txOut] = await db.insert(farmCashTransactions).values({
+                    farmerId, accountId: srcId, type: "saida",
+                    amount: String(parsedAmount), currency: currency || "USD",
+                    category: "transferencia", description: descText,
+                    paymentMethod: "transferencia", referenceType: "transfer",
+                    transactionDate: txDate,
+                }).returning();
+                await db.update(farmCashAccounts)
+                    .set({ currentBalance: sqlFn`current_balance - ${parsedAmount}` })
+                    .where(and(eq(farmCashAccounts.id, srcId), eq(farmCashAccounts.farmerId, farmerId)));
+
+                // Credit destination
+                const [txIn] = await db.insert(farmCashTransactions).values({
+                    farmerId, accountId: dstId, type: "entrada",
+                    amount: String(convertedAmount), currency: currency || "USD",
+                    category: "transferencia", description: descText,
+                    paymentMethod: "transferencia", referenceType: "transfer",
+                    transactionDate: txDate,
+                }).returning();
+                await db.update(farmCashAccounts)
+                    .set({ currentBalance: sqlFn`current_balance + ${convertedAmount}` })
+                    .where(and(eq(farmCashAccounts.id, dstId), eq(farmCashAccounts.farmerId, farmerId)));
+
+                return res.status(201).json({ ok: true, debit: txOut, credit: txIn });
+            }
+
+            // Regular transaction (entrada/saida)
+            const { accountId } = req.body;
             if (!accountId || !type || !amount || !category) {
                 return res.status(400).json({ error: "accountId, type, amount, category required" });
             }
-
-            const farmerId = await getEffectiveFarmerId(req);
-            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const parsedAmount = parseFloat(amount);
             if (isNaN(parsedAmount) || parsedAmount <= 0) {
                 return res.status(400).json({ error: "Invalid amount" });
@@ -271,7 +326,7 @@ export function registerFarmCashFlowRoutes(app: Express) {
                     or(eq(farmExpenses.paymentStatus, "pendente"), eq(farmExpenses.paymentStatus, "parcial"))
                 )
             );
-            const contasAPagar = unpaidExpenses.map(e => ({
+            const contasAPagar = unpaidExpenses.map((e: any) => ({
                 id: e.id,
                 description: e.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim(),
                 supplier: e.supplier,

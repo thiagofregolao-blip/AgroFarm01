@@ -269,6 +269,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const newPaidTotal = previousPaid + payAmount;
 
             let firstTxId: string | null = null;
+            const allTxIds: string[] = [];
 
             if (accountRows && Array.isArray(accountRows) && accountRows.length > 1) {
                 // Multi-account payment: create one transaction per account row (Bug #21 fix)
@@ -288,6 +289,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                         transactionDate: new Date(),
                     }).returning();
                     if (!firstTxId) firstTxId = rowTx.id;
+                    allTxIds.push(rowTx.id);
                     await db.update(farmCashAccounts)
                         .set({ currentBalance: sqlFn`current_balance - ${rowAmount}` })
                         .where(and(eq(farmCashAccounts.id, row.accountId), eq(farmCashAccounts.farmerId, farmerId)));
@@ -307,16 +309,17 @@ export function registerFarmFinancialRoutes(app: Express) {
                     transactionDate: new Date(),
                 }).returning();
                 firstTxId = tx.id;
+                allTxIds.push(tx.id);
                 await db.update(farmCashAccounts)
                     .set({ currentBalance: sqlFn`current_balance - ${payAmount}` })
                     .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
             }
 
-            // Save payable_id and receipt number to cash transaction
-            if (firstTxId) {
-                await db.execute(sqlFn`UPDATE farm_cash_transactions SET payable_id = ${req.params.id} WHERE id = ${firstTxId}`);
+            // Save payable_id and receipt number to ALL cash transactions (not just first)
+            for (const txId of allTxIds) {
+                await db.execute(sqlFn`UPDATE farm_cash_transactions SET payable_id = ${req.params.id} WHERE id = ${txId}`);
                 if (receiptNumber) {
-                    await db.execute(sqlFn`UPDATE farm_cash_transactions SET receipt_id = ${receiptNumber} WHERE id = ${firstTxId}`);
+                    await db.execute(sqlFn`UPDATE farm_cash_transactions SET receipt_id = ${receiptNumber} WHERE id = ${txId}`);
                 }
             }
 
@@ -474,7 +477,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             // Get all existing AP entries with invoice links
             const existingAPs = await db.select().from(farmAccountsPayable)
                 .where(eq(farmAccountsPayable.farmerId, farmerId));
-            const linkedInvoiceIds = new Set(existingAPs.filter(ap => ap.invoiceId).map(ap => ap.invoiceId));
+            const linkedInvoiceIds = new Set(existingAPs.filter((ap: any) => ap.invoiceId).map((ap: any) => ap.invoiceId));
 
             let created = 0;
             for (const invoice of confirmedInvoices) {
@@ -748,7 +751,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { db } = await import("./db");
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
-            const { accountId, amount, paymentMethod } = req.body;
+            const { accountId, amount, paymentMethod, receiptNumber } = req.body;
 
             const [ar] = await db.select().from(farmAccountsReceivable).where(
                 and(eq(farmAccountsReceivable.id, req.params.id), eq(farmAccountsReceivable.farmerId, farmerId))
@@ -774,6 +777,12 @@ export function registerFarmFinancialRoutes(app: Express) {
                 referenceType: "recebimento_conta",
                 transactionDate: new Date(),
             }).returning();
+
+            // Save receiptNumber to cash transaction if provided
+            if (receiptNumber && tx.id) {
+                const { sql: sqlReceipt } = await import("drizzle-orm");
+                await db.execute(sqlReceipt`UPDATE farm_cash_transactions SET receipt_id = ${receiptNumber} WHERE id = ${tx.id}`);
+            }
 
             // Update account balance
             const { sql: sqlFn } = await import("drizzle-orm");
@@ -1073,7 +1082,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                     address: ar.customerAddress,
                 },
                 // Itens
-                items: items.map(i => ({
+                items: items.map((i: any) => ({
                     productName: i.productName,
                     unit: i.unit,
                     quantity: i.quantity,
@@ -1213,7 +1222,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                 ...b,
                 actualAmount: actualMap.get(b.category) || 0,
                 percentUsed: parseFloat(String(b.plannedAmount)) > 0
-                    ? (((actualMap.get(b.category) || 0) / parseFloat(String(b.plannedAmount))) * 100).toFixed(1)
+                    ? ((Number(actualMap.get(b.category) || 0) / parseFloat(String(b.plannedAmount))) * 100).toFixed(1)
                     : "0",
             })));
         } catch (error) {

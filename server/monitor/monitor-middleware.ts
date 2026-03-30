@@ -81,6 +81,42 @@ export function setupGlobalHandlers() {
     console.log("[monitor] ✅ Global error handlers registrados");
 }
 
+// ─── Utility: report errors from inside try/catch blocks ────────────────────
+// Call this from any route handler's catch block to manually report errors
+// that would otherwise never reach the Express error middleware.
+// Usage: reportError(error, { method: "POST", path: "/api/farm/...", userId: "..." })
+export function reportError(
+    error: unknown,
+    context: { method?: string; path?: string; userId?: string; [key: string]: unknown } = {}
+) {
+    try {
+        const err = error instanceof Error ? error : new Error(String(error));
+        const message = err.message || "Unknown error";
+        const stack = err.stack || "";
+        const severity = classifySeverity(message);
+        const hash = hashError(message, stack);
+        const mod = detectModule(stack);
+
+        const tracked = trackError({
+            id: crypto.randomUUID(), hash, message, stack, severity, module: mod,
+            context: {
+                ...context,
+                body: context.body ? sanitizeBody(context.body) : undefined,
+                source: "reportError",
+            },
+        });
+
+        if (shouldProcess(hash) || tracked.count <= 1) {
+            console.log(`[monitor] [reportError] ${message.slice(0, 60)} severity=${severity} module=${mod}`);
+            enqueueBatch(tracked);
+        } else {
+            console.log(`[monitor] [dedup] ${message.slice(0, 60)} (${tracked.count}x)`);
+        }
+    } catch (monitorErr) {
+        console.error("[monitor] reportError interno:", monitorErr);
+    }
+}
+
 function sanitizeBody(body: unknown): unknown {
     if (!body || typeof body !== "object") return {};
     const safe = { ...(body as Record<string, unknown>) };
