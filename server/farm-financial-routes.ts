@@ -70,7 +70,8 @@ export function registerFarmFinancialRoutes(app: Express) {
                     ap.installment_number AS "installmentNumber",
                     ap.total_installments AS "totalInstallments",
                     ap.receipt_file_url AS "receiptFileUrl",
-                    ap.invoice_id AS "invoiceId"
+                    ap.invoice_id AS "invoiceId",
+                    ap.observation AS "observation"
                 FROM farm_cash_transactions t
                 LEFT JOIN farm_accounts_payable ap ON ap.id = t.payable_id
                 WHERE t.farmer_id = ${farmerId}
@@ -217,7 +218,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { db } = await import("./db");
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
-            const { accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl, _editOnly } = req.body;
+            const { accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl, observation, _editOnly } = req.body;
 
             // Get the account payable
             const [ap] = await db.select().from(farmAccountsPayable).where(
@@ -361,6 +362,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             };
             if (receiptNumber) updatePayload.receiptNumber = receiptNumber;
             if (receiptFileUrl) updatePayload.receiptFileUrl = receiptFileUrl;
+            if (observation !== undefined) updatePayload.observation = observation || null;
             await db.update(farmAccountsPayable).set(updatePayload).where(eq(farmAccountsPayable.id, req.params.id));
 
             // Bug #1 fix: sync farmExpenses when payment made via AP
@@ -423,7 +425,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
-            const { payableIds, accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl, cheque } = req.body;
+            const { payableIds, accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl, cheque, observation } = req.body;
             if (!payableIds || !Array.isArray(payableIds) || payableIds.length === 0) {
                 return res.status(400).json({ error: "payableIds is required" });
             }
@@ -534,6 +536,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                 };
                 if (receiptNumber) updatePayload.receiptNumber = receiptNumber;
                 if (receiptFileUrl) updatePayload.receiptFileUrl = receiptFileUrl;
+                if (observation !== undefined) updatePayload.observation = observation || null;
                 await db.update(farmAccountsPayable).set(updatePayload).where(eq(farmAccountsPayable.id, ap.id));
 
                 // Link transaction to AP

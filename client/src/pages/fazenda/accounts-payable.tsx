@@ -607,6 +607,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
     const [filterDateFrom, setFilterDateFrom] = useState("");
     const [filterDateTo, setFilterDateTo] = useState("");
     const [filterSeason, setFilterSeason] = useState("todos");
+    const [filterCurrency, setFilterCurrency] = useState("todos");
     const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
     const [payModalOpen, setPayModalOpen] = useState(false);
 
@@ -629,6 +630,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
     const [receiptNumber, setReceiptNumber] = useState("");
     const [receiptFile, setReceiptFile] = useState<File | null>(null);
     const [receiptFileUrl, setReceiptFileUrl] = useState("");
+    const [payObservation, setPayObservation] = useState("");
 
     // Filter pending items
     const pendingItems = items.filter((i: any) => i.status !== "pago");
@@ -639,7 +641,8 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
         const dateFromMatch = !filterDateFrom || new Date(i.dueDate) >= new Date(filterDateFrom);
         const dateToMatch = !filterDateTo || new Date(i.dueDate) <= new Date(filterDateTo);
         const seasonMatch = filterSeason === "todos" || String(i.season_id || i.seasonId || "") === filterSeason;
-        return termMatch && dateFromMatch && dateToMatch && seasonMatch;
+        const currencyMatch = filterCurrency === "todos" || (i.currency || "USD") === filterCurrency;
+        return termMatch && dateFromMatch && dateToMatch && seasonMatch && currencyMatch;
     });
 
     const checkedItems = filteredPending.filter((i: any) => checkedIds.has(i.id));
@@ -682,7 +685,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
         }
         setPaymentRows([{ accountId: "", amount: totalChecked.toFixed(2), paymentMethod: "transferencia" }]);
         setChequeBanco(""); setChequeNumero(""); setChequeTipo("proprio"); setSelectedChequeId("");
-        setReceiptNumber(""); setReceiptFile(null); setReceiptFileUrl("");
+        setReceiptNumber(""); setReceiptFile(null); setReceiptFileUrl(""); setPayObservation("");
         setPayModalOpen(true);
     }
 
@@ -709,6 +712,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
             }
             if (receiptNumber) payload.receiptNumber = receiptNumber;
             if (receiptFileUrl) payload.receiptFileUrl = receiptFileUrl;
+            if (payObservation) payload.observation = payObservation;
             onPay(item.id, payload);
             setCheckedIds(new Set());
             setPayModalOpen(false);
@@ -734,6 +738,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
             }
             if (receiptNumber) payload.receiptNumber = receiptNumber;
             if (receiptFileUrl) payload.receiptFileUrl = receiptFileUrl;
+            if (payObservation) payload.observation = payObservation;
 
             const res = await fetch("/api/farm/accounts-payable/batch-pay", {
                 method: "POST",
@@ -822,6 +827,16 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
                                 {seasons.map((s: any) => (
                                     <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
                                 ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div>
+                        <Select value={filterCurrency} onValueChange={setFilterCurrency}>
+                            <SelectTrigger className="w-32 bg-white border-0 shadow-sm h-10"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todos">Todas Moedas</SelectItem>
+                                <SelectItem value="USD">$ Dolar</SelectItem>
+                                <SelectItem value="PYG">Gs Guarani</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -1089,6 +1104,18 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
                                     )}
                                 </div>
 
+                                {/* Observações */}
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Observacoes</label>
+                                    <textarea
+                                        value={payObservation}
+                                        onChange={e => setPayObservation(e.target.value)}
+                                        placeholder="Observacoes sobre este pagamento..."
+                                        rows={2}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 resize-none"
+                                    />
+                                </div>
+
                                 {/* Attach Receipt Area */}
                                 <div className="relative">
                                     <label
@@ -1237,6 +1264,9 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
     onReverse: (id: string) => void; reversing: boolean;
 }) {
     const [searchTerm, setSearchTerm] = useState("");
+    const [filterReceiptNum, setFilterReceiptNum] = useState("");
+    const [filterDateFrom, setFilterDateFrom] = useState("");
+    const [filterDateTo, setFilterDateTo] = useState("");
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [editingHistItem, setEditingHistItem] = useState<any>(null);
 
@@ -1251,6 +1281,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
     const [editReceiptNumber, setEditReceiptNumber] = useState("");
     const [editReceiptFile, setEditReceiptFile] = useState<File | null>(null);
     const [editReceiptFileUrl, setEditReceiptFileUrl] = useState("");
+    const [editObservation, setEditObservation] = useState("");
 
     const { data: availableCheques = [] } = useQuery<any[]>({
         queryKey: ["/api/farm/cheques"],
@@ -1270,6 +1301,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
         setEditReceiptFileUrl(item.receiptFileUrl || item.receipt_file_url || "");
         setEditReceiptFile(null);
         setEditChequeBanco(""); setEditChequeNumero(""); setEditChequeTipo("proprio"); setEditSelectedChequeId("");
+        setEditObservation(item.observation || "");
         setEditingHistItem(item);
     }
 
@@ -1301,6 +1333,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
         }
         if (editReceiptNumber) payload.receiptNumber = editReceiptNumber;
         if (editReceiptFileUrl) payload.receiptFileUrl = editReceiptFileUrl;
+        payload.observation = editObservation || null;
         onPay(editingHistItem.payableId || editingHistItem.id, payload);
         setEditingHistItem(null);
     }
@@ -1335,9 +1368,13 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
     const allPayments = [...paymentHistory, ...legacyPaid]
         .sort((a: any, b: any) => new Date(b.paidDate).getTime() - new Date(a.paidDate).getTime());
 
-    const filteredPaid = allPayments.filter((i: any) =>
-        !searchTerm || i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) || i.apDescription?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredPaid = allPayments.filter((i: any) => {
+        const termMatch = !searchTerm || i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) || i.apDescription?.toLowerCase().includes(searchTerm.toLowerCase());
+        const receiptMatch = !filterReceiptNum || (i.receiptNumber || "").toLowerCase().includes(filterReceiptNum.toLowerCase());
+        const dateFromMatch = !filterDateFrom || (i.paidDate && new Date(i.paidDate) >= new Date(filterDateFrom));
+        const dateToMatch = !filterDateTo || (i.paidDate && new Date(i.paidDate) <= new Date(filterDateTo + "T23:59:59"));
+        return termMatch && receiptMatch && dateFromMatch && dateToMatch;
+    });
 
     // Group payments: batch payments are grouped by paymentBatchId, individual payments stay separate
     const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string; batchItems?: any[]; isBatch: boolean }[] = [];
@@ -1404,16 +1441,29 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
     return (
         <div className="space-y-5">
             <div className="bg-gray-100 rounded-xl p-5">
-                <div className="flex items-center gap-3">
-                    <div className="relative flex-1 max-w-sm">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="relative flex-1 min-w-[200px] max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
-                            placeholder="Buscar no historico..."
+                            placeholder="Buscar fornecedor..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             className="pl-10 bg-white border-0 shadow-sm h-10"
                         />
                     </div>
+                    <Input
+                        placeholder="N. Recibo"
+                        value={filterReceiptNum}
+                        onChange={e => setFilterReceiptNum(e.target.value)}
+                        className="w-36 bg-white border-0 shadow-sm h-10"
+                    />
+                    <Input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-36 bg-white border-0 shadow-sm h-10" />
+                    <Input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-36 bg-white border-0 shadow-sm h-10" />
+                    {(searchTerm || filterReceiptNum || filterDateFrom || filterDateTo) && (
+                        <Button variant="ghost" size="sm" className="text-gray-500 h-10" onClick={() => { setSearchTerm(""); setFilterReceiptNum(""); setFilterDateFrom(""); setFilterDateTo(""); }}>
+                            <X className="h-3.5 w-3.5 mr-1" /> Limpar
+                        </Button>
+                    )}
                     <span className="text-xs text-gray-400 ml-auto">{groups.length} pagamento(s)</span>
                 </div>
             </div>
@@ -1544,42 +1594,58 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                 </div>
             )}
 
-            {/* Dialog de edição do histórico — mesmo modal de pagamento */}
+            {/* Dialog de edição — mesmo design premium do modal de pagamento */}
             <Dialog open={!!editingHistItem} onOpenChange={o => !o && setEditingHistItem(null)}>
-                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
-                    <DialogHeader className="px-6 pt-5 pb-3 border-b">
-                        <DialogTitle>Editar Pagamento</DialogTitle>
+                <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                    <DialogHeader className="px-8 pt-6 pb-4 border-b border-gray-100 bg-white">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-200">
+                                <Pencil className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-xl font-black font-headline tracking-tight text-gray-900">Editar Pagamento</DialogTitle>
+                                <p className="text-xs text-gray-400 mt-0.5">{editingHistItem?.supplier} — {editingHistItem?.apDescription || "Sem descricao"}</p>
+                            </div>
+                        </div>
                     </DialogHeader>
                     {editingHistItem && (
-                        <>
-                            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                                {/* Resumo da conta */}
-                                <div className="bg-gray-50 rounded-lg border p-3">
-                                    <p className="text-xs font-semibold text-gray-500 mb-2">Conta selecionada</p>
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-700">{editingHistItem.supplier} - {editingHistItem.description || "Sem descricao"} ({editingHistItem.installmentNumber}/{editingHistItem.totalInstallments})</span>
-                                        <span className="font-mono font-semibold text-red-600">{formatCurrency(parseFloat(editingHistItem.totalAmount), editingHistItem.currency || "USD")}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
-                                        <span className="text-sm font-bold text-gray-800">Total da conta</span>
-                                        <span className="text-lg font-bold text-red-600">{formatCurrency(parseFloat(editingHistItem.totalAmount), editingHistItem.currency || "USD")}</span>
-                                    </div>
+                        <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                            {/* Total Card */}
+                            <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-blue-500 p-5 flex items-center gap-4 shadow-sm">
+                                <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                                    <Wallet className="h-6 w-6 text-blue-600" />
                                 </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total da Conta</p>
+                                    <p className="text-3xl font-black font-headline text-gray-900 tracking-tight leading-none mt-1">{formatCurrency(parseFloat(editingHistItem.totalAmount), editingHistItem.currency || "USD")}</p>
+                                </div>
+                            </div>
 
-                                {/* Forma de pagamento */}
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="font-semibold text-emerald-800">Forma de Pagamento</Label>
-                                        <Button type="button" variant="outline" size="sm" className="h-7 text-xs border-emerald-200 text-emerald-700" onClick={addEditRow}>
-                                            <PlusCircle className="mr-1 h-3 w-3" /> Adicionar metodo
-                                        </Button>
-                                    </div>
-                                    {editPaymentRows.map((row, idx) => (
-                                        <div key={idx} className="grid grid-cols-3 gap-3 items-end">
+                            {/* Form */}
+                            <div className="bg-gray-50 rounded-xl p-6 space-y-5">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Dados do Pagamento</p>
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50" onClick={addEditRow}>
+                                        <PlusCircle className="mr-1 h-3 w-3" /> Adicionar conta
+                                    </Button>
+                                </div>
+                                {editPaymentRows.map((row, idx) => (
+                                    <div key={idx} className="space-y-3">
+                                        {editPaymentRows.length > 1 && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Metodo {idx + 1}</span>
+                                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-300 hover:text-red-500" onClick={() => removeEditRow(idx)}>
+                                                    <X className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-3">
                                             <div>
-                                                <Label className="text-xs text-gray-500">Conta Bancaria *</Label>
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Conta *</label>
                                                 <Select value={row.accountId} onValueChange={v => updateEditRow(idx, "accountId", v)}>
-                                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                    <SelectTrigger className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 text-sm">
+                                                        <SelectValue placeholder="Selecione a conta..." />
+                                                    </SelectTrigger>
                                                     <SelectContent>
                                                         {accounts.map((a: any) => (
                                                             <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>
@@ -1588,75 +1654,60 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                 </Select>
                                             </div>
                                             <div>
-                                                <Label className="text-xs text-gray-500">Valor * (parcial ou total)</Label>
-                                                <Input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0.01"
-                                                    placeholder="0.00"
-                                                    value={row.amount}
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Valor *</label>
+                                                <Input type="number" step="0.01" min="0.01" placeholder="0.00" value={row.amount}
                                                     onChange={e => updateEditRow(idx, "amount", e.target.value)}
-                                                    className="font-mono"
-                                                />
+                                                    className="bg-gray-100 border-none rounded-lg h-11 font-bold text-lg font-headline focus:ring-2 focus:ring-emerald-200 px-4" />
                                             </div>
-                                            <div className="flex gap-2 items-end">
-                                                <div className="flex-1">
-                                                    <Label className="text-xs text-gray-500">Metodo</Label>
-                                                    <Select value={row.paymentMethod} onValueChange={v => updateEditRow(idx, "paymentMethod", v)}>
-                                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="transferencia">Transferencia</SelectItem>
-                                                            <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                                                            <SelectItem value="cheque">Cheque</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                {editPaymentRows.length > 1 && (
-                                                    <Button type="button" variant="ghost" size="sm" className="text-red-400 hover:text-red-600 h-10" onClick={() => removeEditRow(idx)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                )}
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Metodo</label>
+                                                <Select value={row.paymentMethod} onValueChange={v => updateEditRow(idx, "paymentMethod", v)}>
+                                                    <SelectTrigger className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 text-sm"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="transferencia">Transferencia</SelectItem>
+                                                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                                                        <SelectItem value="cheque">Cheque</SelectItem>
+                                                        <SelectItem value="pix">PIX</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">N. Recibo</label>
+                                                <Input placeholder="001-001-0000123" value={editReceiptNumber}
+                                                    onChange={e => setEditReceiptNumber(e.target.value)}
+                                                    className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 px-4 text-sm" />
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                ))}
 
                                 {/* Cheque fields */}
                                 {editHasChequeMethod && (
-                                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
+                                    <div className="p-4 bg-blue-50/80 rounded-lg border border-blue-100 space-y-3">
                                         {emitidoCheques.length > 0 && (
                                             <div>
-                                                <Label className="text-xs text-blue-700">Selecionar Cheque Existente</Label>
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Selecionar Cheque Existente</label>
                                                 <Select value={editSelectedChequeId} onValueChange={(id) => {
                                                     setEditSelectedChequeId(id);
                                                     const ch = emitidoCheques.find((c: any) => String(c.id) === id);
-                                                    if (ch) {
-                                                        setEditChequeBanco(ch.bank || "");
-                                                        setEditChequeNumero(ch.cheque_number || ch.chequeNumber || "");
-                                                        setEditChequeTipo(ch.type || "proprio");
-                                                    }
+                                                    if (ch) { setEditChequeBanco(ch.bank || ""); setEditChequeNumero(ch.cheque_number || ch.chequeNumber || ""); setEditChequeTipo(ch.type || "proprio"); }
                                                 }}>
-                                                    <SelectTrigger><SelectValue placeholder="Selecionar cheque emitido..." /></SelectTrigger>
+                                                    <SelectTrigger className="bg-white/80 border-blue-200 rounded-lg h-11"><SelectValue placeholder="Selecionar cheque emitido..." /></SelectTrigger>
                                                     <SelectContent>
                                                         {emitidoCheques.map((ch: any) => (
-                                                            <SelectItem key={ch.id} value={String(ch.id)}>
-                                                                #{ch.cheque_number || ch.chequeNumber} — {ch.bank} — {ch.holder} — {formatCurrency(parseFloat(ch.amount), ch.currency)}
-                                                            </SelectItem>
+                                                            <SelectItem key={ch.id} value={String(ch.id)}>#{ch.cheque_number || ch.chequeNumber} — {ch.bank} — {formatCurrency(parseFloat(ch.amount), ch.currency)}</SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
                                         )}
                                         <div className="grid grid-cols-3 gap-3">
-                                            <div><Label className="text-xs text-blue-700">Banco *</Label><Input value={editChequeBanco} onChange={e => setEditChequeBanco(e.target.value)} placeholder="Nome do banco" /></div>
-                                            <div><Label className="text-xs text-blue-700">Numero *</Label><Input value={editChequeNumero} onChange={e => setEditChequeNumero(e.target.value)} placeholder="000000" /></div>
-                                            <div><Label className="text-xs text-blue-700">Tipo</Label>
+                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Banco *</label><Input value={editChequeBanco} onChange={e => setEditChequeBanco(e.target.value)} placeholder="Nome do banco" className="bg-white/80 border-blue-200 rounded-lg h-11" /></div>
+                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Numero *</label><Input value={editChequeNumero} onChange={e => setEditChequeNumero(e.target.value)} placeholder="000000" className="bg-white/80 border-blue-200 rounded-lg h-11" /></div>
+                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Tipo</label>
                                                 <Select value={editChequeTipo} onValueChange={setEditChequeTipo}>
-                                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="proprio">Proprio</SelectItem>
-                                                        <SelectItem value="terceiro">Terceiro</SelectItem>
-                                                    </SelectContent>
+                                                    <SelectTrigger className="bg-white/80 border-blue-200 rounded-lg h-11"><SelectValue /></SelectTrigger>
+                                                    <SelectContent><SelectItem value="proprio">Proprio</SelectItem><SelectItem value="terceiro">Terceiro</SelectItem></SelectContent>
                                                 </Select>
                                             </div>
                                         </div>
@@ -1664,57 +1715,52 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                 )}
 
                                 {editPaymentRows.length > 1 && (
-                                    <p className={`text-xs font-medium ${Math.abs(editTotalAllocated - parseFloat(editingHistItem.totalAmount)) < 0.01 ? "text-green-600" : "text-amber-600"}`}>
-                                        Total alocado: {formatCurrency(editTotalAllocated)} / Total da conta: {formatCurrency(parseFloat(editingHistItem.totalAmount))}
-                                    </p>
+                                    <div className={`text-xs font-semibold px-3 py-2 rounded-lg ${Math.abs(editTotalAllocated - parseFloat(editingHistItem.totalAmount)) < 0.01 ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
+                                        Alocado: {formatCurrency(editTotalAllocated)} / Total: {formatCurrency(parseFloat(editingHistItem.totalAmount))}
+                                    </div>
                                 )}
-
-                                {/* Recibo do fornecedor */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Nº Recibo do Fornecedor</Label>
-                                        <Input
-                                            placeholder="Ex: 001-001-0000123"
-                                            value={editReceiptNumber}
-                                            disabled
-                                            className="bg-gray-100 cursor-not-allowed"
-                                        />
-                                        <p className="text-xs text-gray-400 mt-1">Numero do recibo nao pode ser alterado</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-gray-500">Importar Recibo (PDF/imagem)</Label>
-                                        <input
-                                            type="file"
-                                            accept=".pdf,.jpg,.jpeg,.png"
-                                            className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 border border-gray-200 rounded-md px-2 py-1.5 cursor-pointer"
-                                            onChange={e => {
-                                                const file = e.target.files?.[0];
-                                                if (!file) return;
-                                                setEditReceiptFile(file);
-                                                const reader = new FileReader();
-                                                reader.onload = ev => setEditReceiptFileUrl(ev.target?.result as string);
-                                                reader.readAsDataURL(file);
-                                            }}
-                                        />
-                                        {editReceiptFile && <p className="text-xs text-emerald-600 mt-1">✓ {editReceiptFile.name}</p>}
-                                        {!editReceiptFile && editReceiptFileUrl && <p className="text-xs text-emerald-600 mt-1">✓ Recibo existente</p>}
-                                    </div>
-                                </div>
                             </div>
 
-                            {/* Footer fixo */}
-                            <div className="px-6 py-3 border-t bg-gray-50 flex items-center justify-end gap-3">
-                                <Button variant="outline" onClick={() => setEditingHistItem(null)}>Cancelar</Button>
+                            {/* Observações */}
+                            <div>
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Observacoes</label>
+                                <textarea value={editObservation} onChange={e => setEditObservation(e.target.value)}
+                                    placeholder="Observacoes sobre este pagamento..." rows={2}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 resize-none" />
+                            </div>
+
+                            {/* Attach Receipt */}
+                            <div className="relative">
+                                <label className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-gray-200 hover:border-emerald-300 bg-white hover:bg-emerald-50/30 transition-colors cursor-pointer group">
+                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="sr-only" onChange={e => {
+                                        const file = e.target.files?.[0]; if (!file) return;
+                                        setEditReceiptFile(file);
+                                        const reader = new FileReader(); reader.onload = ev => setEditReceiptFileUrl(ev.target?.result as string); reader.readAsDataURL(file);
+                                    }} />
+                                    <Upload className="h-5 w-5 text-gray-300 group-hover:text-emerald-400 transition-colors" />
+                                    {editReceiptFile ? (
+                                        <p className="text-xs font-semibold text-emerald-600">{editReceiptFile.name}</p>
+                                    ) : editReceiptFileUrl ? (
+                                        <p className="text-xs font-semibold text-emerald-600">Recibo existente — clique para substituir</p>
+                                    ) : (
+                                        <><p className="text-xs font-semibold text-gray-500">Clique para enviar ou arraste</p><p className="text-[10px] text-gray-400">PDF, JPG ou PNG</p></>
+                                    )}
+                                </label>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-between pt-2">
+                                <button type="button" className="text-sm font-semibold text-gray-400 hover:text-gray-600 transition-colors cursor-pointer" onClick={() => setEditingHistItem(null)}>Cancelar</button>
                                 <Button
-                                    className="bg-green-600 hover:bg-green-700"
+                                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-blue-200 transition-all hover:shadow-xl hover:shadow-blue-200 text-sm"
                                     disabled={paying || !editAllRowsValid || (editHasChequeMethod && (!editChequeBanco || !editChequeNumero))}
                                     onClick={handleConfirmEdit}
                                 >
-                                    {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckSquare className="mr-2 h-4 w-4" />}
+                                    {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                                     Salvar Alteracoes
                                 </Button>
                             </div>
-                        </>
+                        </div>
                     )}
                 </DialogContent>
             </Dialog>
