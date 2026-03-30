@@ -61,6 +61,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                     t.account_id AS "accountId",
                     t.receipt_id AS "receiptNumber",
                     t.payable_id AS "payableId",
+                    t.payment_batch_id AS "paymentBatchId",
                     t.transaction_date AS "paidDate",
                     t.description,
                     ap.supplier,
@@ -77,7 +78,34 @@ export function registerFarmFinancialRoutes(app: Express) {
                   AND t.type = 'saida'
                 ORDER BY t.transaction_date DESC
             `);
-            res.json((result as any).rows || result);
+            const rows = (result as any).rows || result;
+
+            // Enrich batch payments: fetch all AP items for each batch
+            const batchIds = [...new Set(rows.filter((r: any) => r.paymentBatchId).map((r: any) => r.paymentBatchId))];
+            const batchItemsMap: Record<string, any[]> = {};
+            for (const batchId of batchIds) {
+                const batchItems = await db.execute(sqlFn`
+                    SELECT bi.payable_id AS "payableId", bi.amount,
+                           ap.supplier, ap.description, ap.total_amount AS "totalAmount",
+                           ap.paid_amount AS "paidAmount", ap.status,
+                           ap.installment_number AS "installmentNumber",
+                           ap.total_installments AS "totalInstallments"
+                    FROM farm_payment_batch_items bi
+                    LEFT JOIN farm_accounts_payable ap ON ap.id = bi.payable_id
+                    WHERE bi.batch_id = ${batchId}
+                    ORDER BY bi.amount ASC
+                `);
+                batchItemsMap[batchId as string] = ((batchItems as any).rows || batchItems) as any[];
+            }
+
+            // Attach batch items to each row
+            for (const row of rows) {
+                if (row.paymentBatchId && batchItemsMap[row.paymentBatchId]) {
+                    row.batchItems = batchItemsMap[row.paymentBatchId];
+                }
+            }
+
+            res.json(rows);
         } catch (error) {
             console.error("[PAYMENT_HISTORY_GET]", error);
             res.status(500).json({ error: "Failed to get payment history" });
@@ -382,6 +410,184 @@ export function registerFarmFinancialRoutes(app: Express) {
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_PAY]", error);
             res.status(500).json({ error: "Failed to pay account" });
+        }
+    });
+
+    // Batch pay: pay multiple AP records in a single operation with sequential allocation
+    app.post("/api/farm/accounts-payable/batch-pay", requireFarmer, async (req, res) => {
+        try {
+            const { farmAccountsPayable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
+            const { eq, and } = await import("drizzle-orm");
+            const { sql: sqlFn } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const { payableIds, accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl, cheque } = req.body;
+            if (!payableIds || !Array.isArray(payableIds) || payableIds.length === 0) {
+                return res.status(400).json({ error: "payableIds is required" });
+            }
+
+            const totalToPay = parseFloat(amount);
+            if (!totalToPay || totalToPay <= 0) return res.status(400).json({ error: "Invalid amount" });
+
+            // Fetch all selected AP records
+            const apRecords: any[] = [];
+            for (const id of payableIds) {
+                const [ap] = await db.select().from(farmAccountsPayable).where(
+                    and(eq(farmAccountsPayable.id, id), eq(farmAccountsPayable.farmerId, farmerId))
+                );
+                if (ap) apRecords.push(ap);
+            }
+            if (apRecords.length === 0) return res.status(404).json({ error: "No valid records found" });
+
+            // Sort by remaining balance ascending (pay smallest first)
+            apRecords.sort((a, b) => {
+                const remA = parseFloat(a.totalAmount) - parseFloat(a.paidAmount || 0);
+                const remB = parseFloat(b.totalAmount) - parseFloat(b.paidAmount || 0);
+                return remA - remB;
+            });
+
+            // Generate batch ID for grouping
+            const batchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const supplier = apRecords[0].supplier || "Fornecedor";
+            const currency = apRecords[0].currency || "USD";
+
+            // Sequential allocation: fully pay as many as possible, only last one partial
+            let remaining = totalToPay;
+            const allocations: { ap: any; payAmount: number }[] = [];
+            for (const ap of apRecords) {
+                if (remaining <= 0) break;
+                const itemRemaining = parseFloat(ap.totalAmount) - parseFloat(ap.paidAmount || 0);
+                const payThisItem = Math.min(itemRemaining, remaining);
+                allocations.push({ ap, payAmount: payThisItem });
+                remaining -= payThisItem;
+            }
+
+            // Create ONE cash transaction for the total amount
+            const txDesc = `Pgto: ${supplier} (${allocations.length} titulo${allocations.length > 1 ? 's' : ''})`;
+            let firstTxId: string | null = null;
+            const allTxIds: string[] = [];
+
+            if (accountRows && Array.isArray(accountRows) && accountRows.length > 1) {
+                for (const row of accountRows) {
+                    const rowAmount = parseFloat(row.amount);
+                    if (!rowAmount || !row.accountId) continue;
+                    const [rowTx] = await db.insert(farmCashTransactions).values({
+                        farmerId,
+                        accountId: row.accountId,
+                        type: "saida",
+                        amount: String(rowAmount),
+                        currency,
+                        category: "pagamento_titulo",
+                        description: txDesc,
+                        paymentMethod: row.paymentMethod || paymentMethod || "transferencia",
+                        referenceType: "pagamento_conta",
+                        transactionDate: new Date(),
+                    }).returning();
+                    if (!firstTxId) firstTxId = rowTx.id;
+                    allTxIds.push(rowTx.id);
+                    await db.update(farmCashAccounts)
+                        .set({ currentBalance: sqlFn`current_balance - ${rowAmount}` })
+                        .where(and(eq(farmCashAccounts.id, row.accountId), eq(farmCashAccounts.farmerId, farmerId)));
+                }
+            } else {
+                const [tx] = await db.insert(farmCashTransactions).values({
+                    farmerId,
+                    accountId,
+                    type: "saida",
+                    amount: String(totalToPay),
+                    currency,
+                    category: "pagamento_titulo",
+                    description: txDesc,
+                    paymentMethod: paymentMethod || "transferencia",
+                    referenceType: "pagamento_conta",
+                    transactionDate: new Date(),
+                }).returning();
+                firstTxId = tx.id;
+                allTxIds.push(tx.id);
+                await db.update(farmCashAccounts)
+                    .set({ currentBalance: sqlFn`current_balance - ${totalToPay}` })
+                    .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
+            }
+
+            // Set batch_id on all transactions
+            for (const txId of allTxIds) {
+                await db.execute(sqlFn`UPDATE farm_cash_transactions SET payment_batch_id = ${batchId} WHERE id = ${txId}`);
+                if (receiptNumber) {
+                    await db.execute(sqlFn`UPDATE farm_cash_transactions SET receipt_id = ${receiptNumber} WHERE id = ${txId}`);
+                }
+            }
+
+            // Update each AP record sequentially
+            const results: any[] = [];
+            for (const { ap, payAmount } of allocations) {
+                const newPaidTotal = parseFloat(ap.paidAmount || 0) + payAmount;
+                const totalDue = parseFloat(ap.totalAmount);
+                const newStatus = newPaidTotal >= totalDue ? "pago" : "parcial";
+
+                const updatePayload: any = {
+                    paidAmount: String(newPaidTotal),
+                    paidDate: new Date(),
+                    status: newStatus,
+                    cashTransactionId: firstTxId,
+                };
+                if (receiptNumber) updatePayload.receiptNumber = receiptNumber;
+                if (receiptFileUrl) updatePayload.receiptFileUrl = receiptFileUrl;
+                await db.update(farmAccountsPayable).set(updatePayload).where(eq(farmAccountsPayable.id, ap.id));
+
+                // Link transaction to AP
+                for (const txId of allTxIds) {
+                    // Use a junction: store batch_id + payable link
+                    await db.execute(sqlFn`
+                        INSERT INTO farm_payment_batch_items (batch_id, payable_id, amount, farmer_id)
+                        VALUES (${batchId}, ${ap.id}, ${String(payAmount)}, ${farmerId})
+                        ON CONFLICT DO NOTHING
+                    `);
+                }
+
+                results.push({ id: ap.id, supplier: ap.supplier, paid: payAmount, status: newStatus });
+            }
+
+            // Set payable_id on transactions (first AP for backward compat)
+            for (const txId of allTxIds) {
+                await db.execute(sqlFn`UPDATE farm_cash_transactions SET payable_id = ${allocations[0].ap.id} WHERE id = ${txId}`);
+            }
+
+            // Create cheque if applicable
+            if (cheque && (cheque.bank || cheque.banco)) {
+                try {
+                    const existing = await db.execute(sqlFn`SELECT id FROM farm_cheques WHERE cash_transaction_id = ${firstTxId} LIMIT 1`);
+                    if (((existing as any).rows ?? existing).length === 0) {
+                        const chequeAccountId = (accountRows && accountRows.length > 1)
+                            ? (accountRows.find((r: any) => r.paymentMethod === "cheque")?.accountId || null)
+                            : (accountId || null);
+                        const nowCh = new Date().toISOString();
+                        const dueCh = cheque.dueDate ? new Date(cheque.dueDate).toISOString() : nowCh;
+                        await db.execute(sqlFn`
+                            INSERT INTO farm_cheques
+                                (farmer_id, account_id, type, cheque_number, bank, holder, amount, currency,
+                                 issue_date, due_date, status, cash_transaction_id)
+                            VALUES
+                                (${farmerId}, ${chequeAccountId}, ${'proprio'},
+                                 ${String(cheque.chequeNumber || cheque.numero || '')},
+                                 ${String(cheque.bank || cheque.banco || '')},
+                                 ${String(cheque.holder || cheque.titular || supplier || '')},
+                                 ${String(totalToPay)}, ${currency},
+                                 ${nowCh}::timestamp, ${dueCh}::timestamp,
+                                 ${'emitido'}, ${firstTxId})
+                        `);
+                    }
+                } catch (chErr) {
+                    console.error("[BATCH_PAY_CHEQUE]", chErr);
+                }
+            }
+
+            console.log(`[BATCH_PAY] batchId=${batchId} supplier=${supplier} total=${totalToPay} items=${allocations.length} results=${JSON.stringify(results)}`);
+            res.json({ success: true, batchId, results });
+        } catch (error) {
+            console.error("[BATCH_PAY]", error);
+            res.status(500).json({ error: "Failed to process batch payment" });
         }
     });
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency } from "@/lib/format-currency";
@@ -562,6 +562,7 @@ export default function AccountsPayable() {
                             seasons={seasons as any[]}
                             onPay={(id, data) => pay.mutate({ id, data })}
                             paying={pay.isPending}
+                            queryClient={queryClient}
                         />
                     </TabsContent>
 
@@ -598,9 +599,10 @@ export default function AccountsPayable() {
 }
 
 // ─── Pagamento Tab ────────────────────────────────────────────────────────────
-function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
-    items: any[]; accounts: any[]; seasons: any[]; onPay: (id: string, data: any) => void; paying: boolean;
+function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: {
+    items: any[]; accounts: any[]; seasons: any[]; onPay: (id: string, data: any) => void; paying: boolean; queryClient: any;
 }) {
+    const { toast } = useToast();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterDateFrom, setFilterDateFrom] = useState("");
     const [filterDateTo, setFilterDateTo] = useState("");
@@ -684,30 +686,22 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
         setPayModalOpen(true);
     }
 
+    const [batchPaying, setBatchPaying] = useState(false);
+
     async function handleConfirmPayment() {
         if (checkedIds.size === 0 || !allRowsValid) return;
 
-        // Total the user actually wants to pay across all selected items
-        const totalToPay = totalAllocated;
-        // Sum of remaining balances of all selected items
-        const totalRemaining = checkedItems.reduce((s: number, i: any) =>
-            s + parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0), 0);
-
-        for (const item of checkedItems) {
-            const itemRemaining = parseFloat(item.totalAmount) - parseFloat(item.paidAmount || 0);
-            // Proportional share of totalToPay for this item, capped at item's remaining balance
-            const proportion = totalRemaining > 0 ? itemRemaining / totalRemaining : 0;
-            const itemPayAmount = Math.min(itemRemaining, totalToPay * proportion);
-
+        // Single invoice: use the original onPay (backward compat)
+        if (checkedItems.length === 1) {
+            const item = checkedItems[0];
             const payload: any = {
                 accountId: paymentRows[0].accountId,
-                amount: itemPayAmount.toFixed(2),
+                amount: totalAllocated.toFixed(2),
                 paymentMethod: paymentRows[0].paymentMethod,
                 supplier: item.supplier,
-                // For multi-account split, distribute each item's share proportionally across accounts
                 accountRows: paymentRows.length > 1 ? paymentRows.map(r => ({
                     accountId: r.accountId,
-                    amount: (itemPayAmount * (parseFloat(r.amount) / totalToPay)).toFixed(2),
+                    amount: r.amount,
                 })) : undefined,
             };
             if (hasChequeMethod && chequeBanco && chequeNumero) {
@@ -716,9 +710,52 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
             if (receiptNumber) payload.receiptNumber = receiptNumber;
             if (receiptFileUrl) payload.receiptFileUrl = receiptFileUrl;
             onPay(item.id, payload);
+            setCheckedIds(new Set());
+            setPayModalOpen(false);
+            return;
         }
-        setCheckedIds(new Set());
-        setPayModalOpen(false);
+
+        // Multiple invoices: use batch-pay (sequential allocation, single receipt)
+        setBatchPaying(true);
+        try {
+            const payload: any = {
+                payableIds: checkedItems.map((i: any) => i.id),
+                accountId: paymentRows[0].accountId,
+                amount: totalAllocated.toFixed(2),
+                paymentMethod: paymentRows[0].paymentMethod,
+                accountRows: paymentRows.length > 1 ? paymentRows.map(r => ({
+                    accountId: r.accountId,
+                    amount: r.amount,
+                    paymentMethod: r.paymentMethod,
+                })) : undefined,
+            };
+            if (hasChequeMethod && chequeBanco && chequeNumero) {
+                payload.cheque = { banco: chequeBanco, numero: chequeNumero, tipo: chequeTipo };
+            }
+            if (receiptNumber) payload.receiptNumber = receiptNumber;
+            if (receiptFileUrl) payload.receiptFileUrl = receiptFileUrl;
+
+            const res = await fetch("/api/farm/accounts-payable/batch-pay", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("Batch pay failed");
+
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable/payment-history"] });
+            toast({ title: `Pagamento registrado para ${checkedItems.length} titulos!` });
+        } catch (err) {
+            toast({ title: "Erro ao processar pagamento", variant: "destructive" });
+        } finally {
+            setBatchPaying(false);
+            setCheckedIds(new Set());
+            setPayModalOpen(false);
+        }
     }
 
     const isOverdue = (item: any) => {
@@ -1093,10 +1130,10 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying }: {
                                     </button>
                                     <Button
                                         className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-red-200 transition-all hover:shadow-xl hover:shadow-red-200 text-sm"
-                                        disabled={paying || !allRowsValid || checkedIds.size === 0 || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
+                                        disabled={paying || batchPaying || !allRowsValid || checkedIds.size === 0 || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
                                         onClick={handleConfirmPayment}
                                     >
-                                        {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                                        {(paying || batchPaying) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                                         Confirmar Pagamento
                                     </Button>
                                 </div>
@@ -1302,20 +1339,42 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
         !searchTerm || i.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) || i.apDescription?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Each payment is its own entry (no grouping that merges partial + final)
-    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string }[] = [];
+    // Group payments: batch payments are grouped by paymentBatchId, individual payments stay separate
+    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string; batchItems?: any[]; isBatch: boolean }[] = [];
+    const seenBatchIds = new Set<string>();
     for (const item of filteredPaid) {
         const dateStr = item.paidDate ? new Date(item.paidDate).toLocaleDateString("pt-BR") : "—";
-        const key = item.id; // unique per payment transaction
-        groups.push({
-            key,
-            date: dateStr,
-            supplier: item.supplier || "—",
-            items: [item],
-            total: parseFloat(item.amount || 0),
-            currency: item.currency || "USD",
-            receiptNumber: item.receiptNumber || "",
-        });
+
+        // If this is a batch payment, group by batchId (skip duplicates from multi-account)
+        if (item.paymentBatchId) {
+            if (seenBatchIds.has(item.paymentBatchId)) continue;
+            seenBatchIds.add(item.paymentBatchId);
+            // Sum total from all transactions with this batchId
+            const batchTxs = filteredPaid.filter((p: any) => p.paymentBatchId === item.paymentBatchId);
+            const batchTotal = batchTxs.reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+            groups.push({
+                key: item.paymentBatchId,
+                date: dateStr,
+                supplier: item.supplier || "—",
+                items: batchTxs,
+                total: batchTotal,
+                currency: item.currency || "USD",
+                receiptNumber: item.receiptNumber || "",
+                batchItems: item.batchItems || [],
+                isBatch: true,
+            });
+        } else {
+            groups.push({
+                key: item.id,
+                date: dateStr,
+                supplier: item.supplier || "—",
+                items: [item],
+                total: parseFloat(item.amount || 0),
+                currency: item.currency || "USD",
+                receiptNumber: item.receiptNumber || "",
+                isBatch: false,
+            });
+        }
     }
 
     const toggleGroup = (key: string) => setExpandedGroups(prev => {
@@ -1384,20 +1443,39 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                             <tbody className="divide-y divide-gray-100">
                                 {groups.map(group => {
                                     const item = group.items[0];
+                                    const isExpanded = expandedGroups.has(group.key);
+                                    const hasBatchDetails = group.isBatch && group.batchItems && group.batchItems.length > 0;
                                     return (
-                                        <tr key={group.key} className="hover:bg-emerald-50/20 transition-colors">
+                                        <Fragment key={group.key}>
+                                        <tr className={`hover:bg-emerald-50/20 transition-colors ${hasBatchDetails ? 'cursor-pointer' : ''}`}
+                                            onClick={() => hasBatchDetails && toggleGroup(group.key)}>
                                             <td className="px-5 py-3.5">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`h-8 w-8 rounded-full ${avatarColor(group.supplier)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
                                                         {(group.supplier || "?")[0].toUpperCase()}
                                                     </div>
-                                                    <span className="font-semibold text-gray-900 truncate max-w-[160px]">{group.supplier}</span>
+                                                    <div>
+                                                        <span className="font-semibold text-gray-900 truncate max-w-[160px] block">{group.supplier}</span>
+                                                        {hasBatchDetails && (
+                                                            <span className="text-[10px] text-blue-600 font-medium">
+                                                                {isExpanded ? "▼" : "▶"} {group.batchItems!.length} titulo{group.batchItems!.length > 1 ? "s" : ""}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3.5 text-gray-500 max-w-[180px] truncate">{item?.apDescription || "--"}</td>
+                                            <td className="px-4 py-3.5 text-gray-500 max-w-[180px] truncate">
+                                                {hasBatchDetails
+                                                    ? `Pgto agrupado (${group.batchItems!.length} titulos)`
+                                                    : item?.apDescription || "--"}
+                                            </td>
                                             <td className="px-4 py-3.5 text-sm text-gray-700">{group.date}</td>
                                             <td className="px-3 py-3.5 text-center">
-                                                {item?.installmentNumber ? (
+                                                {hasBatchDetails ? (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-medium">
+                                                        {group.batchItems!.length}x
+                                                    </span>
+                                                ) : item?.installmentNumber ? (
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[11px] font-medium">
                                                         {item.installmentNumber}/{item.totalInstallments}
                                                     </span>
@@ -1423,12 +1501,41 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => openEditModal(item)} aria-label="Editar">
                                                         <Pencil className="h-3.5 w-3.5" />
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" disabled={reversing} onClick={() => onReverse(item.payableId || item.id)} aria-label="Excluir">
+                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" disabled={reversing}
+                                                        onClick={(e) => { e.stopPropagation(); onReverse(item.payableId || item.id); }} aria-label="Excluir">
                                                         <Trash2 className="h-3.5 w-3.5" />
                                                     </Button>
                                                 </div>
                                             </td>
                                         </tr>
+                                        {/* Expanded batch detail rows */}
+                                        {isExpanded && hasBatchDetails && group.batchItems!.map((bi: any, idx: number) => (
+                                            <tr key={`${group.key}-${idx}`} className="bg-blue-50/40">
+                                                <td className="pl-16 pr-5 py-2">
+                                                    <span className="text-xs text-gray-600">{bi.supplier || group.supplier}</span>
+                                                </td>
+                                                <td className="px-4 py-2 text-xs text-gray-500">{bi.description || "--"}</td>
+                                                <td className="px-4 py-2 text-xs text-gray-400">--</td>
+                                                <td className="px-3 py-2 text-center">
+                                                    {bi.installmentNumber ? (
+                                                        <span className="text-[10px] text-gray-500">{bi.installmentNumber}/{bi.totalInstallments}</span>
+                                                    ) : <span className="text-gray-300 text-[10px]">--</span>}
+                                                </td>
+                                                <td className="px-3 py-2 text-center">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                                        bi.status === "pago" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                                    }`}>
+                                                        {bi.status === "pago" ? "Pago" : "Parcial"}
+                                                    </span>
+                                                </td>
+                                                <td className="px-3 py-2"></td>
+                                                <td className="px-5 py-2 text-right text-xs font-semibold text-green-600">
+                                                    {formatCurrency(parseFloat(bi.amount || 0), group.currency)}
+                                                </td>
+                                                <td className="px-5 py-2"></td>
+                                            </tr>
+                                        ))}
+                                        </Fragment>
                                     );
                                 })}
                             </tbody>

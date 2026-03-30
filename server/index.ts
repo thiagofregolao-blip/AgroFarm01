@@ -385,6 +385,16 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS supplier_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS transfer_date TIMESTAMP`);
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS receipt_number TEXT`);
+    await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS payment_batch_id VARCHAR`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS farm_payment_batch_items (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        batch_id VARCHAR NOT NULL,
+        payable_id VARCHAR NOT NULL,
+        amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+        farmer_id VARCHAR NOT NULL,
+        created_at TIMESTAMP DEFAULT now(),
+        UNIQUE(batch_id, payable_id)
+    )`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS warehouse_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS skip_stock_entry BOOLEAN DEFAULT false`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS file_mime_type TEXT`);
