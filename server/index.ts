@@ -383,6 +383,7 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS supplier_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS supplier_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS transfer_date TIMESTAMP`);
+    await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS receipt_number TEXT`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS warehouse_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS skip_stock_entry BOOLEAN DEFAULT false`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS file_mime_type TEXT`);
@@ -780,6 +781,60 @@ app.use((req, res, next) => {
     log("✅ Migration: farm_activity_logs table + indexes ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration farm_activity_logs: ${(migErr as Error).message}`);
+  }
+
+  // Inline migration: grain contracts + deliveries
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_grain_contracts (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        season_id VARCHAR,
+        buyer TEXT NOT NULL,
+        crop TEXT NOT NULL,
+        contract_number TEXT,
+        contract_type TEXT NOT NULL DEFAULT 'spot',
+        total_quantity NUMERIC(15,2) NOT NULL,
+        delivered_quantity NUMERIC(15,2) NOT NULL DEFAULT 0,
+        price_per_ton NUMERIC(15,2) NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        total_value NUMERIC(15,2) NOT NULL,
+        delivery_start_date TIMESTAMP,
+        delivery_end_date TIMESTAMP,
+        status TEXT NOT NULL DEFAULT 'aberto',
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_grain_deliveries (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        contract_id VARCHAR NOT NULL REFERENCES farm_grain_contracts(id) ON DELETE CASCADE,
+        romaneio_id VARCHAR,
+        quantity NUMERIC(15,2) NOT NULL,
+        gross_weight NUMERIC(15,2),
+        tare_weight NUMERIC(15,2),
+        net_weight NUMERIC(15,2),
+        moisture NUMERIC(5,2),
+        impurity NUMERIC(5,2),
+        final_weight NUMERIC(15,2),
+        truck_plate TEXT,
+        driver_name TEXT,
+        delivery_date TIMESTAMP NOT NULL DEFAULT now(),
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+
+    log("✅ Migration: farm_grain_contracts + farm_grain_deliveries tables ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration grain_contracts/deliveries: ${(migErr as Error).message}`);
   }
 
   // Register activity log middleware before routes

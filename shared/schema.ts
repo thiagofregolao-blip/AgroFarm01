@@ -1289,6 +1289,7 @@ export const farmCashTransactions = pgTable("farm_cash_transactions", {
   paymentMethod: text("payment_method"), // efetivo, transferencia, cheque, cartao, pix
   expenseId: varchar("expense_id").references(() => farmExpenses.id),
   invoiceId: varchar("invoice_id").references(() => farmInvoices.id),
+  receiptNumber: text("receipt_number"),
   referenceType: text("reference_type").notNull().default("manual"), // manual, whatsapp, aprovacao_despesa, aprovacao_fatura
   transactionDate: timestamp("transaction_date").notNull().default(sql`now()`),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
