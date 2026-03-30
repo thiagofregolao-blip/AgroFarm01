@@ -164,6 +164,7 @@ export default function FarmCashFlow() {
         if (entries.length === 0) return "$ 0";
         return entries.map(([cur, val]) => {
             if (cur === "PYG") return `₲ ${Math.round(val).toLocaleString("es-PY")}`;
+            if (cur === "PYG") return `Gs. ${Math.round(val).toLocaleString("es-PY")}`;
             return `$ ${val.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
         }).join(" | ");
     };
@@ -321,7 +322,7 @@ export default function FarmCashFlow() {
                                     <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Saldo Liquido</span>
                                 </div>
                                 <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                                    {kpiTotalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {fmtDual(kpiBalanceByCurrency)}
                                 </p>
                                 <p className="text-xs text-gray-400 mt-1">consolidado</p>
                             </div>
@@ -475,14 +476,14 @@ export default function FarmCashFlow() {
                                                                 <div
                                                                     className="w-full bg-emerald-500 rounded-t-md transition-all duration-500"
                                                                     style={{ height: `${Math.max(2, (m.entradas / flowChartMax) * 180)}px` }}
-                                                                    title={`Entradas: ${m.entradas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                                                                    title={`Entradas: ${formatCurrency(m.entradas, currencyFilter !== "todos" ? currencyFilter : "USD")}`}
                                                                 />
                                                             </div>
                                                             <div className="flex flex-col items-center justify-end h-full flex-1 max-w-[28px]">
                                                                 <div
                                                                     className="w-full bg-gray-300 rounded-t-md transition-all duration-500"
                                                                     style={{ height: `${Math.max(2, (m.saidas / flowChartMax) * 180)}px` }}
-                                                                    title={`Saidas: ${m.saidas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                                                                    title={`Saidas: ${formatCurrency(m.saidas, currencyFilter !== "todos" ? currencyFilter : "USD")}`}
                                                                 />
                                                             </div>
                                                         </div>
@@ -509,7 +510,7 @@ export default function FarmCashFlow() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div className="bg-white p-6 rounded-xl shadow-sm">
                                         <div className="flex items-center gap-2 mb-2"><Activity className="h-4 w-4 text-emerald-600" /><p className="text-xs text-gray-500 font-medium">Saldo Total Atual</p></div>
-                                        <p className="text-2xl font-extrabold text-gray-900">{formatCurrency(totalSaldo, "USD")}</p>
+                                        <p className="text-lg font-extrabold text-gray-900">{fmtDual(saldoByCurrency)}</p>
                                     </div>
                                     <div className="bg-white p-6 rounded-xl shadow-sm">
                                         <div className="flex items-center gap-2 mb-2">{upcomingAP.total > 0 ? <AlertTriangle className="h-4 w-4 text-red-500" /> : <DollarSign className="h-4 w-4 text-gray-400" />}<p className="text-xs text-gray-500 font-medium">A Pagar (30 dias)</p></div>
@@ -801,7 +802,7 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                                                 ) : <span className="text-gray-300">--</span>}
                                             </td>
                                             <td className={`px-5 py-3.5 text-right font-mono font-bold ${isEntrada ? "text-emerald-600" : "text-red-500"}`}>
-                                                {isEntrada ? "+" : "-"}{parseFloat(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                {isEntrada ? "+" : "-"}{formatCurrency(parseFloat(t.amount), t.currency || "USD")}
                                             </td>
                                             <td className="px-5 py-3.5 text-center">
                                                 <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
@@ -857,8 +858,8 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                             </button>
                         </div>
                         <p className="text-xs text-gray-400">
-                            Entradas: <strong className="text-emerald-600">{filtered.filter(t => t.type === "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong>
-                            {" "} - Saidas: <strong className="text-red-500">{filtered.filter(t => t.type !== "entrada").reduce((s: number, t: any) => s + parseFloat(t.amount), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</strong>
+                            Entradas: <strong className="text-emerald-600">{(() => { const g: Record<string, number> = {}; filtered.filter((t: any) => t.type === "entrada").forEach((t: any) => { const c = t.currency || "USD"; g[c] = (g[c] || 0) + parseFloat(t.amount || 0); }); return Object.entries(g).map(([c, v]) => formatCurrency(v, c)).join(" | ") || "$ 0"; })()}</strong>
+                            {" "} - Saidas: <strong className="text-red-500">{(() => { const g: Record<string, number> = {}; filtered.filter((t: any) => t.type !== "entrada").forEach((t: any) => { const c = t.currency || "USD"; g[c] = (g[c] || 0) + parseFloat(t.amount || 0); }); return Object.entries(g).map(([c, v]) => formatCurrency(v, c)).join(" | ") || "$ 0"; })()}</strong>
                         </p>
                     </div>
                 </>

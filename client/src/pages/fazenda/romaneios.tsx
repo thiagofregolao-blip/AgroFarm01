@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency } from "@/lib/format-currency";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -160,7 +161,7 @@ export default function FarmRomaneios() {
                     <div>
                         <h1 className="text-2xl font-bold text-emerald-800">📦 Romaneios</h1>
                         <p className="text-emerald-600 text-sm">
-                            Total: <strong>{(totalWeight / 1000).toFixed(2)} ton</strong> • Valor: <strong>$ {totalValue.toLocaleString("en", { minimumFractionDigits: 2 })}</strong>
+                            Total: <strong>{(totalWeight / 1000).toFixed(2)} ton</strong> • Valor: <strong>{formatCurrency(totalValue, "USD")}</strong>
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -326,7 +327,7 @@ export default function FarmRomaneios() {
                                             <td className="text-right p-3 font-mono whitespace-nowrap">{parseFloat(r.netWeight).toLocaleString()} kg</td>
                                             <td className="text-right p-3 font-mono font-semibold whitespace-nowrap">{parseFloat(r.finalWeight).toLocaleString()} kg</td>
                                             <td className="text-right p-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
-                                                {r.totalValue ? `$ ${parseFloat(r.totalValue).toFixed(2)}` : "—"}
+                                                {r.totalValue ? formatCurrency(parseFloat(r.totalValue), r.currency || "USD") : "—"}
                                             </td>
                                             <td className="p-3 text-center">
                                                 <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 ${

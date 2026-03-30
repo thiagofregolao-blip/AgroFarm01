@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency } from "@/lib/format-currency";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -609,7 +610,7 @@ export default function FarmInvoices() {
                                 <DollarSign className="h-4 w-4 text-emerald-700" />
                                 <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Valor Total</span>
                             </div>
-                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>$ {kpiData.totalAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>{formatCurrency(kpiData.totalAmount, "USD")}</p>
                             <p className="text-xs text-gray-400 mt-1">auditado</p>
                         </div>
                         <div className="bg-white rounded-xl shadow-sm border-l-4 border-red-500 p-5">
@@ -770,7 +771,7 @@ export default function FarmInvoices() {
                                             <SelectContent>
                                                 {(invoices as any[]).filter((i: any) => i.status === "pending" || i.status === "pendente").map((inv: any) => (
                                                     <SelectItem key={inv.id} value={String(inv.id)}>
-                                                        #{inv.invoiceNumber || "S/N"} - {inv.supplier || "?"} - ${parseFloat(inv.totalAmount || "0").toFixed(2)}
+                                                        #{inv.invoiceNumber || "S/N"} - {inv.supplier || "?"} - {formatCurrency(parseFloat(inv.totalAmount || "0"), inv.currency || "USD")}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -1217,14 +1218,14 @@ export default function FarmInvoices() {
                                                                             <td className="text-right p-2 font-mono">
                                                                                 {pkgSize ? (
                                                                                     <div className="flex flex-col items-end gap-0.5">
-                                                                                        <span className="text-emerald-700 font-semibold">${realPrice.toFixed(2)}</span>
-                                                                                        <span className="text-[10px] text-gray-400 line-through">${price.toFixed(2)}/emb</span>
+                                                                                        <span className="text-emerald-700 font-semibold">{formatCurrency(realPrice, invoiceDetail?.currency || "USD")}</span>
+                                                                                        <span className="text-[10px] text-gray-400 line-through">{formatCurrency(price, invoiceDetail?.currency || "USD")}/emb</span>
                                                                                     </div>
                                                                                 ) : (
-                                                                                    <span>${price.toFixed(2)}</span>
+                                                                                    <span>{formatCurrency(price, invoiceDetail?.currency || "USD")}</span>
                                                                                 )}
                                                                             </td>
-                                                                            <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                                            <td className="text-right p-2 font-mono font-semibold">{formatCurrency(parseFloat(item.totalPrice), invoiceDetail?.currency || "USD")}</td>
                                                                         </>
                                                                     );
                                                                 })()}
@@ -1303,7 +1304,7 @@ export default function FarmInvoices() {
                                                                 </div>
                                                                 <span className={`font-medium flex-1 truncate text-left ${isSkipped ? "line-through text-gray-400" : ""}`}>{item.productName}</span>
                                                                 <span className={`flex-shrink-0 ${isSkipped ? "text-gray-400 line-through" : "text-emerald-700"}`}>
-                                                                    {qty} × {pkgSize} = {(qty * pkgSize).toFixed(0)} | ${(price / pkgSize).toFixed(2)}/un
+                                                                    {qty} × {pkgSize} = {(qty * pkgSize).toFixed(0)} | {formatCurrency(price / pkgSize, invoiceDetail?.currency || "USD")}/un
                                                                 </span>
                                                             </button>
                                                         );
@@ -1578,7 +1579,7 @@ export default function FarmInvoices() {
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-black text-gray-900 whitespace-nowrap">
-                                                        $ {parseFloat(inv.totalAmount || "0").toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        {formatCurrency(parseFloat(inv.totalAmount || "0"), inv.currency || "USD")}
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
                                                         <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1694,7 +1695,7 @@ export default function FarmInvoices() {
                                                     Conciliada com Fatura #{invoiceDetail.linkedInvoice.invoiceNumber || invoiceDetail.linkedInvoice.id.slice(0, 8)}
                                                 </span>
                                                 <span className="text-sm text-gray-600">
-                                                    - Valor: ${parseFloat(invoiceDetail.linkedInvoice.totalAmount || 0).toFixed(2)}
+                                                    - Valor: {formatCurrency(parseFloat(invoiceDetail.linkedInvoice.totalAmount || 0), invoiceDetail?.currency || "USD")}
                                                 </span>
                                                 <Badge className="bg-blue-100 text-blue-700 text-xs">Precos atualizados</Badge>
                                             </div>
@@ -1991,7 +1992,7 @@ export default function FarmInvoices() {
                                                                 {cleanDescription(e.description)}
                                                             </td>
                                                             <td className="text-right p-3 font-mono font-semibold">
-                                                                ${parseFloat(e.amount).toFixed(2)}
+                                                                {formatCurrency(parseFloat(e.amount), e.currency || "USD")}
                                                             </td>
                                                             <td className="text-right p-3">
                                                                 <div className="flex items-center justify-end gap-2">
@@ -2072,7 +2073,7 @@ export default function FarmInvoices() {
                                                                     {cleanDescription(e.description)}
                                                                 </td>
                                                                 <td className="text-right p-3 font-mono font-semibold text-gray-700">
-                                                                    ${parseFloat(e.amount).toFixed(2)}
+                                                                    {formatCurrency(parseFloat(e.amount), e.currency || "USD")}
                                                                 </td>
                                                                 <td className="text-center p-3">
                                                                     <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
@@ -2148,7 +2149,7 @@ export default function FarmInvoices() {
                                                                 {exp.status === "confirmed" ? "Confirmada" : "Pendente"}
                                                             </Badge>
                                                         </td>
-                                                        <td className="text-right p-3 font-mono font-bold text-emerald-700">$ {parseFloat(exp.amount || "0").toFixed(2)}</td>
+                                                        <td className="text-right p-3 font-mono font-bold text-emerald-700">{formatCurrency(parseFloat(exp.amount || "0"), exp.currency || "USD")}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2331,7 +2332,7 @@ export default function FarmInvoices() {
                                     </div>
                                     <div>
                                         <span className="text-gray-500">Valor Total:</span>
-                                        <p className="font-semibold text-lg">${parseFloat(expenseDetail.amount).toFixed(2)}</p>
+                                        <p className="font-semibold text-lg">{formatCurrency(parseFloat(expenseDetail.amount), expenseDetail.currency || "USD")}</p>
                                     </div>
                                     <div>
                                         <span className="text-gray-500">Data:</span>
@@ -2403,8 +2404,8 @@ export default function FarmInvoices() {
                                                             <td className="p-2 font-medium">{item.itemName}</td>
                                                             <td className="text-center p-2">{parseFloat(item.quantity)}</td>
                                                             <td className="text-center p-2 text-gray-500">{item.unit}</td>
-                                                            <td className="text-right p-2 font-mono">${parseFloat(item.unitPrice).toFixed(2)}</td>
-                                                            <td className="text-right p-2 font-mono font-semibold">${parseFloat(item.totalPrice).toFixed(2)}</td>
+                                                            <td className="text-right p-2 font-mono">{formatCurrency(parseFloat(item.unitPrice), expenseDetail?.currency || "USD")}</td>
+                                                            <td className="text-right p-2 font-mono font-semibold">{formatCurrency(parseFloat(item.totalPrice), expenseDetail?.currency || "USD")}</td>
                                                             {expenseDetail.status === "pending" && (
                                                                 <td className="text-center p-2">
                                                                     <button className="p-1 rounded hover:bg-amber-100" title="Editar item"

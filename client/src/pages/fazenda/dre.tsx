@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency } from "@/lib/format-currency";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +15,7 @@ export default function DrePage() {
         enabled: !!user,
     });
 
-    const fmt = (v: number) => `$ ${Math.abs(v).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmt = (v: number) => formatCurrency(Math.abs(v), "USD");
     const color = (v: number) => v >= 0 ? "text-green-700" : "text-red-600";
 
     return (
@@ -88,7 +89,7 @@ function Row({ label, value, positive }: { label: string; value: number; positiv
         <tr className="border-t border-gray-100">
             <td className="p-4 text-gray-700">{label}</td>
             <td className={`text-right p-4 font-mono ${positive ? "text-green-700" : "text-red-600"}`}>
-                {positive ? "" : "-"} $ {Math.abs(value).toLocaleString("en", { minimumFractionDigits: 2 })}
+                {positive ? "" : "-"}{formatCurrency(Math.abs(value), "USD")}
             </td>
         </tr>
     );
@@ -100,7 +101,7 @@ function TotalRow({ label, value, highlight }: { label: string; value: number; h
         <tr className={`border-t-2 border-emerald-200 ${highlight ? "bg-emerald-50" : "bg-gray-50"}`}>
             <td className={`p-4 font-bold ${highlight ? "text-emerald-900 text-base" : "text-gray-800"}`}>{label}</td>
             <td className={`text-right p-4 font-mono font-bold ${highlight ? `text-lg ${c}` : c}`}>
-                {value >= 0 ? "" : "-"} $ {Math.abs(value).toLocaleString("en", { minimumFractionDigits: 2 })}
+                {value >= 0 ? "" : "-"}{formatCurrency(Math.abs(value), "USD")}
             </td>
         </tr>
     );

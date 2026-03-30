@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency } from "@/lib/format-currency";
 import FazendaLayout from "@/components/fazenda/layout";
 import { useState, useMemo } from "react";
 import { MapPin, BarChart3, TrendingUp, DollarSign, Layers, Package, ChevronDown, ChevronUp } from "lucide-react";
@@ -16,7 +17,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     biologico: "Biologicos", combustivel: "Combustivel", outro: "Outros",
 };
 
-function fmt(val: number) { return `$${Math.round(val).toLocaleString("pt-BR")}`; }
+function fmt(val: number, cur = "USD") { return formatCurrency(val, cur); }
 
 export default function PlotCosts() {
     const [selectedSeason, setSelectedSeason] = useState<string>("");
@@ -160,7 +161,7 @@ export default function PlotCosts() {
                                                     <defs><linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} /><stop offset="95%" stopColor="#16a34a" stopOpacity={0} /></linearGradient></defs>
                                                     <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f0f0f0" />
                                                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6b7280" }} axisLine={false} tickLine={false} />
-                                                    <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
+                                                    <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(0)}M` : `${(v / 1000).toFixed(0)}K`} />
                                                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", padding: "8px 14px" }}
                                                         formatter={(v: number) => [fmt(v), "Custo"]} />
                                                     <Area type="monotone" dataKey="cost" stroke="#16a34a" strokeWidth={2.5} fill="url(#costGrad)" dot={{ r: 4, fill: "#16a34a" }} />

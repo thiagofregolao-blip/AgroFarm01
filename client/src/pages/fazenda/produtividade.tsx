@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency } from "@/lib/format-currency";
 import { useAuth } from "@/hooks/use-auth";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -119,7 +120,7 @@ export default function Produtividade() {
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-500">Custo Total</p>
-                                    <p className="text-2xl font-bold text-gray-900">USD {totalCost.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCost, "USD")}</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -187,13 +188,13 @@ export default function Produtividade() {
                                                         </span>
                                                     </td>
                                                     <td className="py-3 px-2 text-right text-gray-700">
-                                                        {parseFloat(p.total_cost || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        {formatCurrency(parseFloat(p.total_cost || 0), "USD")}
                                                     </td>
                                                     <td className="py-3 px-2 text-right text-gray-700">
-                                                        {parseFloat(p.cost_per_ha || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        {formatCurrency(parseFloat(p.cost_per_ha || 0), "USD")}
                                                     </td>
                                                     <td className="py-3 px-2 text-right text-gray-700">
-                                                        {parseFloat(p.cost_per_ton || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        {formatCurrency(parseFloat(p.cost_per_ton || 0), "USD")}
                                                     </td>
                                                     <td className="py-3 px-2 text-right text-gray-500">
                                                         {p.avg_production_ton} ton ({p.seasons_count} safra{p.seasons_count > 1 ? "s" : ""})

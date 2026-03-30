@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency } from "@/lib/format-currency";
 import FarmLayout from "@/components/fazenda/layout";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -234,7 +235,7 @@ export default function FarmDashboard() {
 
     if (isLoading) return <FarmLayout><div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div></FarmLayout>;
 
-    function fmt(v: number) { return `$${Math.round(v).toLocaleString("pt-BR")}`; }
+    function fmt(v: number, cur = "USD") { return formatCurrency(v, cur); }
     function fmtW(kg: number) { return kg >= 1000 ? `${(kg / 1000).toFixed(1)}t` : `${kg.toFixed(0)}kg`; }
     function fmtDate(d: string | null) { if (!d) return "—"; try { return new Date(d).toLocaleDateString("pt-BR"); } catch { return "—"; } }
     function fmtDateTime(d: string | null) { if (!d) return "—"; try { const dt = new Date(d); return `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`; } catch { return "—"; } }
@@ -293,8 +294,8 @@ export default function FarmDashboard() {
                                             <defs><linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(27,94,32,0.2)" /><stop offset="100%" stopColor="rgba(27,94,32,0)" /></linearGradient></defs>
                                             <CartesianGrid vertical={true} horizontal={false} strokeDasharray="3 3" stroke="#e9f0e1" />
                                             <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#41493e", fontWeight: 700 }} axisLine={false} tickLine={false} />
-                                            <YAxis tick={{ fontSize: 9, fill: "#717a6d" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
-                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: "none", boxShadow: SHADOW, padding: "8px 14px" }} formatter={(v: number) => [`$${v.toLocaleString()}`, "Despesa"]} />
+                                            <YAxis tick={{ fontSize: 9, fill: "#717a6d" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(0)}M` : `${(v / 1000).toFixed(0)}K`} />
+                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: "none", boxShadow: SHADOW, padding: "8px 14px" }} formatter={(v: number) => [fmt(v), "Despesa"]} />
                                             <Area type="monotone" dataKey="value" stroke="#1b5e20" strokeWidth={3} fill="url(#perfGrad)" dot={{ r: 4, fill: "#1b5e20" }} activeDot={{ r: 6, fill: "#1b5e20" }} />
                                         </AreaChart>
                                     </ResponsiveContainer>
