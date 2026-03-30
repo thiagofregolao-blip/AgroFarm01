@@ -51,6 +51,7 @@ export default function AccountsPayable() {
     const [filterTo, setFilterTo] = useState("");
     const [filterSupplier, setFilterSupplier] = useState("todos");
     const [filterSeason, setFilterSeason] = useState("todos");
+    const [filterCurrencyMain, setFilterCurrencyMain] = useState("todos");
 
     const { data: items = [], isLoading } = useQuery({
         queryKey: ["/api/farm/accounts-payable"],
@@ -106,7 +107,8 @@ export default function AccountsPayable() {
             (!filterTo || new Date(i.dueDate) <= new Date(filterTo));
         const supplierCheck = filterSupplier === "todos" || i.supplier === filterSupplier;
         const seasonCheck = filterSeason === "todos" || String(i.season_id || i.seasonId || "") === filterSeason;
-        return statusCheck && dateCheck && supplierCheck && seasonCheck;
+        const currencyCheck = filterCurrencyMain === "todos" || (i.currency || "USD") === filterCurrencyMain;
+        return statusCheck && dateCheck && supplierCheck && seasonCheck && currencyCheck;
     });
 
     const totalAberto = (items as any[]).filter((i: any) => i.status === "aberto" || i.status === "parcial")
@@ -389,8 +391,18 @@ export default function AccountsPayable() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                {(filterStatus !== "todos" || filterSupplier !== "todos" || filterSeason !== "todos" || searchTerm) && (
-                                    <Button variant="ghost" size="sm" className="text-gray-500 h-10" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); setFilterSupplier("todos"); setFilterSeason("todos"); setSearchTerm(""); }}>
+                                <div>
+                                    <Select value={filterCurrencyMain} onValueChange={setFilterCurrencyMain}>
+                                        <SelectTrigger className="w-32 bg-white border-0 shadow-sm h-10"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="todos">Todas Moedas</SelectItem>
+                                            <SelectItem value="USD">$ Dolar</SelectItem>
+                                            <SelectItem value="PYG">Gs Guarani</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {(filterStatus !== "todos" || filterSupplier !== "todos" || filterSeason !== "todos" || filterCurrencyMain !== "todos" || searchTerm) && (
+                                    <Button variant="ghost" size="sm" className="text-gray-500 h-10" onClick={() => { setFilterStatus("todos"); setFilterFrom(""); setFilterTo(""); setFilterSupplier("todos"); setFilterSeason("todos"); setFilterCurrencyMain("todos"); setSearchTerm(""); }}>
                                         Limpar
                                     </Button>
                                 )}
@@ -1594,9 +1606,10 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                 </div>
             )}
 
-            {/* Dialog de edição — mesmo design premium do modal de pagamento */}
+            {/* Dialog de edição — layout 2 colunas igual ao modal de pagamento */}
             <Dialog open={!!editingHistItem} onOpenChange={o => !o && setEditingHistItem(null)}>
                 <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                    {/* Header */}
                     <DialogHeader className="px-8 pt-6 pb-4 border-b border-gray-100 bg-white">
                         <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-200">
@@ -1604,161 +1617,213 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                             </div>
                             <div>
                                 <DialogTitle className="text-xl font-black font-headline tracking-tight text-gray-900">Editar Pagamento</DialogTitle>
-                                <p className="text-xs text-gray-400 mt-0.5">{editingHistItem?.supplier} — {editingHistItem?.apDescription || "Sem descricao"}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    {editingHistItem?.supplier}
+                                    {editingHistItem?.batchItems?.length > 1 && ` — ${editingHistItem.batchItems.length} titulo(s)`}
+                                </p>
                             </div>
                         </div>
                     </DialogHeader>
                     {editingHistItem && (
-                        <div className="flex-1 overflow-y-auto p-8 space-y-6">
-                            {/* Total Card */}
-                            <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-blue-500 p-5 flex items-center gap-4 shadow-sm">
-                                <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-                                    <Wallet className="h-6 w-6 text-blue-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total da Conta</p>
-                                    <p className="text-3xl font-black font-headline text-gray-900 tracking-tight leading-none mt-1">{formatCurrency(parseFloat(editingHistItem.totalAmount), editingHistItem.currency || "USD")}</p>
-                                </div>
-                            </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <div className="grid grid-cols-12 gap-0 min-h-[420px]">
+                                {/* LEFT COLUMN — 7/12 */}
+                                <div className="col-span-12 lg:col-span-7 p-8 space-y-6">
+                                    {/* Total Card */}
+                                    <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-blue-500 p-5 flex items-center gap-4 shadow-sm">
+                                        <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                                            <Wallet className="h-6 w-6 text-blue-600" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Valor Pago</p>
+                                            <p className="text-3xl font-black font-headline text-gray-900 tracking-tight leading-none mt-1">{formatCurrency(parseFloat(editingHistItem.amount || editingHistItem.totalAmount), editingHistItem.currency || "USD")}</p>
+                                        </div>
+                                        {editingHistItem.batchItems?.length > 1 && (
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full shrink-0">
+                                                {editingHistItem.batchItems.length} itens
+                                            </span>
+                                        )}
+                                    </div>
 
-                            {/* Form */}
-                            <div className="bg-gray-50 rounded-xl p-6 space-y-5">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Dados do Pagamento</p>
-                                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50" onClick={addEditRow}>
-                                        <PlusCircle className="mr-1 h-3 w-3" /> Adicionar conta
-                                    </Button>
-                                </div>
-                                {editPaymentRows.map((row, idx) => (
-                                    <div key={idx} className="space-y-3">
+                                    {/* Form */}
+                                    <div className="bg-gray-50 rounded-xl p-6 space-y-5">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Dados do Pagamento</p>
+                                            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50" onClick={addEditRow}>
+                                                <PlusCircle className="mr-1 h-3 w-3" /> Adicionar conta
+                                            </Button>
+                                        </div>
+                                        {editPaymentRows.map((row, idx) => (
+                                            <div key={idx} className="space-y-3">
+                                                {editPaymentRows.length > 1 && (
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Metodo {idx + 1}</span>
+                                                        <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-300 hover:text-red-500" onClick={() => removeEditRow(idx)}>
+                                                            <X className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Conta *</label>
+                                                        <Select value={row.accountId} onValueChange={v => updateEditRow(idx, "accountId", v)}>
+                                                            <SelectTrigger className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 text-sm"><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                                                            <SelectContent>{accounts.map((a: any) => (<SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>))}</SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Valor *</label>
+                                                        <Input type="number" step="0.01" min="0.01" placeholder="0.00" value={row.amount}
+                                                            onChange={e => updateEditRow(idx, "amount", e.target.value)}
+                                                            className="bg-gray-100 border-none rounded-lg h-11 font-bold text-lg font-headline focus:ring-2 focus:ring-emerald-200 px-4" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Metodo</label>
+                                                        <Select value={row.paymentMethod} onValueChange={v => updateEditRow(idx, "paymentMethod", v)}>
+                                                            <SelectTrigger className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 text-sm"><SelectValue /></SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="transferencia">Transferencia</SelectItem>
+                                                                <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                                                                <SelectItem value="cheque">Cheque</SelectItem>
+                                                                <SelectItem value="pix">PIX</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">N. Recibo</label>
+                                                        <Input placeholder="001-001-0000123" value={editReceiptNumber}
+                                                            onChange={e => setEditReceiptNumber(e.target.value)}
+                                                            className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 px-4 text-sm" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {editHasChequeMethod && (
+                                            <div className="p-4 bg-blue-50/80 rounded-lg border border-blue-100 space-y-3">
+                                                {emitidoCheques.length > 0 && (
+                                                    <div>
+                                                        <label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Selecionar Cheque Existente</label>
+                                                        <Select value={editSelectedChequeId} onValueChange={(id) => {
+                                                            setEditSelectedChequeId(id);
+                                                            const ch = emitidoCheques.find((c: any) => String(c.id) === id);
+                                                            if (ch) { setEditChequeBanco(ch.bank || ""); setEditChequeNumero(ch.cheque_number || ch.chequeNumber || ""); setEditChequeTipo(ch.type || "proprio"); }
+                                                        }}>
+                                                            <SelectTrigger className="bg-white/80 border-blue-200 rounded-lg h-11"><SelectValue placeholder="Selecionar cheque emitido..." /></SelectTrigger>
+                                                            <SelectContent>{emitidoCheques.map((ch: any) => (<SelectItem key={ch.id} value={String(ch.id)}>#{ch.cheque_number || ch.chequeNumber} — {ch.bank} — {formatCurrency(parseFloat(ch.amount), ch.currency)}</SelectItem>))}</SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Banco *</label><Input value={editChequeBanco} onChange={e => setEditChequeBanco(e.target.value)} placeholder="Nome do banco" className="bg-white/80 border-blue-200 rounded-lg h-11" /></div>
+                                                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Numero *</label><Input value={editChequeNumero} onChange={e => setEditChequeNumero(e.target.value)} placeholder="000000" className="bg-white/80 border-blue-200 rounded-lg h-11" /></div>
+                                                    <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Tipo</label>
+                                                        <Select value={editChequeTipo} onValueChange={setEditChequeTipo}>
+                                                            <SelectTrigger className="bg-white/80 border-blue-200 rounded-lg h-11"><SelectValue /></SelectTrigger>
+                                                            <SelectContent><SelectItem value="proprio">Proprio</SelectItem><SelectItem value="terceiro">Terceiro</SelectItem></SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {editPaymentRows.length > 1 && (
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Metodo {idx + 1}</span>
-                                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-300 hover:text-red-500" onClick={() => removeEditRow(idx)}>
-                                                    <X className="h-3.5 w-3.5" />
-                                                </Button>
+                                            <div className={`text-xs font-semibold px-3 py-2 rounded-lg ${Math.abs(editTotalAllocated - parseFloat(editingHistItem.amount || editingHistItem.totalAmount)) < 0.01 ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
+                                                Alocado: {formatCurrency(editTotalAllocated)} / Pago: {formatCurrency(parseFloat(editingHistItem.amount || editingHistItem.totalAmount))}
                                             </div>
                                         )}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Conta *</label>
-                                                <Select value={row.accountId} onValueChange={v => updateEditRow(idx, "accountId", v)}>
-                                                    <SelectTrigger className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 text-sm">
-                                                        <SelectValue placeholder="Selecione a conta..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {accounts.map((a: any) => (
-                                                            <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                    </div>
+
+                                    {/* Observações */}
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Observacoes</label>
+                                        <textarea value={editObservation} onChange={e => setEditObservation(e.target.value)}
+                                            placeholder="Observacoes sobre este pagamento..." rows={2}
+                                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 resize-none" />
+                                    </div>
+
+                                    {/* Attach Receipt */}
+                                    <div className="relative">
+                                        <label className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-gray-200 hover:border-emerald-300 bg-white hover:bg-emerald-50/30 transition-colors cursor-pointer group">
+                                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="sr-only" onChange={e => {
+                                                const file = e.target.files?.[0]; if (!file) return;
+                                                setEditReceiptFile(file);
+                                                const reader = new FileReader(); reader.onload = ev => setEditReceiptFileUrl(ev.target?.result as string); reader.readAsDataURL(file);
+                                            }} />
+                                            <Upload className="h-5 w-5 text-gray-300 group-hover:text-emerald-400 transition-colors" />
+                                            {editReceiptFile ? (
+                                                <p className="text-xs font-semibold text-emerald-600">{editReceiptFile.name}</p>
+                                            ) : editReceiptFileUrl ? (
+                                                <p className="text-xs font-semibold text-emerald-600">Recibo existente — clique para substituir</p>
+                                            ) : (
+                                                <><p className="text-xs font-semibold text-gray-500">Clique para enviar ou arraste</p><p className="text-[10px] text-gray-400">PDF, JPG ou PNG</p></>
+                                            )}
+                                        </label>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center justify-between pt-2">
+                                        <button type="button" className="text-sm font-semibold text-gray-400 hover:text-gray-600 transition-colors cursor-pointer" onClick={() => setEditingHistItem(null)}>Cancelar</button>
+                                        <Button
+                                            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-blue-200 transition-all hover:shadow-xl hover:shadow-blue-200 text-sm"
+                                            disabled={paying || !editAllRowsValid || (editHasChequeMethod && (!editChequeBanco || !editChequeNumero))}
+                                            onClick={handleConfirmEdit}
+                                        >
+                                            {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                                            Salvar Alteracoes
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* RIGHT COLUMN — 5/12 — Detalhes + Contas Incluidas */}
+                                <div className="col-span-12 lg:col-span-5 bg-gray-50/50 border-l border-gray-100 p-8 space-y-5">
+                                    {/* Info Card */}
+                                    <div className="relative bg-blue-950 text-white p-6 rounded-xl overflow-hidden">
+                                        <div className="absolute -top-8 -right-8 h-28 w-28 rounded-full bg-blue-400/20 blur-2xl" />
+                                        <div className="relative z-10">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <ShieldCheck className="h-5 w-5 text-blue-400" />
+                                                <h3 className="text-sm font-bold font-headline tracking-tight">Detalhes do Pagamento</h3>
                                             </div>
-                                            <div>
-                                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Valor *</label>
-                                                <Input type="number" step="0.01" min="0.01" placeholder="0.00" value={row.amount}
-                                                    onChange={e => updateEditRow(idx, "amount", e.target.value)}
-                                                    className="bg-gray-100 border-none rounded-lg h-11 font-bold text-lg font-headline focus:ring-2 focus:ring-emerald-200 px-4" />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Metodo</label>
-                                                <Select value={row.paymentMethod} onValueChange={v => updateEditRow(idx, "paymentMethod", v)}>
-                                                    <SelectTrigger className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 text-sm"><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="transferencia">Transferencia</SelectItem>
-                                                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                                                        <SelectItem value="cheque">Cheque</SelectItem>
-                                                        <SelectItem value="pix">PIX</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">N. Recibo</label>
-                                                <Input placeholder="001-001-0000123" value={editReceiptNumber}
-                                                    onChange={e => setEditReceiptNumber(e.target.value)}
-                                                    className="bg-gray-100 border-none rounded-lg h-11 focus:ring-2 focus:ring-emerald-200 px-4 text-sm" />
+                                            <div className="space-y-2 text-blue-200 text-xs">
+                                                <div className="flex justify-between"><span>Fornecedor</span><span className="font-bold text-white">{editingHistItem.supplier}</span></div>
+                                                <div className="flex justify-between"><span>Data</span><span className="font-bold text-white">{editingHistItem.paidDate ? new Date(editingHistItem.paidDate).toLocaleDateString("pt-BR") : "--"}</span></div>
+                                                <div className="flex justify-between"><span>Metodo</span><span className="font-bold text-white">{editingHistItem.paymentMethod || "--"}</span></div>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
 
-                                {/* Cheque fields */}
-                                {editHasChequeMethod && (
-                                    <div className="p-4 bg-blue-50/80 rounded-lg border border-blue-100 space-y-3">
-                                        {emitidoCheques.length > 0 && (
-                                            <div>
-                                                <label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Selecionar Cheque Existente</label>
-                                                <Select value={editSelectedChequeId} onValueChange={(id) => {
-                                                    setEditSelectedChequeId(id);
-                                                    const ch = emitidoCheques.find((c: any) => String(c.id) === id);
-                                                    if (ch) { setEditChequeBanco(ch.bank || ""); setEditChequeNumero(ch.cheque_number || ch.chequeNumber || ""); setEditChequeTipo(ch.type || "proprio"); }
-                                                }}>
-                                                    <SelectTrigger className="bg-white/80 border-blue-200 rounded-lg h-11"><SelectValue placeholder="Selecionar cheque emitido..." /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {emitidoCheques.map((ch: any) => (
-                                                            <SelectItem key={ch.id} value={String(ch.id)}>#{ch.cheque_number || ch.chequeNumber} — {ch.bank} — {formatCurrency(parseFloat(ch.amount), ch.currency)}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-3 gap-3">
-                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Banco *</label><Input value={editChequeBanco} onChange={e => setEditChequeBanco(e.target.value)} placeholder="Nome do banco" className="bg-white/80 border-blue-200 rounded-lg h-11" /></div>
-                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Numero *</label><Input value={editChequeNumero} onChange={e => setEditChequeNumero(e.target.value)} placeholder="000000" className="bg-white/80 border-blue-200 rounded-lg h-11" /></div>
-                                            <div><label className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1.5 block">Tipo</label>
-                                                <Select value={editChequeTipo} onValueChange={setEditChequeTipo}>
-                                                    <SelectTrigger className="bg-white/80 border-blue-200 rounded-lg h-11"><SelectValue /></SelectTrigger>
-                                                    <SelectContent><SelectItem value="proprio">Proprio</SelectItem><SelectItem value="terceiro">Terceiro</SelectItem></SelectContent>
-                                                </Select>
-                                            </div>
+                                    {/* Contas Incluidas */}
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+                                            Contas Incluidas ({editingHistItem.batchItems?.length || 1})
+                                        </p>
+                                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                            {editingHistItem.batchItems && editingHistItem.batchItems.length > 0 ? (
+                                                editingHistItem.batchItems.map((bi: any, idx: number) => (
+                                                    <div key={idx} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-gray-100">
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-xs font-semibold text-gray-800 truncate">{bi.supplier || editingHistItem.supplier}</p>
+                                                            <p className="text-[10px] text-gray-400 truncate">{bi.description || "Sem descricao"} {bi.installmentNumber ? `- ${bi.installmentNumber}/${bi.totalInstallments}` : ""}</p>
+                                                        </div>
+                                                        <div className="text-right shrink-0 ml-2">
+                                                            <span className="text-xs font-bold font-headline text-gray-900">{formatCurrency(parseFloat(bi.amount || 0), editingHistItem.currency || "USD")}</span>
+                                                            <p className={`text-[9px] font-bold ${bi.status === "pago" ? "text-emerald-600" : "text-amber-600"}`}>{bi.status === "pago" ? "Pago" : "Parcial"}</p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-gray-100">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-semibold text-gray-800 truncate">{editingHistItem.supplier}</p>
+                                                        <p className="text-[10px] text-gray-400 truncate">{editingHistItem.apDescription || "Sem descricao"} {editingHistItem.installmentNumber ? `- ${editingHistItem.installmentNumber}/${editingHistItem.totalInstallments}` : ""}</p>
+                                                    </div>
+                                                    <span className="text-xs font-bold font-headline text-gray-900 shrink-0 ml-2">{formatCurrency(parseFloat(editingHistItem.totalAmount || 0), editingHistItem.currency || "USD")}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                )}
-
-                                {editPaymentRows.length > 1 && (
-                                    <div className={`text-xs font-semibold px-3 py-2 rounded-lg ${Math.abs(editTotalAllocated - parseFloat(editingHistItem.totalAmount)) < 0.01 ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
-                                        Alocado: {formatCurrency(editTotalAllocated)} / Total: {formatCurrency(parseFloat(editingHistItem.totalAmount))}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Observações */}
-                            <div>
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 block">Observacoes</label>
-                                <textarea value={editObservation} onChange={e => setEditObservation(e.target.value)}
-                                    placeholder="Observacoes sobre este pagamento..." rows={2}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 resize-none" />
-                            </div>
-
-                            {/* Attach Receipt */}
-                            <div className="relative">
-                                <label className="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-dashed border-gray-200 hover:border-emerald-300 bg-white hover:bg-emerald-50/30 transition-colors cursor-pointer group">
-                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="sr-only" onChange={e => {
-                                        const file = e.target.files?.[0]; if (!file) return;
-                                        setEditReceiptFile(file);
-                                        const reader = new FileReader(); reader.onload = ev => setEditReceiptFileUrl(ev.target?.result as string); reader.readAsDataURL(file);
-                                    }} />
-                                    <Upload className="h-5 w-5 text-gray-300 group-hover:text-emerald-400 transition-colors" />
-                                    {editReceiptFile ? (
-                                        <p className="text-xs font-semibold text-emerald-600">{editReceiptFile.name}</p>
-                                    ) : editReceiptFileUrl ? (
-                                        <p className="text-xs font-semibold text-emerald-600">Recibo existente — clique para substituir</p>
-                                    ) : (
-                                        <><p className="text-xs font-semibold text-gray-500">Clique para enviar ou arraste</p><p className="text-[10px] text-gray-400">PDF, JPG ou PNG</p></>
-                                    )}
-                                </label>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex items-center justify-between pt-2">
-                                <button type="button" className="text-sm font-semibold text-gray-400 hover:text-gray-600 transition-colors cursor-pointer" onClick={() => setEditingHistItem(null)}>Cancelar</button>
-                                <Button
-                                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-blue-200 transition-all hover:shadow-xl hover:shadow-blue-200 text-sm"
-                                    disabled={paying || !editAllRowsValid || (editHasChequeMethod && (!editChequeBanco || !editChequeNumero))}
-                                    onClick={handleConfirmEdit}
-                                >
-                                    {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                                    Salvar Alteracoes
-                                </Button>
+                                </div>
                             </div>
                         </div>
                     )}
