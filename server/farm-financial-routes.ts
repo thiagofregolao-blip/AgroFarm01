@@ -1616,18 +1616,60 @@ export function registerFarmFinancialRoutes(app: Express) {
                 GROUP BY r.crop, r.season_id, r.buyer, s.name
                 ORDER BY r.crop, s.name
             `);
-            const result = ((rows as any).rows ?? rows).map((r: any) => ({
-                id: r.id,
-                crop: r.crop,
-                seasonId: r.seasonId,
-                seasonName: r.seasonName,
-                granero: r.granero,
-                quantity: String(parseFloat(r.totalWeight || 0)),
-                totalWeight: String(r.totalWeight),
-                soldWeight: "0",
-                deliveries: Number(r.deliveries),
-                lastDelivery: r.lastDelivery,
-            }));
+            // Fetch sold grain from farm_receivable_items (same logic as romaneios/silos)
+            const soldRows = await db.execute(sql`
+                SELECT
+                    ri.grain_crop AS crop,
+                    ri.grain_granero AS granero,
+                    SUM(
+                        CASE WHEN UPPER(ri.unit) = 'TON'
+                            THEN CAST(ri.quantity AS NUMERIC) * 1000
+                            ELSE CAST(ri.quantity AS NUMERIC)
+                        END
+                    ) AS sold_kg
+                FROM farm_receivable_items ri
+                JOIN farm_accounts_receivable ar ON ar.id = ri.receivable_id
+                WHERE ar.farmer_id = ${farmerId}
+                  AND ri.grain_crop IS NOT NULL
+                  AND ar.status NOT IN ('anulado')
+                GROUP BY ri.grain_crop, ri.grain_granero
+            `);
+            const soldList = ((soldRows as any).rows ?? soldRows) as any[];
+            // Build sold map: "crop||granero" → soldKg
+            const soldMap: Record<string, number> = {};
+            for (const s of soldList) {
+                const cropKey = (s.crop || "").toLowerCase().trim();
+                const graneroKey = (s.granero || "").toLowerCase().trim();
+                const key = `${cropKey}||${graneroKey}`;
+                soldMap[key] = (soldMap[key] || 0) + parseFloat(s.sold_kg || 0);
+                // Also add fallback key without granero
+                const fallbackKey = `${cropKey}||`;
+                if (graneroKey) {
+                    soldMap[fallbackKey] = (soldMap[fallbackKey] || 0) + parseFloat(s.sold_kg || 0);
+                }
+            }
+
+            const result = ((rows as any).rows ?? rows).map((r: any) => {
+                const totalKg = parseFloat(r.totalWeight || 0);
+                const cropKey = (r.crop || "").toLowerCase().trim();
+                const graneroKey = (r.granero || "").toLowerCase().trim();
+                const exactKey = `${cropKey}||${graneroKey}`;
+                const fallbackKey = `${cropKey}||`;
+                const soldKg = soldMap[exactKey] ?? soldMap[fallbackKey] ?? 0;
+                const availableKg = Math.max(0, totalKg - soldKg);
+                return {
+                    id: r.id,
+                    crop: r.crop,
+                    seasonId: r.seasonId,
+                    seasonName: r.seasonName,
+                    granero: r.granero,
+                    quantity: String(availableKg),
+                    totalWeight: String(totalKg),
+                    soldWeight: String(soldKg),
+                    deliveries: Number(r.deliveries),
+                    lastDelivery: r.lastDelivery,
+                };
+            });
             res.json(result);
         } catch (error) {
             console.error("[GRAIN_STOCK_GET]", error);

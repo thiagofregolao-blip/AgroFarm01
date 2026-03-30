@@ -462,12 +462,12 @@ export default function FarmDashboard() {
                     <section className="md:col-span-4 rounded-xl p-6 text-white relative overflow-hidden cursor-pointer" style={{ background: "#00450d", boxShadow: SHADOW }} onClick={() => setLocation("/fazenda/romaneios")}>
                         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-800/50 rounded-bl-full"></div>
                         <div className="relative z-10 h-full flex flex-col justify-between">
-                            <div><h3 className="headline-font font-bold text-lg text-emerald-50 mb-4">Status dos Silos</h3><div className="space-y-1"><div className="text-3xl font-black">{fmtW(totalHarvest)}</div><div className="text-xs text-emerald-300 font-bold uppercase tracking-widest">Colheita total</div></div></div>
+                            <div><h3 className="headline-font font-bold text-lg text-emerald-50 mb-4">Status dos Silos</h3><div className="space-y-1"><div className="text-3xl font-black">{fmtW(silos.reduce((s: number, silo: any) => s + (silo.availableWeight ?? silo.totalWeight ?? 0), 0))}</div><div className="text-xs text-emerald-300 font-bold uppercase tracking-widest">Estoque disponivel</div></div></div>
                             <div className="mt-6 space-y-3">
                                 {silos.slice(0, 3).map((silo: any, i: number) => (
                                     <div key={silo.buyer} className={`flex justify-between items-center ${i < 2 ? "border-b border-emerald-800 pb-2" : ""}`}>
                                         <span className="text-xs font-medium text-emerald-200 uppercase truncate max-w-[60%]">{silo.buyer}</span>
-                                        <span className="text-sm font-bold">{fmtW(silo.totalWeight || 0)}</span>
+                                        <span className="text-sm font-bold">{fmtW(silo.availableWeight ?? silo.totalWeight ?? 0)}</span>
                                     </div>
                                 ))}
                                 {silos.length === 0 && <p className="text-emerald-300 text-sm">Sem romaneios</p>}
