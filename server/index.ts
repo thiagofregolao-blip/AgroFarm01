@@ -380,6 +380,7 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS person_type TEXT`);
     await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS entity_type TEXT`);
     await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS guarantor_for TEXT`);
+    await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`);
     await db.execute(sql`ALTER TABLE farm_accounts_receivable ADD COLUMN IF NOT EXISTS supplier_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS supplier_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS transfer_date TIMESTAMP`);

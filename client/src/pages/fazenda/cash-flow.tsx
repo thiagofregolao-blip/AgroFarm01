@@ -369,6 +369,7 @@ export default function FarmCashFlow() {
                             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
                             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
                         }} />
+                        <CreateTransactionDialog accounts={allAccounts} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] }); queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] }); }} />
                         <CreateAccountDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
                     </div>
 
@@ -989,7 +990,7 @@ function CreateAccountDialog({ onSuccess }: { onSuccess: () => void }) {
                         <div><Label>Tipo *</Label><Select value={accountType} onValueChange={setAccountType}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{ACCOUNT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent></Select></div>
                         <div><Label>Moeda *</Label><Select value={currency} onValueChange={setCurrency}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="USD">Dólar (USD $)</SelectItem><SelectItem value="PYG">Guaraní (PYG Gs.)</SelectItem></SelectContent></Select></div>
                     </div>
-                    <div><Label>Saldo Inicial</Label><CurrencyInput value={initialBalance} onValueChange={setInitialBalance} /></div>
+                    <div><Label>Saldo Inicial</Label><CurrencyInput value={initialBalance} onValueChange={setInitialBalance} decimals={currency === "PYG" ? 0 : 2} /></div>
                     <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => save.mutate()} disabled={save.isPending || !name || !accountType}>
                         {save.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Salvar Conta"}
                     </Button>
@@ -1167,7 +1168,7 @@ function CreateTransactionDialog({ accounts, onSuccess }: { accounts: any[]; onS
                     </div>
                     <div><Label>Conta *</Label><Select value={accountId} onValueChange={setAccountId}><SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger><SelectContent>{accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name} ({formatCurrency(parseFloat(a.currentBalance), a.currency)})</SelectItem>)}</SelectContent></Select></div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div><Label>Valor *</Label><CurrencyInput value={amount} onValueChange={setAmount} /></div>
+                        <div><Label>Valor *</Label><CurrencyInput value={amount} onValueChange={setAmount} decimals={accounts.find((a: any) => a.id === accountId)?.currency === "PYG" ? 0 : 2} /></div>
                         <div><Label>Data</Label><Input type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} /></div>
                     </div>
                     <div><Label>Categoria *</Label><Select value={category} onValueChange={setCategory}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent></Select></div>

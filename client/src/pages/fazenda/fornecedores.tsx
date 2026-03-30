@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Building2, Phone, Mail, MapPin } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Building2, Phone, Mail, MapPin, EyeOff, Eye } from "lucide-react";
 
 interface Supplier {
     id: string;
@@ -20,12 +20,14 @@ interface Supplier {
     notes: string | null;
     person_type: string | null;
     entity_type: string | null;
+    is_active: boolean;
 }
 
 export default function FornecedoresPage() {
     const { toast } = useToast();
     const qc = useQueryClient();
     const [search, setSearch] = useState("");
+    const [showInactive, setShowInactive] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<Supplier | null>(null);
     const [form, setForm] = useState({ name: "", ruc: "", phone: "", email: "", address: "", notes: "", personType: "", entityType: "" });
@@ -67,6 +69,23 @@ export default function FornecedoresPage() {
         },
     });
 
+    const inactivateMutation = useMutation({
+        mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+            const res = await fetch(`/api/farm/suppliers/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ is_active }),
+            });
+            if (!res.ok) throw new Error("Erro ao atualizar");
+            return res.json();
+        },
+        onSuccess: (_data, vars) => {
+            qc.invalidateQueries({ queryKey: ["/api/farm/suppliers"] });
+            toast({ title: vars.is_active ? "Fornecedor reativado" : "Fornecedor inativado" });
+        },
+    });
+
     const openNew = () => {
         setEditing(null);
         setForm({ name: "", ruc: "", phone: "", email: "", address: "", notes: "", personType: "__none__", entityType: "__none__" });
@@ -79,19 +98,27 @@ export default function FornecedoresPage() {
         setModalOpen(true);
     };
 
-    const filtered = suppliers.filter((s) =>
-        s.name.toLowerCase().includes(search.toLowerCase()) ||
-        (s.ruc && s.ruc.includes(search))
-    );
+    const filtered = suppliers.filter((s) => {
+        const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
+            (s.ruc && s.ruc.includes(search));
+        const matchesActive = showInactive ? true : (s.is_active !== false);
+        return matchesSearch && matchesActive;
+    });
 
     return (
         <FarmLayout>
             <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                     <h1 className="text-xl font-bold text-slate-900">Fornecedores</h1>
-                    <Button onClick={openNew} size="sm">
-                        <Plus className="w-4 h-4 mr-1" /> Novo Fornecedor
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setShowInactive(!showInactive)}>
+                            {showInactive ? <Eye className="w-4 h-4 mr-1" /> : <EyeOff className="w-4 h-4 mr-1" />}
+                            {showInactive ? "Ocultar Inativos" : "Ver Inativos"}
+                        </Button>
+                        <Button onClick={openNew} size="sm">
+                            <Plus className="w-4 h-4 mr-1" /> Novo Fornecedor
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="relative max-w-sm">
@@ -121,6 +148,11 @@ export default function FornecedoresPage() {
                                         <div className="flex gap-1">
                                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
                                                 <Pencil className="w-3.5 h-3.5" />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className={`h-7 w-7 ${s.is_active !== false ? "text-amber-500 hover:text-amber-700" : "text-emerald-500 hover:text-emerald-700"}`}
+                                                title={s.is_active !== false ? "Inativar fornecedor" : "Reativar fornecedor"}
+                                                onClick={() => inactivateMutation.mutate({ id: s.id, is_active: s.is_active === false })}>
+                                                {s.is_active !== false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                             </Button>
                                             <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700"
                                                 onClick={() => { if (confirm("Remover fornecedor?")) deleteMutation.mutate(s.id); }}>
@@ -211,6 +243,11 @@ export default function FornecedoresPage() {
                             <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
                         </div>
                     </div>
+                    {!form.name && (
+                        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                            Nome do fornecedor é obrigatório
+                        </p>
+                    )}
                     {saveMutation.isError && (
                         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
                             {(saveMutation.error as Error)?.message || "Erro ao salvar"}

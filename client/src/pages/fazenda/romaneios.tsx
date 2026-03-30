@@ -654,11 +654,15 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
     const totalValue = (finalWeight / 1000) * (parseFloat(pricePerTon) || 0);
     const isSoja = crop.toLowerCase() === "soja";
     const canSubmit = !!buyer && !!crop && !!grossWeight && !!tare && finalWeight > 0 && (!isSoja || seloIntacta);
+    const isSubmittingRef = useRef(false);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (isSoja && !seloIntacta) return;
         if (finalWeight <= 0) return;
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        setTimeout(() => { isSubmittingRef.current = false; }, 3000);
         onSave({
             buyer, crop, plotId: plotId || null, propertyId: propertyId || null, seasonId: seasonId || null,
             globalSiloId: globalSiloId === "none" ? null : globalSiloId || null,

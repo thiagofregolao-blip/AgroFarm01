@@ -407,6 +407,10 @@ export function registerFarmFinancialRoutes(app: Express) {
                 );
                 if (tx) {
                     const txAmount = parseFloat(tx.amount);
+                    // Delete any cheques linked to this transaction first (FK constraint)
+                    try {
+                        await db.execute(sqlFn`DELETE FROM farm_cheques WHERE cash_transaction_id = ${ap.cashTransactionId}`);
+                    } catch (_) { /* ignore if table doesn't exist */ }
                     // Restore balance to the account
                     await db.update(farmCashAccounts)
                         .set({ currentBalance: sqlFn`current_balance + ${txAmount}` })
@@ -416,11 +420,11 @@ export function registerFarmFinancialRoutes(app: Express) {
                 }
             }
 
-            // Reset AP to open with zero paid
+            // Reset AP to pending with zero paid
             await db.update(farmAccountsPayable).set({
                 paidAmount: "0",
                 paidDate: null,
-                status: "aberto",
+                status: "pendente",
                 cashTransactionId: null,
                 receiptNumber: null,
                 receiptFileUrl: null,
@@ -439,7 +443,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             res.json({ success: true });
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_REVERSE]", error);
-            res.status(500).json({ error: "Failed to reverse payment" });
+            res.status(500).json({ error: error instanceof Error ? error.message : "Failed to reverse payment" });
         }
     });
 
@@ -586,6 +590,9 @@ export function registerFarmFinancialRoutes(app: Express) {
             }
 
             const totalInstallments = parseInt(req.body.totalInstallments) || 1;
+            if (totalInstallments > 1 && !req.body.dueDate) {
+                return res.status(400).json({ error: "Data de vencimento é obrigatória para parcelamentos" });
+            }
             const firstDueDate = parseLocalDate(req.body.dueDate) || new Date();
             const totalAmount = parseFloat(req.body.totalAmount) || 0;
             const perInstallmentAmount = (totalAmount / totalInstallments).toFixed(2);
@@ -758,6 +765,18 @@ export function registerFarmFinancialRoutes(app: Express) {
             );
             if (!ar) return res.status(404).json({ error: "Not found" });
             if (ar.status === "recebido") return res.status(409).json({ error: "Conta ja recebida integralmente" });
+
+            // Validate currency match between account and receivable
+            if (accountId) {
+                const [acct] = await db.select().from(farmCashAccounts).where(
+                    and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId))
+                );
+                if (acct && acct.currency !== ar.currency) {
+                    return res.status(409).json({
+                        error: `Moeda incompatível: conta em ${acct.currency}, recebimento em ${ar.currency}. Selecione uma conta na mesma moeda.`,
+                    });
+                }
+            }
 
             const receiveAmount = parseFloat(amount || ar.totalAmount);
             const previousReceived = parseFloat(ar.receivedAmount || "0");

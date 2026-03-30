@@ -8,68 +8,122 @@ interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
   decimals?: number;
 }
 
-function formatCurrencyValue(raw: string, decimals: number): string {
-  // Remove everything except digits
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return "";
-
-  // Pad to ensure at least decimals+1 digits
-  const padded = digits.padStart(decimals + 1, "0");
-  const intPart = padded.slice(0, padded.length - decimals);
-  const decPart = padded.slice(padded.length - decimals);
-
-  // Remove leading zeros from integer part (but keep at least one digit)
-  const cleanInt = intPart.replace(/^0+/, "") || "0";
-
-  // Add thousand separators (dots)
-  const withDots = cleanInt.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
-  return decimals > 0 ? `${withDots},${decPart}` : withDots;
+/** Format a number for display in pt-BR style (dot=thousands, comma=decimal) */
+function formatForDisplay(numStr: string, decimals: number): string {
+  const num = parseFloat(numStr);
+  if (isNaN(num) || num === 0) return "";
+  if (decimals === 0) {
+    return Math.round(num).toLocaleString("pt-BR");
+  }
+  return num.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
-function toRawNumber(formatted: string, decimals: number): string {
-  const digits = formatted.replace(/\D/g, "");
-  if (!digits) return "0";
-  const padded = digits.padStart(decimals + 1, "0");
-  const intPart = padded.slice(0, padded.length - decimals);
-  const decPart = padded.slice(padded.length - decimals);
-  const cleanInt = intPart.replace(/^0+/, "") || "0";
-  return decimals > 0 ? `${cleanInt}.${decPart}` : cleanInt;
+/** Parse display string back to numeric string (removes thousand separators, normalises decimal) */
+function parseDisplayToRaw(display: string, decimals: number): string {
+  // Remove thousand separators (dots in pt-BR)
+  let s = display.replace(/\./g, "");
+  // Normalise comma → dot for decimal
+  s = s.replace(",", ".");
+  // Keep only digits and one dot
+  s = s.replace(/[^\d.]/g, "");
+  const parts = s.split(".");
+  if (parts.length > 2) s = parts[0] + "." + parts.slice(1).join("");
+  if (decimals === 0) s = s.replace(/\./g, "");
+  return s || "0";
+}
+
+// Kept for backward-compat exports (not used internally anymore)
+export function formatCurrencyValue(raw: string, decimals: number): string {
+  return formatForDisplay(raw, decimals);
+}
+export function toRawNumber(formatted: string, decimals: number): string {
+  return parseDisplayToRaw(formatted, decimals);
 }
 
 const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
   ({ className, value, onValueChange, prefix = "$ ", decimals = 2, ...props }, ref) => {
-    const [displayValue, setDisplayValue] = React.useState("");
+    const [display, setDisplay] = React.useState("");
+    const [focused, setFocused] = React.useState(false);
 
-    // Sync display from external value
+    // Sync from external value when not focused
     React.useEffect(() => {
-      const numStr = String(value || "0");
-      // Convert "1234.56" to digits "123456"
-      const parts = numStr.split(".");
-      const intDigits = (parts[0] || "0").replace(/\D/g, "");
-      const decDigits = (parts[1] || "").replace(/\D/g, "").padEnd(decimals, "0").slice(0, decimals);
-      const allDigits = intDigits + decDigits;
-      const formatted = formatCurrencyValue(allDigits, decimals);
-      setDisplayValue(formatted);
-    }, [value, decimals]);
+      if (focused) return;
+      const numStr = String(value ?? "");
+      const num = parseFloat(numStr);
+      if (!numStr || isNaN(num) || num === 0) {
+        setDisplay("");
+      } else {
+        setDisplay(formatForDisplay(numStr, decimals));
+      }
+    }, [value, decimals, focused]);
+
+    function handleFocus(e: React.FocusEvent<HTMLInputElement>) {
+      setFocused(true);
+      // Show raw number on focus (without formatting)
+      const raw = parseDisplayToRaw(display, decimals);
+      const num = parseFloat(raw);
+      if (!isNaN(num) && num !== 0) {
+        const rawDisplay = decimals > 0 ? num.toFixed(decimals) : String(Math.round(num));
+        setDisplay(rawDisplay);
+        // Select all after short delay (browser quirk)
+        setTimeout(() => e.target.select(), 0);
+      }
+      props.onFocus?.(e);
+    }
+
+    function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
+      setFocused(false);
+      const raw = parseDisplayToRaw(display, decimals);
+      const num = parseFloat(raw);
+      if (!isNaN(num) && num > 0) {
+        setDisplay(formatForDisplay(String(num), decimals));
+        onValueChange(decimals > 0 ? num.toFixed(decimals) : String(Math.round(num)));
+      } else {
+        setDisplay("");
+        onValueChange("0");
+      }
+      props.onBlur?.(e);
+    }
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-      const rawInput = e.target.value.replace(/[^0-9]/g, "");
-      const formatted = formatCurrencyValue(rawInput, decimals);
-      setDisplayValue(formatted);
-      onValueChange(toRawNumber(formatted, decimals));
+      let raw = e.target.value;
+      if (decimals === 0) {
+        // Only allow digits
+        raw = raw.replace(/\D/g, "");
+        setDisplay(raw);
+        onValueChange(raw || "0");
+      } else {
+        // Allow digits, one dot or comma as decimal separator
+        // First normalise: remove thousand separators
+        raw = raw.replace(/\./g, "").replace(",", ".");
+        raw = raw.replace(/[^\d.]/g, "");
+        // Only one decimal point
+        const parts = raw.split(".");
+        if (parts.length > 2) raw = parts[0] + "." + parts.slice(1).join("");
+        // Limit decimal places
+        if (parts[1] !== undefined) {
+          raw = parts[0] + "." + parts[1].slice(0, decimals);
+        }
+        setDisplay(raw);
+        onValueChange(raw || "0");
+      }
     }
 
     function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-      // Allow: backspace, delete, tab, escape, enter, arrows
-      const allowed = ["Backspace", "Delete", "Tab", "Escape", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+      const allowed = [
+        "Backspace", "Delete", "Tab", "Escape", "Enter",
+        "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End",
+      ];
       if (allowed.includes(e.key)) return;
-      // Allow Ctrl/Cmd+A, C, V, X
       if ((e.ctrlKey || e.metaKey) && ["a", "c", "v", "x"].includes(e.key.toLowerCase())) return;
-      // Only allow digits
-      if (!/^\d$/.test(e.key)) {
-        e.preventDefault();
-      }
+      // Allow digits
+      if (/^\d$/.test(e.key)) return;
+      // Allow decimal separator (only if decimals > 0)
+      if (decimals > 0 && (e.key === "." || e.key === ",")) return;
+      e.preventDefault();
     }
 
     return (
@@ -82,14 +136,16 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
         <input
           ref={ref}
           type="text"
-          inputMode="numeric"
+          inputMode={decimals === 0 ? "numeric" : "decimal"}
           className={cn(
             "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
             prefix ? "pl-7" : "",
             className
           )}
-          value={displayValue}
+          value={display}
           onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           {...props}
         />
@@ -99,4 +155,4 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
 );
 CurrencyInput.displayName = "CurrencyInput";
 
-export { CurrencyInput, formatCurrencyValue, toRawNumber };
+export { CurrencyInput };
