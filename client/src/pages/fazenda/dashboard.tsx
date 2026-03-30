@@ -125,29 +125,41 @@ export default function FarmDashboard() {
     const { data: accountsPayable = [] } = useQuery<any[]>({ queryKey: ["/api/farm/accounts-payable"], queryFn: async () => (await apiRequest("GET", "/api/farm/accounts-payable")).json(), enabled: !!user });
     const { data: supplierSummary = [] } = useQuery<any[]>({ queryKey: ["/api/farm/invoices/summary/by-supplier"], queryFn: async () => (await apiRequest("GET", "/api/farm/invoices/summary/by-supplier")).json(), enabled: !!user });
 
-    // ─── Card 1: Despesas Mensais (filtrado ate mes atual, com ano) ─────────
-    const monthlyExpenses = useMemo(() => {
+    // ─── Card 1: Despesas Mensais (filtrado ate mes atual, separado por moeda) ─────────
+    const { monthlyExpenses, totalExpensesUsd, totalExpensesPyg } = useMemo(() => {
         const now = new Date();
         const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-        const map: Record<string, number> = {};
+        const mapUsd: Record<string, number> = {};
+        const mapPyg: Record<string, number> = {};
         invoices.forEach((inv: any) => {
             if (!inv.issueDate) return;
             const d = new Date(inv.issueDate);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
             if (key > currentKey) return;
-            if (!map[key]) map[key] = 0;
-            map[key] += parseFloat(inv.totalAmount || 0);
+            const cur = (inv.currency || "USD").toUpperCase();
+            if (cur === "PYG") {
+                if (!mapPyg[key]) mapPyg[key] = 0;
+                mapPyg[key] += parseFloat(inv.totalAmount || 0);
+            } else {
+                if (!mapUsd[key]) mapUsd[key] = 0;
+                mapUsd[key] += parseFloat(inv.totalAmount || 0);
+            }
         });
+        const allKeysSet = new Set([...Object.keys(mapUsd), ...Object.keys(mapPyg)]);
+        const allKeys = Array.from(allKeysSet).sort().slice(-12);
         const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-        return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([key, value]) => {
+        const data = allKeys.map(key => {
             const [year, m] = key.split("-");
-            const shortYear = year.slice(2);
-            return { month: `${months[parseInt(m) - 1]}/${shortYear}`, value: Math.round(value) };
+            return { month: `${months[parseInt(m) - 1]}/${year.slice(2)}`, usd: Math.round(mapUsd[key] || 0), pyg: Math.round(mapPyg[key] || 0) };
         });
+        return {
+            monthlyExpenses: data,
+            totalExpensesUsd: data.reduce((s, m) => s + m.usd, 0),
+            totalExpensesPyg: data.reduce((s, m) => s + m.pyg, 0),
+        };
     }, [invoices]);
-    const totalExpenses = monthlyExpenses.reduce((s, m) => s + m.value, 0);
-    const lastMonth = monthlyExpenses[monthlyExpenses.length - 1]?.value || 0;
-    const prevMonth = monthlyExpenses[monthlyExpenses.length - 2]?.value || 0;
+    const lastMonth = monthlyExpenses[monthlyExpenses.length - 1]?.usd || 0;
+    const prevMonth = monthlyExpenses[monthlyExpenses.length - 2]?.usd || 0;
     const pctChange = prevMonth > 0 ? ((lastMonth - prevMonth) / prevMonth * 100) : 0;
 
     // ─── Card 2: Plots + last application date per plot ──────────────────────
@@ -193,27 +205,32 @@ export default function FarmDashboard() {
     const silos = siloData?.silos || [];
     const totalHarvest = siloData?.totalHarvest || 0;
 
-    // ─── Card 6: Divida por empresa (contas a pagar + faturas pendentes) ────
+    // ─── Card 6: Divida por empresa (separada por moeda) ────
     const debtByCompany = useMemo(() => {
-        const m: Record<string, { name: string; amount: number }> = {};
+        const m: Record<string, { name: string; currency: string; amount: number }> = {};
         // Contas a pagar pendentes
         accountsPayable.forEach((ap: any) => {
-            if (ap.status === "paid") return;
+            if (ap.status === "pago") return;
             const name = ap.supplier || "Outros";
-            if (!m[name]) m[name] = { name, amount: 0 };
-            m[name].amount += parseFloat(ap.totalAmount || ap.amount || 0);
+            const cur = (ap.currency || "USD").toUpperCase();
+            const key = `${name}||${cur}`;
+            if (!m[key]) m[key] = { name, currency: cur, amount: 0 };
+            m[key].amount += parseFloat(ap.totalAmount || ap.amount || 0) - parseFloat(ap.paidAmount || 0);
         });
-        // Faturas pendentes
+        // Faturas pendentes (somente as que NAO tem AP vinculado)
+        const apInvoiceIds = new Set(accountsPayable.map((ap: any) => ap.invoiceId).filter(Boolean));
         invoices.forEach((inv: any) => {
-            if (inv.status !== "pending") return;
+            if (inv.status !== "pending" || apInvoiceIds.has(inv.id)) return;
             const name = inv.supplierName || inv.supplier || "Outros";
-            if (!m[name]) m[name] = { name, amount: 0 };
-            m[name].amount += parseFloat(inv.totalAmount || 0);
+            const cur = (inv.currency || "USD").toUpperCase();
+            const key = `${name}||${cur}`;
+            if (!m[key]) m[key] = { name, currency: cur, amount: 0 };
+            m[key].amount += parseFloat(inv.totalAmount || 0);
         });
-        return Object.values(m).sort((a, b) => b.amount - a.amount).slice(0, 6);
+        return Object.values(m).filter(d => d.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 8);
     }, [accountsPayable, invoices]);
-    const maxDebt = Math.max(...debtByCompany.map(d => d.amount), 1);
-    const totalDebt = debtByCompany.reduce((s, d) => s + d.amount, 0);
+    const totalDebtUsd = debtByCompany.filter(d => d.currency !== "PYG").reduce((s, d) => s + d.amount, 0);
+    const totalDebtPyg = debtByCompany.filter(d => d.currency === "PYG").reduce((s, d) => s + d.amount, 0);
 
     // ─── Card 7: Equipment + ultimo abastecimento ───────────────────────────
     const lastDieselByEquip = useMemo(() => {
@@ -282,9 +299,11 @@ export default function FarmDashboard() {
                             <div className="flex justify-between items-center mb-6">
                                 <div><h3 className="headline-font font-bold text-lg text-emerald-950">Despesas Mensais</h3><p className="text-sm text-[#41493e]">Trajetoria anual de faturas</p></div>
                                 <div className="text-right">
-                                    <span className="text-3xl font-black text-emerald-950">{fmt(totalExpenses)}</span>
-                                    <span className="text-sm font-semibold text-emerald-700 ml-1">Total</span>
-                                    {pctChange !== 0 && <div className={`text-[10px] font-bold uppercase tracking-wider ${pctChange > 0 ? "text-red-700" : "text-[#2f5c00]"}`}>{pctChange > 0 ? "+" : ""}{pctChange.toFixed(1)}% vs mes anterior</div>}
+                                    <div className="flex items-baseline gap-3 justify-end">
+                                        {totalExpensesUsd > 0 && <span className="text-2xl font-black text-emerald-950">{fmt(totalExpensesUsd, "USD")}</span>}
+                                        {totalExpensesPyg > 0 && <span className="text-2xl font-black text-emerald-950">{fmt(totalExpensesPyg, "PYG")}</span>}
+                                    </div>
+                                    {pctChange !== 0 && <div className={`text-[10px] font-bold uppercase tracking-wider ${pctChange > 0 ? "text-red-700" : "text-[#2f5c00]"}`}>{pctChange > 0 ? "+" : ""}{pctChange.toFixed(1)}% vs mes anterior (USD)</div>}
                                 </div>
                             </div>
                             <div className="h-52 w-full">
@@ -295,8 +314,9 @@ export default function FarmDashboard() {
                                             <CartesianGrid vertical={true} horizontal={false} strokeDasharray="3 3" stroke="#e9f0e1" />
                                             <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#41493e", fontWeight: 700 }} axisLine={false} tickLine={false} />
                                             <YAxis tick={{ fontSize: 9, fill: "#717a6d" }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(0)}M` : `${(v / 1000).toFixed(0)}K`} />
-                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: "none", boxShadow: SHADOW, padding: "8px 14px" }} formatter={(v: number) => [fmt(v), "Despesa"]} />
-                                            <Area type="monotone" dataKey="value" stroke="#1b5e20" strokeWidth={3} fill="url(#perfGrad)" dot={{ r: 4, fill: "#1b5e20" }} activeDot={{ r: 6, fill: "#1b5e20" }} />
+                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: "none", boxShadow: SHADOW, padding: "8px 14px" }} formatter={(v: number, name: string) => [name === "pyg" ? fmt(v, "PYG") : fmt(v, "USD"), name === "pyg" ? "Guarani" : "Dolar"]} />
+                                            <Area type="monotone" dataKey="usd" stroke="#1b5e20" strokeWidth={3} fill="url(#perfGrad)" dot={{ r: 4, fill: "#1b5e20" }} activeDot={{ r: 6, fill: "#1b5e20" }} />
+                                            {totalExpensesPyg > 0 && <Area type="monotone" dataKey="pyg" stroke="#b45309" strokeWidth={2} fill="none" dot={{ r: 3, fill: "#b45309" }} />}
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 ) : <div className="h-full flex items-center justify-center text-[#717a6d] text-sm">Sem faturas registradas</div>}
@@ -480,11 +500,12 @@ export default function FarmDashboard() {
                         <div className="flex justify-between items-center mb-5">
                             <div><h3 className="headline-font font-bold text-lg text-emerald-950">Divida por Empresa</h3><p className="text-sm text-[#41493e]">Contas a pagar + faturas pendentes</p></div>
                         </div>
-                        {/* 3 metric cards */}
+                        {/* metric cards */}
                         <div className="grid grid-cols-3 gap-3 mb-5">
                             <div className="bg-red-50 p-3 rounded-xl">
-                                <div className="text-[10px] uppercase font-bold text-red-800 mb-1">Total Divida</div>
-                                <div className="text-lg font-black text-red-700">{fmt(totalDebt)}</div>
+                                <div className="text-[10px] uppercase font-bold text-red-800 mb-1">Divida $</div>
+                                <div className="text-lg font-black text-red-700">{fmt(totalDebtUsd, "USD")}</div>
+                                {totalDebtPyg > 0 && <div className="text-sm font-bold text-red-600 mt-1">{fmt(totalDebtPyg, "PYG")}</div>}
                             </div>
                             <div className="bg-[#eff6e7] p-3 rounded-xl">
                                 <div className="text-[10px] uppercase font-bold text-[#41493e] mb-1">Maior Credor</div>
@@ -495,25 +516,33 @@ export default function FarmDashboard() {
                                 <div className="text-lg font-black text-emerald-950">{invoices.filter((i: any) => i.status === "pending").length}</div>
                             </div>
                         </div>
-                        {/* Barras verticais finas */}
-                        {debtByCompany.length > 0 ? (
-                            <div className="flex items-end gap-4 px-1" style={{ height: 160 }}>
+                        {/* Barras verticais — separadas por moeda */}
+                        {debtByCompany.length > 0 ? (() => {
+                            const maxDebt = Math.max(...debtByCompany.map(d => d.currency === "PYG" ? 0 : d.amount), 1);
+                            const maxDebtPyg = Math.max(...debtByCompany.map(d => d.currency === "PYG" ? d.amount : 0), 1);
+                            return (
+                            <div className="flex items-end gap-3 px-1" style={{ height: 160 }}>
                                 {debtByCompany.map((d, i) => {
-                                    const pct = (d.amount / maxDebt) * 100;
-                                    const colors = ["#1b5e20", "#204200", "#2f5c00", "#41493e", "#717a6d", "#9ca3af"];
+                                    const isPyg = d.currency === "PYG";
+                                    const pct = isPyg ? (d.amount / maxDebtPyg) * 100 : (d.amount / maxDebt) * 100;
+                                    const colors = isPyg
+                                        ? ["#b45309", "#d97706", "#f59e0b", "#fbbf24"]
+                                        : ["#1b5e20", "#204200", "#2f5c00", "#41493e", "#717a6d", "#9ca3af"];
+                                    const colorIdx = debtByCompany.filter(x => x.currency === d.currency).indexOf(d);
                                     return (
-                                        <div key={d.name} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                                            <span className="text-[9px] font-black text-emerald-950 whitespace-nowrap">{fmt(d.amount)}</span>
+                                        <div key={`${d.name}-${d.currency}`} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                                            <span className="text-[9px] font-black text-emerald-950 whitespace-nowrap">{fmt(d.amount, d.currency)}</span>
                                             <div className="w-3/5 max-w-[32px] bg-[#e9f0e1] rounded-t-sm relative overflow-hidden" style={{ height: "120px" }}>
                                                 <div className="absolute bottom-0 left-0 right-0 rounded-t-sm transition-all duration-700"
-                                                    style={{ height: `${Math.max(pct, 5)}%`, background: colors[i] || "#9ca3af" }}></div>
+                                                    style={{ height: `${Math.max(pct, 5)}%`, background: colors[colorIdx] || "#9ca3af" }}></div>
                                             </div>
                                             <span className="text-[7px] font-bold text-[#41493e] text-center truncate max-w-full uppercase leading-tight">{d.name.split(" ").slice(0, 2).join(" ")}</span>
+                                            <span className={`text-[7px] font-bold ${isPyg ? "text-amber-600" : "text-emerald-700"}`}>{isPyg ? "Gs" : "$"}</span>
                                         </div>
                                     );
                                 })}
-                            </div>
-                        ) : <div className="h-32 flex items-center justify-center text-[#717a6d] text-sm">Sem dividas pendentes</div>}
+                            </div>);
+                        })() : <div className="h-32 flex items-center justify-center text-[#717a6d] text-sm">Sem dividas pendentes</div>}
                     </section>
 
                     {/* ══ CARD 7: Frota (5 col) — com ultimo abastecimento ══ */}

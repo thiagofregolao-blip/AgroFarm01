@@ -755,6 +755,29 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 .set(updateData)
                 .where(eq(farmInvoices.id, req.params.id))
                 .returning();
+
+            // Cascade: update linked accounts payable (supplier, currency, totalAmount)
+            const cascadeFields: string[] = [];
+            const cascadeValues: any[] = [];
+            if (supplier !== undefined) cascadeFields.push(`supplier = '${supplier.replace(/'/g, "''")}'`);
+            if (currency !== undefined) cascadeFields.push(`currency = '${currency}'`);
+            if (totalAmount !== undefined) cascadeFields.push(`total_amount = '${totalAmount}'`);
+            if (dueDate !== undefined) cascadeFields.push(`due_date = ${dueDate ? `'${new Date(dueDate).toISOString()}'` : 'NULL'}`);
+            if (cascadeFields.length > 0) {
+                try {
+                    const { sql: sqlFn } = await import("drizzle-orm");
+                    await db.execute(sqlFn`
+                        UPDATE farm_accounts_payable
+                        SET ${sqlFn.raw(cascadeFields.join(", "))}
+                        WHERE invoice_id = ${req.params.id}
+                          AND status != 'pago'
+                    `);
+                    console.log(`[INVOICE_CASCADE] Updated AP fields [${cascadeFields.join(", ")}] for invoice ${req.params.id}`);
+                } catch (cascErr) {
+                    console.error("[INVOICE_CASCADE]", cascErr);
+                }
+            }
+
             res.json(updated);
         } catch (error) {
             console.error("[FARM_INVOICE_UPDATE]", error);
