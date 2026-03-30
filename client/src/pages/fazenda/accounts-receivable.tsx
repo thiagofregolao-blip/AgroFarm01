@@ -234,11 +234,28 @@ export default function AccountsReceivable() {
         i.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // ─── KPI Calculations ───────────────────────────────────────────────────
+    // ─── Dual currency helper ─────────────────────────────────────────────
+    const groupByCur = (arr: any[], amountFn: (i: any) => number) => {
+        const result: Record<string, number> = {};
+        for (const i of arr) { const cur = i.currency || "USD"; result[cur] = (result[cur] || 0) + amountFn(i); }
+        return result;
+    };
+    const fmtDual = (byCur: Record<string, number>) => {
+        const entries = Object.entries(byCur).filter(([, v]) => v !== 0);
+        if (entries.length === 0) return "$ 0";
+        return entries.map(([cur, val]) => {
+            if (cur === "PYG") return `₲ ${Math.round(val).toLocaleString("es-PY")}`;
+            return `$ ${val.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+        }).join(" | ");
+    };
+
+    // ─── KPI Calculations (dual currency) ──────────────────────────────────
     const kpiTotalReceivable = useMemo(() => {
-        return activeItems
-            .filter((i: any) => i.status === "pendente" || i.status === "parcial")
-            .reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0);
+        const open = activeItems.filter((i: any) => i.status === "pendente" || i.status === "parcial");
+        return {
+            total: open.reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0),
+            byCurrency: groupByCur(open, (i) => parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0)),
+        };
     }, [items]);
 
     const kpiOverdue = useMemo(() => {
@@ -246,15 +263,18 @@ export default function AccountsReceivable() {
         return {
             count: overdueItems.length,
             sum: overdueItems.reduce((s: number, i: any) => s + parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0), 0),
+            byCurrency: groupByCur(overdueItems, (i) => parseFloat(i.totalAmount) - parseFloat(i.receivedAmount || 0)),
         };
     }, [items]);
 
     const kpiReceivedThisMonth = useMemo(() => {
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        return activeItems
-            .filter((i: any) => i.status === "recebido" && i.updatedAt && new Date(i.updatedAt) >= monthStart)
-            .reduce((s: number, i: any) => s + parseFloat(i.receivedAmount || i.totalAmount || 0), 0);
+        const received = activeItems.filter((i: any) => i.status === "recebido" && i.updatedAt && new Date(i.updatedAt) >= monthStart);
+        return {
+            total: received.reduce((s: number, i: any) => s + parseFloat(i.receivedAmount || i.totalAmount || 0), 0),
+            byCurrency: groupByCur(received, (i) => parseFloat(i.receivedAmount || i.totalAmount || 0)),
+        };
     }, [items]);
 
     const kpiNext7Days = useMemo(() => {
@@ -354,7 +374,7 @@ export default function AccountsReceivable() {
                                 <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Total a Receber</span>
                             </div>
                             <p className="text-2xl font-extrabold font-headline text-gray-900">
-                                {kpiTotalReceivable.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
+                                {fmtDual(kpiTotalReceivable.byCurrency)}
                             </p>
                             <p className="text-xs text-gray-400 mt-1">{activeItems.filter((i: any) => i.status !== "recebido").length} titulos pendentes</p>
                         </div>
@@ -366,7 +386,7 @@ export default function AccountsReceivable() {
                                 <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Vencidos</span>
                             </div>
                             <p className="text-2xl font-extrabold font-headline text-red-600">
-                                {kpiOverdue.sum.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
+                                {fmtDual(kpiOverdue.byCurrency)}
                             </p>
                             <p className="text-xs text-red-400 mt-1">{kpiOverdue.count} titulo(s) em atraso</p>
                         </div>
@@ -378,7 +398,7 @@ export default function AccountsReceivable() {
                                 <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Recebidos (Mes)</span>
                             </div>
                             <p className="text-2xl font-extrabold font-headline text-green-600">
-                                {kpiReceivedThisMonth.toLocaleString("pt-BR", { style: "currency", currency: "USD" })}
+                                {fmtDual(kpiReceivedThisMonth.byCurrency)}
                             </p>
                             <p className="text-xs text-gray-400 mt-1">no mes atual</p>
                         </div>

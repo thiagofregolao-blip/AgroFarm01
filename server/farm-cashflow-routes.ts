@@ -266,12 +266,16 @@ export function registerFarmCashFlowRoutes(app: Express) {
                 and(eq(farmCashTransactions.farmerId, farmerId), gte(farmCashTransactions.transactionDate, firstOfMonth))
             );
 
+            // Group by currency to avoid mixing USD and PYG
+            const byCurrency: Record<string, { entradas: number; saidas: number }> = {};
             let totalEntradas = 0;
             let totalSaidas = 0;
             for (const t of monthTransactions) {
                 const val = parseFloat(t.amount as string) || 0;
-                if (t.type === "entrada") totalEntradas += val;
-                else totalSaidas += val;
+                const cur = t.currency || "USD";
+                if (!byCurrency[cur]) byCurrency[cur] = { entradas: 0, saidas: 0 };
+                if (t.type === "entrada") { totalEntradas += val; byCurrency[cur].entradas += val; }
+                else { totalSaidas += val; byCurrency[cur].saidas += val; }
             }
 
             const sixMonthsAgo = new Date();
@@ -283,7 +287,9 @@ export function registerFarmCashFlowRoutes(app: Express) {
                 and(eq(farmCashTransactions.farmerId, farmerId), gte(farmCashTransactions.transactionDate, sixMonthsAgo))
             );
 
+            // Monthly chart data grouped by currency
             const monthlyData: Record<string, { entradas: number; saidas: number }> = {};
+            const monthlyByCurrency: Record<string, Record<string, { entradas: number; saidas: number }>> = {};
             for (let i = 5; i >= 0; i--) {
                 const d = new Date();
                 d.setMonth(d.getMonth() - i);
@@ -293,10 +299,16 @@ export function registerFarmCashFlowRoutes(app: Express) {
             for (const t of allRecent) {
                 const d = new Date(t.transactionDate as any);
                 const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                const cur = t.currency || "USD";
                 if (monthlyData[key]) {
                     const val = parseFloat(t.amount as string) || 0;
                     if (t.type === "entrada") monthlyData[key].entradas += val;
                     else monthlyData[key].saidas += val;
+                    // Also track by currency
+                    if (!monthlyByCurrency[cur]) monthlyByCurrency[cur] = {};
+                    if (!monthlyByCurrency[cur][key]) monthlyByCurrency[cur][key] = { entradas: 0, saidas: 0 };
+                    if (t.type === "entrada") monthlyByCurrency[cur][key].entradas += val;
+                    else monthlyByCurrency[cur][key].saidas += val;
                 }
             }
 
@@ -308,10 +320,14 @@ export function registerFarmCashFlowRoutes(app: Express) {
             }));
 
             const byCategoryRaw: Record<string, number> = {};
+            const byCategoryCurrency: Record<string, Record<string, number>> = {};
             for (const t of monthTransactions) {
                 if (t.type === "saida") {
                     const val = parseFloat(t.amount as string) || 0;
+                    const cur = t.currency || "USD";
                     byCategoryRaw[t.category] = (byCategoryRaw[t.category] || 0) + val;
+                    if (!byCategoryCurrency[cur]) byCategoryCurrency[cur] = {};
+                    byCategoryCurrency[cur][t.category] = (byCategoryCurrency[cur][t.category] || 0) + val;
                 }
             }
             const byCategory = Object.entries(byCategoryRaw).map(([cat, val]) => ({ category: cat, value: Math.round(val * 100) / 100 }))
@@ -361,6 +377,12 @@ export function registerFarmCashFlowRoutes(app: Express) {
                 totalInstallments: ar.totalInstallments,
             }));
 
+            // Build per-currency summaries
+            const currencySummary: Record<string, { entradas: number; saidas: number; saldo: number }> = {};
+            for (const [cur, vals] of Object.entries(byCurrency)) {
+                currencySummary[cur] = { entradas: vals.entradas, saidas: vals.saidas, saldo: vals.entradas - vals.saidas };
+            }
+
             res.json({
                 accounts,
                 monthSummary: {
@@ -368,9 +390,11 @@ export function registerFarmCashFlowRoutes(app: Express) {
                     totalSaidas,
                     saldoLiquido: totalEntradas - totalSaidas,
                     transactionCount: monthTransactions.length,
+                    byCurrency: currencySummary,
                 },
                 chartData,
                 byCategory,
+                byCategoryCurrency,
                 contasAPagar,
                 contasARVencer,
             });

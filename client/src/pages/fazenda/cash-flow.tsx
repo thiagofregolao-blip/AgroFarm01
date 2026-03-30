@@ -149,25 +149,49 @@ export default function FarmCashFlow() {
         }).filter(m => m.entradas > 0 || m.saidas > 0 || currencyFilter !== "todos");
     }, [transactions, currencyFilter]);
 
-    // ── Predictive indicators ────────────────────────────────────────
-    const totalSaldo = allAccounts.reduce((s, a) => s + (parseFloat(a.currentBalance) || 0), 0);
+    // ── Helper: group values by currency ─────────────────────────────
+    const groupByCurrency = (items: any[], amountFn: (item: any) => number, currencyFn: (item: any) => string = (i) => i.currency || "USD") => {
+        const result: Record<string, number> = {};
+        for (const item of items) {
+            const cur = currencyFn(item);
+            result[cur] = (result[cur] || 0) + amountFn(item);
+        }
+        return result;
+    };
+
+    const fmtDual = (byCur: Record<string, number>) => {
+        const entries = Object.entries(byCur).filter(([, v]) => v !== 0);
+        if (entries.length === 0) return "$ 0";
+        return entries.map(([cur, val]) => {
+            if (cur === "PYG") return `₲ ${Math.round(val).toLocaleString("es-PY")}`;
+            return `$ ${val.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+        }).join(" | ");
+    };
+
+    // ── Predictive indicators (dual currency) ─────────────────────────
+    const totalSaldo = accounts.reduce((s: number, a: any) => s + (parseFloat(a.currentBalance) || 0), 0);
+    const saldoByCurrency = groupByCurrency(accounts, (a) => parseFloat(a.currentBalance) || 0, (a) => a.currency || "USD");
 
     const upcomingAP = useMemo(() => {
         const next30 = new Date(); next30.setDate(next30.getDate() + 30);
-        return (accountsPayable as any[])
-            .filter((ap: any) => ap.status !== "pago" && new Date(ap.dueDate) <= next30)
-            .reduce((s: number, ap: any) => s + parseFloat(ap.totalAmount || ap.amount || 0), 0);
+        const filtered = (accountsPayable as any[]).filter((ap: any) => ap.status !== "pago" && new Date(ap.dueDate) <= next30);
+        return {
+            total: filtered.reduce((s: number, ap: any) => s + parseFloat(ap.totalAmount || ap.amount || 0), 0),
+            byCurrency: groupByCurrency(filtered, (ap) => parseFloat(ap.totalAmount || ap.amount || 0)),
+        };
     }, [accountsPayable]);
 
     const upcomingAR = useMemo(() => {
         const next30 = new Date(); next30.setDate(next30.getDate() + 30);
-        return (accountsReceivable as any[])
-            .filter((ar: any) => ar.status !== "recebido" && new Date(ar.dueDate) <= next30)
-            .reduce((s: number, ar: any) => s + parseFloat(ar.totalAmount) - parseFloat(ar.receivedAmount || 0), 0);
+        const filtered = (accountsReceivable as any[]).filter((ar: any) => ar.status !== "recebido" && new Date(ar.dueDate) <= next30);
+        return {
+            total: filtered.reduce((s: number, ar: any) => s + parseFloat(ar.totalAmount) - parseFloat(ar.receivedAmount || 0), 0),
+            byCurrency: groupByCurrency(filtered, (ar) => parseFloat(ar.totalAmount) - parseFloat(ar.receivedAmount || 0)),
+        };
     }, [accountsReceivable]);
 
-    const predictedBalance = totalSaldo + upcomingAR - upcomingAP;
-    const burnRate = month.totalSaidas / (new Date().getDate() || 1); // daily average spending
+    const predictedBalance = totalSaldo + upcomingAR.total - upcomingAP.total;
+    const burnRate = month.totalSaidas / (new Date().getDate() || 1);
     const daysUntilZero = burnRate > 0 ? Math.floor(totalSaldo / burnRate) : null;
 
     // Build 30-day cash flow projection
@@ -194,38 +218,43 @@ export default function FarmCashFlow() {
         return points;
     }, [totalSaldo, accountsPayable, accountsReceivable]);
 
-    // ── Stitch AgriIntel KPI calculations ─────────────────────────
+    // ── Stitch AgriIntel KPI calculations (dual currency) ─────────────
     const kpiTotalBalance = useMemo(() => {
-        return allAccounts.reduce((s: number, a: any) => s + (parseFloat(a.currentBalance) || 0), 0);
-    }, [allAccounts]);
+        return accounts.reduce((s: number, a: any) => s + (parseFloat(a.currentBalance) || 0), 0);
+    }, [accounts]);
+    const kpiBalanceByCurrency = useMemo(() => groupByCurrency(accounts, (a) => parseFloat(a.currentBalance) || 0, (a) => a.currency || "USD"), [accounts]);
 
     const kpiMonthIncome = useMemo(() => {
         const now = new Date();
         const thisMonth = now.getMonth();
         const thisYear = now.getFullYear();
-        return transactions
-            .filter((t: any) => {
-                if (t.type !== "entrada") return false;
-                const d = new Date(t.transactionDate);
-                return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
-            })
-            .reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
-    }, [transactions]);
+        const monthTx = filteredTransactions.filter((t: any) => {
+            if (t.type !== "entrada") return false;
+            const d = new Date(t.transactionDate);
+            return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+        });
+        return {
+            total: monthTx.reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0),
+            byCurrency: groupByCurrency(monthTx, (t) => parseFloat(t.amount || 0)),
+        };
+    }, [filteredTransactions]);
 
     const kpiMonthExpense = useMemo(() => {
         const now = new Date();
         const thisMonth = now.getMonth();
         const thisYear = now.getFullYear();
-        return transactions
-            .filter((t: any) => {
-                if (t.type === "entrada") return false;
-                const d = new Date(t.transactionDate);
-                return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
-            })
-            .reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
-    }, [transactions]);
+        const monthTx = filteredTransactions.filter((t: any) => {
+            if (t.type === "entrada") return false;
+            const d = new Date(t.transactionDate);
+            return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+        });
+        return {
+            total: monthTx.reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0),
+            byCurrency: groupByCurrency(monthTx, (t) => parseFloat(t.amount || 0)),
+        };
+    }, [filteredTransactions]);
 
-    // ── Monthly flow chart (last 6 months CSS bars) ────────────────
+    // ── Monthly flow chart (last 6 months CSS bars, filtered by currency) ──
     const monthlyFlowData = useMemo(() => {
         const now = new Date();
         const months: { label: string; entradas: number; saidas: number }[] = [];
@@ -234,16 +263,16 @@ export default function FarmCashFlow() {
             const m = d.getMonth();
             const y = d.getFullYear();
             const label = d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
-            const entradas = transactions
+            const entradas = filteredTransactions
                 .filter((t: any) => t.type === "entrada" && new Date(t.transactionDate).getMonth() === m && new Date(t.transactionDate).getFullYear() === y)
                 .reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
-            const saidas = transactions
+            const saidas = filteredTransactions
                 .filter((t: any) => t.type !== "entrada" && new Date(t.transactionDate).getMonth() === m && new Date(t.transactionDate).getFullYear() === y)
                 .reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
             months.push({ label, entradas, saidas });
         }
         return months;
-    }, [transactions]);
+    }, [filteredTransactions]);
 
     const flowChartMax = useMemo(() => {
         return Math.max(1, ...monthlyFlowData.map(m => Math.max(m.entradas, m.saidas)));
@@ -302,7 +331,7 @@ export default function FarmCashFlow() {
                                     <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Entradas</span>
                                 </div>
                                 <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                                    {kpiMonthIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {fmtDual(kpiMonthIncome.byCurrency)}
                                 </p>
                                 <p className="text-xs text-gray-400 mt-1">receitas do mes</p>
                             </div>
@@ -312,7 +341,7 @@ export default function FarmCashFlow() {
                                     <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Saidas</span>
                                 </div>
                                 <p className="text-2xl font-extrabold text-gray-900" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                                    {kpiMonthExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {fmtDual(kpiMonthExpense.byCurrency)}
                                 </p>
                                 <p className="text-xs text-red-400 mt-1">despesas do mes</p>
                             </div>
@@ -483,12 +512,12 @@ export default function FarmCashFlow() {
                                         <p className="text-2xl font-extrabold text-gray-900">{formatCurrency(totalSaldo, "USD")}</p>
                                     </div>
                                     <div className="bg-white p-6 rounded-xl shadow-sm">
-                                        <div className="flex items-center gap-2 mb-2">{upcomingAP > 0 ? <AlertTriangle className="h-4 w-4 text-red-500" /> : <DollarSign className="h-4 w-4 text-gray-400" />}<p className="text-xs text-gray-500 font-medium">A Pagar (30 dias)</p></div>
-                                        <p className={`text-2xl font-extrabold ${upcomingAP > 0 ? "text-red-600" : "text-gray-400"}`}>{formatCurrency(upcomingAP, "USD")}</p>
+                                        <div className="flex items-center gap-2 mb-2">{upcomingAP.total > 0 ? <AlertTriangle className="h-4 w-4 text-red-500" /> : <DollarSign className="h-4 w-4 text-gray-400" />}<p className="text-xs text-gray-500 font-medium">A Pagar (30 dias)</p></div>
+                                        <p className={`text-lg font-extrabold ${upcomingAP.total > 0 ? "text-red-600" : "text-gray-400"}`}>{fmtDual(upcomingAP.byCurrency)}</p>
                                     </div>
                                     <div className="bg-white p-6 rounded-xl shadow-sm">
-                                        <div className="flex items-center gap-2 mb-2"><TrendingUp className={`h-4 w-4 ${upcomingAR > 0 ? "text-blue-600" : "text-gray-400"}`} /><p className="text-xs text-gray-500 font-medium">A Receber (30 dias)</p></div>
-                                        <p className={`text-2xl font-extrabold ${upcomingAR > 0 ? "text-blue-700" : "text-gray-400"}`}>{formatCurrency(upcomingAR, "USD")}</p>
+                                        <div className="flex items-center gap-2 mb-2"><TrendingUp className={`h-4 w-4 ${upcomingAR.total > 0 ? "text-blue-600" : "text-gray-400"}`} /><p className="text-xs text-gray-500 font-medium">A Receber (30 dias)</p></div>
+                                        <p className={`text-lg font-extrabold ${upcomingAR.total > 0 ? "text-blue-700" : "text-gray-400"}`}>{fmtDual(upcomingAR.byCurrency)}</p>
                                     </div>
                                     <div className="bg-white p-6 rounded-xl shadow-sm">
                                         <div className="flex items-center gap-2 mb-2"><Target className={`h-4 w-4 ${predictedBalance >= 0 ? "text-emerald-600" : "text-red-500"}`} /><p className="text-xs text-gray-500 font-medium">Saldo Projetado (30d)</p></div>
