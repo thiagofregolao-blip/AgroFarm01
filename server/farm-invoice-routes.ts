@@ -74,10 +74,29 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const filtered = docTypeFilter
                 ? invoices.filter((inv: any) => (inv.documentType || "factura") === docTypeFilter)
                 : invoices;
-            // Strip pdfBase64 from list response (can be megabytes), add hasFile flag
+            // Check which invoices have payments in accounts_payable
+            const { db } = await import("./db");
+            const { sql } = await import("drizzle-orm");
+            const apRows = await db.execute(sql`
+                SELECT invoice_id, status, paid_amount, total_amount
+                FROM farm_accounts_payable
+                WHERE farmer_id = ${farmerId} AND invoice_id IS NOT NULL
+            `);
+            const apMap: Record<string, { apStatus: string; paidAmount: string; totalAmount: string }> = {};
+            for (const row of ((apRows as any).rows ?? apRows) as any[]) {
+                apMap[row.invoice_id] = { apStatus: row.status, paidAmount: row.paid_amount, totalAmount: row.total_amount };
+            }
+
+            // Strip pdfBase64 from list response (can be megabytes), add hasFile flag + payment info
             const light = filtered.map((inv: any) => {
                 const { pdfBase64, rawPdfData, ...rest } = inv;
-                return { ...rest, hasFile: !!pdfBase64 };
+                const ap = apMap[inv.id];
+                return {
+                    ...rest,
+                    hasFile: !!pdfBase64,
+                    paymentStatus: ap?.apStatus || null,
+                    hasPendingPayment: ap && (ap.apStatus === "pago" || ap.apStatus === "parcial"),
+                };
             });
             res.json(light);
         } catch (error) {
@@ -875,6 +894,18 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const invoiceId = req.params.id;
+
+            // Block deletion if invoice has payments
+            const apCheck = await db.execute(sql`
+                SELECT id, status FROM farm_accounts_payable
+                WHERE invoice_id = ${invoiceId} AND farmer_id = ${farmerId}
+                  AND status IN ('pago', 'parcial')
+                LIMIT 1
+            `);
+            const apRows = (apCheck as any).rows ?? apCheck;
+            if (apRows.length > 0) {
+                return res.status(400).json({ error: "Nao e possivel excluir uma fatura que ja possui pagamento registrado. Reverta o pagamento primeiro." });
+            }
 
             // Check if invoice was confirmed — if so, reverse stock entries
             const invoice = await farmStorage.getInvoiceById(invoiceId);

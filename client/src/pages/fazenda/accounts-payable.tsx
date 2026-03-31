@@ -431,7 +431,6 @@ export default function AccountsPayable() {
                                                 <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Vencimento</th>
                                                 <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Status</th>
                                                 <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Valor</th>
-                                                <th className="text-right px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Acoes</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -467,17 +466,6 @@ export default function AccountsPayable() {
                                                         {/* Valor */}
                                                         <td className="px-5 py-3.5 text-right font-extrabold text-gray-900 font-headline">
                                                             {formatCurrency(item.totalAmount, item.currency || "USD")}
-                                                        </td>
-                                                        {/* Acoes */}
-                                                        <td className="px-5 py-3.5 text-right">
-                                                            <div className="flex items-center justify-end gap-1">
-                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => setEditingItem(item)} aria-label="Editar">
-                                                                    <Pencil className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" onClick={() => { if (confirm("Excluir esta conta?")) del.mutate(item.id); }} aria-label="Excluir">
-                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                            </div>
                                                         </td>
                                                     </tr>
                                                 );
@@ -688,11 +676,21 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
         setPaymentRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
     };
 
+    // Currency of selected items (for filtering bank accounts)
+    const selectedCurrency = checkedItems.length > 0 ? (checkedItems[0].currency || "USD") : "USD";
+    const filteredAccounts = accounts.filter((a: any) => a.currency === selectedCurrency);
+
     function openPayModal() {
         // Validate: all selected items must be from the same supplier
         const suppliers = new Set(checkedItems.map((i: any) => i.supplier));
         if (suppliers.size > 1) {
             alert("Nao e possivel pagar faturas de fornecedores diferentes na mesma operacao. Selecione apenas faturas do mesmo fornecedor.");
+            return;
+        }
+        // Validate: all selected items must be the same currency
+        const currencies = new Set(checkedItems.map((i: any) => (i.currency || "USD").toUpperCase()));
+        if (currencies.size > 1) {
+            alert("Nao e possivel pagar faturas em moedas diferentes na mesma operacao. Selecione apenas faturas na mesma moeda ($ ou Gs).");
             return;
         }
         setPaymentRows([{ accountId: "", amount: totalChecked.toFixed(2), paymentMethod: "transferencia" }]);
@@ -1013,7 +1011,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
                                                             <SelectValue placeholder="Selecione a conta..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {accounts.map((a: any) => (
+                                                            {filteredAccounts.map((a: any) => (
                                                                 <SelectItem key={a.id} value={a.id}>{a.name} ({a.currency})</SelectItem>
                                                             ))}
                                                         </SelectContent>
@@ -1494,6 +1492,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                 <tr className="bg-gray-50">
                                     <th className="text-left px-5 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Fornecedor</th>
                                     <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Descricao</th>
+                                    <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Observacoes</th>
                                     <th className="text-left px-4 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Data Pgto</th>
                                     <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Parcela</th>
                                     <th className="text-center px-3 py-3.5 text-[11px] uppercase tracking-wider font-bold text-gray-400">Metodo</th>
@@ -1530,6 +1529,9 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                 {hasBatchDetails
                                                     ? `Pgto agrupado (${group.batchItems!.length} titulos)`
                                                     : item?.apDescription || "--"}
+                                            </td>
+                                            <td className="px-4 py-3.5 text-gray-400 max-w-[150px] truncate text-xs italic">
+                                                {item?.observation || "--"}
                                             </td>
                                             <td className="px-4 py-3.5 text-sm text-gray-700">{group.date}</td>
                                             <td className="px-3 py-3.5 text-center">
@@ -1577,6 +1579,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                     <span className="text-xs text-gray-600">{bi.supplier || group.supplier}</span>
                                                 </td>
                                                 <td className="px-4 py-2 text-xs text-gray-500">{bi.description || "--"}</td>
+                                                <td className="px-4 py-2"></td>
                                                 <td className="px-4 py-2 text-xs text-gray-400">--</td>
                                                 <td className="px-3 py-2 text-center">
                                                     {bi.installmentNumber ? (

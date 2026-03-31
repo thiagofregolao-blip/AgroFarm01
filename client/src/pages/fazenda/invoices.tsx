@@ -1550,7 +1550,17 @@ export default function FarmInvoices() {
                                                         {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "--"}
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap">
-                                                        {inv.status === "confirmed" ? (
+                                                        {inv.paymentStatus === "pago" ? (
+                                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                                PAGA
+                                                            </span>
+                                                        ) : inv.paymentStatus === "parcial" ? (
+                                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                                                PARCIAL
+                                                            </span>
+                                                        ) : inv.status === "confirmed" ? (
                                                             <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                                                 CONFIRMADA
@@ -1592,13 +1602,23 @@ export default function FarmInvoices() {
                                                                     <Eye className="h-4 w-4 text-blue-500" />
                                                                 </button>
                                                             )}
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); if (confirm("Excluir esta fatura?")) deleteMutation.mutate(inv.id); }}
-                                                                className="p-1.5 rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
-                                                                title="Excluir fatura"
-                                                            >
-                                                                <Trash2 className="h-4 w-4 text-red-400" />
-                                                            </button>
+                                                            {inv.hasPendingPayment ? (
+                                                                <button
+                                                                    className="p-1.5 rounded-lg cursor-not-allowed opacity-30"
+                                                                    title="Fatura com pagamento — nao pode excluir"
+                                                                    disabled
+                                                                >
+                                                                    <Trash2 className="h-4 w-4 text-gray-400" />
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); if (confirm("Excluir esta fatura?")) deleteMutation.mutate(inv.id); }}
+                                                                    className="p-1.5 rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
+                                                                    title="Excluir fatura"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4 text-red-400" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
