@@ -404,8 +404,7 @@ app.use((req, res, next) => {
         updated_at TIMESTAMP NOT NULL DEFAULT now(),
         UNIQUE(farmer_id, crop, season_id)
     )`);
-    // Retroactive fix: clear cashTransactionId from APs that are part of batches
-    // (prevents duplicate rows in payment-history via ap2 JOIN)
+    // Retroactive fix 1: clear cashTransactionId from APs that are part of batches
     try {
         await db.execute(sql`
             UPDATE farm_accounts_payable
@@ -414,6 +413,17 @@ app.use((req, res, next) => {
               AND cash_transaction_id IS NOT NULL
         `);
     } catch (_) { /* table may not exist yet */ }
+    // Retroactive fix 2: set payable_id on transactions that have none but AP has cash_transaction_id
+    try {
+        await db.execute(sql`
+            UPDATE farm_cash_transactions t
+            SET payable_id = ap.id
+            FROM farm_accounts_payable ap
+            WHERE ap.cash_transaction_id = t.id
+              AND t.payable_id IS NULL
+              AND ap.cash_transaction_id IS NOT NULL
+        `);
+    } catch (_) {}
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS warehouse_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS skip_stock_entry BOOLEAN DEFAULT false`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS file_mime_type TEXT`);
