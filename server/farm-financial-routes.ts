@@ -277,8 +277,9 @@ export function registerFarmFinancialRoutes(app: Express) {
                     status: newStatus,
                 };
                 if (paymentMethod) updatePayload.paymentMethod = paymentMethod;
-                // receiptFileUrl can be updated but receiptNumber is locked on edit
                 if (receiptFileUrl) updatePayload.receiptFileUrl = receiptFileUrl;
+                if (receiptNumber) updatePayload.receiptNumber = receiptNumber;
+                if (observation !== undefined) updatePayload.observation = observation || null;
                 await db.update(farmAccountsPayable).set(updatePayload).where(eq(farmAccountsPayable.id, req.params.id));
 
                 // 5. Sync farmExpenses if linked
@@ -604,15 +605,28 @@ export function registerFarmFinancialRoutes(app: Express) {
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
-            const [ap] = await db.select().from(farmAccountsPayable).where(
+            // Try to find AP by ID first, then fallback: ID might be a transaction ID
+            let [ap] = await db.select().from(farmAccountsPayable).where(
                 and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
             );
-            if (!ap) return res.status(404).json({ error: "Not found" });
+            if (!ap) {
+                const txLookup = await db.execute(sqlFn`
+                    SELECT payable_id FROM farm_cash_transactions WHERE id = ${req.params.id} AND farmer_id = ${farmerId} LIMIT 1
+                `);
+                const txRows = ((txLookup as any).rows ?? txLookup) as any[];
+                if (txRows.length > 0 && txRows[0].payable_id) {
+                    [ap] = await db.select().from(farmAccountsPayable).where(
+                        and(eq(farmAccountsPayable.id, txRows[0].payable_id), eq(farmAccountsPayable.farmerId, farmerId))
+                    );
+                }
+            }
+            if (!ap) return res.status(404).json({ error: "Conta a pagar nao encontrada" });
+            const apId = ap.id;
 
             // Find ALL cash transactions linked to this AP (via payable_id or cashTransactionId)
             const linkedTxResult = await db.execute(sqlFn`
                 SELECT id, amount, account_id AS "accountId" FROM farm_cash_transactions
-                WHERE payable_id = ${req.params.id} AND farmer_id = ${farmerId}
+                WHERE payable_id = ${apId} AND farmer_id = ${farmerId}
             `);
             const linkedTxs = ((linkedTxResult as any).rows ?? linkedTxResult) as any[];
 
@@ -640,7 +654,7 @@ export function registerFarmFinancialRoutes(app: Express) {
 
             // Clean up batch items if any
             try {
-                await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${req.params.id}`);
+                await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${apId}`);
             } catch (_) { /* ignore */ }
 
             // Reset AP to open with zero paid
@@ -653,7 +667,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                 receiptFileUrl: null,
                 paymentMethod: null,
                 observation: null,
-            } as any).where(eq(farmAccountsPayable.id, req.params.id));
+            } as any).where(eq(farmAccountsPayable.id, apId));
 
             // Sync farmExpenses if linked
             if (ap.expenseId) {
@@ -664,7 +678,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                 } as any).where(eq(farmExpenses.id, ap.expenseId));
             }
 
-            console.log(`[AP_REVERSE] Reversed AP ${req.params.id}, deleted ${linkedTxs.length} transaction(s)`);
+            console.log(`[AP_REVERSE] Reversed AP ${apId} (requested ${req.params.id}), deleted ${linkedTxs.length} transaction(s)`);
 
             res.json({ success: true });
         } catch (error) {
