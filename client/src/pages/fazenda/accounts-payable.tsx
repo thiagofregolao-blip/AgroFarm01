@@ -1109,7 +1109,13 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
 
                                     {paymentRows.length > 1 && (
                                         <div className={`text-xs font-semibold px-3 py-2 rounded-lg ${Math.abs(totalAllocated - totalChecked) < 0.01 ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
-                                            Alocado: {formatCurrency(totalAllocated)} / Selecionado: {formatCurrency(totalChecked)}
+                                            Alocado: {formatCurrency(totalAllocated, selectedCurrency)} / Selecionado: {formatCurrency(totalChecked, selectedCurrency)}
+                                        </div>
+                                    )}
+
+                                    {totalAllocated > totalChecked && (
+                                        <div className="text-xs font-semibold px-3 py-2 rounded-lg text-red-700 bg-red-50 border border-red-200">
+                                            Valor informado ({formatCurrency(totalAllocated, selectedCurrency)}) excede o saldo devedor ({formatCurrency(totalChecked, selectedCurrency)}). Corrija o valor.
                                         </div>
                                     )}
                                 </div>
@@ -1167,7 +1173,7 @@ function PagamentoTab({ items, accounts, seasons, onPay, paying, queryClient }: 
                                     </button>
                                     <Button
                                         className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold rounded-xl h-12 px-8 shadow-lg shadow-red-200 transition-all hover:shadow-xl hover:shadow-red-200 text-sm"
-                                        disabled={paying || batchPaying || !allRowsValid || checkedIds.size === 0 || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
+                                        disabled={paying || batchPaying || !allRowsValid || checkedIds.size === 0 || totalAllocated > totalChecked || (hasChequeMethod && (!chequeBanco || !chequeNumero))}
                                         onClick={handleConfirmPayment}
                                     >
                                         {(paying || batchPaying) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}

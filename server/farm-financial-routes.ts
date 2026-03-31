@@ -296,6 +296,10 @@ export function registerFarmFinancialRoutes(app: Express) {
 
             // ─── NEW PAYMENT MODE (original flow) ───
             const previousPaid = parseFloat(ap.paidAmount || "0");
+            const remaining = totalDue - previousPaid;
+            if (payAmount > remaining + 0.01) {
+                return res.status(400).json({ error: `Valor (${payAmount.toFixed(2)}) excede o saldo devedor (${remaining.toFixed(2)})` });
+            }
             const newPaidTotal = previousPaid + payAmount;
 
             let firstTxId: string | null = null;
@@ -443,6 +447,12 @@ export function registerFarmFinancialRoutes(app: Express) {
                 if (ap) apRecords.push(ap);
             }
             if (apRecords.length === 0) return res.status(404).json({ error: "No valid records found" });
+
+            // Validate: total to pay cannot exceed total remaining
+            const totalRemaining = apRecords.reduce((s: number, ap: any) => s + parseFloat(ap.totalAmount) - parseFloat(ap.paidAmount || 0), 0);
+            if (totalToPay > totalRemaining + 0.01) {
+                return res.status(400).json({ error: `Valor (${totalToPay.toFixed(2)}) excede o saldo devedor total (${totalRemaining.toFixed(2)})` });
+            }
 
             // Sort by remaining balance ascending (pay smallest first)
             apRecords.sort((a, b) => {
