@@ -70,7 +70,7 @@ export default function FieldNotebook() {
             }
         }
         return groups;
-    }, [entries]);
+    }, [filteredEntries]);
 
     return (
         <FarmLayout>
