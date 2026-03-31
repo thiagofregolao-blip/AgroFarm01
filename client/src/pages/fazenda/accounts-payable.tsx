@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil, History, Search, CreditCard, RefreshCw, BarChart3, CalendarDays, DollarSign, TrendingUp, Wallet, ShieldCheck, Upload, Info, X, Check } from "lucide-react";
+import { Receipt, Loader2, AlertTriangle, CheckCircle, Clock, Download, CheckSquare, PlusCircle, Trash2, Pencil, History, Search, CreditCard, RefreshCw, BarChart3, CalendarDays, DollarSign, TrendingUp, Wallet, ShieldCheck, Upload, Info, X, Check, Eye } from "lucide-react";
 
 // ─── CSV export utility ──────────────────────────────────────────────────────
 function exportToCSV(data: any[], filename: string) {
@@ -1580,6 +1580,12 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                             </td>
                                             <td className="px-5 py-3.5 text-right">
                                                 <div className="flex items-center justify-end gap-1">
+                                                    {item?.receiptFileUrl && (
+                                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600"
+                                                            onClick={(e) => { e.stopPropagation(); window.open(item.receiptFileUrl, '_blank'); }} aria-label="Ver recibo">
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    )}
                                                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => openEditModal(item)} aria-label="Editar">
                                                         <Pencil className="h-3.5 w-3.5" />
                                                     </Button>
