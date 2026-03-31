@@ -275,6 +275,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
             const { accountId, amount, paymentMethod, accountRows, receiptNumber, receiptFileUrl, observation, _editOnly } = req.body;
+            console.log(`[AP_PAY] id=${req.params.id} amount=${amount} observation="${observation || ''}" _editOnly=${_editOnly}`);
 
             // Get the account payable
             const [ap] = await db.select().from(farmAccountsPayable).where(
