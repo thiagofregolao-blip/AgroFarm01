@@ -227,7 +227,44 @@ export default function FarmStock() {
         }
     };
 
-    const filtered = stock.filter((s: any) => {
+    // Group stock by productId — sum quantities, weighted average cost
+    const grouped = useMemo(() => {
+        const map: Record<string, any> = {};
+        for (const s of stock as any[]) {
+            const key = s.productId || s.id;
+            if (!map[key]) {
+                map[key] = {
+                    ...s,
+                    quantity: "0",
+                    averageCost: "0",
+                    _totalQty: 0,
+                    _totalValue: 0,
+                    _deposits: [] as string[],
+                    _rows: [] as any[],
+                };
+            }
+            const qty = parseFloat(s.quantity || 0);
+            const cost = parseFloat(s.averageCost || 0);
+            map[key]._totalQty += qty;
+            map[key]._totalValue += qty * cost;
+            map[key]._rows.push(s);
+            const depName = s.depositName || s.propertyName || "Sem deposito";
+            if (!map[key]._deposits.includes(depName)) map[key]._deposits.push(depName);
+            // Keep latest lote/expiryDate
+            if (s.lote && !map[key].lote) map[key].lote = s.lote;
+            if (s.expiryDate && (!map[key].expiryDate || s.expiryDate > map[key].expiryDate)) map[key].expiryDate = s.expiryDate;
+        }
+        return Object.values(map).map((g: any) => ({
+            ...g,
+            quantity: String(g._totalQty),
+            averageCost: String(g._totalQty > 0 ? g._totalValue / g._totalQty : 0),
+            depositCount: g._deposits.length,
+            depositNames: g._deposits,
+            subRows: g._rows.length > 1 ? g._rows : null,
+        }));
+    }, [stock]);
+
+    const filtered = grouped.filter((s: any) => {
         const matchesSearch = s.productName.toLowerCase().includes(search.toLowerCase()) ||
             (s.productCategory || "").toLowerCase().includes(search.toLowerCase());
         const matchesCategory = !categoryFilter || normalizeCategory(s.productCategory) === categoryFilter;
@@ -473,6 +510,10 @@ export default function FarmStock() {
                                                                 <p className="font-bold text-sm text-gray-900 truncate" title={s.productName}>{displayName}</p>
                                                                 {s.activeIngredient ? (
                                                                     <p className="text-[11px] text-gray-400 truncate">{s.activeIngredient}</p>
+                                                                ) : s.depositCount > 1 ? (
+                                                                    <p className="text-[11px] text-blue-500 font-medium">{s.depositCount} depositos: {s.depositNames.join(", ")}</p>
+                                                                ) : s.depositName ? (
+                                                                    <p className="text-[11px] text-gray-400">{s.depositName}</p>
                                                                 ) : (
                                                                     <p className="text-[11px] text-gray-300">ID: {String(s.productId || s.id).substring(0, 8)}</p>
                                                                 )}
