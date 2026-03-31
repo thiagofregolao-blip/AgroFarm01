@@ -724,25 +724,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             for (const t of txAll) { if (!seenTx[t.id]) { seenTx[t.id] = true; txs.push(t); } }
             console.log(`[AP_REVERSE] Found ${txs.length} transactions to reverse`);
 
-            // Step 4: Reverse each transaction
-            for (const tx of txs) {
-                const amt = parseFloat(tx.amount || 0);
-                try { await db.execute(sqlFn`DELETE FROM farm_cheques WHERE cash_transaction_id = ${tx.id}`); } catch (_) {}
-                if (amt > 0 && tx.account_id) {
-                    await db.execute(sqlFn`UPDATE farm_cash_accounts SET current_balance = current_balance + ${amt} WHERE id = ${tx.account_id} AND farmer_id = ${farmerId}`);
-                }
-                await db.execute(sqlFn`DELETE FROM farm_cash_transactions WHERE id = ${tx.id}`);
-                console.log(`[AP_REVERSE] Deleted tx=${tx.id} amount=${amt}`);
-            }
-
-            // Step 5: Delete ALL batch items for this batch
-            if (batchId) {
-                try { await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE batch_id = ${batchId}`); } catch (_) {}
-            } else {
-                try { await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${apId}`); } catch (_) {}
-            }
-
-            // Step 6: Reset ALL APs in the batch back to open
+            // Step 4: Reset ALL APs FIRST (clear cash_transaction_id to remove FK constraint)
             for (const id of allApIds) {
                 await db.execute(sqlFn`
                     UPDATE farm_accounts_payable
@@ -759,6 +741,24 @@ export function registerFarmFinancialRoutes(app: Express) {
                           AND id IS NOT NULL
                     `);
                 } catch (_) {}
+            }
+
+            // Step 5: Delete batch items
+            if (batchId) {
+                try { await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE batch_id = ${batchId}`); } catch (_) {}
+            } else {
+                try { await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${apId}`); } catch (_) {}
+            }
+
+            // Step 6: Now delete transactions (FK constraint cleared in step 4)
+            for (const tx of txs) {
+                const amt = parseFloat(tx.amount || 0);
+                try { await db.execute(sqlFn`DELETE FROM farm_cheques WHERE cash_transaction_id = ${tx.id}`); } catch (_) {}
+                if (amt > 0 && tx.account_id) {
+                    await db.execute(sqlFn`UPDATE farm_cash_accounts SET current_balance = current_balance + ${amt} WHERE id = ${tx.account_id} AND farmer_id = ${farmerId}`);
+                }
+                await db.execute(sqlFn`DELETE FROM farm_cash_transactions WHERE id = ${tx.id}`);
+                console.log(`[AP_REVERSE] Deleted tx=${tx.id} amount=${amt}`);
             }
 
             console.log(`[AP_REVERSE] SUCCESS: reversed ${allApIds.length} AP(s), deleted ${txs.length} tx(s), batch=${batchId || 'none'}`);
