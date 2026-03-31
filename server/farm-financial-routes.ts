@@ -127,7 +127,24 @@ export function registerFarmFinancialRoutes(app: Express) {
             const accounts = await db.select().from(farmAccountsPayable)
                 .where(and(...conditions))
                 .orderBy(desc(farmAccountsPayable.dueDate));
-            res.json(accounts);
+            // Enrich with observation (column added via ALTER TABLE, not in Drizzle schema)
+            const { sql: sqlFn } = await import("drizzle-orm");
+            const apIds = accounts.map((a: any) => a.id);
+            let obsMap: Record<string, string> = {};
+            if (apIds.length > 0) {
+                try {
+                    const obsRows = await db.execute(sqlFn`
+                        SELECT id, observation FROM farm_accounts_payable
+                        WHERE id = ANY(ARRAY[${sqlFn.raw(apIds.map((id: string) => `'${id}'`).join(","))}]::varchar[])
+                          AND observation IS NOT NULL
+                    `);
+                    for (const row of ((obsRows as any).rows ?? obsRows) as any[]) {
+                        if (row.observation) obsMap[row.id] = row.observation;
+                    }
+                } catch (_) { /* column may not exist yet */ }
+            }
+            const enriched = accounts.map((a: any) => ({ ...a, observation: obsMap[a.id] || null }));
+            res.json(enriched);
         } catch (error) {
             console.error("[ACCOUNTS_PAYABLE_GET]", error);
             res.status(500).json({ error: "Failed to get accounts payable" });
@@ -615,10 +632,12 @@ export function registerFarmFinancialRoutes(app: Express) {
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
-            // Try to find AP by ID first, then fallback: ID might be a transaction ID
+            // Try multiple strategies to find the AP record
             let [ap] = await db.select().from(farmAccountsPayable).where(
                 and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
             );
+
+            // Fallback 1: ID might be a transaction ID — lookup via payable_id
             if (!ap) {
                 const txLookup = await db.execute(sqlFn`
                     SELECT payable_id FROM farm_cash_transactions WHERE id = ${req.params.id} AND farmer_id = ${farmerId} LIMIT 1
@@ -630,17 +649,36 @@ export function registerFarmFinancialRoutes(app: Express) {
                     );
                 }
             }
-            if (!ap) return res.status(404).json({ error: "Conta a pagar nao encontrada" });
+
+            // Fallback 2: search AP by cashTransactionId
+            if (!ap) {
+                [ap] = await db.select().from(farmAccountsPayable).where(
+                    and(eq(farmAccountsPayable.cashTransactionId, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+                );
+            }
+
+            if (!ap) {
+                console.error(`[AP_REVERSE] Could not find AP for id=${req.params.id}, farmerId=${farmerId}`);
+                return res.status(404).json({ error: "Conta a pagar nao encontrada" });
+            }
             const apId = ap.id;
 
-            // Find ALL cash transactions linked to this AP (via payable_id or cashTransactionId)
+            // Find ALL cash transactions linked to this AP (via payable_id OR cashTransactionId OR original ID)
             const linkedTxResult = await db.execute(sqlFn`
                 SELECT id, amount, account_id AS "accountId" FROM farm_cash_transactions
-                WHERE payable_id = ${apId} AND farmer_id = ${farmerId}
+                WHERE farmer_id = ${farmerId}
+                  AND (payable_id = ${apId}
+                       ${ap.cashTransactionId ? sqlFn`OR id = ${ap.cashTransactionId}` : sqlFn``}
+                       OR id = ${req.params.id})
             `);
-            const linkedTxs = ((linkedTxResult as any).rows ?? linkedTxResult) as any[];
+            // Deduplicate by id
+            const txMap = new Map<string, any>();
+            for (const row of ((linkedTxResult as any).rows ?? linkedTxResult) as any[]) {
+                txMap.set(row.id, row);
+            }
+            const linkedTxs = Array.from(txMap.values());
 
-            // Fallback: if no transactions found via payable_id, try cashTransactionId
+            // Last fallback: try cashTransactionId directly
             if (linkedTxs.length === 0 && ap.cashTransactionId) {
                 const [fallbackTx] = await db.select().from(farmCashTransactions).where(
                     eq(farmCashTransactions.id, ap.cashTransactionId)
