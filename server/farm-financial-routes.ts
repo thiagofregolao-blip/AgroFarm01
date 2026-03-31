@@ -654,7 +654,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                 }
             }
 
-            console.log(`[BATCH_PAY] batchId=${batchId} supplier=${supplier} total=${totalToPay} items=${allocations.length} results=${JSON.stringify(results)}`);
+            console.log(`[BATCH_PAY] batchId=${batchId} supplier=${supplier} total=${totalToPay} observation="${observation || ''}" items=${allocations.length} results=${JSON.stringify(results)}`);
             res.json({ success: true, batchId, results });
         } catch (error) {
             console.error("[BATCH_PAY]", error);
@@ -662,7 +662,7 @@ export function registerFarmFinancialRoutes(app: Express) {
         }
     });
 
-    // Reverse a payment: revert cash flow, reset AP to open (ALL raw SQL — no Drizzle ORM issues)
+    // Reverse a payment: revert cash flow, reset ALL APs in batch to open
     app.post("/api/farm/accounts-payable/:id/reverse", requireFarmer, async (req, res) => {
         try {
             const { sql: sqlFn } = await import("drizzle-orm");
@@ -672,12 +672,12 @@ export function registerFarmFinancialRoutes(app: Express) {
             const rid = req.params.id;
             console.log(`[AP_REVERSE] rid=${rid} farmerId=${farmerId}`);
 
-            // Find AP: try direct, then via tx.payable_id, then via cash_transaction_id
+            // Step 1: Find the AP record
             let apRes = await db.execute(sqlFn`SELECT id, cash_transaction_id, expense_id FROM farm_accounts_payable WHERE id = ${rid} AND farmer_id = ${farmerId} LIMIT 1`);
             let apRows = ((apRes as any).rows ?? apRes) as any[];
             if (apRows.length === 0) {
-                const txRes = await db.execute(sqlFn`SELECT payable_id FROM farm_cash_transactions WHERE id = ${rid} AND farmer_id = ${farmerId} LIMIT 1`);
-                const txR = ((txRes as any).rows ?? txRes) as any[];
+                const txRes2 = await db.execute(sqlFn`SELECT payable_id FROM farm_cash_transactions WHERE id = ${rid} AND farmer_id = ${farmerId} LIMIT 1`);
+                const txR = ((txRes2 as any).rows ?? txRes2) as any[];
                 if (txR.length > 0 && txR[0].payable_id) {
                     apRes = await db.execute(sqlFn`SELECT id, cash_transaction_id, expense_id FROM farm_accounts_payable WHERE id = ${txR[0].payable_id} AND farmer_id = ${farmerId} LIMIT 1`);
                     apRows = ((apRes as any).rows ?? apRes) as any[];
@@ -688,29 +688,43 @@ export function registerFarmFinancialRoutes(app: Express) {
                 apRows = ((apRes as any).rows ?? apRes) as any[];
             }
             if (apRows.length === 0) return res.status(404).json({ error: "Conta a pagar nao encontrada" });
-
             const ap = apRows[0];
             const apId = ap.id;
-            const cashTxId = ap.cash_transaction_id;
+            console.log(`[AP_REVERSE] Found AP=${apId}`);
 
-            // Find all linked transactions — simple OR conditions (no arrays)
-            const txRes = cashTxId
-                ? await db.execute(sqlFn`
-                    SELECT id, amount, account_id FROM farm_cash_transactions
-                    WHERE farmer_id = ${farmerId} AND (payable_id = ${apId} OR id = ${rid} OR id = ${cashTxId})
-                  `)
-                : await db.execute(sqlFn`
-                    SELECT id, amount, account_id FROM farm_cash_transactions
-                    WHERE farmer_id = ${farmerId} AND (payable_id = ${apId} OR id = ${rid})
-                  `);
-            // Deduplicate
+            // Step 2: Find ALL APs in the same batch (if batch payment)
+            const allApIds: string[] = [apId];
+            let batchId: string | null = null;
+            try {
+                const batchRes = await db.execute(sqlFn`SELECT batch_id FROM farm_payment_batch_items WHERE payable_id = ${apId} LIMIT 1`);
+                const batchRows = ((batchRes as any).rows ?? batchRes) as any[];
+                if (batchRows.length > 0) {
+                    batchId = batchRows[0].batch_id;
+                    // Find ALL APs in this batch
+                    const siblingRes = await db.execute(sqlFn`SELECT payable_id FROM farm_payment_batch_items WHERE batch_id = ${batchId}`);
+                    const siblings = ((siblingRes as any).rows ?? siblingRes) as any[];
+                    for (const s of siblings) {
+                        if (s.payable_id && allApIds.indexOf(s.payable_id) === -1) allApIds.push(s.payable_id);
+                    }
+                    console.log(`[AP_REVERSE] Batch ${batchId} has ${allApIds.length} APs: ${allApIds.join(", ")}`);
+                }
+            } catch (_) {}
+
+            // Step 3: Find ALL transactions (by payable_id of any AP, or by batch_id, or by rid)
+            let txQuery = `SELECT id, amount, account_id FROM farm_cash_transactions WHERE farmer_id = '${farmerId}' AND (id = '${rid}'`;
+            for (const id of allApIds) { txQuery += ` OR payable_id = '${id}'`; }
+            if (batchId) { txQuery += ` OR payment_batch_id = '${batchId}'`; }
+            if (ap.cash_transaction_id) { txQuery += ` OR id = '${ap.cash_transaction_id}'`; }
+            txQuery += `)`;
+            const txRes = await db.execute(sqlFn.raw(txQuery));
             const txAll = ((txRes as any).rows ?? txRes) as any[];
-            const seen = new Set<string>();
+            // Deduplicate
+            const seenTx: Record<string, boolean> = {};
             const txs: any[] = [];
-            for (const t of txAll) { if (!seen.has(t.id)) { seen.add(t.id); txs.push(t); } }
+            for (const t of txAll) { if (!seenTx[t.id]) { seenTx[t.id] = true; txs.push(t); } }
             console.log(`[AP_REVERSE] Found ${txs.length} transactions to reverse`);
 
-            // Reverse each: restore balance + delete cheques + delete tx
+            // Step 4: Reverse each transaction
             for (const tx of txs) {
                 const amt = parseFloat(tx.amount || 0);
                 try { await db.execute(sqlFn`DELETE FROM farm_cheques WHERE cash_transaction_id = ${tx.id}`); } catch (_) {}
@@ -718,26 +732,36 @@ export function registerFarmFinancialRoutes(app: Express) {
                     await db.execute(sqlFn`UPDATE farm_cash_accounts SET current_balance = current_balance + ${amt} WHERE id = ${tx.account_id} AND farmer_id = ${farmerId}`);
                 }
                 await db.execute(sqlFn`DELETE FROM farm_cash_transactions WHERE id = ${tx.id}`);
+                console.log(`[AP_REVERSE] Deleted tx=${tx.id} amount=${amt}`);
             }
 
-            // Clean batch items
-            try { await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${apId}`); } catch (_) {}
-
-            // Reset AP
-            await db.execute(sqlFn`
-                UPDATE farm_accounts_payable
-                SET paid_amount = '0', paid_date = NULL, status = 'aberto',
-                    cash_transaction_id = NULL, receipt_number = NULL,
-                    receipt_file_url = NULL, payment_method = NULL, observation = NULL
-                WHERE id = ${apId}
-            `);
-
-            // Sync expense
-            if (ap.expense_id) {
-                try { await db.execute(sqlFn`UPDATE farm_expenses SET payment_status = 'pendente', paid_amount = '0' WHERE id = ${ap.expense_id}`); } catch (_) {}
+            // Step 5: Delete ALL batch items for this batch
+            if (batchId) {
+                try { await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE batch_id = ${batchId}`); } catch (_) {}
+            } else {
+                try { await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${apId}`); } catch (_) {}
             }
 
-            console.log(`[AP_REVERSE] SUCCESS: AP=${apId} reversed, ${txs.length} tx deleted`);
+            // Step 6: Reset ALL APs in the batch back to open
+            for (const id of allApIds) {
+                await db.execute(sqlFn`
+                    UPDATE farm_accounts_payable
+                    SET paid_amount = '0', paid_date = NULL, status = 'aberto',
+                        cash_transaction_id = NULL, receipt_number = NULL,
+                        receipt_file_url = NULL, payment_method = NULL, observation = NULL
+                    WHERE id = ${id} AND farmer_id = ${farmerId}
+                `);
+                // Sync linked expense
+                try {
+                    await db.execute(sqlFn`
+                        UPDATE farm_expenses SET payment_status = 'pendente', paid_amount = '0'
+                        WHERE id = (SELECT expense_id FROM farm_accounts_payable WHERE id = ${id})
+                          AND id IS NOT NULL
+                    `);
+                } catch (_) {}
+            }
+
+            console.log(`[AP_REVERSE] SUCCESS: reversed ${allApIds.length} AP(s), deleted ${txs.length} tx(s), batch=${batchId || 'none'}`);
             res.json({ success: true });
         } catch (error) {
             console.error("[AP_REVERSE] ERROR:", error);
