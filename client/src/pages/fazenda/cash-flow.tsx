@@ -770,6 +770,7 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                                     <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Data</th>
                                     <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Categoria</th>
                                     <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Descricao</th>
+                                    <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">N. Recibo</th>
                                     <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Banco</th>
                                     <th className="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Valor</th>
                                     <th className="text-center px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Status</th>
@@ -792,6 +793,9 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                                                 </span>
                                             </td>
                                             <td className="px-5 py-3.5 text-gray-700 max-w-[200px] truncate">{t.description || "--"}</td>
+                                            <td className="px-5 py-3.5 text-xs text-gray-500 font-mono">
+                                                {t.receipt_id || t.receiptNumber || t.receipt_number || "--"}
+                                            </td>
                                             <td className="px-5 py-3.5">
                                                 {acc ? (
                                                     <div className="flex items-center gap-2">

@@ -1373,6 +1373,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
             installmentNumber: i.installmentNumber,
             totalInstallments: i.totalInstallments,
             receiptFileUrl: i.receiptFileUrl || i.receipt_file_url,
+            observation: i.observation || null,
         }));
 
     const allPayments = [...paymentHistory, ...legacyPaid]

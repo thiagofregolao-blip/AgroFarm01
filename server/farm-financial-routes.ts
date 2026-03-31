@@ -609,35 +609,50 @@ export function registerFarmFinancialRoutes(app: Express) {
             );
             if (!ap) return res.status(404).json({ error: "Not found" });
 
-            // Find and reverse the cash transaction
-            if (ap.cashTransactionId) {
-                const [tx] = await db.select().from(farmCashTransactions).where(
+            // Find ALL cash transactions linked to this AP (via payable_id or cashTransactionId)
+            const linkedTxResult = await db.execute(sqlFn`
+                SELECT id, amount, account_id AS "accountId" FROM farm_cash_transactions
+                WHERE payable_id = ${req.params.id} AND farmer_id = ${farmerId}
+            `);
+            const linkedTxs = ((linkedTxResult as any).rows ?? linkedTxResult) as any[];
+
+            // Fallback: if no transactions found via payable_id, try cashTransactionId
+            if (linkedTxs.length === 0 && ap.cashTransactionId) {
+                const [fallbackTx] = await db.select().from(farmCashTransactions).where(
                     eq(farmCashTransactions.id, ap.cashTransactionId)
                 );
-                if (tx) {
-                    const txAmount = parseFloat(tx.amount);
-                    // Delete any cheques linked to this transaction first (FK constraint)
-                    try {
-                        await db.execute(sqlFn`DELETE FROM farm_cheques WHERE cash_transaction_id = ${ap.cashTransactionId}`);
-                    } catch (_) { /* ignore if table doesn't exist */ }
-                    // Restore balance to the account
+                if (fallbackTx) linkedTxs.push({ id: fallbackTx.id, amount: fallbackTx.amount, accountId: fallbackTx.accountId });
+            }
+
+            // Reverse each transaction: restore balance + delete
+            for (const tx of linkedTxs) {
+                const txAmount = parseFloat(tx.amount || 0);
+                try {
+                    await db.execute(sqlFn`DELETE FROM farm_cheques WHERE cash_transaction_id = ${tx.id}`);
+                } catch (_) { /* ignore */ }
+                if (txAmount > 0 && tx.accountId) {
                     await db.update(farmCashAccounts)
                         .set({ currentBalance: sqlFn`current_balance + ${txAmount}` })
                         .where(and(eq(farmCashAccounts.id, tx.accountId), eq(farmCashAccounts.farmerId, farmerId)));
-                    // Delete the cash transaction
-                    await db.delete(farmCashTransactions).where(eq(farmCashTransactions.id, ap.cashTransactionId));
                 }
+                await db.delete(farmCashTransactions).where(eq(farmCashTransactions.id, tx.id));
             }
 
-            // Reset AP to pending with zero paid
+            // Clean up batch items if any
+            try {
+                await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${req.params.id}`);
+            } catch (_) { /* ignore */ }
+
+            // Reset AP to open with zero paid
             await db.update(farmAccountsPayable).set({
                 paidAmount: "0",
                 paidDate: null,
-                status: "pendente",
+                status: "aberto",
                 cashTransactionId: null,
                 receiptNumber: null,
                 receiptFileUrl: null,
                 paymentMethod: null,
+                observation: null,
             } as any).where(eq(farmAccountsPayable.id, req.params.id));
 
             // Sync farmExpenses if linked
@@ -648,6 +663,8 @@ export function registerFarmFinancialRoutes(app: Express) {
                     paidAmount: "0",
                 } as any).where(eq(farmExpenses.id, ap.expenseId));
             }
+
+            console.log(`[AP_REVERSE] Reversed AP ${req.params.id}, deleted ${linkedTxs.length} transaction(s)`);
 
             res.json({ success: true });
         } catch (error) {

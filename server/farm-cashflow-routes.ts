@@ -149,7 +149,28 @@ export function registerFarmCashFlowRoutes(app: Express) {
                 .where(and(...conditions))
                 .orderBy(desc(farmCashTransactions.transactionDate))
                 .limit(500);
-            res.json(transactions);
+            // Enrich with receipt_id (added via ALTER TABLE, not in Drizzle schema)
+            const { sql: sqlFn } = await import("drizzle-orm");
+            const txIds = transactions.map((t: any) => t.id);
+            let receiptMap: Record<string, string> = {};
+            if (txIds.length > 0) {
+                try {
+                    const receiptRows = await db.execute(sqlFn`
+                        SELECT id, receipt_id, receipt_number FROM farm_cash_transactions
+                        WHERE id = ANY(ARRAY[${sqlFn.raw(txIds.map((id: string) => `'${id}'`).join(","))}]::varchar[])
+                    `);
+                    for (const row of ((receiptRows as any).rows ?? receiptRows) as any[]) {
+                        if (row.receipt_id || row.receipt_number) {
+                            receiptMap[row.id] = row.receipt_id || row.receipt_number;
+                        }
+                    }
+                } catch (_) { /* receipt columns may not exist yet */ }
+            }
+            const enriched = transactions.map((t: any) => ({
+                ...t,
+                receipt_id: receiptMap[t.id] || null,
+            }));
+            res.json(enriched);
         } catch (error) {
             console.error("[CASH_TRANSACTIONS_GET]", error);
             res.status(500).json({ error: "Failed to get transactions" });
