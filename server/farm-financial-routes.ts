@@ -1315,11 +1315,13 @@ export function registerFarmFinancialRoutes(app: Express) {
 
             if (existing) {
                 const { sql: sqlFn } = await import("drizzle-orm");
+                const startDate = req.body.timbradoStartDate ? new Date(req.body.timbradoStartDate).toISOString() : (existing.timbradoStartDate ? new Date(existing.timbradoStartDate).toISOString() : null);
+                const endDate = req.body.timbradoEndDate ? new Date(req.body.timbradoEndDate).toISOString() : (existing.timbradoEndDate ? new Date(existing.timbradoEndDate).toISOString() : null);
                 await db.execute(sqlFn`
                     UPDATE farm_invoice_config SET
                         timbrado = ${req.body.timbrado || existing.timbrado},
-                        timbrado_start_date = ${req.body.timbradoStartDate ? new Date(req.body.timbradoStartDate) : existing.timbradoStartDate},
-                        timbrado_end_date = ${req.body.timbradoEndDate ? new Date(req.body.timbradoEndDate) : existing.timbradoEndDate},
+                        timbrado_start_date = ${startDate},
+                        timbrado_end_date = ${endDate},
                         establecimiento = ${req.body.establecimiento || existing.establecimiento},
                         punto_expedicion = ${req.body.puntoExpedicion || existing.puntoExpedicion},
                         ruc = ${req.body.ruc || existing.ruc},
@@ -1334,8 +1336,8 @@ export function registerFarmFinancialRoutes(app: Express) {
             const [created] = await db.insert(farmInvoiceConfig).values({
                 farmerId,
                 timbrado: req.body.timbrado,
-                timbradoStartDate: req.body.timbradoStartDate ? new Date(req.body.timbradoStartDate) : null,
-                timbradoEndDate: req.body.timbradoEndDate ? new Date(req.body.timbradoEndDate) : null,
+                timbradoStartDate: req.body.timbradoStartDate ? new Date(req.body.timbradoStartDate).toISOString() : null,
+                timbradoEndDate: req.body.timbradoEndDate ? new Date(req.body.timbradoEndDate).toISOString() : null,
                 establecimiento: req.body.establecimiento || "001",
                 puntoExpedicion: req.body.puntoExpedicion || "001",
                 ruc: req.body.ruc,
