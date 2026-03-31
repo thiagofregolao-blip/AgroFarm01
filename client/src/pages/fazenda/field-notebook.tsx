@@ -5,6 +5,7 @@ import { BookOpen, Calendar, Sprout, MapPin, Filter, FileDown, Clock, Package } 
 
 export default function FieldNotebook() {
     const [seasonId, setSeasonId] = useState<string>("");
+    const [plotFilter, setPlotFilter] = useState<string>("");
 
     const queryUrl = `/api/farm/field-notebook${seasonId ? `?seasonId=${seasonId}` : ""}`;
 
@@ -21,13 +22,29 @@ export default function FieldNotebook() {
     const summary = data?.summary || {};
     const seasons = data?.seasons || [];
 
+    // Unique plot names for filter
+    const uniquePlots = useMemo(() => {
+        const names: string[] = [];
+        for (const e of entries) {
+            const name = e.plotName || "";
+            if (name && names.indexOf(name) === -1) names.push(name);
+        }
+        return names.sort();
+    }, [entries]);
+
+    // Filter by plot
+    const filteredEntries = useMemo(() => {
+        if (!plotFilter) return entries;
+        return entries.filter((e: any) => e.plotName === plotFilter);
+    }, [entries, plotFilter]);
+
     // Agrupar aplicações que aconteceram juntas (mesmo talhão, dentro de 5 min)
     const groupedEntries = useMemo(() => {
-        if (!entries.length) return [];
+        if (!filteredEntries.length) return [];
         const groups: { key: string; date: string; plotName: string; plotArea: string; propertyName: string; appliedBy: string; products: any[] }[] = [];
         const BATCH_WINDOW = 5 * 60 * 1000; // 5 minutos
 
-        for (const entry of entries) {
+        for (const entry of filteredEntries) {
             const entryTime = entry.date ? new Date(entry.date).getTime() : 0;
             const plotKey = entry.plotName || "__none__";
 
@@ -83,6 +100,22 @@ export default function FieldNotebook() {
                                 <option value="">Todas as safras</option>
                                 {seasons.map((s: any) => (
                                     <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                        )}
+                        {uniquePlots.length > 0 && (
+                            <select
+                                value={plotFilter}
+                                onChange={e => setPlotFilter(e.target.value)}
+                                style={{
+                                    padding: "8px 12px", borderRadius: 8,
+                                    border: "1px solid #D1D5DB", fontSize: 14,
+                                    background: "#fff",
+                                }}
+                            >
+                                <option value="">Todos os talhoes</option>
+                                {uniquePlots.map((name: string) => (
+                                    <option key={name} value={name}>{name}</option>
                                 ))}
                             </select>
                         )}
