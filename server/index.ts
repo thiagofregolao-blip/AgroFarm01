@@ -395,6 +395,15 @@ app.use((req, res, next) => {
         created_at TIMESTAMP DEFAULT now(),
         UNIQUE(batch_id, payable_id)
     )`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS farm_grain_stock (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id VARCHAR NOT NULL,
+        crop TEXT NOT NULL,
+        season_id VARCHAR,
+        quantity DECIMAL(15,2) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP NOT NULL DEFAULT now(),
+        UNIQUE(farmer_id, crop, season_id)
+    )`);
     await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS warehouse_id TEXT`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS skip_stock_entry BOOLEAN DEFAULT false`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS file_mime_type TEXT`);

@@ -64,16 +64,17 @@ export function registerFarmFinancialRoutes(app: Express) {
                     t.payment_batch_id AS "paymentBatchId",
                     t.transaction_date AS "paidDate",
                     t.description,
-                    ap.supplier,
-                    ap.description AS "apDescription",
-                    ap.total_amount AS "totalAmount",
-                    ap.installment_number AS "installmentNumber",
-                    ap.total_installments AS "totalInstallments",
-                    ap.receipt_file_url AS "receiptFileUrl",
-                    ap.invoice_id AS "invoiceId",
-                    ap.observation AS "observation"
+                    COALESCE(ap.supplier, ap2.supplier) AS "supplier",
+                    COALESCE(ap.description, ap2.description) AS "apDescription",
+                    COALESCE(ap.total_amount, ap2.total_amount) AS "totalAmount",
+                    COALESCE(ap.installment_number, ap2.installment_number) AS "installmentNumber",
+                    COALESCE(ap.total_installments, ap2.total_installments) AS "totalInstallments",
+                    COALESCE(ap.receipt_file_url, ap2.receipt_file_url) AS "receiptFileUrl",
+                    COALESCE(ap.invoice_id, ap2.invoice_id) AS "invoiceId",
+                    COALESCE(ap.observation, ap2.observation) AS "observation"
                 FROM farm_cash_transactions t
                 LEFT JOIN farm_accounts_payable ap ON ap.id = t.payable_id
+                LEFT JOIN farm_accounts_payable ap2 ON ap2.cash_transaction_id = t.id
                 WHERE t.farmer_id = ${farmerId}
                   AND t.reference_type = 'pagamento_conta'
                   AND t.type = 'saida'
@@ -656,10 +657,11 @@ export function registerFarmFinancialRoutes(app: Express) {
             // Find all linked transactions
             const idsToSearch = [apId, rid];
             if (cashTxId) idsToSearch.push(cashTxId);
-            const uniqueIds = idsToSearch.filter((v, i, a) => a.indexOf(v) === i);
+            const uniqueIds = idsToSearch.filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
+            const idsArray = uniqueIds.map((id: string) => `'${id}'`).join(",");
             const txRes = await db.execute(sqlFn`
                 SELECT DISTINCT ON (id) id, amount, account_id FROM farm_cash_transactions
-                WHERE farmer_id = ${farmerId} AND (payable_id = ${apId} OR id = ANY(${uniqueIds}))
+                WHERE farmer_id = ${farmerId} AND (payable_id = ${apId} OR id IN (${sqlFn.raw(idsArray)}))
             `);
             const txs = ((txRes as any).rows ?? txRes) as any[];
             console.log(`[AP_REVERSE] Found ${txs.length} transactions to reverse`);
