@@ -1499,6 +1499,12 @@ export const farmAccountsPayable = pgTable("farm_accounts_payable", {
   paidDate: timestamp("paid_date"),
   status: text("status").notNull().default("aberto"), // aberto, parcial, pago, vencido
   cashTransactionId: varchar("cash_transaction_id").references(() => farmCashTransactions.id),
+  observation: text("observation"),
+  receiptNumber: text("receipt_number"),
+  receiptFileUrl: text("receipt_file_url"),
+  paymentMethod: text("payment_method"),
+  seasonId: varchar("season_id"),
+  supplierId: text("supplier_id"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
