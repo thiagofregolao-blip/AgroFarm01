@@ -654,16 +654,21 @@ export function registerFarmFinancialRoutes(app: Express) {
             const apId = ap.id;
             const cashTxId = ap.cash_transaction_id;
 
-            // Find all linked transactions
-            const idsToSearch = [apId, rid];
-            if (cashTxId) idsToSearch.push(cashTxId);
-            const uniqueIds = idsToSearch.filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
-            const idsArray = uniqueIds.map((id: string) => `'${id}'`).join(",");
-            const txRes = await db.execute(sqlFn`
-                SELECT DISTINCT ON (id) id, amount, account_id FROM farm_cash_transactions
-                WHERE farmer_id = ${farmerId} AND (payable_id = ${apId} OR id IN (${sqlFn.raw(idsArray)}))
-            `);
-            const txs = ((txRes as any).rows ?? txRes) as any[];
+            // Find all linked transactions — simple OR conditions (no arrays)
+            const txRes = cashTxId
+                ? await db.execute(sqlFn`
+                    SELECT id, amount, account_id FROM farm_cash_transactions
+                    WHERE farmer_id = ${farmerId} AND (payable_id = ${apId} OR id = ${rid} OR id = ${cashTxId})
+                  `)
+                : await db.execute(sqlFn`
+                    SELECT id, amount, account_id FROM farm_cash_transactions
+                    WHERE farmer_id = ${farmerId} AND (payable_id = ${apId} OR id = ${rid})
+                  `);
+            // Deduplicate
+            const txAll = ((txRes as any).rows ?? txRes) as any[];
+            const seen = new Set<string>();
+            const txs: any[] = [];
+            for (const t of txAll) { if (!seen.has(t.id)) { seen.add(t.id); txs.push(t); } }
             console.log(`[AP_REVERSE] Found ${txs.length} transactions to reverse`);
 
             // Reverse each: restore balance + delete cheques + delete tx
