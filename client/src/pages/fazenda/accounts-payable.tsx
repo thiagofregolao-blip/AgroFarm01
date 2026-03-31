@@ -1394,7 +1394,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
     });
 
     // Group payments: batch payments are grouped by paymentBatchId, individual payments stay separate
-    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string; batchItems?: any[]; isBatch: boolean }[] = [];
+    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string; observation: string; batchItems?: any[]; isBatch: boolean }[] = [];
     const seenBatchIds = new Set<string>();
     for (const item of filteredPaid) {
         const dateStr = item.paidDate ? new Date(item.paidDate).toLocaleDateString("pt-BR") : "—";
@@ -1410,6 +1410,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                 key: item.paymentBatchId,
                 date: dateStr,
                 supplier: item.supplier || "—",
+                observation: item.observation || "",
                 items: batchTxs,
                 total: batchTotal,
                 currency: item.currency || "USD",
@@ -1422,6 +1423,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                 key: item.id,
                 date: dateStr,
                 supplier: item.supplier || "—",
+                observation: item.observation || "",
                 items: [item],
                 total: parseFloat(item.amount || 0),
                 currency: item.currency || "USD",
@@ -1538,7 +1540,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                     : item?.apDescription || "--"}
                                             </td>
                                             <td className="px-4 py-3.5 text-gray-400 max-w-[150px] truncate text-xs italic">
-                                                {item?.observation || "--"}
+                                                {group.observation || item?.observation || "--"}
                                             </td>
                                             <td className="px-4 py-3.5 text-sm text-gray-700">{group.date}</td>
                                             <td className="px-3 py-3.5 text-center">

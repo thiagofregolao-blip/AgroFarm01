@@ -622,116 +622,80 @@ export function registerFarmFinancialRoutes(app: Express) {
         }
     });
 
-    // Reverse a payment: revert cash flow, reset AP to open
+    // Reverse a payment: revert cash flow, reset AP to open (ALL raw SQL — no Drizzle ORM issues)
     app.post("/api/farm/accounts-payable/:id/reverse", requireFarmer, async (req, res) => {
         try {
-            const { farmAccountsPayable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
-            const { eq, and } = await import("drizzle-orm");
             const { sql: sqlFn } = await import("drizzle-orm");
             const { db } = await import("./db");
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const rid = req.params.id;
+            console.log(`[AP_REVERSE] rid=${rid} farmerId=${farmerId}`);
 
-            // Try multiple strategies to find the AP record
-            let [ap] = await db.select().from(farmAccountsPayable).where(
-                and(eq(farmAccountsPayable.id, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
-            );
-
-            // Fallback 1: ID might be a transaction ID — lookup via payable_id
-            if (!ap) {
-                const txLookup = await db.execute(sqlFn`
-                    SELECT payable_id FROM farm_cash_transactions WHERE id = ${req.params.id} AND farmer_id = ${farmerId} LIMIT 1
-                `);
-                const txRows = ((txLookup as any).rows ?? txLookup) as any[];
-                if (txRows.length > 0 && txRows[0].payable_id) {
-                    [ap] = await db.select().from(farmAccountsPayable).where(
-                        and(eq(farmAccountsPayable.id, txRows[0].payable_id), eq(farmAccountsPayable.farmerId, farmerId))
-                    );
+            // Find AP: try direct, then via tx.payable_id, then via cash_transaction_id
+            let apRes = await db.execute(sqlFn`SELECT id, cash_transaction_id, expense_id FROM farm_accounts_payable WHERE id = ${rid} AND farmer_id = ${farmerId} LIMIT 1`);
+            let apRows = ((apRes as any).rows ?? apRes) as any[];
+            if (apRows.length === 0) {
+                const txRes = await db.execute(sqlFn`SELECT payable_id FROM farm_cash_transactions WHERE id = ${rid} AND farmer_id = ${farmerId} LIMIT 1`);
+                const txR = ((txRes as any).rows ?? txRes) as any[];
+                if (txR.length > 0 && txR[0].payable_id) {
+                    apRes = await db.execute(sqlFn`SELECT id, cash_transaction_id, expense_id FROM farm_accounts_payable WHERE id = ${txR[0].payable_id} AND farmer_id = ${farmerId} LIMIT 1`);
+                    apRows = ((apRes as any).rows ?? apRes) as any[];
                 }
             }
-
-            // Fallback 2: search AP by cashTransactionId
-            if (!ap) {
-                [ap] = await db.select().from(farmAccountsPayable).where(
-                    and(eq(farmAccountsPayable.cashTransactionId, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
-                );
+            if (apRows.length === 0) {
+                apRes = await db.execute(sqlFn`SELECT id, cash_transaction_id, expense_id FROM farm_accounts_payable WHERE cash_transaction_id = ${rid} AND farmer_id = ${farmerId} LIMIT 1`);
+                apRows = ((apRes as any).rows ?? apRes) as any[];
             }
+            if (apRows.length === 0) return res.status(404).json({ error: "Conta a pagar nao encontrada" });
 
-            if (!ap) {
-                console.error(`[AP_REVERSE] Could not find AP for id=${req.params.id}, farmerId=${farmerId}`);
-                return res.status(404).json({ error: "Conta a pagar nao encontrada" });
-            }
+            const ap = apRows[0];
             const apId = ap.id;
+            const cashTxId = ap.cash_transaction_id;
 
-            // Find ALL cash transactions linked to this AP (via payable_id OR cashTransactionId OR original ID)
-            const linkedTxResult = await db.execute(sqlFn`
-                SELECT id, amount, account_id AS "accountId" FROM farm_cash_transactions
-                WHERE farmer_id = ${farmerId}
-                  AND (payable_id = ${apId}
-                       ${ap.cashTransactionId ? sqlFn`OR id = ${ap.cashTransactionId}` : sqlFn``}
-                       OR id = ${req.params.id})
+            // Find all linked transactions
+            const idsToSearch = [apId, rid];
+            if (cashTxId) idsToSearch.push(cashTxId);
+            const uniqueIds = idsToSearch.filter((v, i, a) => a.indexOf(v) === i);
+            const txRes = await db.execute(sqlFn`
+                SELECT DISTINCT ON (id) id, amount, account_id FROM farm_cash_transactions
+                WHERE farmer_id = ${farmerId} AND (payable_id = ${apId} OR id = ANY(${uniqueIds}))
             `);
-            // Deduplicate by id
-            const txMap = new Map<string, any>();
-            for (const row of ((linkedTxResult as any).rows ?? linkedTxResult) as any[]) {
-                txMap.set(row.id, row);
-            }
-            const linkedTxs = Array.from(txMap.values());
+            const txs = ((txRes as any).rows ?? txRes) as any[];
+            console.log(`[AP_REVERSE] Found ${txs.length} transactions to reverse`);
 
-            // Last fallback: try cashTransactionId directly
-            if (linkedTxs.length === 0 && ap.cashTransactionId) {
-                const [fallbackTx] = await db.select().from(farmCashTransactions).where(
-                    eq(farmCashTransactions.id, ap.cashTransactionId)
-                );
-                if (fallbackTx) linkedTxs.push({ id: fallbackTx.id, amount: fallbackTx.amount, accountId: fallbackTx.accountId });
-            }
-
-            // Reverse each transaction: restore balance + delete
-            for (const tx of linkedTxs) {
-                const txAmount = parseFloat(tx.amount || 0);
-                try {
-                    await db.execute(sqlFn`DELETE FROM farm_cheques WHERE cash_transaction_id = ${tx.id}`);
-                } catch (_) { /* ignore */ }
-                if (txAmount > 0 && tx.accountId) {
-                    await db.update(farmCashAccounts)
-                        .set({ currentBalance: sqlFn`current_balance + ${txAmount}` })
-                        .where(and(eq(farmCashAccounts.id, tx.accountId), eq(farmCashAccounts.farmerId, farmerId)));
+            // Reverse each: restore balance + delete cheques + delete tx
+            for (const tx of txs) {
+                const amt = parseFloat(tx.amount || 0);
+                try { await db.execute(sqlFn`DELETE FROM farm_cheques WHERE cash_transaction_id = ${tx.id}`); } catch (_) {}
+                if (amt > 0 && tx.account_id) {
+                    await db.execute(sqlFn`UPDATE farm_cash_accounts SET current_balance = current_balance + ${amt} WHERE id = ${tx.account_id} AND farmer_id = ${farmerId}`);
                 }
-                await db.delete(farmCashTransactions).where(eq(farmCashTransactions.id, tx.id));
+                await db.execute(sqlFn`DELETE FROM farm_cash_transactions WHERE id = ${tx.id}`);
             }
 
-            // Clean up batch items if any
-            try {
-                await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${apId}`);
-            } catch (_) { /* ignore */ }
+            // Clean batch items
+            try { await db.execute(sqlFn`DELETE FROM farm_payment_batch_items WHERE payable_id = ${apId}`); } catch (_) {}
 
-            // Reset AP to open with zero paid
-            await db.update(farmAccountsPayable).set({
-                paidAmount: "0",
-                paidDate: null,
-                status: "aberto",
-                cashTransactionId: null,
-                receiptNumber: null,
-                receiptFileUrl: null,
-                paymentMethod: null,
-                observation: null,
-            } as any).where(eq(farmAccountsPayable.id, apId));
+            // Reset AP
+            await db.execute(sqlFn`
+                UPDATE farm_accounts_payable
+                SET paid_amount = '0', paid_date = NULL, status = 'aberto',
+                    cash_transaction_id = NULL, receipt_number = NULL,
+                    receipt_file_url = NULL, payment_method = NULL, observation = NULL
+                WHERE id = ${apId}
+            `);
 
-            // Sync farmExpenses if linked
-            if (ap.expenseId) {
-                const { farmExpenses } = await import("../shared/schema");
-                await db.update(farmExpenses).set({
-                    paymentStatus: "pendente",
-                    paidAmount: "0",
-                } as any).where(eq(farmExpenses.id, ap.expenseId));
+            // Sync expense
+            if (ap.expense_id) {
+                try { await db.execute(sqlFn`UPDATE farm_expenses SET payment_status = 'pendente', paid_amount = '0' WHERE id = ${ap.expense_id}`); } catch (_) {}
             }
 
-            console.log(`[AP_REVERSE] Reversed AP ${apId} (requested ${req.params.id}), deleted ${linkedTxs.length} transaction(s)`);
-
+            console.log(`[AP_REVERSE] SUCCESS: AP=${apId} reversed, ${txs.length} tx deleted`);
             res.json({ success: true });
         } catch (error) {
-            console.error("[ACCOUNTS_PAYABLE_REVERSE]", error);
-            res.status(500).json({ error: error instanceof Error ? error.message : "Failed to reverse payment" });
+            console.error("[AP_REVERSE] ERROR:", error);
+            res.status(500).json({ error: error instanceof Error ? error.message : "Erro ao reverter pagamento" });
         }
     });
 
