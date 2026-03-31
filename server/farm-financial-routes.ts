@@ -53,7 +53,7 @@ export function registerFarmFinancialRoutes(app: Express) {
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
             const result = await db.execute(sqlFn`
-                SELECT
+                SELECT DISTINCT ON (t.id)
                     t.id,
                     t.amount,
                     t.currency,
@@ -64,26 +64,55 @@ export function registerFarmFinancialRoutes(app: Express) {
                     t.payment_batch_id AS "paymentBatchId",
                     t.transaction_date AS "paidDate",
                     t.description,
-                    COALESCE(ap.supplier, ap2.supplier) AS "supplier",
-                    COALESCE(ap.description, ap2.description) AS "apDescription",
-                    COALESCE(ap.total_amount, ap2.total_amount) AS "totalAmount",
-                    COALESCE(ap.installment_number, ap2.installment_number) AS "installmentNumber",
-                    COALESCE(ap.total_installments, ap2.total_installments) AS "totalInstallments",
-                    COALESCE(ap.receipt_file_url, ap2.receipt_file_url) AS "receiptFileUrl",
-                    COALESCE(ap.invoice_id, ap2.invoice_id) AS "invoiceId",
-                    COALESCE(ap.observation, ap2.observation) AS "observation"
+                    ap.supplier,
+                    ap.description AS "apDescription",
+                    ap.total_amount AS "totalAmount",
+                    ap.installment_number AS "installmentNumber",
+                    ap.total_installments AS "totalInstallments",
+                    ap.receipt_file_url AS "receiptFileUrl",
+                    ap.invoice_id AS "invoiceId",
+                    ap.observation AS "observation"
                 FROM farm_cash_transactions t
                 LEFT JOIN farm_accounts_payable ap ON ap.id = t.payable_id
-                LEFT JOIN farm_accounts_payable ap2 ON ap2.cash_transaction_id = t.id
                 WHERE t.farmer_id = ${farmerId}
                   AND t.reference_type = 'pagamento_conta'
                   AND t.type = 'saida'
-                ORDER BY t.transaction_date DESC
+                ORDER BY t.id, t.transaction_date DESC
             `);
-            const rows = (result as any).rows || result;
+            let rows = ((result as any).rows || result) as any[];
+
+            // For transactions without payable_id, try to find AP via cash_transaction_id
+            for (const row of rows) {
+                if (!row.supplier && !row.payableId) {
+                    try {
+                        const apFallback = await db.execute(sqlFn`
+                            SELECT supplier, description, total_amount, installment_number, total_installments,
+                                   receipt_file_url, invoice_id, observation, id AS payable_id
+                            FROM farm_accounts_payable
+                            WHERE cash_transaction_id = ${row.id} AND farmer_id = ${farmerId} LIMIT 1
+                        `);
+                        const apRow = (((apFallback as any).rows ?? apFallback) as any[])[0];
+                        if (apRow) {
+                            row.supplier = apRow.supplier;
+                            row.apDescription = apRow.description;
+                            row.totalAmount = apRow.total_amount;
+                            row.installmentNumber = apRow.installment_number;
+                            row.totalInstallments = apRow.total_installments;
+                            row.receiptFileUrl = apRow.receipt_file_url;
+                            row.invoiceId = apRow.invoice_id;
+                            row.observation = apRow.observation;
+                            row.payableId = apRow.payable_id;
+                        }
+                    } catch (_) {}
+                }
+            }
+
+            // Sort by date desc after DISTINCT ON
+            rows.sort((a: any, b: any) => new Date(b.paidDate).getTime() - new Date(a.paidDate).getTime());
 
             // Enrich batch payments: fetch all AP items for each batch
-            const batchIds = [...new Set(rows.filter((r: any) => r.paymentBatchId).map((r: any) => r.paymentBatchId))];
+            const batchIds: string[] = [];
+            for (const r of rows) { if (r.paymentBatchId && batchIds.indexOf(r.paymentBatchId) === -1) batchIds.push(r.paymentBatchId); }
             const batchItemsMap: Record<string, any[]> = {};
             for (const batchId of batchIds) {
                 const batchItems = await db.execute(sqlFn`
@@ -100,14 +129,23 @@ export function registerFarmFinancialRoutes(app: Express) {
                 batchItemsMap[batchId as string] = ((batchItems as any).rows || batchItems) as any[];
             }
 
-            // Attach batch items to each row
+            // Attach batch items to each row + collect all batch payableIds
+            const allBatchPayableIds: string[] = [];
             for (const row of rows) {
                 if (row.paymentBatchId && batchItemsMap[row.paymentBatchId]) {
                     row.batchItems = batchItemsMap[row.paymentBatchId];
+                    for (const bi of row.batchItems) {
+                        if (bi.payableId) allBatchPayableIds.push(bi.payableId);
+                    }
                 }
             }
 
-            res.json(rows);
+            // Also add payableIds from transactions
+            for (const row of rows) {
+                if (row.payableId) allBatchPayableIds.push(row.payableId);
+            }
+
+            res.json({ payments: rows, allPayableIds: allBatchPayableIds });
         } catch (error) {
             console.error("[PAYMENT_HISTORY_GET]", error);
             res.status(500).json({ error: "Failed to get payment history" });
@@ -561,7 +599,7 @@ export function registerFarmFinancialRoutes(app: Express) {
                     paidAmount: String(newPaidTotal),
                     paidDate: new Date(),
                     status: newStatus,
-                    cashTransactionId: firstTxId,
+                    // Don't set cashTransactionId on batch APs — use batch_items instead
                 };
                 if (receiptNumber) updatePayload.receiptNumber = receiptNumber;
                 if (receiptFileUrl) updatePayload.receiptFileUrl = receiptFileUrl;

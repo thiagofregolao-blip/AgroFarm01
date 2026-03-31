@@ -1355,13 +1355,19 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
     }
 
     // Fetch individual payment transactions (each payment = separate entry)
-    const { data: paymentHistory = [] } = useQuery<any[]>({
+    const { data: paymentHistoryData } = useQuery<any>({
         queryKey: ["/api/farm/accounts-payable/payment-history"],
         queryFn: async () => { const r = await apiRequest("GET", "/api/farm/accounts-payable/payment-history"); return r.json(); },
     });
+    // Support both old format (array) and new format ({ payments, allPayableIds })
+    const paymentHistory: any[] = Array.isArray(paymentHistoryData) ? paymentHistoryData : (paymentHistoryData?.payments || []);
+    const allPaidPayableIds: string[] = Array.isArray(paymentHistoryData) ? [] : (paymentHistoryData?.allPayableIds || []);
 
-    // Fallback: also show AP records that are pago/parcial but have no payable_id in transactions (legacy)
-    const txPayableIds = new Set(paymentHistory.map((p: any) => p.payableId).filter(Boolean));
+    // Fallback: show AP records that are pago/parcial but NOT tracked by any payment transaction or batch
+    const txPayableIds = new Set([
+        ...paymentHistory.map((p: any) => p.payableId).filter(Boolean),
+        ...allPaidPayableIds,
+    ]);
     const legacyPaid = items
         .filter((i: any) => (i.status === "pago" || i.status === "parcial") && !txPayableIds.has(i.id))
         .map((i: any) => ({
@@ -1403,9 +1409,12 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
         if (item.paymentBatchId) {
             if (seenBatchIds.has(item.paymentBatchId)) continue;
             seenBatchIds.add(item.paymentBatchId);
-            // Sum total from all transactions with this batchId
             const batchTxs = filteredPaid.filter((p: any) => p.paymentBatchId === item.paymentBatchId);
-            const batchTotal = batchTxs.reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+            // Use batchItems sum (correct allocated amounts) if available, else transaction amount
+            const batchItemsArr = item.batchItems || [];
+            const batchTotal = batchItemsArr.length > 0
+                ? batchItemsArr.reduce((s: number, bi: any) => s + parseFloat(bi.amount || 0), 0)
+                : parseFloat(item.amount || 0);
             groups.push({
                 key: item.paymentBatchId,
                 date: dateStr,
