@@ -1569,10 +1569,6 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
                                                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />#{group.receiptNumber}
                                                     </span>
-                                                ) : item?.receiptFileUrl ? (
-                                                    <a href={item.receiptFileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline inline-flex items-center gap-1">
-                                                        <Receipt className="h-3 w-3" /> Ver
-                                                    </a>
                                                 ) : <span className="text-gray-300">--</span>}
                                             </td>
                                             <td className="px-5 py-3.5 text-right font-extrabold text-green-600 font-headline">
@@ -1581,7 +1577,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                             <td className="px-5 py-3.5 text-right">
                                                 <div className="flex items-center justify-end gap-1">
                                                     {item?.receiptFileUrl && (
-                                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-emerald-600"
+                                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-400 hover:text-blue-600 hover:bg-blue-50"
                                                             onClick={(e) => { e.stopPropagation(); window.open(item.receiptFileUrl, '_blank'); }} aria-label="Ver recibo">
                                                             <Eye className="h-3.5 w-3.5" />
                                                         </Button>
