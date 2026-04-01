@@ -30,17 +30,16 @@
     ],
     "mac": {
       "category": "public.app-category.business",
-      "icon": "assets/icon.icns",
+      "icon": "assets/icon.png",
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] }
-      ],
-      "dmg": {
-        "title": "AgroFarm Digital",
-        "backgroundColor": "#1a56db"
-      }
+      ]
+    },
+    "dmg": {
+      "title": "AgroFarm Digital"
     },
     "win": {
-      "icon": "assets/icon.ico",
+      "icon": "assets/icon.png",
       "target": [
         { "target": "nsis", "arch": ["x64"] }
       ]
