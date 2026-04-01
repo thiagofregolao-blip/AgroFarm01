@@ -966,6 +966,24 @@ app.use((req, res, next) => {
   const { botChatHandler } = await import("./bot/chat-handler");
   app.post("/api/bot/chat", botChatHandler);
 
+  // ── Download page: validate password and return latest release links ──
+  app.post("/api/download/auth", (req: any, res: any) => {
+    const DOWNLOAD_PASSWORD = process.env.DOWNLOAD_PASSWORD || "agrofarm2025";
+    const { password } = req.body || {};
+    if (!password || password !== DOWNLOAD_PASSWORD) {
+      return res.status(401).json({ error: "Senha incorreta" });
+    }
+    // Links do GitHub Releases — atualize a tag conforme nova versão
+    const GH_REPO = "thiagofregolao-blip/AgroFarm01";
+    const LATEST_TAG = process.env.ELECTRON_VERSION || "v1.0.0";
+    const base = `https://github.com/${GH_REPO}/releases/download/${LATEST_TAG}`;
+    res.json({
+      version: LATEST_TAG,
+      mac: `${base}/AgroFarm-Digital-${LATEST_TAG.replace("v", "")}.dmg`,
+      win: `${base}/AgroFarm-Digital-Setup-${LATEST_TAG.replace("v", "")}.exe`,
+    });
+  });
+
   // ── Monitor test error endpoint (gera erro proposital pra testar) ──
   app.post("/api/monitor/test-error", (req: any, res: any, next: any) => {
     const level = (req.body?.level || req.query?.level || "warning") as string;

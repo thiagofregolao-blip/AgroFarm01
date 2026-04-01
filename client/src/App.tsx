@@ -67,6 +67,7 @@ import FarmLogin from "@/pages/fazenda/login";
 import FarmReports from "@/pages/fazenda/reports";
 import FazendaClima from "@/pages/fazenda/clima";
 import LandingPage from "@/pages/landing";
+import DownloadPage from "@/pages/download";
 import FieldNotebook from "@/pages/fazenda/field-notebook";
 import QuotationNetwork from "@/pages/fazenda/quotation-network";
 import NdviPage from "@/pages/fazenda/ndvi";
@@ -103,6 +104,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
+      <Route path="/download" component={DownloadPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password/:token" component={ResetPassword} />
