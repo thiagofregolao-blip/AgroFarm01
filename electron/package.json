@@ -6,6 +6,10 @@
   "author": "AgroFarm Digital",
   "license": "UNLICENSED",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thiagofregolao-blip/AgroFarm01.git"
+  },
   "scripts": {
     "start": "electron .",
     "build:mac": "electron-builder --mac",
