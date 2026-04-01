@@ -118,19 +118,46 @@ export function registerFieldNotebookRoutes(app: Express) {
             const oldPropertyId = original.propertyId;
             const newPropertyId = propertyId || original.propertyId;
 
-            // ── Adjust stock ──
+            // ── Adjust stock (SQL direto — não toca no average_cost) ──
+            const adjustStockQtyOnly = async (prodId: string, propId: string | null, delta: number) => {
+                const coalesced = propId || "__none__";
+                await db.execute(sql`
+                    UPDATE farm_stock
+                    SET quantity = CAST(quantity AS NUMERIC) + ${delta}, updated_at = now()
+                    WHERE farmer_id = ${farmerId}
+                      AND product_id = ${prodId}
+                      AND COALESCE(property_id, '__none__') = ${coalesced}
+                `);
+            };
+
+            const recordMovement = async (prodId: string, type: "entry" | "exit", absQty: number, notes: string) => {
+                await db.execute(sql`
+                    INSERT INTO farm_stock_movements
+                        (farmer_id, product_id, type, quantity, reference_type, notes)
+                    VALUES
+                        (${farmerId}, ${prodId}, ${type}, ${String(type === "entry" ? absQty : -absQty)}, ${"correcao_caderno"}, ${notes})
+                `);
+            };
+
             if (oldProductId === newProductId) {
-                // Same product: only adjust the difference
-                const diff = newQty - oldQty;
-                if (diff !== 0) {
-                    // diff > 0 → used more → deduct more from stock
-                    // diff < 0 → used less → return to stock
-                    await (farmStorage as any).upsertStock(farmerId, oldProductId, -diff, 0, oldPropertyId);
+                const diff = newQty - oldQty; // positivo = usou mais, negativo = usou menos
+                if (Math.abs(diff) > 0.0001) {
+                    if (diff > 0) {
+                        // usou mais → sai mais do estoque
+                        await adjustStockQtyOnly(oldProductId, oldPropertyId, -diff);
+                        await recordMovement(oldProductId, "exit", diff, "Consumo adicional — edição no Caderno de Campo");
+                    } else {
+                        // usou menos → devolve ao estoque
+                        await adjustStockQtyOnly(oldProductId, oldPropertyId, -diff); // -diff é positivo
+                        await recordMovement(oldProductId, "entry", -diff, "Devolução — edição no Caderno de Campo");
+                    }
                 }
             } else {
-                // Product changed: return old product fully, deduct new product
-                await (farmStorage as any).upsertStock(farmerId, oldProductId, +oldQty, 0, oldPropertyId);
-                await (farmStorage as any).upsertStock(farmerId, newProductId, -newQty, 0, newPropertyId);
+                // Produto trocado: devolve o antigo, desconta o novo
+                await adjustStockQtyOnly(oldProductId, oldPropertyId, +oldQty);
+                await recordMovement(oldProductId, "entry", oldQty, "Devolução — troca de produto no Caderno de Campo");
+                await adjustStockQtyOnly(newProductId, newPropertyId, -newQty);
+                await recordMovement(newProductId, "exit", newQty, "Consumo — troca de produto no Caderno de Campo");
             }
 
             // ── Update application record ──
@@ -164,7 +191,7 @@ export function registerFieldNotebookRoutes(app: Express) {
         if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
 
         try {
-            const { farmStorage } = await import("./farm-storage");
+            const { sql } = await import("drizzle-orm");
             const appId = req.params.id;
 
             // Fetch original application
@@ -174,9 +201,25 @@ export function registerFieldNotebookRoutes(app: Express) {
             if (!original) return res.status(404).json({ error: "Aplicação não encontrada" });
 
             const qty = parseFloat(original.quantity);
+            const propId = original.propertyId;
+            const coalesced = propId || "__none__";
 
-            // Return quantity to stock before deleting
-            await (farmStorage as any).upsertStock(farmerId, original.productId, +qty, 0, original.propertyId);
+            // Devolver ao estoque SEM tocar no average_cost
+            await db.execute(sql`
+                UPDATE farm_stock
+                SET quantity = CAST(quantity AS NUMERIC) + ${qty}, updated_at = now()
+                WHERE farmer_id = ${farmerId}
+                  AND product_id = ${original.productId}
+                  AND COALESCE(property_id, '__none__') = ${coalesced}
+            `);
+
+            // Registrar entrada na movimentação com badge de correção
+            await db.execute(sql`
+                INSERT INTO farm_stock_movements
+                    (farmer_id, product_id, type, quantity, reference_type, notes)
+                VALUES
+                    (${farmerId}, ${original.productId}, ${"entry"}, ${String(qty)}, ${"correcao_caderno"}, ${"Devolução — exclusão no Caderno de Campo"})
+            `);
 
             // Delete the application record
             await db.delete(farmApplications).where(
