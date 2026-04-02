@@ -1,6 +1,6 @@
 {
   "name": "agrofarm-digital",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "AgroFarm Digital — Gestão Agrícola Inteligente",
   "main": "main.js",
   "author": "AgroFarm Digital",
@@ -41,12 +41,15 @@
       ]
     },
     "dmg": {
-      "title": "AgroFarm Digital",
-      "background": null,
+      "title": "${productName} ${version} ${arch}",
       "contents": [
         { "x": 130, "y": 220 },
         { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
-      ]
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "win": {
       "icon": "assets/icon.png",
