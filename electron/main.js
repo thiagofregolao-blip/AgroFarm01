@@ -33,7 +33,7 @@ function createWindow() {
         return { action: "allow" };
     });
 
-    win.loadURL(APP_URL + "/fazenda/login");
+    win.loadURL(APP_URL + "/auth");
 
     // Remove menu bar (deixa mais limpo)
     win.setMenuBarVisibility(false);
