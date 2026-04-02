@@ -1031,13 +1031,14 @@ app.use((req, res, next) => {
     }
     // Links do GitHub Releases — atualize a tag conforme nova versão
     const GH_REPO = "thiagofregolao-blip/AgroFarm01";
-    const LATEST_TAG = process.env.ELECTRON_VERSION || "v1.0.2";
+    const LATEST_TAG = process.env.ELECTRON_VERSION || "v1.0.4";
     const ver = LATEST_TAG.replace("v", "");
     const base = `https://github.com/${GH_REPO}/releases/download/${LATEST_TAG}`;
     res.json({
       version: LATEST_TAG,
-      mac: `${base}/AgroFarm-Digital-${ver}-arm64.dmg`,
-      win: `${base}/AgroFarm-Digital-${ver}.exe`,
+      mac: `${base}/AgroFarm-Digital-${ver}-arm64.dmg`,      // Apple Silicon
+      macIntel: `${base}/AgroFarm-Digital-${ver}-x64.dmg`,  // Intel
+      win: `${base}/AgroFarm-Digital-${ver}-x64.exe`,
     });
   });
 

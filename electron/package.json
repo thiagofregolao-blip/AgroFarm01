@@ -1,6 +1,6 @@
 {
   "name": "agrofarm-digital",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "AgroFarm Digital — Gestão Agrícola Inteligente",
   "main": "main.js",
   "author": "AgroFarm Digital",
@@ -24,7 +24,7 @@
   "build": {
     "appId": "com.agrofarmdigital.app",
     "productName": "AgroFarm Digital",
-    "artifactName": "AgroFarm-Digital-${version}.${ext}",
+    "artifactName": "AgroFarm-Digital-${version}-${arch}.${ext}",
     "copyright": "Copyright © 2025 AgroFarm Digital",
     "directories": {
       "output": "dist"
