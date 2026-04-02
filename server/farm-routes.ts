@@ -18,6 +18,7 @@ import { registerFarmN8nWebhookRoutes } from "./farm-n8n-webhook-routes";
 import { registerFarmRomaneioRoutes } from "./farm-romaneio-routes";
 import { registerFarmFinancialRoutes } from "./farm-financial-routes";
 import { registerFarmSprint24Routes } from "./farm-sprint24-routes";
+import { registerFarmCreditNoteRoutes } from "./farm-credit-note-routes";
 
 export function registerFarmRoutes(app: Express) {
     registerFarmAuthRoutes(app);
@@ -33,6 +34,7 @@ export function registerFarmRoutes(app: Express) {
     registerFarmRomaneioRoutes(app);
     registerFarmFinancialRoutes(app);
     registerFarmSprint24Routes(app);
+    registerFarmCreditNoteRoutes(app);
 
     console.log("Farm routes registered (/api/farm/*, /api/pdv/*)");
 }

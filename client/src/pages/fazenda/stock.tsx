@@ -836,6 +836,14 @@ export default function FarmStock() {
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
                                                             Correção Caderno
                                                         </span>
+                                                    ) : m.referenceType === "nota_credito_provedor" ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700">
+                                                            NC Provedor
+                                                        </span>
+                                                    ) : m.referenceType === "nota_credito_emissao" ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
+                                                            NC Emissão
+                                                        </span>
                                                     ) : (m.referenceType || "—")}
                                                 </td>
                                                 <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{m.notes || "—"}</td>
@@ -946,6 +954,14 @@ export default function FarmStock() {
                                                         {m.referenceType === "correcao_caderno" ? (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
                                                                 Correção Caderno
+                                                            </span>
+                                                        ) : m.referenceType === "nota_credito_provedor" ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700">
+                                                                NC Provedor
+                                                            </span>
+                                                        ) : m.referenceType === "nota_credito_emissao" ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
+                                                                NC Emissão
                                                             </span>
                                                         ) : (m.referenceType || "—")}
                                                     </td>

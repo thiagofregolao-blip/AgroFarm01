@@ -73,6 +73,8 @@ import QuotationNetwork from "@/pages/fazenda/quotation-network";
 import NdviPage from "@/pages/fazenda/ndvi";
 import FarmRomaneios from "@/pages/fazenda/romaneios";
 import AccountsPayable from "@/pages/fazenda/accounts-payable";
+import CreditNotesProvider from "@/pages/fazenda/credit-notes-provider";
+import CreditNotesEmission from "@/pages/fazenda/credit-notes-emission";
 import AccountsReceivable from "@/pages/fazenda/accounts-receivable";
 import DrePage from "@/pages/fazenda/dre";
 import BudgetPage from "@/pages/fazenda/budget";
@@ -175,6 +177,8 @@ function Router() {
       <Route path="/fazenda/perfil" component={FarmProfile} />
       <Route path="/fazenda/romaneios" component={FarmRomaneios} />
       <Route path="/fazenda/contas-pagar" component={AccountsPayable} />
+      <Route path="/fazenda/notas-credito-provedor" component={CreditNotesProvider} />
+      <Route path="/fazenda/notas-credito-emissao" component={CreditNotesEmission} />
       <Route path="/fazenda/contas-receber" component={AccountsReceivable} />
       <Route path="/fazenda/dre" component={DrePage} />
       <Route path="/fazenda/orcamento" component={BudgetPage} />

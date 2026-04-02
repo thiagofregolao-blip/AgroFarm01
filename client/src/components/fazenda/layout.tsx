@@ -81,8 +81,9 @@ const financeNavGroups: NavGroup[] = [
     {
         label: "Despesas e Faturas",
         items: [
-            { labelKey: "nav_invoices",         href: "/fazenda/faturas",      icon: FileText,  moduleKey: "invoices" },
-            { labelKey: "nav_accounts_payable", href: "/fazenda/contas-pagar", icon: Receipt,   moduleKey: "accounts_payable" },
+            { labelKey: "nav_invoices",         href: "/fazenda/faturas",                   icon: FileText,  moduleKey: "invoices" },
+            { labelKey: "nav_accounts_payable", href: "/fazenda/contas-pagar",              icon: Receipt,   moduleKey: "accounts_payable" },
+            { labelKey: "nav_credit_notes_prov", href: "/fazenda/notas-credito-provedor",   icon: RefreshCw, moduleKey: "credit_notes_prov", alwaysOn: true },
         ],
     },
     {
@@ -94,8 +95,9 @@ const financeNavGroups: NavGroup[] = [
     {
         label: "Entradas",
         items: [
-            { labelKey: "nav_accounts_receivable", href: "/fazenda/contas-receber",      icon: HandCoins, moduleKey: "accounts_receivable" },
-            { labelKey: "nav_emission_faturas",    href: "/fazenda/contas-receber?nova=1", icon: FilePlus,  moduleKey: "accounts_receivable", alwaysOn: true },
+            { labelKey: "nav_accounts_receivable", href: "/fazenda/contas-receber",          icon: HandCoins, moduleKey: "accounts_receivable" },
+            { labelKey: "nav_emission_faturas",    href: "/fazenda/contas-receber?nova=1",   icon: FilePlus,  moduleKey: "accounts_receivable", alwaysOn: true },
+            { labelKey: "nav_credit_notes_emis",  href: "/fazenda/notas-credito-emissao",   icon: RefreshCw, moduleKey: "credit_notes_emis", alwaysOn: true },
         ],
     },
     {

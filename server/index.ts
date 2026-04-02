@@ -126,6 +126,62 @@ app.use((req, res, next) => {
     log(`⚠️  Migration grain_granero: ${migErr.message}`);
   }
 
+  // Inline migration: Notas de Crédito tables
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_credit_notes (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type text NOT NULL,
+        note_type text NOT NULL,
+        supplier text,
+        supplier_id varchar,
+        client text,
+        timbrado text NOT NULL,
+        note_number text NOT NULL,
+        issue_date timestamp NOT NULL,
+        total_amount numeric(15,2) NOT NULL DEFAULT 0,
+        total_exenta numeric(15,2) DEFAULT 0,
+        total_iva5 numeric(15,2) DEFAULT 0,
+        total_iva10 numeric(15,2) DEFAULT 0,
+        status text NOT NULL DEFAULT 'active',
+        currency text DEFAULT 'USD',
+        season_id varchar,
+        notes text,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_credit_note_items (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        credit_note_id varchar NOT NULL REFERENCES farm_credit_notes(id) ON DELETE CASCADE,
+        product_id varchar,
+        description text NOT NULL,
+        quantity numeric(15,4) DEFAULT 0,
+        unit_price numeric(15,4) DEFAULT 0,
+        tax_regime text NOT NULL DEFAULT 'exenta',
+        subtotal numeric(15,2) NOT NULL DEFAULT 0,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS farm_credit_note_invoices (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        credit_note_id varchar NOT NULL REFERENCES farm_credit_notes(id) ON DELETE CASCADE,
+        invoice_id text NOT NULL,
+        invoice_type text NOT NULL DEFAULT 'payable',
+        allocated_amount numeric(15,2) NOT NULL,
+        created_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    log("✅ Migration: farm_credit_notes tables ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_credit_notes: ${migErr.message}`);
+  }
+
   // Inline migration: ensure the `type` column exists on farm_pdv_terminals
   try {
     const dbMod = await import("./db");
