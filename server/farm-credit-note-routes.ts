@@ -14,6 +14,7 @@ export function registerFarmCreditNoteRoutes(app: Express) {
             if (!farmerId) return res.status(403).json({ error: "Forbidden" });
 
             const invoiceType = (req.query.invoiceType as string) || "payable";
+            const supplierId = (req.query.supplierId as string) || null;
 
             if (invoiceType === "payable") {
                 const result = await db.execute(sql`
@@ -33,6 +34,7 @@ export function registerFarmCreditNoteRoutes(app: Express) {
                     WHERE ap.farmer_id = ${farmerId}
                       AND ap.status IN ('aberto', 'parcial')
                       AND (CAST(ap.total_amount AS NUMERIC) - CAST(COALESCE(ap.paid_amount, 0) AS NUMERIC)) > 0
+                      AND (${supplierId}::text IS NULL OR ap.supplier_id = ${supplierId})
                     ORDER BY ap.due_date ASC
                 `);
                 res.json((result as any).rows || result);
