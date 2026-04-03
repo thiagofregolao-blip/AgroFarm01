@@ -13,6 +13,7 @@ import { AdminFarmerRoute } from "@/lib/admin-farmer-route";
 import { EmpresaRoute } from "@/lib/empresa-route";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
+import AuthDesktopPage from "@/pages/auth-desktop";
 import Dashboard from "@/pages/dashboard";
 import Vendas from "@/pages/vendas";
 import Comissoes from "@/pages/comissoes";
@@ -108,6 +109,7 @@ function Router() {
       <Route path="/" component={LandingPage} />
       <Route path="/download" component={DownloadPage} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/auth-desktop" component={AuthDesktopPage} />
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password/:token" component={ResetPassword} />
       <AdminRoute path="/admin" component={AdminPage} />
