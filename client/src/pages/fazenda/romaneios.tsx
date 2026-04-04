@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Scale, Loader2, Wheat, TrendingUp, Truck, Upload, Camera, Check, X, Clock, MessageSquare, FileImage, MapPin, Calculator, ShieldAlert, Award, Eye } from "lucide-react";
+import { Plus, Scale, Loader2, Wheat, TrendingUp, Truck, Upload, Camera, Check, X, Clock, MessageSquare, FileImage, MapPin, Calculator, ShieldAlert, Award, Eye, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SiloVisualization from "@/components/fazenda/silo-visualization";
 import { onEnterNext } from "@/lib/enter-navigation";
@@ -23,6 +23,7 @@ export default function FarmRomaneios() {
     const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [importedData, setImportedData] = useState<any>(null);
     const [uploading, setUploading] = useState(false);
+    const [editingRomaneio, setEditingRomaneio] = useState<any>(null);
     const { user } = useAuth();
 
     // Auto-normalize buyer names on first load (one-time data fix)
@@ -110,6 +111,16 @@ export default function FarmRomaneios() {
     const del = useMutation({
         mutationFn: async (id: string) => apiRequest("DELETE", `/api/farm/romaneios/${id}`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/farm/romaneios"] }); toast({ title: "Romaneio removido" }); },
+    });
+
+    const update = useMutation({
+        mutationFn: async ({ id, data }: { id: string; data: any }) => apiRequest("PUT", `/api/farm/romaneios/${id}`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/romaneios"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/romaneios/productivity"] });
+            toast({ title: "Romaneio atualizado!" });
+            setEditingRomaneio(null);
+        },
     });
 
     const confirmMutation = useMutation({
@@ -235,13 +246,13 @@ export default function FarmRomaneios() {
                     </div>
                 </div>
 
-                {/* ====== WhatsApp Pending Approval ====== */}
+                {/* ====== Pending Approval ====== */}
                 {pendingRomaneios.length > 0 && (
                     <Card className="border-amber-200 bg-amber-50/50">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-base flex items-center gap-2 text-amber-800">
-                                <MessageSquare className="h-5 w-5" />
-                                Romaneios via WhatsApp — Aguardando Aprovação ({pendingRomaneios.length})
+                                <Clock className="h-5 w-5" />
+                                Romaneios Aguardando Aprovação ({pendingRomaneios.length})
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
@@ -260,6 +271,25 @@ export default function FarmRomaneios() {
                         </CardContent>
                     </Card>
                 )}
+
+                {/* ====== Edit Dialog ====== */}
+                <Dialog open={!!editingRomaneio} onOpenChange={(v) => { if (!v) setEditingRomaneio(null); }}>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader><DialogTitle>Editar Romaneio</DialogTitle></DialogHeader>
+                        {editingRomaneio && (
+                            <RomaneioForm
+                                plots={plots}
+                                properties={properties}
+                                seasons={seasons}
+                                globalSilos={globalSilos}
+                                onSave={(data: any) => update.mutate({ id: editingRomaneio.id, data })}
+                                saving={update.isPending}
+                                initialData={editingRomaneio}
+                                editMode
+                            />
+                        )}
+                    </DialogContent>
+                </Dialog>
 
                 {/* ====== Silo Viability Dashboard (100% width, compact) ====== */}
                 {siloViability && siloViability.silos && siloViability.silos.length > 0 && (
@@ -347,6 +377,10 @@ export default function FarmRomaneios() {
                                                             <Eye className="h-3.5 w-3.5 mr-1" />Ver
                                                         </Button>
                                                     )}
+                                                    <Button variant="ghost" size="sm" className="text-emerald-600 h-7 text-xs"
+                                                        onClick={() => setEditingRomaneio(r)}>
+                                                        <Pencil className="h-3.5 w-3.5 mr-1" />Editar
+                                                    </Button>
                                                     <Button variant="ghost" size="sm" className="text-red-500 h-7 text-xs"
                                                         onClick={() => { if (confirm("Remover este romaneio?")) del.mutate(r.id); }}>
                                                         Excluir
@@ -516,8 +550,12 @@ function PendingRomaneioCard({ romaneio, plots, seasons, globalSilos, onConfirm,
                         <span className="font-semibold text-amber-800">Ticket #{romaneio.ticketNumber || "S/N"}</span>
                         <span className="text-gray-400">•</span>
                         <span className="text-gray-500">{new Date(romaneio.deliveryDate).toLocaleDateString("pt-BR")}</span>
-                        <Badge variant="outline" className="text-[10px] px-2 py-0 h-5 border-green-400 text-green-700 bg-green-50">
-                            WhatsApp
+                        <Badge variant="outline" className={`text-[10px] px-2 py-0 h-5 ${
+                            romaneio.source === "whatsapp" ? "border-green-400 text-green-700 bg-green-50" :
+                            romaneio.source === "import" ? "border-blue-400 text-blue-700 bg-blue-50" :
+                            "border-gray-300 text-gray-600 bg-gray-50"
+                        }`}>
+                            {romaneio.source === "whatsapp" ? "WhatsApp" : romaneio.source === "import" ? "Import" : "Manual"}
                         </Badge>
                         {romaneio.hasFile && (
                             <Button variant="ghost" size="sm" className="h-5 text-[10px] text-blue-600 px-1"
@@ -624,14 +662,14 @@ function PendingRomaneioCard({ romaneio, plots, seasons, globalSilos, onConfirm,
     );
 }
 
-// ====== Romaneio Form (Manual + AI pre-filled) ======
-function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving, initialData }: any) {
+// ====== Romaneio Form (Manual + AI pre-filled + Edit) ======
+function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving, initialData, editMode }: any) {
     const d = initialData || {};
     const [buyer, setBuyer] = useState(d.buyer || "");
     const [crop, setCrop] = useState(d.crop ? d.crop.charAt(0).toUpperCase() + d.crop.slice(1) : "");
-    const [plotId, setPlotId] = useState("");
-    const [propertyId, setPropertyId] = useState("");
-    const [seasonId, setSeasonId] = useState("");
+    const [plotId, setPlotId] = useState(d.plotId || "");
+    const [propertyId, setPropertyId] = useState(d.propertyId || "");
+    const [seasonId, setSeasonId] = useState(d.seasonId || "");
     const [seloIntacta, setSeloIntacta] = useState(false);
     const [globalSiloId, setGlobalSiloId] = useState(d.globalSiloId || "");
     const [deliveryDate, setDeliveryDate] = useState(
@@ -675,7 +713,7 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
             driver: driver || null,
             discounts: d.discounts || null,
             documentNumber: d.documentNumber || null,
-            source: initialData ? "import" : "manual",
+            source: editMode ? (d.source || "manual") : initialData ? "import" : "manual",
             notes: notes || null,
             pdfBase64: d.pdfBase64 || null,
             fileMimeType: d.fileMimeType || null,
@@ -684,7 +722,7 @@ function RomaneioForm({ plots, properties, seasons, globalSilos, onSave, saving,
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4" onKeyDown={onEnterNext as any}>
-            {initialData && (
+            {initialData && !editMode && (
                 <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-700 flex items-center gap-2 border border-blue-200">
                     <Camera className="h-4 w-4" />
                     Dados extraídos pela IA — revise e ajuste se necessário antes de confirmar.

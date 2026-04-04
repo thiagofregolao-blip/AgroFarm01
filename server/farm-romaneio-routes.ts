@@ -56,8 +56,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
 
     app.post("/api/farm/romaneios", requireFarmer, async (req, res) => {
         try {
-            const { farmRomaneios, farmAccountsReceivable, farmGrainStock } = await import("../shared/schema");
-            const { eq, and, sql: sqlFn } = await import("drizzle-orm");
+            const { farmRomaneios } = await import("../shared/schema");
             const { db } = await import("./db");
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
@@ -67,50 +66,12 @@ export function registerFarmRomaneioRoutes(app: Express) {
                 body.deliveryDate = parseLocalDate(body.deliveryDate) || new Date();
             }
 
+            // Always create as pending — financial effects only happen on confirm
             const [romaneio] = await db.insert(farmRomaneios).values({
                 ...body,
                 farmerId,
+                status: "pending",
             }).returning();
-
-            // AUTO: Romaneio → Conta a Receber
-            if (romaneio.totalValue && parseFloat(romaneio.totalValue) > 0) {
-                const dueDate = new Date(romaneio.deliveryDate);
-                dueDate.setDate(dueDate.getDate() + 30);
-                await db.insert(farmAccountsReceivable).values({
-                    farmerId,
-                    romaneioId: romaneio.id,
-                    buyer: romaneio.buyer,
-                    description: `${romaneio.crop} - Ticket ${romaneio.ticketNumber || 'S/N'} - ${(parseFloat(romaneio.finalWeight) / 1000).toFixed(2)} ton`,
-                    totalAmount: romaneio.totalValue,
-                    currency: romaneio.currency,
-                    dueDate: dueDate.toISOString(),
-                    status: "pendente",
-                });
-            }
-
-            // AUTO: Romaneio → Estoque de Graos (entrada)
-            if (romaneio.crop && romaneio.finalWeight) {
-                try {
-                    const cropNorm = romaneio.crop.toLowerCase().trim();
-                    const qty = parseFloat(romaneio.finalWeight);
-                    const existing = await db.select().from(farmGrainStock).where(
-                        and(eq(farmGrainStock.farmerId, farmerId), eq(farmGrainStock.crop, cropNorm), eq(farmGrainStock.seasonId, romaneio.seasonId || ''))
-                    );
-                    if (existing.length > 0) {
-                        await db.update(farmGrainStock)
-                            .set({ quantity: sqlFn`CAST(${farmGrainStock.quantity} AS NUMERIC) + ${qty}`, updatedAt: new Date() })
-                            .where(eq(farmGrainStock.id, existing[0].id));
-                    } else {
-                        await db.insert(farmGrainStock).values({
-                            farmerId, crop: cropNorm, seasonId: romaneio.seasonId || null,
-                            quantity: String(qty),
-                        });
-                    }
-                    console.log(`[ROMANEIO→GRAIN_STOCK] +${qty}kg ${cropNorm}`);
-                } catch (gsErr) {
-                    console.error("[ROMANEIO→GRAIN_STOCK_ERROR]", gsErr);
-                }
-            }
 
             res.json(romaneio);
         } catch (error) {
