@@ -38,6 +38,7 @@ const translations = {
     nav_budget: "Orçamento",
     nav_reconciliation: "Conciliação",
     nav_suppliers: "Empresas e Pessoas",
+    nav_categories: "Categorias de Entradas e Saídas",
     nav_productivity: "Produtividade",
 
     // Profile
@@ -179,6 +180,7 @@ const translations = {
     nav_budget: "Presupuesto",
     nav_reconciliation: "Conciliación",
     nav_suppliers: "Empresas e Pessoas",
+    nav_categories: "Categorías de Entradas y Salidas",
     nav_productivity: "Productividad",
 
     // Profile

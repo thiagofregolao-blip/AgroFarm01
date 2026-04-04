@@ -397,7 +397,6 @@ export default function FarmCashFlow() {
                                     { value: "transferencias", label: "Transferencias" },
                                     { value: "contas", label: "Contas / Bancos" },
                                     { value: "cheques", label: "Cheques" },
-                                    { value: "categorias", label: "Categorias" },
                                 ].map(tab => (
                                     <TabsTrigger key={tab.value} value={tab.value}
                                         className="text-[13px] font-semibold rounded-lg px-4 py-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200">
@@ -658,9 +657,6 @@ export default function FarmCashFlow() {
 
                             <TabsContent value="contas" className="mt-6">
                                 <AccountsManager accounts={accounts} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] })} />
-                            </TabsContent>
-                            <TabsContent value="categorias" className="mt-6">
-                                <CategoriesManager categories={customCategories} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/expense-categories"] })} />
                             </TabsContent>
                         </Tabs>
                     )}

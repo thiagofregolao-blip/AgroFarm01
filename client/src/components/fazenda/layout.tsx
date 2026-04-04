@@ -5,7 +5,7 @@ import {
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
     Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2,
-    Settings, HelpCircle, Download, ChevronDown, FilePlus, Users, RefreshCw
+    Settings, HelpCircle, Download, ChevronDown, FilePlus, Users, RefreshCw, Tag
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -89,7 +89,8 @@ const financeNavGroups: NavGroup[] = [
     {
         label: "Cadastros",
         items: [
-            { labelKey: "nav_suppliers",        href: "/fazenda/fornecedores", icon: Building2, moduleKey: "suppliers" },
+            { labelKey: "nav_suppliers",   href: "/fazenda/fornecedores", icon: Building2, moduleKey: "suppliers" },
+            { labelKey: "nav_categories",  href: "/fazenda/categorias",   icon: Tag,       moduleKey: "categories", alwaysOn: true },
         ],
     },
     {

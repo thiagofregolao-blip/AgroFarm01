@@ -81,6 +81,7 @@ import DrePage from "@/pages/fazenda/dre";
 import BudgetPage from "@/pages/fazenda/budget";
 import BankReconciliation from "@/pages/fazenda/reconciliation";
 import FarmFornecedores from "@/pages/fazenda/fornecedores";
+import FarmCategories from "@/pages/fazenda/categories";
 import FarmProdutividade from "@/pages/fazenda/produtividade";
 import CotacaoSoja from "@/pages/fazenda/cotacao-soja";
 
@@ -186,6 +187,7 @@ function Router() {
       <Route path="/fazenda/orcamento" component={BudgetPage} />
       <Route path="/fazenda/conciliacao" component={BankReconciliation} />
       <Route path="/fazenda/fornecedores" component={FarmFornecedores} />
+      <Route path="/fazenda/categorias" component={FarmCategories} />
       <Route path="/fazenda/produtividade" component={FarmProdutividade} />
       <Route path="/fazenda/cotacao-soja" component={CotacaoSoja} />
 
