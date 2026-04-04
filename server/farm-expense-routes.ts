@@ -561,6 +561,25 @@ export function registerFarmExpenseRoutes(app: Express) {
         }
     });
 
+    app.put("/api/farm/expense-categories/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenseCategories } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const { name, type } = req.body;
+            if (!name) return res.status(400).json({ error: "Nome é obrigatório" });
+            const [updated] = await db.update(farmExpenseCategories)
+                .set({ name, type })
+                .where(and(eq(farmExpenseCategories.id, req.params.id), eq(farmExpenseCategories.farmerId, farmerId)))
+                .returning();
+            res.json(updated);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to update category" });
+        }
+    });
+
     app.delete("/api/farm/expense-categories/:id", requireFarmer, async (req, res) => {
         try {
             const { farmExpenseCategories } = await import("../shared/schema");
