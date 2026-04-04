@@ -133,9 +133,12 @@ export function registerFarmExpenseRoutes(app: Express) {
                 const appCost = qty * unitCost;
 
                 plotData[plotKey].totalCost += appCost;
-                // Track distinct applied_at timestamps — same timestamp = same application event (same cart submission)
+                // Track distinct calendar days — same day = same application event
+                // (each product in a cart gets a separate DB insert with slightly different timestamps,
+                // so we can't use exact timestamp; grouping by DATE is the correct semantic)
                 if (app.appliedAt) {
-                    plotData[plotKey].appliedAtSet.add(new Date(app.appliedAt).toISOString());
+                    const dateKey = new Date(app.appliedAt).toISOString().slice(0, 10); // "YYYY-MM-DD"
+                    plotData[plotKey].appliedAtSet.add(dateKey);
                 }
                 plotData[plotKey].applications.push(app);
 
