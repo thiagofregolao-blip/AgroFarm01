@@ -594,16 +594,17 @@ export function registerFarmRomaneioRoutes(app: Express) {
                   AND ar.status NOT IN ('anulado')
                 GROUP BY ri.grain_crop, ri.grain_granero
             `);
-            // Mapear: { "CROPNORM-BUYERNORM" -> sold_kg }
+            // Mapear: { "cropnorm||BUYERNORM" -> sold_kg }
+            // Só acumula na chave exata (com granero). Sem granero → ignora no breakdown por silo.
+            // Fallback global foi removido: causava que toda venda sem granero fosse atribuída
+            // a TODOS os silos que tinham aquela cultura, duplicando o "Vendido".
             const soldMap: Record<string, number> = {};
             for (const row of ((soldAgg as any).rows ?? soldAgg)) {
                 const cropKey = (row.crop || "").toLowerCase().trim();
                 const buyerKey = normalizeBuyerKey(row.granero || "");
+                if (!buyerKey) continue; // sem granero → não atribui a nenhum silo específico
                 const mapKey = `${cropKey}||${buyerKey}`;
                 soldMap[mapKey] = (soldMap[mapKey] || 0) + parseFloat(row.sold_kg || "0");
-                // Tambem acumular por crop sem granero (fallback)
-                const fallbackKey = `${cropKey}||`;
-                soldMap[fallbackKey] = (soldMap[fallbackKey] || 0) + parseFloat(row.sold_kg || "0");
             }
 
             // 2. Get total harvest across all buyers
@@ -713,11 +714,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
                 let totalSoldForSilo = 0;
                 for (const cropData of silo.crops) {
                     const cropKey = (cropData.crop || "").toLowerCase().trim();
-                    // Tentar match exato (crop + granero normalizado)
-                    const exactKey = `${cropKey}||${key}`;
-                    // Fallback: crop sem granero (AR sem grain_granero preenchido)
-                    const fallbackKey = `${cropKey}||`;
-                    const soldKg = soldMap[exactKey] ?? soldMap[fallbackKey] ?? 0;
+                    const soldKg = soldMap[`${cropKey}||${key}`] ?? 0;
                     cropData.soldWeight = soldKg;
                     cropData.availableWeight = Math.max(0, cropData.weight - soldKg);
                     totalSoldForSilo += soldKg;
