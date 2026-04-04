@@ -264,7 +264,7 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV withdraw: register application + update stock
     app.post("/api/pdv/withdraw", requirePdv, async (req, res) => {
         try {
-            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId, signatureBase64, employeeName, photoBase64 } = req.body;
+            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId, signatureBase64, employeeName, photoBase64, idempotencyKey } = req.body;
             if (!productId || !quantity || (!plotId && !equipmentId)) {
                 return res.status(400).json({ error: "Product, quantity, and objective (plot or equipment) required" });
             }
@@ -319,7 +319,8 @@ export function registerFarmPdvRoutes(app: Express) {
                 appliedAt: new Date(),
                 syncedFromOffline: false,
                 seasonId: seasonId || null,
-            });
+                ...(idempotencyKey ? { idempotencyKey } : {}),
+            } as any);
 
             // Save signature, employee name, and photo if provided
             if (application.id) {

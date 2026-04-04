@@ -569,9 +569,27 @@ export class FarmStorage {
 
         const qty = parseFloat(data.quantity);
         const depositId = (data as any).propertyId || null;
+        const idempotencyKey = (data as any).idempotencyKey as string | undefined;
+
+        // 0. Idempotency check — return existing record if key already used
+        if (idempotencyKey) {
+            const existingRows = await db.execute(sql`
+                SELECT id FROM farm_applications WHERE idempotency_key = ${idempotencyKey} LIMIT 1
+            `);
+            const existingId = ((existingRows as any).rows ?? existingRows)[0]?.id;
+            if (existingId) {
+                const [existing] = await db.select().from(farmApplications).where(eq(farmApplications.id, existingId));
+                return existing;
+            }
+        }
 
         // 1. Create application record
         const [app] = await db.insert(farmApplications).values(data).returning();
+
+        // 1b. Save idempotency key if provided
+        if (idempotencyKey) {
+            await db.execute(sql`UPDATE farm_applications SET idempotency_key = ${idempotencyKey} WHERE id = ${app.id}`);
+        }
 
         // 2. Subtract from stock — try specific deposit first, fallback to any with enough, then largest
         const propCoalesced = depositId || '__none__';

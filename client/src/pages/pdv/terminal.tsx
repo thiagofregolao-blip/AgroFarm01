@@ -369,6 +369,7 @@ export default function PdvTerminal() {
     const [selectedPlots, setSelectedPlots] = useState<any[]>([]);
     const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const submittingRef = useRef(false);
     const [negativeStockWarning, setNegativeStockWarning] = useState<{ items: Array<{ name: string; available: number; requested: number; unit: string }>; generatePDF: boolean } | null>(null);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [categoryFilter, setCategoryFilter] = useState<string>("");
@@ -942,6 +943,8 @@ export default function PdvTerminal() {
         }
         setNegativeStockWarning(null);
 
+        if (submittingRef.current) return;
+        submittingRef.current = true;
         setSubmitting(true);
         try {
             let count = 0;
@@ -969,6 +972,7 @@ export default function PdvTerminal() {
                         notes: count === 0 ? instructions : undefined,
                         dosePerHa: validDose,
                         seasonId: selectedSeasonId || null,
+                        idempotencyKey: crypto.randomUUID(),
                     } : {
                         productId: item.product.id,
                         quantity: d.allocatedQty,
@@ -979,6 +983,7 @@ export default function PdvTerminal() {
                         equipmentId: selectedEquipment?.id || null,
                         flowRateLha: flowRateLha ? parseFloat(flowRateLha) : null,
                         seasonId: selectedSeasonId || null,
+                        idempotencyKey: crypto.randomUUID(),
                     };
                     payloads.push(payload);
 
@@ -1022,6 +1027,7 @@ export default function PdvTerminal() {
         } catch (err) {
             toast({ title: "Erro ao registrar saída", variant: "destructive" });
         } finally {
+            submittingRef.current = false;
             setSubmitting(false);
         }
     };
@@ -2991,7 +2997,8 @@ export default function PdvTerminal() {
                             </button>
                             <button
                                 onClick={() => handleSubmit(negativeStockWarning.generatePDF)}
-                                className="flex-1 px-4 py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 transition-colors"
+                                disabled={submitting}
+                                className="flex-1 px-4 py-3 rounded-xl bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Confirmar Saida
                             </button>

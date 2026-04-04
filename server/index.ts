@@ -933,6 +933,70 @@ app.use((req, res, next) => {
     log(`⚠️  Migration grain_contracts/deliveries: ${(migErr as Error).message}`);
   }
 
+  // Inline migration: idempotency_key for PDV applications + retroactive duplicate cleanup
+  try {
+    const { db, dbReady } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await dbReady;
+
+    // Add idempotency_key column
+    await db.execute(sql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100)`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_applications_idempotency ON farm_applications (idempotency_key) WHERE idempotency_key IS NOT NULL`);
+
+    // Find duplicate applications: same farmer_id + product_id + plot_id + quantity within 120 seconds
+    // Keep the oldest (smallest created_at), delete the rest + their movements + restore stock
+    const dupResult = await db.execute(sql`
+      WITH ordered AS (
+        SELECT
+          a.id,
+          a.farmer_id,
+          a.product_id,
+          a.property_id,
+          a.quantity,
+          a.applied_at,
+          LAG(a.id) OVER (
+            PARTITION BY a.farmer_id, a.product_id, COALESCE(a.plot_id::text, ''), a.quantity
+            ORDER BY a.applied_at ASC
+          ) AS prev_id,
+          LAG(a.applied_at) OVER (
+            PARTITION BY a.farmer_id, a.product_id, COALESCE(a.plot_id::text, ''), a.quantity
+            ORDER BY a.applied_at ASC
+          ) AS prev_at
+        FROM farm_applications a
+      )
+      SELECT id, farmer_id, product_id, property_id, quantity
+      FROM ordered
+      WHERE prev_id IS NOT NULL
+        AND EXTRACT(EPOCH FROM (applied_at - prev_at)) < 120
+    `);
+    const dupRows: any[] = (dupResult as any).rows ?? (dupResult as any) ?? [];
+
+    if (dupRows.length > 0) {
+      for (const dup of dupRows) {
+        // Delete the movement for this duplicate application
+        await db.execute(sql`
+          DELETE FROM farm_stock_movements
+          WHERE reference_type = 'pdv' AND reference_id = ${dup.id}
+        `);
+        // Restore the stock quantity that was erroneously deducted
+        await db.execute(sql`
+          UPDATE farm_stock
+          SET quantity = CAST(quantity AS NUMERIC) + ABS(CAST(${dup.quantity} AS NUMERIC))
+          WHERE farmer_id = ${dup.farmer_id}
+            AND product_id = ${dup.product_id}
+            AND COALESCE(property_id::text, '') = COALESCE(${dup.property_id ?? ''}::text, '')
+        `);
+        // Delete the duplicate application
+        await db.execute(sql`DELETE FROM farm_applications WHERE id = ${dup.id}`);
+      }
+      log(`✅ Migration: ${dupRows.length} duplicate PDV applications removed and stock restored`);
+    } else {
+      log("✅ Migration: PDV idempotency_key column ensured (no duplicates found)");
+    }
+  } catch (migErr: any) {
+    log(`⚠️  Migration PDV idempotency: ${migErr.message}`);
+  }
+
   // Register activity log middleware before routes
   const { activityLogMiddleware } = await import("./lib/activity-logger");
   app.use(activityLogMiddleware);
