@@ -102,7 +102,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                 propertyId: string;
                 propertyName: string;
                 totalCost: number;
-                applicationCount: number;
+                appliedAtSet: Set<string>; // distinct timestamps = distinct application events
                 totalQtyByProduct: Record<string, { productId: string; productName: string; productUnit: string; category: string | null; imageUrl: string | null; quantity: number; unitCost: number; totalCost: number; dosePerHa: number | null }>;
                 applications: typeof apps;
             }> = {};
@@ -122,7 +122,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                         propertyId: app.propertyId || "",
                         propertyName: app.propertyName || "Sem propriedade",
                         totalCost: 0,
-                        applicationCount: 0,
+                        appliedAtSet: new Set<string>(),
                         totalQtyByProduct: {},
                         applications: [],
                     };
@@ -133,7 +133,10 @@ export function registerFarmExpenseRoutes(app: Express) {
                 const appCost = qty * unitCost;
 
                 plotData[plotKey].totalCost += appCost;
-                plotData[plotKey].applicationCount += 1;
+                // Track distinct applied_at timestamps — same timestamp = same application event (same cart submission)
+                if (app.appliedAt) {
+                    plotData[plotKey].appliedAtSet.add(new Date(app.appliedAt).toISOString());
+                }
                 plotData[plotKey].applications.push(app);
 
                 if (!plotData[plotKey].totalQtyByProduct[app.productId]) {
@@ -158,9 +161,10 @@ export function registerFarmExpenseRoutes(app: Express) {
                 ...p,
                 costPerHa: p.plotAreaHa > 0 ? p.totalCost / p.plotAreaHa : 0,
                 products: Object.values(p.totalQtyByProduct),
-                applications: undefined, // Don't send raw apps to reduce payload
+                applications: undefined,
                 plotCoordinates: p.plotCoordinates || null,
-                applicationCount: p.applicationCount,
+                applicationCount: p.appliedAtSet.size, // distinct events, not product lines
+                appliedAtSet: undefined, // don't serialize the Set
             }));
 
             // Normalize category names (lowercase, singular) to avoid duplicates

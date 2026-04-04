@@ -45,8 +45,10 @@ function PlotMap({ coordinates }: { coordinates: LatLng[] }) {
                 attributionControl: false,
             });
 
-            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            // Esri World Imagery (satélite) — mesmo tile usado em Properties e Dashboard
+            L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
                 maxZoom: 20,
+                attribution: "&copy; Esri",
             }).addTo(map);
 
             const latLngs = coordinates.map(c => [c.lat, c.lng] as [number, number]);
