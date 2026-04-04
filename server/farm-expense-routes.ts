@@ -64,6 +64,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                 plotName: farmPlots.name,
                 plotAreaHa: farmPlots.areaHa,
                 plotCrop: farmPlots.crop,
+                plotCoordinates: farmPlots.coordinates,
                 propertyName: farmProperties.name,
             })
                 .from(farmApplications)
@@ -97,9 +98,11 @@ export function registerFarmExpenseRoutes(app: Express) {
                 plotName: string;
                 plotAreaHa: number;
                 plotCrop: string | null;
+                plotCoordinates: string | null;
                 propertyId: string;
                 propertyName: string;
                 totalCost: number;
+                applicationCount: number;
                 totalQtyByProduct: Record<string, { productId: string; productName: string; productUnit: string; category: string | null; imageUrl: string | null; quantity: number; unitCost: number; totalCost: number; dosePerHa: number | null }>;
                 applications: typeof apps;
             }> = {};
@@ -115,9 +118,11 @@ export function registerFarmExpenseRoutes(app: Express) {
                         plotName: app.plotName || "Sem talhão",
                         plotAreaHa: parseFloat(app.plotAreaHa || "0"),
                         plotCrop: app.plotCrop,
+                        plotCoordinates: app.plotCoordinates || null,
                         propertyId: app.propertyId || "",
                         propertyName: app.propertyName || "Sem propriedade",
                         totalCost: 0,
+                        applicationCount: 0,
                         totalQtyByProduct: {},
                         applications: [],
                     };
@@ -128,6 +133,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                 const appCost = qty * unitCost;
 
                 plotData[plotKey].totalCost += appCost;
+                plotData[plotKey].applicationCount += 1;
                 plotData[plotKey].applications.push(app);
 
                 if (!plotData[plotKey].totalQtyByProduct[app.productId]) {
@@ -153,6 +159,8 @@ export function registerFarmExpenseRoutes(app: Express) {
                 costPerHa: p.plotAreaHa > 0 ? p.totalCost / p.plotAreaHa : 0,
                 products: Object.values(p.totalQtyByProduct),
                 applications: undefined, // Don't send raw apps to reduce payload
+                plotCoordinates: p.plotCoordinates || null,
+                applicationCount: p.applicationCount,
             }));
 
             // Normalize category names (lowercase, singular) to avoid duplicates
