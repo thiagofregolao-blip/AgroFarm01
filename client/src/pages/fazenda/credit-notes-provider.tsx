@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, FileX, Trash2, AlertTriangle, X, Check, ChevronDown } from "lucide-react";
+import FarmLayout from "@/components/fazenda/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -280,6 +281,7 @@ export default function CreditNotesProvider() {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
+        <FarmLayout>
         <div className="p-4 md:p-6 max-w-5xl mx-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
@@ -677,5 +679,6 @@ export default function CreditNotesProvider() {
                 </div>
             )}
         </div>
+        </FarmLayout>
     );
 }
