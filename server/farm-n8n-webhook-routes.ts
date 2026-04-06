@@ -4,6 +4,7 @@ import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { ZApiClient } from "./whatsapp/zapi-client";
+import { findSimilarSuppliers, fillMissingSupplierFields } from "./lib/supplier-dedup";
 
 // Middleware to validate n8n webhook shared secret
 function requireWebhookSecret(req: any, res: any, next: any) {
@@ -666,7 +667,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
                     console.error("[WEBHOOK_INVOICE_SEASON]", err);
                 }
 
-                // Auto-register supplier if not exists (with full data from receipt)
+                // Auto-register supplier if not exists — fuzzy dedup to prevent duplicates
                 let supplierId = null;
                 if (parsed.supplier) {
                     try {
@@ -675,40 +676,22 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
                         const supplierEmail = parsed.supplierEmail || null;
                         const supplierAddress = parsed.supplierAddress || null;
 
-                        // Search by RUC first (most reliable), then by name
-                        const existingSup = await db.execute(sql`
-                            SELECT id, ruc, phone, email, address FROM farm_suppliers WHERE farmer_id = ${farmer.id} AND is_active = true
-                            AND (
-                                (${supplierRuc}::text IS NOT NULL AND ruc = ${supplierRuc})
-                                OR name ILIKE ${'%' + parsed.supplier.substring(0, 15) + '%'}
-                            )
-                            LIMIT 1
-                        `);
-                        const supRows = (existingSup as any).rows ?? existingSup;
-                        if (supRows.length > 0) {
-                            supplierId = supRows[0].id;
-                            // Update missing fields on existing supplier
-                            const existing = supRows[0];
-                            if ((!existing.ruc && supplierRuc) || (!existing.phone && supplierPhone) || (!existing.email && supplierEmail) || (!existing.address && supplierAddress)) {
-                                await db.execute(sql`
-                                    UPDATE farm_suppliers SET
-                                        ruc = COALESCE(ruc, ${supplierRuc}),
-                                        phone = COALESCE(phone, ${supplierPhone}),
-                                        email = COALESCE(email, ${supplierEmail}),
-                                        address = COALESCE(address, ${supplierAddress}),
-                                        updated_at = NOW()
-                                    WHERE id = ${supplierId}
-                                `);
-                                console.log(`[WEBHOOK_INVOICE_SUPPLIER] Updated missing fields for supplier ${supplierId}`);
-                            }
+                        const similar = await findSimilarSuppliers(db, sql, farmer.id, parsed.supplier, supplierRuc);
+
+                        if (similar.length > 0 && similar[0].similarity >= 0.85) {
+                            // High confidence match — link and fill any missing fields
+                            supplierId = similar[0].id;
+                            await fillMissingSupplierFields(db, sql, supplierId, { ruc: supplierRuc, phone: supplierPhone, email: supplierEmail, address: supplierAddress });
+                            console.log(`[WEBHOOK_INVOICE_SUPPLIER] Linked supplier id=${supplierId} for "${parsed.supplier}" (similarity=${similar[0].similarity.toFixed(2)}, by=${similar[0].matchedBy})`);
                         } else {
+                            // No good match — create new supplier
                             const newSup = await db.execute(sql`
                                 INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, person_type, entity_type)
                                 VALUES (${farmer.id}, ${parsed.supplier}, ${supplierRuc}, ${supplierPhone}, ${supplierEmail}, ${supplierAddress}, 'provedor', 'juridica')
                                 RETURNING id
                             `);
                             supplierId = ((newSup as any).rows ?? newSup)[0]?.id;
-                            console.log(`[WEBHOOK_INVOICE_SUPPLIER] Created new supplier ${supplierId}: ${parsed.supplier} | RUC: ${supplierRuc}`);
+                            console.log(`[WEBHOOK_INVOICE_SUPPLIER] Created supplier id=${supplierId}: "${parsed.supplier}" RUC: ${supplierRuc}`);
                         }
                     } catch (err) {
                         console.error("[WEBHOOK_INVOICE_SUPPLIER]", err);

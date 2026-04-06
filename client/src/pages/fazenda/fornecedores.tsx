@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import FarmLayout from "@/components/fazenda/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Building2, Phone, Mail, MapPin, EyeOff, Eye } from "lucide-react";
+
+interface SimilarSupplier { id: string; name: string; ruc: string | null; similarity: number; matchedBy: "ruc" | "name"; }
 
 interface Supplier {
     id: string;
@@ -31,6 +34,7 @@ export default function FornecedoresPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<Supplier | null>(null);
     const [form, setForm] = useState({ name: "", ruc: "", phone: "", email: "", address: "", notes: "", personType: "", entityType: "" });
+    const [similarWarning, setSimilarWarning] = useState<{ similar: SimilarSupplier[]; pendingData: any } | null>(null);
 
     const { data: suppliers = [], isLoading } = useQuery<Supplier[]>({
         queryKey: ["/api/farm/suppliers"],
@@ -41,15 +45,21 @@ export default function FornecedoresPage() {
             const url = editing ? `/api/farm/suppliers/${editing.id}` : "/api/farm/suppliers";
             const method = editing ? "PUT" : "POST";
             const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
-            if (!res.ok) {
-                const body = await res.json().catch(() => null);
-                throw new Error(body?.error || "Erro ao salvar");
+            const body = await res.json().catch(() => null);
+            if (res.ok && body?.warning) {
+                return { __warning: true, similar: body.similar as SimilarSupplier[], pendingData: data };
             }
-            return res.json();
+            if (!res.ok) throw new Error(body?.error || "Erro ao salvar");
+            return body;
         },
-        onSuccess: () => {
+        onSuccess: (result: any) => {
+            if (result?.__warning) {
+                setSimilarWarning({ similar: result.similar, pendingData: result.pendingData });
+                return;
+            }
             qc.invalidateQueries({ queryKey: ["/api/farm/suppliers"] });
             setModalOpen(false);
+            setSimilarWarning(null);
             toast({ title: editing ? "Fornecedor atualizado" : "Fornecedor cadastrado" });
         },
         onError: (err: Error) => {
@@ -261,6 +271,50 @@ export default function FornecedoresPage() {
                             entityType: form.entityType === "__none__" ? null : form.entityType,
                         })} disabled={!form.name || saveMutation.isPending}>
                             {saveMutation.isPending ? "Salvando..." : "Salvar"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={!!similarWarning} onOpenChange={(open) => { if (!open) setSimilarWarning(null); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-amber-700">
+                            <AlertTriangle className="w-5 h-5" />
+                            Fornecedor semelhante encontrado
+                        </DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-slate-600">
+                        Encontramos fornecedores com nome parecido. Verifique se não é o mesmo antes de criar:
+                    </p>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {similarWarning?.similar.map((s) => (
+                            <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                <div>
+                                    <p className="text-sm font-medium text-slate-800">{s.name}</p>
+                                    <p className="text-xs text-slate-500">
+                                        {s.ruc ? `RUC: ${s.ruc}` : "Sem RUC"} · {s.matchedBy === "ruc" ? "RUC idêntico" : `${Math.round(s.similarity * 100)}% similar`}
+                                    </p>
+                                </div>
+                                <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-800 text-xs"
+                                    onClick={() => {
+                                        setSimilarWarning(null);
+                                        setModalOpen(false);
+                                        setSearch(s.name.split(" ")[0]);
+                                    }}>
+                                    Ver cadastro
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setSimilarWarning(null)}>Cancelar</Button>
+                        <Button variant="destructive" onClick={() => {
+                            if (similarWarning) {
+                                saveMutation.mutate({ ...similarWarning.pendingData, forceCreate: true });
+                                setSimilarWarning(null);
+                            }
+                        }}>
+                            Criar mesmo assim
                         </Button>
                     </DialogFooter>
                 </DialogContent>

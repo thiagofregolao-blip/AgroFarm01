@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import { farmProductsCatalog, farmStockMovements, farmInvoiceItems, farmInvoices } from "@shared/schema";
 import { parseWithGemini } from "./gemini-invoice-parser";
 import { eq } from "drizzle-orm";
+import { findSimilarSuppliers, fillMissingSupplierFields } from "./lib/supplier-dedup";
 
 // Helper: find matching remissions for a given invoice
 async function findMatchingRemissions(farmerId: string, invoiceSupplier: string | null, invoiceItemNames: string[]) {
@@ -346,42 +347,35 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 documentType: isRemision ? "remision" : "factura",
             });
 
-            // Auto-create or link supplier in farm_suppliers
+            // Auto-create or link supplier in farm_suppliers (fuzzy dedup)
             try {
                 const supplierName = parsed.supplier || "";
-                const supplierRuc = parsed.supplierRuc || "";
+                const supplierRuc = parsed.supplierRuc || null;
                 if (supplierName) {
-                    // Escape LIKE special characters to prevent injection
-                    const namePrefix = supplierName.substring(0, 15).replace(/[%_\\]/g, '\\$&');
-                    const likePattern = `%${namePrefix}%`;
-                    const existing = await db.execute(sql`
-                        SELECT id FROM farm_suppliers
-                        WHERE farmer_id = ${farmerId}
-                          AND is_active = true
-                          AND (
-                            name ILIKE ${likePattern}
-                            ${supplierRuc ? sql`OR ruc = ${supplierRuc}` : sql``}
-                          )
-                        LIMIT 1
-                    `);
-                    const existingRows = Array.isArray(existing) ? existing : (existing.rows || []);
+                    const supplierPhone = parsed.supplierPhone || null;
+                    const supplierEmail = parsed.supplierEmail || null;
+                    const supplierAddress = parsed.supplierAddress || null;
+
+                    const similar = await findSimilarSuppliers(db, sql, farmerId, supplierName, supplierRuc);
                     let supplierId: string | null = null;
-                    if (existingRows.length > 0) {
-                        supplierId = (existingRows[0] as any).id;
-                        console.log(`[INVOICE_IMPORT] Linked existing supplier id=${supplierId} for "${supplierName}"`);
+
+                    if (similar.length > 0 && similar[0].similarity >= 0.85) {
+                        // High confidence match — link and fill missing fields
+                        supplierId = similar[0].id;
+                        await fillMissingSupplierFields(db, sql, supplierId, { ruc: supplierRuc, phone: supplierPhone, email: supplierEmail, address: supplierAddress });
+                        console.log(`[INVOICE_IMPORT] Linked existing supplier id=${supplierId} for "${supplierName}" (similarity=${similar[0].similarity.toFixed(2)}, by=${similar[0].matchedBy})`);
                     } else {
-                        const supplierPhone = parsed.supplierPhone || null;
-                        const supplierEmail = parsed.supplierEmail || null;
-                        const supplierAddress = parsed.supplierAddress || null;
+                        // No good match — create new supplier
                         const created = await db.execute(sql`
                             INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, person_type, entity_type)
-                            VALUES (${farmerId}, ${supplierName}, ${supplierRuc || null}, ${supplierPhone}, ${supplierEmail}, ${supplierAddress}, 'provedor', 'juridica')
+                            VALUES (${farmerId}, ${supplierName}, ${supplierRuc}, ${supplierPhone}, ${supplierEmail}, ${supplierAddress}, 'provedor', 'juridica')
                             RETURNING id
                         `);
                         const createdRows = Array.isArray(created) ? created : (created.rows || []);
                         supplierId = (createdRows[0] as any)?.id || null;
                         console.log(`[INVOICE_IMPORT] Auto-created supplier id=${supplierId} for "${supplierName}" RUC: ${supplierRuc}`);
                     }
+
                     if (supplierId) {
                         await db.execute(sql`
                             UPDATE farm_invoices

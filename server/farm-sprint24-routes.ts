@@ -2,6 +2,7 @@ import { Express, Request, Response } from "express";
 import { requireFarmer, parseLocalDate , getEffectiveFarmerId } from "./farm-middleware";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import { findSimilarSuppliers, fillMissingSupplierFields } from "./lib/supplier-dedup";
 
 export function registerFarmSprint24Routes(app: Express) {
 
@@ -25,17 +26,34 @@ export function registerFarmSprint24Routes(app: Express) {
         try {
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
-            const { name, ruc, phone, email, address, notes, personType, entityType } = req.body;
-            // Validate RUC uniqueness
+            const { name, ruc, phone, email, address, notes, personType, entityType, forceCreate } = req.body;
+
+            // 1. Block duplicate RUC for juridical persons (hard block — same RUC = same company)
             if (ruc) {
                 const existing = await db.execute(sql`
-                    SELECT id FROM farm_suppliers WHERE farmer_id = ${farmerId} AND ruc = ${ruc} AND is_active = true LIMIT 1
+                    SELECT id, name FROM farm_suppliers
+                    WHERE farmer_id = ${farmerId} AND ruc = ${ruc} AND is_active = true LIMIT 1
                 `);
                 const existingRows = (existing as any).rows ?? existing;
                 if (existingRows.length > 0) {
-                    return res.status(409).json({ error: `Ja existe um fornecedor cadastrado com o RUC ${ruc}` });
+                    return res.status(409).json({
+                        error: `Já existe um fornecedor com o RUC ${ruc}: "${existingRows[0].name}". Dois fornecedores não podem ter o mesmo RUC.`,
+                    });
                 }
             }
+
+            // 2. Warn on similar name (unless user explicitly confirmed forceCreate)
+            if (!forceCreate && name) {
+                const similar = await findSimilarSuppliers(db, sql, farmerId, name, ruc || null);
+                if (similar.length > 0) {
+                    return res.status(200).json({
+                        warning: true,
+                        message: "Encontramos fornecedores com nome parecido. Verifique se não é o mesmo antes de criar um novo cadastro.",
+                        similar,
+                    });
+                }
+            }
+
             const rows = await db.execute(sql`
                 INSERT INTO farm_suppliers (farmer_id, name, ruc, phone, email, address, notes, person_type, entity_type)
                 VALUES (${farmerId}, ${name}, ${ruc ?? null}, ${phone ?? null}, ${email ?? null}, ${address ?? null}, ${notes ?? null}, ${personType ?? null}, ${entityType ?? null})
