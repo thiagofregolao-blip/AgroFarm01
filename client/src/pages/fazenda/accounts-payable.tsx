@@ -1409,11 +1409,12 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
         return termMatch && receiptMatch && dateFromMatch && dateToMatch;
     });
 
-    // Group payments: batch payments by paymentBatchId, multi-method single payments by payableId
+    // Group payments: batch by batchId, multi-method by payableId + timestamp proximity (120s)
     const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string; observation: string; batchItems?: any[]; isBatch: boolean; isMultiMethod: boolean }[] = [];
     const seenBatchIds = new Set<string>();
-    const seenPayableIds = new Set<string>();
+    const seenTxIds = new Set<string>();
     for (const item of filteredPaid) {
+        if (seenTxIds.has(item.id)) continue;
         const dateStr = item.paidDate ? new Date(item.paidDate).toLocaleDateString("pt-BR") : "—";
 
         // Batch payment: group by batchId
@@ -1421,6 +1422,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
             if (seenBatchIds.has(item.paymentBatchId)) continue;
             seenBatchIds.add(item.paymentBatchId);
             const batchTxs = filteredPaid.filter((p: any) => p.paymentBatchId === item.paymentBatchId);
+            batchTxs.forEach((t: any) => seenTxIds.add(t.id));
             const batchItemsArr = item.batchItems || [];
             const batchTotal = batchItemsArr.length > 0
                 ? batchItemsArr.reduce((s: number, bi: any) => s + parseFloat(bi.amount || 0), 0)
@@ -1439,24 +1441,28 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                 isMultiMethod: false,
             });
         } else if (item.payableId) {
-            // Single AP payment — group all transactions of the same payableId (multi-method case)
-            if (seenPayableIds.has(item.payableId)) continue;
-            seenPayableIds.add(item.payableId);
-            const samePayableTxs = filteredPaid.filter((p: any) => !p.paymentBatchId && p.payableId === item.payableId);
-            const total = samePayableTxs.reduce((s: number, p: any) => s + parseFloat(p.amount || 0), 0);
+            // Group transactions of same payableId created within 120 seconds of each other
+            const itemTs = new Date(item.paidDate).getTime();
+            const sameOpTxs = filteredPaid.filter((p: any) => {
+                if (p.paymentBatchId || p.payableId !== item.payableId || seenTxIds.has(p.id)) return false;
+                return Math.abs(new Date(p.paidDate).getTime() - itemTs) < 120_000;
+            });
+            sameOpTxs.forEach((t: any) => seenTxIds.add(t.id));
+            const total = sameOpTxs.reduce((s: number, p: any) => s + parseFloat(p.amount || 0), 0);
             groups.push({
-                key: item.payableId,
+                key: `${item.payableId}_${item.id}`,
                 date: dateStr,
                 supplier: item.supplier || "—",
                 observation: item.observation || "",
-                items: samePayableTxs,
+                items: sameOpTxs,
                 total,
                 currency: item.currency || "USD",
                 receiptNumber: item.receiptNumber || "",
                 isBatch: false,
-                isMultiMethod: samePayableTxs.length > 1,
+                isMultiMethod: sameOpTxs.length > 1,
             });
         } else {
+            seenTxIds.add(item.id);
             // Legacy: no payableId
             groups.push({
                 key: item.id,
