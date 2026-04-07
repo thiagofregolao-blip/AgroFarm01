@@ -286,21 +286,45 @@ export function registerFarmCreditNoteRoutes(app: Express) {
                 const allocated = parseFloat(inv.allocatedAmount) || 0;
                 const itype = inv.invoiceType as string;
                 if (itype === "payable") {
-                    // Try by ap.id first, then fallback to ap.invoice_id (FK)
-                    let apRows = ((await db.execute(sql`
+                    const searchId = inv.invoiceId;
+                    console.log(`[CN_POST] Searching AP: invoiceId=${searchId} (type=${typeof searchId}) farmerId=${farmerId} invoiceType=${itype}`);
+
+                    // Try by ap.id first
+                    let apRows = searchId ? ((await db.execute(sql`
                         SELECT id, CAST(total_amount AS NUMERIC) AS ta, CAST(COALESCE(paid_amount,0) AS NUMERIC) AS pa
-                        FROM farm_accounts_payable WHERE id = ${inv.invoiceId} AND farmer_id = ${farmerId}
-                    `)) as any).rows;
-                    if (!apRows?.length) {
+                        FROM farm_accounts_payable WHERE id = ${searchId} AND farmer_id = ${farmerId}
+                    `)) as any).rows : [];
+
+                    // Fallback: by ap.invoice_id (FK to farm_invoices)
+                    if (!apRows?.length && searchId) {
                         apRows = ((await db.execute(sql`
                             SELECT id, CAST(total_amount AS NUMERIC) AS ta, CAST(COALESCE(paid_amount,0) AS NUMERIC) AS pa
-                            FROM farm_accounts_payable WHERE invoice_id = ${inv.invoiceId} AND farmer_id = ${farmerId}
+                            FROM farm_accounts_payable WHERE invoice_id = ${searchId} AND farmer_id = ${farmerId}
                             ORDER BY created_at DESC LIMIT 1
                         `)) as any).rows;
                     }
+
+                    // Fallback: by supplier name + status open
+                    if (!apRows?.length && supplierId) {
+                        apRows = ((await db.execute(sql`
+                            SELECT id, CAST(total_amount AS NUMERIC) AS ta, CAST(COALESCE(paid_amount,0) AS NUMERIC) AS pa
+                            FROM farm_accounts_payable
+                            WHERE farmer_id = ${farmerId}
+                              AND (supplier_id = ${supplierId} OR LOWER(TRIM(supplier)) = (
+                                SELECT LOWER(TRIM(name)) FROM farm_suppliers WHERE id = ${supplierId} LIMIT 1
+                              ))
+                              AND status IN ('aberto', 'parcial')
+                            ORDER BY created_at DESC LIMIT 1
+                        `)) as any).rows;
+                        if (apRows?.length) console.log(`[CN_POST] Found via supplier fallback: apId=${apRows[0].id}`);
+                    }
+
                     const ap = apRows?.[0];
-                    console.log(`[CN_POST] invoiceId=${inv.invoiceId} farmerId=${farmerId} found=${!!ap}`);
-                    if (!ap) return res.status(400).json({ error: `Conta a pagar não encontrada: ${inv.invoiceId}` });
+                    console.log(`[CN_POST] Result: found=${!!ap} apId=${ap?.id || 'NONE'}`);
+                    if (!ap) return res.status(400).json({
+                        error: `Conta a pagar não encontrada`,
+                        debug: { searchId, searchIdType: typeof searchId, farmerId, supplierId: supplierId || null }
+                    });
                     // Update inv.invoiceId to real ap.id for later inserts
                     inv.resolvedApId = ap.id;
                     const remaining = parseFloat(ap.ta) - parseFloat(ap.pa);
