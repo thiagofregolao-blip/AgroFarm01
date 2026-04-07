@@ -1578,7 +1578,23 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                 <div className="flex items-center justify-end gap-1">
                                                     {item?.receiptFileUrl && (
                                                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-400 hover:text-blue-600 hover:bg-blue-50"
-                                                            onClick={(e) => { e.stopPropagation(); window.open(item.receiptFileUrl, '_blank'); }} aria-label="Ver recibo">
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const url = item.receiptFileUrl as string;
+                                                                if (url.startsWith("data:")) {
+                                                                    const [meta, b64] = url.split(",");
+                                                                    const mime = meta.match(/:(.*?);/)?.[1] ?? "application/octet-stream";
+                                                                    const bytes = atob(b64);
+                                                                    const arr = new Uint8Array(bytes.length);
+                                                                    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+                                                                    const blob = new Blob([arr], { type: mime });
+                                                                    const objUrl = URL.createObjectURL(blob);
+                                                                    window.open(objUrl, "_blank");
+                                                                    setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
+                                                                } else {
+                                                                    window.open(url, "_blank");
+                                                                }
+                                                            }} aria-label="Ver recibo">
                                                             <Eye className="h-3.5 w-3.5" />
                                                         </Button>
                                                     )}
