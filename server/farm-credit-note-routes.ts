@@ -286,11 +286,23 @@ export function registerFarmCreditNoteRoutes(app: Express) {
                 const allocated = parseFloat(inv.allocatedAmount) || 0;
                 const itype = inv.invoiceType as string;
                 if (itype === "payable") {
-                    const ap = ((await db.execute(sql`
-                        SELECT CAST(total_amount AS NUMERIC) AS ta, CAST(COALESCE(paid_amount,0) AS NUMERIC) AS pa
+                    // Try by ap.id first, then fallback to ap.invoice_id (FK)
+                    let apRows = ((await db.execute(sql`
+                        SELECT id, CAST(total_amount AS NUMERIC) AS ta, CAST(COALESCE(paid_amount,0) AS NUMERIC) AS pa
                         FROM farm_accounts_payable WHERE id = ${inv.invoiceId} AND farmer_id = ${farmerId}
-                    `)) as any).rows?.[0];
+                    `)) as any).rows;
+                    if (!apRows?.length) {
+                        apRows = ((await db.execute(sql`
+                            SELECT id, CAST(total_amount AS NUMERIC) AS ta, CAST(COALESCE(paid_amount,0) AS NUMERIC) AS pa
+                            FROM farm_accounts_payable WHERE invoice_id = ${inv.invoiceId} AND farmer_id = ${farmerId}
+                            ORDER BY created_at DESC LIMIT 1
+                        `)) as any).rows;
+                    }
+                    const ap = apRows?.[0];
+                    console.log(`[CN_POST] invoiceId=${inv.invoiceId} farmerId=${farmerId} found=${!!ap}`);
                     if (!ap) return res.status(400).json({ error: `Conta a pagar não encontrada: ${inv.invoiceId}` });
+                    // Update inv.invoiceId to real ap.id for later inserts
+                    inv.resolvedApId = ap.id;
                     const remaining = parseFloat(ap.ta) - parseFloat(ap.pa);
                     if (allocated > remaining + 0.02) {
                         return res.status(400).json({ error: `Valor alocado (${allocated}) excede o saldo (${remaining.toFixed(2)})` });
@@ -340,10 +352,12 @@ export function registerFarmCreditNoteRoutes(app: Express) {
             for (const inv of invoices) {
                 const allocated = parseFloat(inv.allocatedAmount) || 0;
                 const itype = inv.invoiceType as string;
+                // Use resolvedApId (set during validation) or original invoiceId
+                const apId = (inv as any).resolvedApId || inv.invoiceId;
 
                 await db.execute(sql`
                     INSERT INTO farm_credit_note_invoices (credit_note_id, invoice_id, invoice_type, allocated_amount)
-                    VALUES (${cnId}, ${inv.invoiceId}, ${itype}, ${String(allocated)})
+                    VALUES (${cnId}, ${apId}, ${itype}, ${String(allocated)})
                 `);
 
                 if (itype === "payable") {
@@ -355,7 +369,7 @@ export function registerFarmCreditNoteRoutes(app: Express) {
                                 WHEN (CAST(COALESCE(paid_amount,0) AS NUMERIC) + ${allocated}) > 0 THEN 'parcial'
                                 ELSE status
                             END
-                        WHERE id = ${inv.invoiceId} AND farmer_id = ${farmerId}
+                        WHERE id = ${apId} AND farmer_id = ${farmerId}
                     `);
                 } else {
                     await db.execute(sql`
