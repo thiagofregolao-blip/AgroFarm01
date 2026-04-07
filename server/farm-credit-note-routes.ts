@@ -34,10 +34,36 @@ export function registerFarmCreditNoteRoutes(app: Express) {
                     WHERE ap.farmer_id = ${farmerId}
                       AND ap.status IN ('aberto', 'parcial')
                       AND (CAST(ap.total_amount AS NUMERIC) - CAST(COALESCE(ap.paid_amount, 0) AS NUMERIC)) > 0
-                      AND (${supplierId}::text IS NULL OR ap.supplier_id = ${supplierId})
+                      AND (
+                        ${supplierId}::text IS NULL
+                        OR ap.supplier_id = ${supplierId}
+                        OR (
+                          ap.supplier_id IS NULL
+                          AND LOWER(TRIM(ap.supplier)) = (
+                            SELECT LOWER(TRIM(name)) FROM farm_suppliers
+                            WHERE id = ${supplierId} AND farmer_id = ${farmerId}
+                            LIMIT 1
+                          )
+                        )
+                      )
                     ORDER BY ap.due_date ASC
                 `);
-                res.json((result as any).rows || result);
+                const rows = (result as any).rows || result;
+                // Backfill supplier_id nos registros que foram encontrados só pelo nome
+                if (supplierId && rows.length > 0) {
+                    await db.execute(sql`
+                        UPDATE farm_accounts_payable
+                        SET supplier_id = ${supplierId}
+                        WHERE farmer_id = ${farmerId}
+                          AND supplier_id IS NULL
+                          AND LOWER(TRIM(supplier)) = (
+                            SELECT LOWER(TRIM(name)) FROM farm_suppliers
+                            WHERE id = ${supplierId} AND farmer_id = ${farmerId}
+                            LIMIT 1
+                          )
+                    `);
+                }
+                res.json(rows);
             } else {
                 const result = await db.execute(sql`
                     SELECT
