@@ -288,58 +288,83 @@ export function registerFarmFinancialRoutes(app: Express) {
             const txDesc = `Pgto: ${ap.supplier} - ${ap.description || ''}`.trim();
 
             // ─── EDIT MODE: update existing payment instead of creating new ───
-            if (_editOnly && ap.cashTransactionId) {
-                // 1. Find old transaction to get old amount and accountId
-                const [oldTx] = await db.select().from(farmCashTransactions).where(
-                    eq(farmCashTransactions.id, ap.cashTransactionId)
-                );
-                const oldAmount = oldTx ? parseFloat(oldTx.amount) : 0;
-                const oldAccountId = oldTx?.accountId;
-                const diff = payAmount - oldAmount; // positive = paying more, negative = paying less
-
-                // 2. Update the existing cash transaction (amount, method, account)
-                const newAccountId = accountId || oldAccountId;
-                if (oldTx) {
-                    await db.update(farmCashTransactions).set({
-                        amount: String(payAmount),
-                        paymentMethod: paymentMethod || oldTx.paymentMethod || "transferencia",
-                        accountId: newAccountId,
-                    }).where(eq(farmCashTransactions.id, ap.cashTransactionId));
+            if (_editOnly) {
+                // Bug 3 fix: validate payAmount does not exceed totalDue
+                if (payAmount > totalDue + 0.01) {
+                    return res.status(400).json({ error: `Valor editado (${payAmount.toFixed(2)}) excede o total da fatura (${totalDue.toFixed(2)})` });
                 }
 
-                // 3. Adjust cash account balances
-                if (oldAccountId === newAccountId) {
-                    // Same account: just adjust by difference
-                    if (Math.abs(diff) > 0.001) {
+                // Bug 2 fix: delete ALL existing transactions for this AP and recreate from accountRows
+                // 1. Find all old transactions for this AP
+                const oldTxRows = ((await db.execute(sqlFn`
+                    SELECT id, account_id, CAST(amount AS NUMERIC) AS amount
+                    FROM farm_cash_transactions
+                    WHERE payable_id = ${req.params.id} AND farmer_id = ${farmerId} AND type = 'saida'
+                `)) as any).rows || [];
+
+                // 2. Reverse balances for all old transactions
+                for (const oldTx of oldTxRows) {
+                    if (oldTx.account_id) {
                         await db.update(farmCashAccounts)
-                            .set({ currentBalance: sqlFn`current_balance - ${diff}` })
-                            .where(and(eq(farmCashAccounts.id, newAccountId), eq(farmCashAccounts.farmerId, farmerId)));
+                            .set({ currentBalance: sqlFn`current_balance + ${parseFloat(oldTx.amount)}` })
+                            .where(and(eq(farmCashAccounts.id, oldTx.account_id), eq(farmCashAccounts.farmerId, farmerId)));
                     }
-                } else {
-                    // Different account: reverse old, apply new
-                    if (oldAccountId) {
-                        await db.update(farmCashAccounts)
-                            .set({ currentBalance: sqlFn`current_balance + ${oldAmount}` })
-                            .where(and(eq(farmCashAccounts.id, oldAccountId), eq(farmCashAccounts.farmerId, farmerId)));
-                    }
+                }
+
+                // 3. Delete all old transactions for this AP
+                await db.execute(sqlFn`
+                    DELETE FROM farm_cash_transactions
+                    WHERE payable_id = ${req.params.id} AND farmer_id = ${farmerId} AND type = 'saida'
+                `);
+
+                // 4. Recreate transactions from accountRows (or single row)
+                const rows = (accountRows && Array.isArray(accountRows) && accountRows.length > 0)
+                    ? accountRows
+                    : [{ accountId, amount: String(payAmount), paymentMethod: paymentMethod || "transferencia" }];
+
+                const txDesc = `Pgto: ${ap.supplier} - ${ap.description || ''}`.trim();
+                let firstNewTxId: string | null = null;
+                for (const row of rows) {
+                    const rowAmount = parseFloat(row.amount);
+                    if (!rowAmount || !row.accountId) continue;
+                    const [newTx] = await db.insert(farmCashTransactions).values({
+                        farmerId,
+                        accountId: row.accountId,
+                        type: "saida",
+                        amount: String(rowAmount),
+                        currency: ap.currency,
+                        category: "pagamento_titulo",
+                        description: txDesc,
+                        paymentMethod: row.paymentMethod || paymentMethod || "transferencia",
+                        referenceType: "pagamento_conta",
+                        transactionDate: new Date(),
+                    }).returning();
+                    if (!firstNewTxId) firstNewTxId = newTx.id;
+                    // Deduct from account
                     await db.update(farmCashAccounts)
-                        .set({ currentBalance: sqlFn`current_balance - ${payAmount}` })
-                        .where(and(eq(farmCashAccounts.id, newAccountId), eq(farmCashAccounts.farmerId, farmerId)));
+                        .set({ currentBalance: sqlFn`current_balance - ${rowAmount}` })
+                        .where(and(eq(farmCashAccounts.id, row.accountId), eq(farmCashAccounts.farmerId, farmerId)));
+                    // Link to AP
+                    await db.execute(sqlFn`UPDATE farm_cash_transactions SET payable_id = ${req.params.id} WHERE id = ${newTx.id}`);
+                    if (receiptNumber) {
+                        await db.execute(sqlFn`UPDATE farm_cash_transactions SET receipt_id = ${receiptNumber} WHERE id = ${newTx.id}`);
+                    }
                 }
 
-                // 4. Update accounts payable with new paid amount (replace, not sum)
+                // 5. Update AP record
                 const newStatus = payAmount >= totalDue ? "pago" : "parcial";
                 const updatePayload: any = {
                     paidAmount: String(payAmount),
                     status: newStatus,
+                    cashTransactionId: firstNewTxId,
+                    paymentMethod: rows[0]?.paymentMethod || paymentMethod || "transferencia",
                 };
-                if (paymentMethod) updatePayload.paymentMethod = paymentMethod;
                 if (receiptFileUrl) updatePayload.receiptFileUrl = receiptFileUrl;
                 if (receiptNumber) updatePayload.receiptNumber = receiptNumber;
                 if (observation !== undefined) updatePayload.observation = observation || null;
                 await db.update(farmAccountsPayable).set(updatePayload).where(eq(farmAccountsPayable.id, req.params.id));
 
-                // 5. Sync farmExpenses if linked
+                // 6. Sync farmExpenses if linked
                 if (ap.expenseId) {
                     const { farmExpenses } = await import("../shared/schema");
                     await db.update(farmExpenses).set({

@@ -1348,10 +1348,11 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
             paymentMethod: editPaymentRows[0].paymentMethod,
             supplier: editingHistItem.supplier,
             _editOnly: true,
-            accountRows: editPaymentRows.length > 1 ? editPaymentRows.map(r => ({
+            accountRows: editPaymentRows.map(r => ({
                 accountId: r.accountId,
                 amount: r.amount,
-            })) : undefined,
+                paymentMethod: r.paymentMethod,
+            })),
         };
         if (editHasChequeMethod && editChequeBanco && editChequeNumero) {
             payload.cheque = { banco: editChequeBanco, numero: editChequeNumero, tipo: editChequeTipo };
@@ -1710,7 +1711,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Valor Pago</p>
-                                            <p className="text-3xl font-black font-headline text-gray-900 tracking-tight leading-none mt-1">{formatCurrency(parseFloat(editingHistItem.amount || editingHistItem.totalAmount), editingHistItem.currency || "USD")}</p>
+                                            <p className="text-3xl font-black font-headline text-gray-900 tracking-tight leading-none mt-1">{formatCurrency(editTotalAllocated || parseFloat(editingHistItem.amount || editingHistItem.totalAmount), editingHistItem.currency || "USD")}</p>
                                         </div>
                                         {editingHistItem.batchItems?.length > 1 && (
                                             <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full shrink-0">
@@ -1802,8 +1803,8 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                         )}
 
                                         {editPaymentRows.length > 1 && (
-                                            <div className={`text-xs font-semibold px-3 py-2 rounded-lg ${Math.abs(editTotalAllocated - parseFloat(editingHistItem.amount || editingHistItem.totalAmount)) < 0.01 ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
-                                                Alocado: {formatCurrency(editTotalAllocated)} / Pago: {formatCurrency(parseFloat(editingHistItem.amount || editingHistItem.totalAmount))}
+                                            <div className={`text-xs font-semibold px-3 py-2 rounded-lg ${"text-slate-600 bg-slate-50"}`}>
+                                                Total: {formatCurrency(editTotalAllocated, editingHistItem.currency || "USD")}
                                             </div>
                                         )}
                                     </div>
