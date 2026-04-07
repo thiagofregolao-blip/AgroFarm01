@@ -1307,12 +1307,21 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
     const emitidoCheques = (availableCheques as any[]).filter((ch: any) => ch.status === "emitido");
 
     function openEditModal(item: any) {
-        const paidAmt = parseFloat(item.amount || item.paidAmount || item.totalAmount || 0);
-        setEditPaymentRows([{
-            accountId: item.accountId || item.account_id || "",
-            amount: String(paidAmt),
-            paymentMethod: item.paymentMethod || item.payment_method || "transferencia",
-        }]);
+        // Multi-method: populate one edit row per transaction
+        if (item._allTxs && item._allTxs.length > 1) {
+            setEditPaymentRows(item._allTxs.map((tx: any) => ({
+                accountId: tx.accountId || tx.account_id || "",
+                amount: String(parseFloat(tx.amount || 0)),
+                paymentMethod: tx.paymentMethod || tx.payment_method || "transferencia",
+            })));
+        } else {
+            const paidAmt = parseFloat(item.amount || item.paidAmount || item.totalAmount || 0);
+            setEditPaymentRows([{
+                accountId: item.accountId || item.account_id || "",
+                amount: String(paidAmt),
+                paymentMethod: item.paymentMethod || item.payment_method || "transferencia",
+            }]);
+        }
         setEditReceiptNumber(item.receiptNumber || item.receipt_number || "");
         setEditReceiptFileUrl(item.receiptFileUrl || item.receipt_file_url || "");
         setEditReceiptFile(null);
@@ -1399,18 +1408,18 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
         return termMatch && receiptMatch && dateFromMatch && dateToMatch;
     });
 
-    // Group payments: batch payments are grouped by paymentBatchId, individual payments stay separate
-    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string; observation: string; batchItems?: any[]; isBatch: boolean }[] = [];
+    // Group payments: batch payments by paymentBatchId, multi-method single payments by payableId
+    const groups: { key: string; date: string; supplier: string; items: any[]; total: number; currency: string; receiptNumber: string; observation: string; batchItems?: any[]; isBatch: boolean; isMultiMethod: boolean }[] = [];
     const seenBatchIds = new Set<string>();
+    const seenPayableIds = new Set<string>();
     for (const item of filteredPaid) {
         const dateStr = item.paidDate ? new Date(item.paidDate).toLocaleDateString("pt-BR") : "—";
 
-        // If this is a batch payment, group by batchId (skip duplicates from multi-account)
+        // Batch payment: group by batchId
         if (item.paymentBatchId) {
             if (seenBatchIds.has(item.paymentBatchId)) continue;
             seenBatchIds.add(item.paymentBatchId);
             const batchTxs = filteredPaid.filter((p: any) => p.paymentBatchId === item.paymentBatchId);
-            // Use batchItems sum (correct allocated amounts) if available, else transaction amount
             const batchItemsArr = item.batchItems || [];
             const batchTotal = batchItemsArr.length > 0
                 ? batchItemsArr.reduce((s: number, bi: any) => s + parseFloat(bi.amount || 0), 0)
@@ -1426,8 +1435,28 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                 receiptNumber: item.receiptNumber || "",
                 batchItems: item.batchItems || [],
                 isBatch: true,
+                isMultiMethod: false,
+            });
+        } else if (item.payableId) {
+            // Single AP payment — group all transactions of the same payableId (multi-method case)
+            if (seenPayableIds.has(item.payableId)) continue;
+            seenPayableIds.add(item.payableId);
+            const samePayableTxs = filteredPaid.filter((p: any) => !p.paymentBatchId && p.payableId === item.payableId);
+            const total = samePayableTxs.reduce((s: number, p: any) => s + parseFloat(p.amount || 0), 0);
+            groups.push({
+                key: item.payableId,
+                date: dateStr,
+                supplier: item.supplier || "—",
+                observation: item.observation || "",
+                items: samePayableTxs,
+                total,
+                currency: item.currency || "USD",
+                receiptNumber: item.receiptNumber || "",
+                isBatch: false,
+                isMultiMethod: samePayableTxs.length > 1,
             });
         } else {
+            // Legacy: no payableId
             groups.push({
                 key: item.id,
                 date: dateStr,
@@ -1438,6 +1467,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                 currency: item.currency || "USD",
                 receiptNumber: item.receiptNumber || "",
                 isBatch: false,
+                isMultiMethod: false,
             });
         }
     }
@@ -1524,6 +1554,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                     const item = group.items[0];
                                     const isExpanded = expandedGroups.has(group.key);
                                     const hasBatchDetails = group.isBatch && group.batchItems && group.batchItems.length > 0;
+                                    const hasMultiMethod = group.isMultiMethod && group.items.length > 1;
                                     return (
                                         <Fragment key={group.key}>
                                         <tr className={`hover:bg-emerald-50/20 transition-colors ${hasBatchDetails ? 'cursor-pointer' : ''}`}
@@ -1563,7 +1594,11 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                     </span>
                                                 ) : <span className="text-gray-300">--</span>}
                                             </td>
-                                            <td className="px-3 py-3.5 text-center">{methodLabel(item?.paymentMethod)}</td>
+                                            <td className="px-3 py-3.5 text-center">
+                                                {hasMultiMethod
+                                                    ? <div className="flex flex-wrap gap-1 justify-center">{group.items.map((tx: any, i: number) => <span key={i}>{methodLabel(tx.paymentMethod)}</span>)}</div>
+                                                    : methodLabel(item?.paymentMethod)}
+                                            </td>
                                             <td className="px-3 py-3.5 text-center">
                                                 {group.receiptNumber ? (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
@@ -1598,7 +1633,7 @@ function HistoricoTab({ items, accounts, seasons, onPay, paying, onReverse, reve
                                                             <Eye className="h-3.5 w-3.5" />
                                                         </Button>
                                                     )}
-                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => openEditModal(item)} aria-label="Editar">
+                                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600" onClick={() => openEditModal(hasMultiMethod ? { ...item, _allTxs: group.items } : item)} aria-label="Editar">
                                                         <Pencil className="h-3.5 w-3.5" />
                                                     </Button>
                                                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" disabled={reversing}
