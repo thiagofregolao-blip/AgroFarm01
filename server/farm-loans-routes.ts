@@ -144,7 +144,7 @@ export function registerFarmLoansRoutes(app: Express) {
                     : `Prestamo otorgado a ${counterpartName}`;
 
                 await db.execute(sql`
-                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, date)
+                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, transaction_date)
                     VALUES (${farmerId}, ${accountId}, ${txType}, ${total}, ${currency || "USD"}, ${txDesc}, ${"prestamo"}, ${new Date().toISOString()})
                 `);
 
@@ -235,8 +235,6 @@ export function registerFarmLoansRoutes(app: Express) {
             `);
 
             // Update loan paid_amount
-            const loanPaid = (parseFloat(inst.paid_amount_1 || inst.paid_amount) || 0);
-            const newLoanPaid = (parseFloat(inst.paid_amount) || 0) + payAmount;
             await db.execute(sql`
                 UPDATE farm_loans
                 SET paid_amount = COALESCE(paid_amount, 0) + ${payAmount}
@@ -265,7 +263,7 @@ export function registerFarmLoansRoutes(app: Express) {
                     : `Recibido parcela ${inst.installment_number} - Prestamo a ${inst.counterpart_name}`;
 
                 await db.execute(sql`
-                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, date)
+                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, transaction_date)
                     VALUES (${farmerId}, ${accountId}, ${txType}, ${payAmount}, ${inst.currency}, ${txDesc}, ${"prestamo"}, ${new Date().toISOString()})
                 `);
 
