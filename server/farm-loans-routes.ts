@@ -151,11 +151,11 @@ export function registerFarmLoansRoutes(app: Express) {
                 // Update account balance
                 if (txType === "entrada") {
                     await db.execute(sql`
-                        UPDATE farm_cash_accounts SET balance = CAST(balance AS NUMERIC) + ${total} WHERE id = ${accountId}
+                        UPDATE farm_cash_accounts SET current_balance = CAST(current_balance AS NUMERIC) + ${total} WHERE id = ${accountId}
                     `);
                 } else {
                     await db.execute(sql`
-                        UPDATE farm_cash_accounts SET balance = CAST(balance AS NUMERIC) - ${total} WHERE id = ${accountId}
+                        UPDATE farm_cash_accounts SET current_balance = CAST(current_balance AS NUMERIC) - ${total} WHERE id = ${accountId}
                     `);
                 }
             }
@@ -269,11 +269,11 @@ export function registerFarmLoansRoutes(app: Express) {
 
                 if (txType === "saida") {
                     await db.execute(sql`
-                        UPDATE farm_cash_accounts SET balance = CAST(balance AS NUMERIC) - ${payAmount} WHERE id = ${accountId}
+                        UPDATE farm_cash_accounts SET current_balance = CAST(current_balance AS NUMERIC) - ${payAmount} WHERE id = ${accountId}
                     `);
                 } else {
                     await db.execute(sql`
-                        UPDATE farm_cash_accounts SET balance = CAST(balance AS NUMERIC) + ${payAmount} WHERE id = ${accountId}
+                        UPDATE farm_cash_accounts SET current_balance = CAST(current_balance AS NUMERIC) + ${payAmount} WHERE id = ${accountId}
                     `);
                 }
             }
