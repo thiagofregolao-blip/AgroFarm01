@@ -5,7 +5,7 @@ import {
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
     Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2,
-    Settings, HelpCircle, Download, ChevronDown, FilePlus, Users, RefreshCw, Tag
+    Settings, HelpCircle, Download, ChevronDown, FilePlus, Users, RefreshCw, Tag, Banknote
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -99,6 +99,12 @@ const financeNavGroups: NavGroup[] = [
             { labelKey: "nav_accounts_receivable", href: "/fazenda/contas-receber",          icon: HandCoins, moduleKey: "accounts_receivable" },
             { labelKey: "nav_emission_faturas",    href: "/fazenda/contas-receber?nova=1",   icon: FilePlus,  moduleKey: "accounts_receivable", alwaysOn: true },
             { labelKey: "nav_credit_notes_emis",  href: "/fazenda/notas-credito-emissao",   icon: RefreshCw, moduleKey: "credit_notes_emis", alwaysOn: true },
+        ],
+    },
+    {
+        label: "Prestamos",
+        items: [
+            { labelKey: "nav_loans", href: "/fazenda/prestamos", icon: Banknote, moduleKey: "loans", alwaysOn: true },
         ],
     },
     {

@@ -84,6 +84,7 @@ import FarmFornecedores from "@/pages/fazenda/fornecedores";
 import FarmCategories from "@/pages/fazenda/categories";
 import FarmProdutividade from "@/pages/fazenda/produtividade";
 import CotacaoSoja from "@/pages/fazenda/cotacao-soja";
+import FarmLoans from "@/pages/fazenda/loans";
 
 // PDV (Point of Sale)
 import PdvLogin from "@/pages/pdv/login";
@@ -190,6 +191,7 @@ function Router() {
       <Route path="/fazenda/categorias" component={FarmCategories} />
       <Route path="/fazenda/produtividade" component={FarmProdutividade} />
       <Route path="/fazenda/cotacao-soja" component={CotacaoSoja} />
+      <Route path="/fazenda/prestamos" component={FarmLoans} />
 
       {/* PDV Routes (Tablet) */}
       <Route path="/pdv/login" component={PdvLogin} />

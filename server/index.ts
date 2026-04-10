@@ -997,6 +997,47 @@ app.use((req, res, next) => {
     log(`⚠️  Migration PDV idempotency: ${migErr.message}`);
   }
 
+  // Inline migration: farm_loans + farm_loan_installments
+  try {
+    const { db: loanDb, dbReady: loanReady } = await import("./db");
+    const { sql: loanSql } = await import("drizzle-orm");
+    await loanReady;
+    await loanDb.execute(loanSql`
+      CREATE TABLE IF NOT EXISTS farm_loans (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        farmer_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL DEFAULT 'payable',
+        counterpart_id VARCHAR,
+        counterpart_name TEXT NOT NULL,
+        description TEXT,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        account_id VARCHAR,
+        total_amount NUMERIC(15,2) NOT NULL,
+        interest_rate NUMERIC(8,4),
+        paid_amount NUMERIC(15,2) DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'aberto',
+        created_at TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+    await loanDb.execute(loanSql`
+      CREATE TABLE IF NOT EXISTS farm_loan_installments (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        loan_id VARCHAR NOT NULL REFERENCES farm_loans(id) ON DELETE CASCADE,
+        installment_number INTEGER NOT NULL,
+        amount NUMERIC(15,2) NOT NULL,
+        due_date TIMESTAMP NOT NULL,
+        paid_amount NUMERIC(15,2) DEFAULT 0,
+        paid_date TIMESTAMP,
+        status TEXT NOT NULL DEFAULT 'pendente',
+        cash_transaction_id VARCHAR,
+        created_at TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+    log("✅ Migration: farm_loans + farm_loan_installments tables ensured");
+  } catch (migErr: any) {
+    log(`⚠️  Migration farm_loans: ${migErr.message}`);
+  }
+
   // Register activity log middleware before routes
   const { activityLogMiddleware } = await import("./lib/activity-logger");
   app.use(activityLogMiddleware);
@@ -1041,6 +1082,11 @@ app.use((req, res, next) => {
   const { registerAdminReportRoutes } = await import("./admin-report-routes");
   registerAdminReportRoutes(app);
   log("✅ Admin Report routes registered (/api/company/admin-reports/*)");
+
+  // Register Farm Loans routes
+  const { registerFarmLoansRoutes } = await import("./farm-loans-routes");
+  registerFarmLoansRoutes(app);
+  log("✅ Farm Loans routes registered (/api/farm/loans/*)");
 
   // Register WhatsApp routes (if configured)
   if (process.env.ZAPI_INSTANCE_ID && process.env.ZAPI_TOKEN && process.env.GEMINI_API_KEY) {
