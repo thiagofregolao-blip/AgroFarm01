@@ -32,30 +32,19 @@ export function registerFarmLoansRoutes(app: Express) {
 
             const loans = result.rows || result;
 
-            // Fetch installments for each loan
-            const loanIds = loans.map((l: any) => l.id);
-            let installments: any[] = [];
-            if (loanIds.length > 0) {
+            // Fetch installments for all loans
+            const enriched = [];
+            for (const loan of loans as any[]) {
                 const instResult = await db.execute(sql`
                     SELECT * FROM farm_loan_installments
-                    WHERE loan_id = ANY(${loanIds})
+                    WHERE loan_id = ${loan.id}
                     ORDER BY installment_number ASC
                 `);
-                installments = instResult.rows || instResult;
+                enriched.push({
+                    ...loan,
+                    installments: instResult.rows || instResult,
+                });
             }
-
-            // Group installments by loan_id
-            const byLoan: Record<string, any[]> = {};
-            for (const inst of installments) {
-                const lid = inst.loan_id;
-                if (!byLoan[lid]) byLoan[lid] = [];
-                byLoan[lid].push(inst);
-            }
-
-            const enriched = loans.map((loan: any) => ({
-                ...loan,
-                installments: byLoan[loan.id] || [],
-            }));
 
             res.json(enriched);
         } catch (err: any) {
@@ -144,8 +133,8 @@ export function registerFarmLoansRoutes(app: Express) {
                     : `Prestamo otorgado a ${counterpartName}`;
 
                 await db.execute(sql`
-                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, transaction_date)
-                    VALUES (${farmerId}, ${accountId}, ${txType}, ${total}, ${currency || "USD"}, ${txDesc}, ${"prestamo"}, ${new Date().toISOString()})
+                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, reference_type, transaction_date)
+                    VALUES (${farmerId}, ${accountId}, ${txType}, ${total}, ${currency || "USD"}, ${txDesc}, ${"prestamo"}, ${"prestamo"}, ${new Date().toISOString()})
                 `);
 
                 // Update account balance
@@ -263,8 +252,8 @@ export function registerFarmLoansRoutes(app: Express) {
                     : `Recibido parcela ${inst.installment_number} - Prestamo a ${inst.counterpart_name}`;
 
                 await db.execute(sql`
-                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, transaction_date)
-                    VALUES (${farmerId}, ${accountId}, ${txType}, ${payAmount}, ${inst.currency}, ${txDesc}, ${"prestamo"}, ${new Date().toISOString()})
+                    INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, reference_type, transaction_date)
+                    VALUES (${farmerId}, ${accountId}, ${txType}, ${payAmount}, ${inst.currency}, ${txDesc}, ${"prestamo"}, ${"prestamo"}, ${new Date().toISOString()})
                 `);
 
                 if (txType === "saida") {
