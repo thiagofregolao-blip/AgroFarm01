@@ -31,7 +31,10 @@ if (isNeonUrl) {
     import('drizzle-orm/postgres-js'),
     import('postgres')
   ]).then(([{ drizzle }, postgres]) => {
-    const sql = postgres.default(databaseUrl);
+    // onnotice: silencia NOTICES do Postgres (ex: 'column already exists, skipping'
+    // vindos dos ALTER TABLE IF NOT EXISTS em server/index.ts). Errors reais
+    // continuam gerando excecao normalmente.
+    const sql = postgres.default(databaseUrl, { onnotice: () => {} });
     db = drizzle(sql, { schema });
     pool = sql;
   });
