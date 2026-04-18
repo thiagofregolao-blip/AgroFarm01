@@ -57,8 +57,7 @@ REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
 - Produtos fitossanitários em geral
 
 **remision** (Nota de Remision / Guia de Remessa) — use quando:
-- O documento diz "NOTA DE REMISION", "REMISION", "NOTA DE REMISSAO", "GUIA DE REMESSA" em QUALQUER parte do documento (cabecalho, canto superior direito, lateral, etc.)
-- REGRA ABSOLUTA: se as palavras "REMISION" ou "REMISSAO" aparecem no documento, o type DEVE SER "remision", NUNCA "invoice"
+- O TITULO/CABECALHO/TIMBRADO do documento diz "NOTA DE REMISION", "REMISION", "NOTA DE REMISSAO" ou "GUIA DE REMESSA". Olhe especificamente o topo, o timbrado, ou o canto superior direito — e ahi que o tipo do documento e declarado.
 - E um comprovante de ENTREGA de mercadoria, NAO uma fatura de compra
 - Geralmente NAO tem precos/valores, apenas produtos e quantidades
 - Pode referenciar uma fatura associada ("Facturas asociadas")
@@ -67,7 +66,10 @@ REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
 
 **unknown** — quando não for possível determinar com certeza.
 
-REGRA DE PRIORIDADE PARA TIPO: Antes de classificar, verifique TODO o documento por textos como "REMISION", "REMISSAO", "NOTA DE REMISION". Se encontrar, o type OBRIGATORIAMENTE deve ser "remision". Essa regra tem prioridade sobre qualquer outra.
+REGRA DE CLASSIFICACAO CORRETA:
+1. Olhe o CABECALHO/TIMBRADO do documento (topo da pagina, caixa do timbrado, canto superior direito). Se diz "FACTURA" ou "FACTURA ELECTRONICA" → type="invoice". Se diz "NOTA DE REMISION" ou "REMISION" no titulo → type="remision".
+2. IMPORTANTE — FALSOS POSITIVOS DE REMISSAO: faturas paraguaias frequentemente tem uma LINHA DE REFERENCIA no corpo tipo "REMISIONES: 001-004:0000596" ou "Facturas asociadas: ..." — isso e apenas uma REFERENCIA cruzada a um documento relacionado, NAO muda o tipo. Se o cabecalho diz "FACTURA", o type e "invoice" mesmo que a palavra "REMISIONES" apareca no corpo.
+3. Se o documento tem TOTAL A PAGAR, PRECO UNITARIO e VALOR DE VENTA preenchidos com valores > 0 → quase sempre e "invoice" (remissoes normalmente nao tem precos).
 
 Se for 'invoice', extraia TAMBÉM o fornecedor, o número da nota (se houver) e TODOS os produtos com quantidades, unidades e valores.
 

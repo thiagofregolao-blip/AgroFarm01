@@ -230,8 +230,22 @@ export function registerFarmInvoiceRoutes(app: Express) {
             const parsed = await parseWithGemini(fileBase64, mimeType);
             console.log(`[INVOICE_IMPORT] Gemini extracted: type=${parsed.type}, supplier=${parsed.supplier}, items=${parsed.items.length}, total=${parsed.totalAmount}`);
 
-            // Auto-detect remision: 3 camadas de detecção
+            // Auto-detect remision: 3 camadas de detecção + downgrade
             let isRemision = parsed.type === "remision" || req.body?.isRemision === "true";
+
+            // Camada 0 (downgrade): Gemini pode classificar remision por erro ao ler "REMISIONES: XXX"
+            // no corpo da fatura (campo de referencia presente em quase toda factura paraguaia).
+            // Se temos indicios fortes de factura (total > 0 ou items com preco > 0), reverter.
+            // So aplica quando o usuario NAO forcou remision via req.body.isRemision.
+            if (isRemision && req.body?.isRemision !== "true" && parsed.type === "remision") {
+                const total = Number(parsed.totalAmount) || 0;
+                const hasPricedItems = Array.isArray(parsed.items) &&
+                    parsed.items.some(it => Number(it.unitPrice) > 0 || Number(it.totalPrice) > 0);
+                if (total > 0 || hasPricedItems) {
+                    isRemision = false;
+                    console.log(`[INVOICE_IMPORT] Downgrade: Gemini disse remision mas ha indicios de factura (total=${total}, pricedItems=${hasPricedItems}) — tratando como invoice`);
+                }
+            }
 
             // Camada 2: fallback por texto — se Gemini disse "invoice" mas o texto contém palavras de remissão
             if (!isRemision && parsed.description) {

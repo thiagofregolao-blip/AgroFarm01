@@ -36,12 +36,26 @@ interface ExtractedInvoice {
 }
 
 /**
- * Detect if a document is a remission using 3-layer detection
+ * Detect if a document is a remission using 3-layer detection + downgrade
  * Same logic as farm-invoice-routes.ts
  */
 function detectRemision(parsed: any): boolean {
-    // Camada 1: Gemini classificou como remision
-    if (parsed.type === "remision") return true;
+    // Camada 0 (downgrade): se o Gemini disse remision MAS ha indicios fortes de factura
+    // (total > 0, items com preco > 0, ou supplier contem "FACTURA"), reverter. Protege
+    // contra falso positivo quando Gemini le "REMISIONES: XXX" (campo de referencia
+    // presente em quase toda fatura paraguaia) e classifica mal.
+    if (parsed.type === "remision") {
+        const total = Number(parsed.totalAmount) || 0;
+        const hasPricedItems = Array.isArray(parsed.items) &&
+            parsed.items.some((it: any) => Number(it.unitPrice) > 0 || Number(it.totalPrice) > 0);
+        const supplierSaysFactura = String(parsed.supplier || "").toUpperCase().includes("FACTURA");
+
+        if (total > 0 || hasPricedItems || supplierSaysFactura) {
+            console.log(`[EMAIL_IMPORT] Downgrade: Gemini disse remision mas ha indicios de factura (total=${total}, pricedItems=${hasPricedItems}) — tratando como invoice`);
+            return false;
+        }
+        return true;
+    }
 
     // Camada 2: fallback por texto na descrição ou supplier
     const textsToCheck = [parsed.description || "", parsed.supplier || ""].join(" ").toUpperCase();
