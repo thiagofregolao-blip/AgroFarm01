@@ -515,7 +515,7 @@ export async function parseFarmInvoiceImage(buffer: Buffer, mimeType: string): P
     }
 
     const base64Image = buffer.toString("base64");
-    const model = "gemini-2.0-flash"; // Align with what works in GeminiClient
+    const model = "gemini-2.5-flash"; // Align with what works in GeminiClient
 
     const prompt = `
     VOCÊ É UM EXTRATOR DE DADOS DE DOCUMENTOS AGRÍCOLAS.
@@ -716,7 +716,7 @@ export async function parseRomaneioImage(buffer: Buffer, mimeType: string): Prom
     }
 
     const base64Image = buffer.toString("base64");
-    const model = "gemini-2.0-flash";
+    const model = "gemini-2.5-flash";
 
     const prompt = `
     VOCÊ É UM EXTRATOR DE DADOS DE ROMANEIOS / NOTAS DE ROMANEIO / BOLETAS DE PESAJE AGRÍCOLAS.

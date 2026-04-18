@@ -30,7 +30,7 @@ export class GeminiClient {
 
   constructor(config: GeminiConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model || "gemini-2.0-flash";
+    this.model = config.model || "gemini-2.5-flash";
     this.baseUrl = "https://generativelanguage.googleapis.com/v1beta";
   }
 
@@ -682,9 +682,9 @@ ${fullText.substring(0, 30000)} // Limite de 30k chars pra não estourar payload
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("GEMINI_API_KEY não configurada.");
 
-    // Using gemini-2.0-flash exactly as we fixed earlier for invoice parsing
+    // Using gemini-2.5-flash exactly as we fixed earlier for invoice parsing
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -756,7 +756,7 @@ Retorne APENAS UM JSON VÁLIDO no formato exato baixo, sem comentários adiciona
 }`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -846,7 +846,7 @@ DÚVIDA DO AGRICULTOR:
 SUA RESPOSTA COMPLETA E DETALHADA:`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -939,7 +939,7 @@ Return ONLY valid JSON:
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

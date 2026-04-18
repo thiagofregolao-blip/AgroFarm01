@@ -138,7 +138,7 @@ Retorne APENAS UM JSON VALIDO no formato exato:
 }`;
 
 /**
- * Parse a document (PDF or image) using Gemini 2.0 Flash Vision
+ * Parse a document (PDF or image) using Gemini 2.5 Flash Vision
  * Same engine used by WhatsApp webhook — unified extraction
  */
 export async function parseWithGemini(fileBase64: string, mimeType: string): Promise<GeminiParsedInvoice> {
@@ -152,7 +152,7 @@ export async function parseWithGemini(fileBase64: string, mimeType: string): Pro
 
     const callGemini = async (): Promise<{ text: string; rawData: any; httpStatus: number }> => {
         const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -204,8 +204,9 @@ export async function parseWithGemini(fileBase64: string, mimeType: string): Pro
     let { text, rawData, httpStatus } = await callGemini();
     let parsed = tryParse(text);
 
-    // Retry once on empty/invalid response — Gemini has transient hiccups
-    if (!parsed) {
+    // Retry once on empty/invalid response — mas NAO em 429 (rate limit nao resolve em 1.5s
+    // e duplicar chamada so agrava o problema de capacity do Gemini).
+    if (!parsed && httpStatus !== 429) {
         diagnose(rawData, httpStatus, text);
         console.warn("[GEMINI_PARSER] Tentando novamente em 1.5s...");
         await new Promise(r => setTimeout(r, 1500));
@@ -215,7 +216,10 @@ export async function parseWithGemini(fileBase64: string, mimeType: string): Pro
 
     if (!parsed) {
         diagnose(rawData, httpStatus, text);
-        throw new Error("Gemini retornou resposta inválida após retry. Veja log [GEMINI_PARSER] para detalhes.");
+        const suffix = httpStatus === 429
+            ? "Gemini retornou 429 (capacity/rate limit). Tente novamente em alguns minutos."
+            : "Gemini retornou resposta inválida após retry. Veja log [GEMINI_PARSER] para detalhes.";
+        throw new Error(suffix);
     }
 
     // Normalize fields
