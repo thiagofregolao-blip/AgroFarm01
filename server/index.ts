@@ -943,6 +943,9 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(100)`);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_applications_idempotency ON farm_applications (idempotency_key) WHERE idempotency_key IS NOT NULL`);
 
+    // display_order: ordem de selecao do cliente no PDV (preserva sequencia no caderno/PDF)
+    await db.execute(sql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 0`);
+
     // Find duplicate applications: same farmer_id + product_id + plot_id + quantity within 120 seconds
     // Keep the oldest (smallest created_at), delete the rest + their movements + restore stock
     const dupResult = await db.execute(sql`

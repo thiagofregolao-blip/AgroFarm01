@@ -264,7 +264,7 @@ export function registerFarmPdvRoutes(app: Express) {
     // PDV withdraw: register application + update stock
     app.post("/api/pdv/withdraw", requirePdv, async (req, res) => {
         try {
-            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId, signatureBase64, employeeName, photoBase64, idempotencyKey } = req.body;
+            const { productId, quantity, plotId, propertyId, appliedBy, notes, equipmentId, horimeter, odometer, dosePerHa, flowRateLha, seasonId, signatureBase64, employeeName, photoBase64, idempotencyKey, displayOrder } = req.body;
             if (!productId || !quantity || (!plotId && !equipmentId)) {
                 return res.status(400).json({ error: "Product, quantity, and objective (plot or equipment) required" });
             }
@@ -336,6 +336,9 @@ export function registerFarmPdvRoutes(app: Express) {
                     if (photoBase64) {
                         await db.execute(sql`UPDATE farm_applications SET photo_base64 = ${photoBase64} WHERE id = ${application.id}`);
                     }
+                    if (typeof displayOrder === "number") {
+                        await db.execute(sql`UPDATE farm_applications SET display_order = ${displayOrder} WHERE id = ${application.id}`);
+                    }
                 } catch (sigErr: any) {
                     console.warn("[PDV_WITHDRAW] Could not save extra fields:", sigErr?.message);
                 }
@@ -377,6 +380,11 @@ export function registerFarmPdvRoutes(app: Express) {
                         appliedAt: app.appliedAt ? new Date(app.appliedAt) : new Date(),
                         syncedFromOffline: true,
                     });
+                    if (application.id && typeof app.displayOrder === "number") {
+                        const { db } = await import("./db");
+                        const { sql } = await import("drizzle-orm");
+                        await db.execute(sql`UPDATE farm_applications SET display_order = ${app.displayOrder} WHERE id = ${application.id}`);
+                    }
                     results.push({ success: true, id: application.id });
                 } catch (err) {
                     results.push({ success: false, error: String(err) });

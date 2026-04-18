@@ -963,6 +963,8 @@ export default function PdvTerminal() {
                     if (d.allocatedQty <= 0) continue;
                     const plot = selectedPlots.find(p => p.id === d.plotId);
 
+                    // displayOrder = ordem de selecao do cliente (count comeca em 0 e incrementa
+                    // respeitando a ordem de confirmationData, que espelha a ordem do cart)
                     const payload = isDiesel ? {
                         productId: item.product.id,
                         quantity: d.allocatedQty,
@@ -973,6 +975,7 @@ export default function PdvTerminal() {
                         dosePerHa: validDose,
                         seasonId: selectedSeasonId || null,
                         idempotencyKey: crypto.randomUUID(),
+                        displayOrder: count,
                     } : {
                         productId: item.product.id,
                         quantity: d.allocatedQty,
@@ -984,6 +987,7 @@ export default function PdvTerminal() {
                         flowRateLha: flowRateLha ? parseFloat(flowRateLha) : null,
                         seasonId: selectedSeasonId || null,
                         idempotencyKey: crypto.randomUUID(),
+                        displayOrder: count,
                     };
                     payloads.push(payload);
 

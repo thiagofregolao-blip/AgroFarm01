@@ -1,8 +1,9 @@
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import FarmLayout from "@/components/fazenda/layout";
-import { BookOpen, Calendar, Sprout, MapPin, Clock, Package, Pencil, Trash2, X, Check, Download, AlertTriangle } from "lucide-react";
+import { BookOpen, Calendar, Sprout, MapPin, Clock, Package, Pencil, Trash2, X, Check, Download, AlertTriangle, Plus } from "lucide-react";
 import { generateReceituarioPDF, downloadPDF } from "@/lib/pdf-receituario";
+import { apiRequest } from "@/lib/queryClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Entry {
@@ -24,6 +25,7 @@ interface Entry {
     appliedBy?: string;
     notes?: string;
     seasonId?: string;
+    displayOrder?: number;
 }
 
 interface Group {
@@ -34,6 +36,142 @@ interface Group {
     propertyName: string;
     appliedBy: string;
     products: Entry[];
+}
+
+// ─── Add Product Modal (para adicionar produto a uma aplicacao ja feita) ────
+function AddProductModal({
+    anchor,
+    plotArea,
+    onClose,
+    onAdded,
+}: {
+    anchor: Entry;
+    plotArea: number;
+    onClose: () => void;
+    onAdded: () => void;
+}) {
+    const [productId, setProductId] = useState<string>("");
+    const [dose, setDose] = useState<string>("");
+    const [error, setError] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const { data: stock = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/stock"],
+        queryFn: async () => (await apiRequest("GET", "/api/farm/stock")).json(),
+    });
+
+    // Agrupa por produto (igual a tela de estoque faz)
+    const products = useMemo(() => {
+        const map = new Map<string, any>();
+        for (const s of stock) {
+            const k = s.productId;
+            if (!map.has(k)) {
+                map.set(k, { productId: k, productName: s.productName, unit: s.productUnit, quantity: 0 });
+            }
+            map.get(k)!.quantity += parseFloat(s.quantity || "0");
+        }
+        return Array.from(map.values()).sort((a, b) => a.productName.localeCompare(b.productName));
+    }, [stock]);
+
+    const selected = products.find(p => p.productId === productId);
+    const doseNum = parseFloat((dose || "").replace(",", "."));
+    const qty = !isNaN(doseNum) && doseNum > 0 && plotArea > 0 ? doseNum * plotArea : 0;
+
+    async function handleSave() {
+        if (!productId) { setError("Selecione um produto"); return; }
+        if (!qty || qty <= 0) { setError("Informe a dose"); return; }
+        setSaving(true); setError("");
+        try {
+            const res = await fetch(`/api/farm/field-notebook/${anchor.id}/add-product`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ productId, quantity: qty, dosePerHa: doseNum }),
+            });
+            if (!res.ok) {
+                const d = await res.json();
+                throw new Error(d.error || "Erro ao adicionar");
+            }
+            onAdded();
+            onClose();
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                    <div>
+                        <div style={{ fontWeight: 700, fontSize: 17, color: "#111827" }}>Adicionar produto à aplicação</div>
+                        <div style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
+                            {anchor.plotName} {plotArea > 0 ? `(${plotArea.toFixed(2)} ha)` : ""}
+                        </div>
+                    </div>
+                    <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", padding: 4 }}>
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    <div>
+                        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Produto</label>
+                        <select
+                            value={productId}
+                            onChange={e => setProductId(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #D1D5DB", fontSize: 15, boxSizing: "border-box", background: "#fff" }}
+                        >
+                            <option value="">Selecione...</option>
+                            {products.map(p => (
+                                <option key={p.productId} value={p.productId}>
+                                    {p.productName} — estoque: {p.quantity.toFixed(2)} {p.unit}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
+                            Dose por hectare {selected ? `(${selected.unit}/ha)` : ""}
+                        </label>
+                        <input
+                            type="number"
+                            step="0.001"
+                            min="0.001"
+                            value={dose}
+                            onChange={e => setDose(e.target.value)}
+                            placeholder="Ex: 1.5"
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #D1D5DB", fontSize: 15, boxSizing: "border-box" }}
+                        />
+                    </div>
+
+                    <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#166534" }}>
+                        Quantidade total: <strong>{qty ? qty.toFixed(2) : "0.00"} {selected?.unit || ""}</strong>
+                        <div style={{ fontSize: 11, color: "#15803D", marginTop: 2 }}>
+                            (dose × {plotArea > 0 ? plotArea.toFixed(2) : "0"} ha — será deduzida do estoque)
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", color: "#DC2626", fontSize: 13 }}>{error}</div>
+                    )}
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
+                    <button onClick={onClose} disabled={saving} style={{ flex: 1, padding: "11px 0", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                        Cancelar
+                    </button>
+                    <button onClick={handleSave} disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: 8, border: "none", background: saving ? "#9CA3AF" : "#367C2B", color: "#fff", fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <Check size={16} />
+                        {saving ? "Adicionando..." : "Adicionar"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
@@ -324,6 +462,7 @@ export default function FieldNotebook() {
     const [plotFilter, setPlotFilter] = useState<string>("");
     const [editEntry, setEditEntry] = useState<Entry | null>(null);
     const [deleteEntry, setDeleteEntry] = useState<Entry | null>(null);
+    const [addProductGroup, setAddProductGroup] = useState<Group | null>(null);
     // After edit/delete on a group, offer PDF regeneration
     const [pendingPdfGroup, setPendingPdfGroup] = useState<Group | null>(null);
 
@@ -656,17 +795,34 @@ export default function FieldNotebook() {
                                         {/* Footer */}
                                         <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "#9CA3AF" }}>
                                             <span>{group.products.length} produto{group.products.length > 1 ? "s" : ""}</span>
-                                            <button
-                                                onClick={() => downloadGroupPDF(group)}
-                                                title="Baixar receituário"
-                                                style={{
-                                                    background: "none", border: "none", cursor: "pointer",
-                                                    color: "#6B7280", display: "flex", alignItems: "center",
-                                                    gap: 4, fontSize: 12, padding: "2px 6px", borderRadius: 6,
-                                                }}
-                                            >
-                                                <Download size={12} /> Receituário
-                                            </button>
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                {group.products[0]?.plotId && (
+                                                    <button
+                                                        onClick={() => setAddProductGroup(group)}
+                                                        title="Adicionar produto a esta aplicação"
+                                                        style={{
+                                                            background: "#367C2B15", border: "1px solid #367C2B40",
+                                                            cursor: "pointer", color: "#367C2B",
+                                                            display: "flex", alignItems: "center",
+                                                            gap: 4, fontSize: 12, fontWeight: 600,
+                                                            padding: "4px 10px", borderRadius: 6,
+                                                        }}
+                                                    >
+                                                        <Plus size={12} /> Adicionar produto
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => downloadGroupPDF(group)}
+                                                    title="Baixar receituário"
+                                                    style={{
+                                                        background: "none", border: "none", cursor: "pointer",
+                                                        color: "#6B7280", display: "flex", alignItems: "center",
+                                                        gap: 4, fontSize: 12, padding: "2px 6px", borderRadius: 6,
+                                                    }}
+                                                >
+                                                    <Download size={12} /> Receituário
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -696,8 +852,24 @@ export default function FieldNotebook() {
                     entry={deleteEntry}
                     onClose={() => setDeleteEntry(null)}
                     onDeleted={() => {
-                        queryClient.invalidateQueries({ queryKey: ["/api/farm/field-notebook"] });
+                        // Achar o grupo para oferecer regeneracao de PDF apos excluir
+                        const group = groupedEntries.find(g => g.products.some(p => p.id === deleteEntry.id));
+                        if (group) handleAfterChange(group);
+                        else queryClient.invalidateQueries({ queryKey: ["/api/farm/field-notebook"] });
                         setDeleteEntry(null);
+                    }}
+                />
+            )}
+
+            {/* Add Product Modal */}
+            {addProductGroup && addProductGroup.products[0] && (
+                <AddProductModal
+                    anchor={addProductGroup.products[0]}
+                    plotArea={parseFloat(addProductGroup.plotArea || "0")}
+                    onClose={() => setAddProductGroup(null)}
+                    onAdded={() => {
+                        handleAfterChange(addProductGroup);
+                        setAddProductGroup(null);
                     }}
                 />
             )}

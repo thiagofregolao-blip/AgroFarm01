@@ -1216,6 +1216,7 @@ export const farmApplications = pgTable("farm_applications", {
   employeeName: text("employee_name"), // Funcionário identificado por reconhecimento facial
   photoBase64: text("photo_base64"), // Foto do comprovante de abastecimento
   syncedFromOffline: boolean("synced_from_offline").default(false),
+  displayOrder: integer("display_order").default(0), // ordem de selecao no PDV
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

@@ -4,8 +4,8 @@
 
 import type { Express } from "express";
 import { db } from "./db";
-import { farmApplications, farmProductsCatalog, farmPlots, farmProperties, farmSeasons, farmEquipment } from "../shared/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { farmApplications, farmProductsCatalog, farmPlots, farmProperties, farmSeasons, farmEquipment, farmStock } from "../shared/schema";
+import { eq, and, desc, asc, sql } from "drizzle-orm";
 
 export function registerFieldNotebookRoutes(app: Express) {
     // GET /api/farm/field-notebook — consolidated field notebook data
@@ -17,7 +17,9 @@ export function registerFieldNotebookRoutes(app: Express) {
         try {
             const { seasonId } = req.query;
 
-            // Get all applications for this farmer with related data
+            // Get all applications for this farmer with related data.
+            // Ordem: data da aplicacao DESC (mais recente primeiro), e dentro de cada lote do PDV
+            // os produtos saem na ordem em que foram selecionados (display_order ASC).
             const applications = await db.select({
                 id: farmApplications.id,
                 date: farmApplications.appliedAt,
@@ -38,13 +40,14 @@ export function registerFieldNotebookRoutes(app: Express) {
                 appliedBy: farmApplications.appliedBy,
                 notes: farmApplications.notes,
                 seasonId: farmApplications.seasonId,
+                displayOrder: farmApplications.displayOrder,
             })
                 .from(farmApplications)
                 .leftJoin(farmProductsCatalog, eq(farmApplications.productId, farmProductsCatalog.id))
                 .leftJoin(farmPlots, eq(farmApplications.plotId, farmPlots.id))
                 .leftJoin(farmProperties, eq(farmApplications.propertyId, farmProperties.id))
                 .where(eq(farmApplications.farmerId, farmerId))
-                .orderBy(desc(farmApplications.appliedAt));
+                .orderBy(desc(farmApplications.appliedAt), asc(farmApplications.displayOrder), asc(farmApplications.createdAt));
 
             // Filter by season dates if provided
             let filteredApps = applications;
@@ -87,6 +90,70 @@ export function registerFieldNotebookRoutes(app: Express) {
         } catch (error) {
             console.error("[FIELD-NOTEBOOK] Error:", error);
             res.status(500).json({ error: "Failed to load field notebook" });
+        }
+    });
+
+    // POST /api/farm/field-notebook/:anchorId/add-product — adiciona produto extra a uma
+    // aplicacao ja finalizada (mesmo talhao/propriedade/appliedAt). Da baixa no estoque.
+    app.post("/api/farm/field-notebook/:anchorId/add-product", async (req: any, res) => {
+        const { getEffectiveFarmerId } = await import("./farm-middleware");
+        const farmerId = await getEffectiveFarmerId(req);
+        if (!farmerId) return res.status(401).json({ error: "Unauthorized" });
+
+        try {
+            const { farmStorage } = await import("./farm-storage");
+            const anchorId = req.params.anchorId;
+            const { productId, quantity, dosePerHa, notes } = req.body;
+
+            if (!productId) return res.status(400).json({ error: "productId obrigatorio" });
+            const qty = parseFloat(quantity);
+            if (!qty || qty <= 0) return res.status(400).json({ error: "quantidade invalida" });
+
+            // Busca aplicacao ancora para herdar talhao/propriedade/appliedAt/seasonId/appliedBy
+            const [anchor] = await db.select().from(farmApplications).where(
+                and(eq(farmApplications.id, anchorId), eq(farmApplications.farmerId, farmerId))
+            );
+            if (!anchor) return res.status(404).json({ error: "Aplicacao ancora nao encontrada" });
+
+            // display_order = max do grupo (mesmo appliedAt + mesmo plot) + 1
+            const sameGroup = await db.select({ maxOrder: sql<number>`COALESCE(MAX(display_order), 0)` })
+                .from(farmApplications)
+                .where(and(
+                    eq(farmApplications.farmerId, farmerId),
+                    eq(farmApplications.appliedAt, anchor.appliedAt),
+                    anchor.plotId ? eq(farmApplications.plotId, anchor.plotId) : sql`plot_id IS NULL`,
+                ));
+            const nextOrder = (Number(sameGroup[0]?.maxOrder) || 0) + 1;
+
+            // Insere nova aplicacao usando storage (deduz estoque automaticamente)
+            const newApp = await farmStorage.createApplication({
+                farmerId,
+                productId,
+                plotId: anchor.plotId,
+                propertyId: anchor.propertyId,
+                equipmentId: anchor.equipmentId,
+                horimeter: anchor.horimeter,
+                odometer: anchor.odometer,
+                quantity: String(qty),
+                dosePerHa: dosePerHa ? String(dosePerHa) : null,
+                flowRateLha: anchor.flowRateLha,
+                appliedBy: anchor.appliedBy,
+                notes: notes || "Adicionado pelo Caderno de Campo",
+                appliedAt: anchor.appliedAt,
+                syncedFromOffline: false,
+                seasonId: anchor.seasonId,
+            } as any);
+
+            // Persiste display_order (campo novo — raw SQL)
+            if (newApp.id) {
+                await db.execute(sql`UPDATE farm_applications SET display_order = ${nextOrder} WHERE id = ${newApp.id}`);
+            }
+
+            console.log(`[FIELD-NOTEBOOK] ADD_PRODUCT anchor=${anchorId} new=${newApp.id} prod=${productId} qty=${qty} order=${nextOrder}`);
+            res.status(201).json({ success: true, id: newApp.id, displayOrder: nextOrder });
+        } catch (error: any) {
+            console.error("[FIELD-NOTEBOOK_ADD_PRODUCT]", error);
+            res.status(500).json({ error: error?.message || "Falha ao adicionar produto" });
         }
     });
 
