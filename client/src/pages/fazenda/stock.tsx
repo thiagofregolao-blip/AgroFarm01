@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel, User, Eye, AlertTriangle, TrendingUp, DollarSign, BarChart3, Leaf, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Loader2, Search, Warehouse, ArrowUpRight, ArrowDownRight, Plus, Camera, Package, Trash2, Pencil, RefreshCw, FileText, Building2, ArrowLeftRight, Upload, Fuel, User, Eye, AlertTriangle, TrendingUp, DollarSign, BarChart3, Leaf, ChevronLeft, ChevronRight, Download, Layers } from "lucide-react";
 import { useState, useRef, useMemo } from "react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -495,6 +495,7 @@ export default function FarmStock() {
                                             const isLow = qty >= 0 && qty < 5;
                                             const cat = normalizeCategory(s.productCategory);
                                             const badge = CAT_BADGE_STYLES[cat] || CAT_BADGE_STYLES.Outros;
+                                            const isMerged = (s.mergedCount ?? 1) > 1;
                                             const displayName = s.productName?.length > 50
                                                 ? s.productName.substring(0, 50) + "..."
                                                 : s.productName;
@@ -507,7 +508,18 @@ export default function FarmStock() {
                                                                 <Leaf className="h-5 w-5 text-emerald-600" />
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <p className="font-bold text-sm text-gray-900 truncate" title={s.productName}>{displayName}</p>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <p className="font-bold text-sm text-gray-900 truncate" title={s.productName}>{displayName}</p>
+                                                                    {isMerged && (
+                                                                        <span
+                                                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-indigo-100 text-indigo-700 flex-shrink-0"
+                                                                            title={`${s.mergedCount} registros duplicados no catalogo foram agrupados. Totais somados.`}
+                                                                        >
+                                                                            <Layers className="h-2.5 w-2.5" />
+                                                                            {s.mergedCount}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                                 {s.activeIngredient ? (
                                                                     <p className="text-[11px] text-gray-400 truncate">{s.activeIngredient}</p>
                                                                 ) : s.depositCount > 1 ? (
@@ -582,12 +594,21 @@ export default function FarmStock() {
                                                     </td>
                                                     {/* Acoes */}
                                                     <td className="text-right px-4 py-3">
-                                                        {canEdit && <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
-                                                                {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                                            </Button>
-                                                        </div>}
+                                                        {canEdit && (isMerged ? (
+                                                            <span
+                                                                className="inline-block text-[10px] text-indigo-600 font-semibold cursor-help"
+                                                                title="Este produto tem duplicatas no catalogo. Edicao desabilitada ate a mesclagem no catalogo."
+                                                            >
+                                                                agrupado
+                                                            </span>
+                                                        ) : (
+                                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
+                                                                    {deleteStock.isPending && deleteStock.variables === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                                </Button>
+                                                            </div>
+                                                        ))}
                                                     </td>
                                                 </tr>
                                             );
@@ -605,6 +626,7 @@ export default function FarmStock() {
                                     const isLow = qty >= 0 && qty < 5;
                                     const cat = normalizeCategory(s.productCategory);
                                     const badge = CAT_BADGE_STYLES[cat] || CAT_BADGE_STYLES.Outros;
+                                    const isMerged = (s.mergedCount ?? 1) > 1;
                                     return (
                                         <div key={s.id} className={`rounded-xl border p-4 shadow-sm ${isNegative ? "bg-red-50 border-red-200" : "bg-white border-gray-100"}`}>
                                             <div className="flex items-start gap-3 mb-3">
@@ -612,11 +634,19 @@ export default function FarmStock() {
                                                     <Leaf className="h-5 w-5 text-emerald-600" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="font-bold text-sm text-gray-900 truncate">{s.productName}</p>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <p className="font-bold text-sm text-gray-900 truncate">{s.productName}</p>
+                                                        {isMerged && (
+                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-indigo-100 text-indigo-700 flex-shrink-0">
+                                                                <Layers className="h-2.5 w-2.5" />
+                                                                {s.mergedCount}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     {s.activeIngredient && <p className="text-[11px] text-gray-400">{s.activeIngredient}</p>}
                                                     <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${badge.bg} ${badge.text}`}>{cat}</span>
                                                 </div>
-                                                {canEdit && (
+                                                {canEdit && !isMerged && (
                                                     <div className="flex gap-1 flex-shrink-0">
                                                         <EditStockDialog stockItem={s} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-600" onClick={() => handleDelete(s.id, s.productName)} disabled={deleteStock.isPending}>
@@ -625,6 +655,13 @@ export default function FarmStock() {
                                                     </div>
                                                 )}
                                             </div>
+                                            {isMerged && (
+                                                <div className="mb-3 px-3 py-2 bg-indigo-50 rounded-lg border border-indigo-100">
+                                                    <p className="text-[10px] text-indigo-700 leading-relaxed">
+                                                        <span className="font-semibold">Agrupado:</span> {s.mergedCount} registros duplicados somados. A mesclagem no catalogo ficara disponivel em breve.
+                                                    </p>
+                                                </div>
+                                            )}
                                             <div className="grid grid-cols-2 gap-3 text-sm">
                                                 <div>
                                                     <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Quantidade</p>

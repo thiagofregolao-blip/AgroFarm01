@@ -1,5 +1,6 @@
 import { db, dbReady } from "./db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { groupStockByProduct } from "./lib/product-dedup";
 import {
     users, farmProperties, farmPlots, farmEquipment, farmEmployees, farmProductsCatalog,
     farmStock, farmInvoices, farmInvoiceItems, farmStockMovements,
@@ -240,7 +241,8 @@ export class FarmStorage {
                   ${excludeCommercial ? sql`AND (d.deposit_type IS NULL OR d.deposit_type != 'comercial')` : sql``}
                 ORDER BY p.name
             `);
-            return (rows as any).rows ?? rows;
+            const raw = (rows as any).rows ?? rows;
+            return groupStockByProduct(raw);
         } catch (err) {
             // Fallback: original query without deposit columns (column/table may not exist yet)
             console.warn("[getStock] Fallback to original query:", (err as any)?.message);
@@ -258,7 +260,8 @@ export class FarmStorage {
                 WHERE s.farmer_id = ${farmerId}
                 ORDER BY p.name
             `);
-            return (rows as any).rows ?? rows;
+            const raw = (rows as any).rows ?? rows;
+            return groupStockByProduct(raw);
         }
     }
 
