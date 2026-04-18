@@ -208,20 +208,20 @@ export async function createDraftInvoice(
         return existingInvs.find(inv => inv.sourceEmailId === emailId) as any;
     }
 
-    const parsedAmt = parseFloat(String(extracted.totalAmount)) || 0;
-    // Exclude remissions from duplicate check — a remission and its invoice share the same number
+    // Dedup rule: invoice number MUST match (plus supplier for extra safety).
+    // The old sup+amt fallback caused false positives — recurring invoices from
+    // the same supplier with a coincident total were silently dropped.
+    // Exclude remissions from duplicate check — a remission and its invoice share the same number.
     const emailDuplicate = existingInvs.filter(inv => inv.documentType !== "remision").find(inv => {
-        const invAmt = parseFloat(inv.totalAmount as string) || 0;
         const sameNum = extracted.invoiceNumber && inv.invoiceNumber &&
             inv.invoiceNumber.replace(/\D/g, '') === String(extracted.invoiceNumber).replace(/\D/g, '');
         const sameSup = extracted.supplier && inv.supplier &&
             inv.supplier.toLowerCase().includes(String(extracted.supplier).toLowerCase().substring(0, 10));
-        const sameAmt = Math.abs(invAmt - parsedAmt) < 0.01;
-        return (sameNum && sameAmt) || (sameNum && sameSup) || (sameSup && sameAmt);
+        return sameNum && sameSup;
     });
 
     if (emailDuplicate) {
-        console.log(`[Invoice Email] Fatura duplicada detectada: ${emailDuplicate.invoiceNumber} / ${emailDuplicate.supplier}`);
+        console.log(`[Invoice Email] Fatura duplicada detectada: num=${emailDuplicate.invoiceNumber} supplier=${emailDuplicate.supplier} existingId=${emailDuplicate.id}`);
         return emailDuplicate as any;
     }
 
