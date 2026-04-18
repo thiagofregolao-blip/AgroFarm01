@@ -150,35 +150,72 @@ export async function parseWithGemini(fileBase64: string, mimeType: string): Pro
     // For PDFs, Gemini needs the correct mime type
     const geminiMime = mimeType === "application/pdf" ? "application/pdf" : mimeType;
 
-    const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                contents: [
-                    {
-                        parts: [
-                            { text: GEMINI_PROMPT },
-                            { inline_data: { mime_type: geminiMime, data: fileBase64 } }
-                        ]
-                    }
-                ],
-                generationConfig: { temperature: 0.1 }
-            })
+    const callGemini = async (): Promise<{ text: string; rawData: any; httpStatus: number }> => {
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [
+                        {
+                            parts: [
+                                { text: GEMINI_PROMPT },
+                                { inline_data: { mime_type: geminiMime, data: fileBase64 } }
+                            ]
+                        }
+                    ],
+                    generationConfig: { temperature: 0.1 }
+                })
+            }
+        );
+        const rawData = await response.json();
+        const text = rawData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        return { text, rawData, httpStatus: response.status };
+    };
+
+    const tryParse = (text: string): GeminiParsedInvoice | null => {
+        const cleanJson = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+        if (!cleanJson) return null;
+        try {
+            return JSON.parse(cleanJson);
+        } catch {
+            return null;
         }
-    );
+    };
 
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const diagnose = (rawData: any, httpStatus: number, text: string) => {
+        const blockReason = rawData?.promptFeedback?.blockReason;
+        const safetyRatings = rawData?.promptFeedback?.safetyRatings;
+        const finishReason = rawData?.candidates?.[0]?.finishReason;
+        const errMsg = rawData?.error?.message;
+        console.error("[GEMINI_PARSER] Resposta invalida do Gemini:", JSON.stringify({
+            httpStatus,
+            finishReason,
+            blockReason,
+            safetyRatings,
+            errMsg,
+            textPreview: (text || "").substring(0, 300),
+            rawPreview: JSON.stringify(rawData).substring(0, 500),
+        }));
+    };
 
-    let parsed: GeminiParsedInvoice;
-    try {
-        parsed = JSON.parse(cleanJson);
-    } catch (e) {
-        console.error("[GEMINI_PARSER] Failed to parse JSON:", cleanJson.substring(0, 200));
-        throw new Error("Gemini retornou resposta inválida. Tente novamente.");
+    // First attempt
+    let { text, rawData, httpStatus } = await callGemini();
+    let parsed = tryParse(text);
+
+    // Retry once on empty/invalid response — Gemini has transient hiccups
+    if (!parsed) {
+        diagnose(rawData, httpStatus, text);
+        console.warn("[GEMINI_PARSER] Tentando novamente em 1.5s...");
+        await new Promise(r => setTimeout(r, 1500));
+        ({ text, rawData, httpStatus } = await callGemini());
+        parsed = tryParse(text);
+    }
+
+    if (!parsed) {
+        diagnose(rawData, httpStatus, text);
+        throw new Error("Gemini retornou resposta inválida após retry. Veja log [GEMINI_PARSER] para detalhes.");
     }
 
     // Normalize fields
