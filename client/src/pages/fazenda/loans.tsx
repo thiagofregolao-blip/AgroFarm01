@@ -156,7 +156,12 @@ export default function LoansPage() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/loans"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/loan-payments"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
             toast({ title: "Prestamo excluido" });
+        },
+        onError: (err: any) => {
+            toast({ title: "Erro ao excluir prestamo", description: err.message, variant: "destructive" });
         },
     });
 
