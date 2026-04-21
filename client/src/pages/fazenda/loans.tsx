@@ -296,13 +296,13 @@ export default function LoansPage() {
                             <CreditCard className="w-4 h-4" /> Prestamos a Pagar
                         </TabsTrigger>
                         <TabsTrigger value="history_payable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-red-100 data-[state=active]:text-red-700">
-                            <History className="w-4 h-4" /> Historico de Prestamos Pagos
+                            <History className="w-4 h-4" /> Historico de Pagamentos de Prestamos
                         </TabsTrigger>
                         <TabsTrigger value="receivable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
                             <Wallet className="w-4 h-4" /> Prestamos a Receber
                         </TabsTrigger>
                         <TabsTrigger value="history_receivable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
-                            <History className="w-4 h-4" /> Historico de Prestamos Recebidos
+                            <History className="w-4 h-4" /> Historico de Recebimento de Prestamos
                         </TabsTrigger>
                     </TabsList>
 
