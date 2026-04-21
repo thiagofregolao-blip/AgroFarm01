@@ -296,7 +296,9 @@ export function registerFarmLoansRoutes(app: Express) {
     // ?type=payable  -> "Historico de Pagamentos" (saidas em prestamos a pagar)
     // ?type=receivable -> "Historico de Recebimentos" (entradas em prestamos a receber)
     // ============================================================================
-    app.get("/api/farm/loans/payments", requireFarmer, async (req, res) => {
+    // URL fora do prefixo /loans/:id para evitar conflito com a rota GET /loans/:id
+    // (Express matcharia "payments" como :id e retornaria 404 "Loan not found")
+    app.get("/api/farm/loan-payments", requireFarmer, async (req, res) => {
         try {
             const { sql } = await import("drizzle-orm");
             const { db } = await import("./db");
@@ -347,7 +349,7 @@ export function registerFarmLoansRoutes(app: Express) {
     // Reversao atomica: desfaz estado anterior no caixa/parcela/loan, aplica o novo,
     // tudo em 1 transacao DB.
     // ============================================================================
-    app.patch("/api/farm/loans/payments/:txId", requireFarmer, async (req, res) => {
+    app.patch("/api/farm/loan-payments/:txId", requireFarmer, async (req, res) => {
         try {
             const { sql } = await import("drizzle-orm");
             const { db } = await import("./db");

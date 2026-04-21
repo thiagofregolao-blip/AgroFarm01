@@ -296,13 +296,13 @@ export default function LoansPage() {
                             <CreditCard className="w-4 h-4" /> Prestamos a Pagar
                         </TabsTrigger>
                         <TabsTrigger value="history_payable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-red-100 data-[state=active]:text-red-700">
-                            <History className="w-4 h-4" /> Historico de Pagamentos
+                            <History className="w-4 h-4" /> Historico de Prestamos Pagos
                         </TabsTrigger>
                         <TabsTrigger value="receivable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
                             <Wallet className="w-4 h-4" /> Prestamos a Receber
                         </TabsTrigger>
                         <TabsTrigger value="history_receivable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
-                            <History className="w-4 h-4" /> Historico a Receber
+                            <History className="w-4 h-4" /> Historico de Prestamos Recebidos
                         </TabsTrigger>
                     </TabsList>
 
@@ -836,16 +836,16 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
     const [editDescription, setEditDescription] = useState("");
 
     const { data: payments = [], isLoading } = useQuery<PaymentRow[]>({
-        queryKey: ["/api/farm/loans/payments", type],
+        queryKey: ["/api/farm/loan-payments", type],
         queryFn: async () => {
-            const r = await apiRequest("GET", `/api/farm/loans/payments?type=${type}`);
+            const r = await apiRequest("GET", `/api/farm/loan-payments?type=${type}`);
             return r.json();
         },
     });
 
     const editMutation = useMutation({
         mutationFn: async (payload: { txId: string; amount: number; accountId: string; transactionDate: string; description: string }) => {
-            const r = await apiRequest("PATCH", `/api/farm/loans/payments/${payload.txId}`, {
+            const r = await apiRequest("PATCH", `/api/farm/loan-payments/${payload.txId}`, {
                 amount: payload.amount,
                 accountId: payload.accountId,
                 transactionDate: payload.transactionDate,
@@ -854,7 +854,7 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
             return r.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/farm/loans/payments"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/loan-payments"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/loans"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
             toast({ title: "Pagamento atualizado" });
