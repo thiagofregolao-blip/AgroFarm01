@@ -14,7 +14,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
     Loader2, PlusCircle, Trash2, CheckCircle, Clock, AlertTriangle,
-    DollarSign, CalendarDays, Wallet, Percent, Eye, CreditCard, Search
+    DollarSign, CalendarDays, Wallet, Percent, Eye, CreditCard, Search,
+    Pencil, History
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -288,18 +289,26 @@ export default function LoansPage() {
                     </div>
                 </div>
 
-                {/* Tabs */}
+                {/* Tabs — vermelho para "a Pagar" (saida), verde para "a Receber" (entrada) */}
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="w-full sm:w-auto">
-                        <TabsTrigger value="payable" className="flex-1 sm:flex-none gap-1">
+                    <TabsList className="w-full flex flex-wrap gap-1 h-auto p-1">
+                        <TabsTrigger value="payable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-red-100 data-[state=active]:text-red-700">
                             <CreditCard className="w-4 h-4" /> Prestamos a Pagar
                         </TabsTrigger>
-                        <TabsTrigger value="receivable" className="flex-1 sm:flex-none gap-1">
+                        <TabsTrigger value="history_payable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-red-100 data-[state=active]:text-red-700">
+                            <History className="w-4 h-4" /> Historico de Pagamentos
+                        </TabsTrigger>
+                        <TabsTrigger value="receivable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
                             <Wallet className="w-4 h-4" /> Prestamos a Receber
+                        </TabsTrigger>
+                        <TabsTrigger value="history_receivable" className="flex-1 min-w-[140px] gap-1 data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
+                            <History className="w-4 h-4" /> Historico a Receber
                         </TabsTrigger>
                     </TabsList>
 
-                    {/* KPI Cards */}
+                    {/* KPI Cards — apenas nas tabs de emprestimos (nao no historico) */}
+                    {(activeTab === "payable" || activeTab === "receivable") && (
+                    <>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
                         <Card>
                             <CardContent className="p-3">
@@ -359,13 +368,23 @@ export default function LoansPage() {
                             <PlusCircle className="w-4 h-4" /> Novo Prestamo
                         </Button>
                     </div>
+                    </>
+                    )}
 
-                    {/* Content for both tabs (same layout) */}
+                    {/* Content for loan tabs */}
                     <TabsContent value="payable" className="mt-4">
                         <LoansList loans={filtered} isLoading={isLoading} onDetail={openDetail} onDelete={(id) => deleteMutation.mutate(id)} currencySymbol={currencySymbol} />
                     </TabsContent>
                     <TabsContent value="receivable" className="mt-4">
                         <LoansList loans={filtered} isLoading={isLoading} onDetail={openDetail} onDelete={(id) => deleteMutation.mutate(id)} currencySymbol={currencySymbol} />
+                    </TabsContent>
+
+                    {/* Content for history tabs */}
+                    <TabsContent value="history_payable" className="mt-4">
+                        <LoanPaymentHistory type="payable" accounts={accounts as any[]} />
+                    </TabsContent>
+                    <TabsContent value="history_receivable" className="mt-4">
+                        <LoanPaymentHistory type="receivable" accounts={accounts as any[]} />
                     </TabsContent>
                 </Tabs>
 
@@ -787,5 +806,208 @@ function LoansList({
                 );
             })}
         </div>
+    );
+}
+
+// ─── PAYMENT HISTORY ────────────────────────────────────────────────────────
+interface PaymentRow {
+    id: string;
+    transactionDate: string;
+    amount: string;
+    currency: string;
+    description: string | null;
+    accountId: string | null;
+    accountName: string | null;
+    installmentId: string | null;
+    installmentNumber: number | null;
+    installmentAmount: string | null;
+    loanId: string | null;
+    counterpartName: string | null;
+    loanType: string | null;
+}
+
+function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"; accounts: any[] }) {
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+    const [editing, setEditing] = useState<PaymentRow | null>(null);
+    const [editAmount, setEditAmount] = useState("");
+    const [editAccountId, setEditAccountId] = useState("");
+    const [editDate, setEditDate] = useState("");
+    const [editDescription, setEditDescription] = useState("");
+
+    const { data: payments = [], isLoading } = useQuery<PaymentRow[]>({
+        queryKey: ["/api/farm/loans/payments", type],
+        queryFn: async () => {
+            const r = await apiRequest("GET", `/api/farm/loans/payments?type=${type}`);
+            return r.json();
+        },
+    });
+
+    const editMutation = useMutation({
+        mutationFn: async (payload: { txId: string; amount: number; accountId: string; transactionDate: string; description: string }) => {
+            const r = await apiRequest("PATCH", `/api/farm/loans/payments/${payload.txId}`, {
+                amount: payload.amount,
+                accountId: payload.accountId,
+                transactionDate: payload.transactionDate,
+                description: payload.description,
+            });
+            return r.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/loans/payments"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/loans"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
+            toast({ title: "Pagamento atualizado" });
+            setEditing(null);
+        },
+        onError: (err: any) => {
+            toast({ title: "Erro ao editar pagamento", description: err.message, variant: "destructive" });
+        },
+    });
+
+    function openEdit(row: PaymentRow) {
+        setEditing(row);
+        setEditAmount(String(parseFloat(row.amount)));
+        setEditAccountId(row.accountId || "");
+        setEditDate(row.transactionDate ? new Date(row.transactionDate).toISOString().slice(0, 10) : "");
+        setEditDescription(row.description || "");
+    }
+
+    function submitEdit() {
+        if (!editing) return;
+        const amt = parseFloat(editAmount);
+        if (isNaN(amt) || amt <= 0) {
+            toast({ title: "Valor invalido", variant: "destructive" });
+            return;
+        }
+        if (!editAccountId) {
+            toast({ title: "Selecione uma caixa", variant: "destructive" });
+            return;
+        }
+        editMutation.mutate({
+            txId: editing.id,
+            amount: amt,
+            accountId: editAccountId,
+            transactionDate: editDate || new Date().toISOString(),
+            description: editDescription,
+        });
+    }
+
+    const themeHeader = type === "payable" ? "text-red-700 border-red-200" : "text-green-700 border-green-200";
+    const themeAmount = type === "payable" ? "text-red-600" : "text-green-600";
+
+    if (isLoading) {
+        return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
+    }
+    if (payments.length === 0) {
+        return (
+            <div className="text-center py-12 text-gray-400">
+                <History className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Nenhum {type === "payable" ? "pagamento" : "recebimento"} registrado</p>
+            </div>
+        );
+    }
+
+    return (
+        <>
+            <Card>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className={`border-b ${themeHeader}`}>
+                                    <th className="text-left px-4 py-3 font-semibold">Data</th>
+                                    <th className="text-left px-4 py-3 font-semibold">Caixa</th>
+                                    <th className="text-left px-4 py-3 font-semibold">Descricao</th>
+                                    <th className="text-left px-4 py-3 font-semibold">{type === "payable" ? "Fornecedor" : "Pessoa/Empresa"}</th>
+                                    <th className="text-right px-4 py-3 font-semibold">Valor</th>
+                                    <th className="text-right px-4 py-3 font-semibold">Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {payments.map(p => {
+                                    const canEdit = !!p.installmentId;
+                                    return (
+                                        <tr key={p.id} className="border-b hover:bg-gray-50">
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                {p.transactionDate ? new Date(p.transactionDate).toLocaleDateString("pt-BR") : "—"}
+                                            </td>
+                                            <td className="px-4 py-3">{p.accountName || "—"}</td>
+                                            <td className="px-4 py-3 text-gray-600 max-w-[280px] truncate" title={p.description || ""}>
+                                                {p.description || "—"}
+                                            </td>
+                                            <td className="px-4 py-3 font-medium">{p.counterpartName || "—"}</td>
+                                            <td className={`px-4 py-3 text-right font-bold ${themeAmount}`}>
+                                                {formatCurrency(parseFloat(p.amount), p.currency)}
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    onClick={() => openEdit(p)}
+                                                    disabled={!canEdit}
+                                                    title={canEdit ? "Editar pagamento" : "Pagamento antigo sem vinculo (nao editavel)"}
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Edit Modal */}
+            {editing && (
+                <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Editar Pagamento</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                            <div className="text-xs text-gray-500 bg-gray-50 rounded p-2">
+                                <p><span className="font-semibold">Contraparte:</span> {editing.counterpartName || "—"}</p>
+                                {editing.installmentNumber != null && (
+                                    <p><span className="font-semibold">Parcela:</span> #{editing.installmentNumber}{editing.installmentAmount ? ` (${formatCurrency(parseFloat(editing.installmentAmount), editing.currency)})` : ""}</p>
+                                )}
+                            </div>
+                            <div>
+                                <Label>Valor</Label>
+                                <Input type="number" step="0.01" value={editAmount} onChange={e => setEditAmount(e.target.value)} />
+                            </div>
+                            <div>
+                                <Label>Caixa</Label>
+                                <Select value={editAccountId} onValueChange={setEditAccountId}>
+                                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                    <SelectContent>
+                                        {accounts.filter((a: any) => a.currency === editing.currency).map((a: any) => (
+                                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label>Data</Label>
+                                <Input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
+                            </div>
+                            <div>
+                                <Label>Descricao</Label>
+                                <Input value={editDescription} onChange={e => setEditDescription(e.target.value)} />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
+                                <Button onClick={submitEdit} disabled={editMutation.isPending}>
+                                    {editMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                                    Salvar
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
+        </>
     );
 }

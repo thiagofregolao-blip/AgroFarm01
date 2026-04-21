@@ -442,6 +442,7 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS transfer_date TIMESTAMP`);
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS receipt_number TEXT`);
     await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS payment_batch_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE farm_cash_transactions ADD COLUMN IF NOT EXISTS reference_id VARCHAR`);
     await db.execute(sql`CREATE TABLE IF NOT EXISTS farm_payment_batch_items (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         batch_id VARCHAR NOT NULL,
