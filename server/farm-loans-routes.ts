@@ -63,8 +63,12 @@ export function registerFarmLoansRoutes(app: Express) {
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
 
+            // JOIN com farm_cash_accounts para expor accountName no modal de detalhes
             const result = await db.execute(sql`
-                SELECT * FROM farm_loans WHERE id = ${req.params.id} AND farmer_id = ${farmerId}
+                SELECT l.*, acc.name AS account_name
+                FROM farm_loans l
+                LEFT JOIN farm_cash_accounts acc ON acc.id = l.account_id
+                WHERE l.id = ${req.params.id} AND l.farmer_id = ${farmerId}
             `);
             const loan = (result.rows || result)[0];
             if (!loan) return res.status(404).json({ error: "Loan not found" });
@@ -250,6 +254,143 @@ export function registerFarmLoansRoutes(app: Express) {
             res.json({ ok: true });
         } catch (err: any) {
             console.error("[LOAN_DELETE]", err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // ============================================================================
+    // LOANS — UPDATE (edit completo)
+    // Somente permitido enquanto status = "aberto" (nenhum pagamento feito).
+    // Refaz totalmente: reverte tx de criacao antiga, substitui parcelas, cria
+    // nova tx de criacao com novo valor/conta. Tudo atomico.
+    // ============================================================================
+    app.put("/api/farm/loans/:id", requireFarmer, async (req, res) => {
+        try {
+            const { sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const loanId = req.params.id;
+            const {
+                counterpartId, counterpartName, description,
+                currency, accountId, totalAmount, interestRate, installments,
+            } = req.body;
+
+            if (!counterpartName || !totalAmount || !installments?.length) {
+                return res.status(400).json({ error: "Campos obrigatorios: counterpartName, totalAmount, installments" });
+            }
+
+            const sum = installments.reduce((acc: number, i: any) => acc + (parseFloat(i.amount) || 0), 0);
+            const total = parseFloat(totalAmount) || 0;
+            if (Math.abs(sum - total) > 0.01) {
+                return res.status(400).json({
+                    error: `Soma das parcelas (${sum.toFixed(2)}) diverge do valor total (${total.toFixed(2)})`,
+                });
+            }
+
+            // Carrega emprestimo atual
+            const loanRes = await db.execute(sql`
+                SELECT * FROM farm_loans WHERE id = ${loanId} AND farmer_id = ${farmerId}
+            `);
+            const loan = (loanRes.rows || loanRes)[0];
+            if (!loan) return res.status(404).json({ error: "Loan not found" });
+            if (loan.status !== "aberto") {
+                return res.status(400).json({
+                    error: "Emprestimo com pagamentos nao pode ser editado. Exclua os pagamentos no historico antes.",
+                });
+            }
+
+            await db.transaction(async (dbTx: any) => {
+                // 1) Reverte e remove a cash_transaction antiga de criacao (reference_id = loanId)
+                const oldTxRes = await dbTx.execute(sql`
+                    SELECT id, account_id, type, amount FROM farm_cash_transactions
+                    WHERE farmer_id = ${farmerId}
+                      AND reference_type = 'prestamo'
+                      AND reference_id = ${loanId}
+                `);
+                const oldTxs = (oldTxRes.rows || oldTxRes) as any[];
+                for (const t of oldTxs) {
+                    if (t.account_id) {
+                        const amount = parseFloat(t.amount) || 0;
+                        const revertDelta = t.type === "entrada" ? -amount : +amount;
+                        await dbTx.execute(sql`
+                            UPDATE farm_cash_accounts
+                            SET current_balance = CAST(current_balance AS NUMERIC) + ${revertDelta}
+                            WHERE id = ${t.account_id}
+                        `);
+                    }
+                }
+                await dbTx.execute(sql`
+                    DELETE FROM farm_cash_transactions
+                    WHERE farmer_id = ${farmerId}
+                      AND reference_type = 'prestamo'
+                      AND reference_id = ${loanId}
+                `);
+
+                // 2) Apaga parcelas antigas e recria
+                await dbTx.execute(sql`
+                    DELETE FROM farm_loan_installments WHERE loan_id = ${loanId}
+                `);
+
+                // 3) Atualiza o loan (tipo e numero serial nao mudam)
+                await dbTx.execute(sql`
+                    UPDATE farm_loans SET
+                        counterpart_id = ${counterpartId || null},
+                        counterpart_name = ${counterpartName},
+                        description = ${description || null},
+                        currency = ${currency || "USD"},
+                        account_id = ${accountId || null},
+                        total_amount = ${total},
+                        interest_rate = ${interestRate ? parseFloat(interestRate) : null}
+                    WHERE id = ${loanId}
+                `);
+
+                // 4) Recria parcelas
+                for (let idx = 0; idx < installments.length; idx++) {
+                    const inst = installments[idx];
+                    await dbTx.execute(sql`
+                        INSERT INTO farm_loan_installments (loan_id, installment_number, amount, due_date)
+                        VALUES (${loanId}, ${idx + 1}, ${parseFloat(inst.amount)}, ${inst.dueDate})
+                    `);
+                }
+
+                // 5) Cria nova cash_transaction de criacao + aplica saldo no novo caixa
+                if (accountId) {
+                    const txType = loan.type === "payable" ? "entrada" : "saida";
+                    const txDesc = loan.type === "payable"
+                        ? `Prestamo recibido de ${counterpartName}`
+                        : `Prestamo otorgado a ${counterpartName}`;
+
+                    await dbTx.execute(sql`
+                        INSERT INTO farm_cash_transactions (farmer_id, account_id, type, amount, currency, description, category, reference_type, reference_id, transaction_date)
+                        VALUES (${farmerId}, ${accountId}, ${txType}, ${total}, ${currency || "USD"}, ${txDesc}, ${"prestamo"}, ${"prestamo"}, ${loanId}, ${new Date().toISOString()})
+                    `);
+
+                    const balanceDelta = txType === "entrada" ? +total : -total;
+                    await dbTx.execute(sql`
+                        UPDATE farm_cash_accounts
+                        SET current_balance = CAST(current_balance AS NUMERIC) + ${balanceDelta}
+                        WHERE id = ${accountId}
+                    `);
+                }
+            });
+
+            // Retorna loan atualizado com parcelas
+            const updated = await db.execute(sql`
+                SELECT l.*, acc.name AS account_name
+                FROM farm_loans l
+                LEFT JOIN farm_cash_accounts acc ON acc.id = l.account_id
+                WHERE l.id = ${loanId}
+            `);
+            const updatedLoan = (updated.rows || updated)[0];
+            const instResult = await db.execute(sql`
+                SELECT * FROM farm_loan_installments WHERE loan_id = ${loanId} ORDER BY installment_number ASC
+            `);
+
+            res.json({ ...updatedLoan, installments: instResult.rows || instResult });
+        } catch (err: any) {
+            console.error("[LOAN_UPDATE]", err);
             res.status(500).json({ error: err.message });
         }
     });
@@ -541,6 +682,106 @@ export function registerFarmLoansRoutes(app: Express) {
             res.json({ ok: true });
         } catch (err: any) {
             console.error("[LOAN_PAYMENT_EDIT]", err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // ============================================================================
+    // DELETE payment — exclui um pagamento e reverte tudo atomicamente
+    // - saldo da caixa volta ao estado anterior
+    // - installment.paid_amount decrementa, status recalcula
+    // - loan.paid_amount decrementa, status recalcula
+    // - a cash_transaction eh removida (some do fluxo de caixa)
+    // ============================================================================
+    app.delete("/api/farm/loan-payments/:txId", requireFarmer, async (req, res) => {
+        try {
+            const { sql } = await import("drizzle-orm");
+            const { db } = await import("./db");
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const txId = req.params.txId;
+
+            // Carrega tx + parcela/loan
+            const txResult = await db.execute(sql`
+                SELECT tx.*, inst.id AS inst_id, inst.amount AS inst_amount, inst.paid_amount AS inst_paid,
+                       l.id AS loan_id
+                FROM farm_cash_transactions tx
+                LEFT JOIN farm_loan_installments inst ON inst.id = tx.reference_id
+                LEFT JOIN farm_loans             l    ON l.id = inst.loan_id
+                WHERE tx.id = ${txId} AND tx.farmer_id = ${farmerId}
+            `);
+            const row = (txResult.rows || txResult)[0];
+            if (!row) return res.status(404).json({ error: "Pagamento nao encontrado" });
+            if (row.reference_type !== "prestamo") {
+                return res.status(400).json({ error: "Transacao nao e um pagamento de prestamo" });
+            }
+            if (!row.inst_id) {
+                return res.status(400).json({ error: "Pagamento antigo sem vinculo com parcela — nao e possivel reverter automaticamente" });
+            }
+
+            const amount = parseFloat(row.amount) || 0;
+            const accountId = row.account_id;
+            const txType = row.type; // 'saida' ou 'entrada'
+            const instAmount = parseFloat(row.inst_amount) || 0;
+            const instPaid = parseFloat(row.inst_paid) || 0;
+            const newInstPaid = Math.max(0, instPaid - amount);
+
+            await db.transaction(async (dbTx: any) => {
+                // 1) Reverte saldo do caixa
+                if (accountId) {
+                    const revertDelta = txType === "saida" ? +amount : -amount;
+                    await dbTx.execute(sql`
+                        UPDATE farm_cash_accounts
+                        SET current_balance = CAST(current_balance AS NUMERIC) + ${revertDelta}
+                        WHERE id = ${accountId}
+                    `);
+                }
+
+                // 2) Decrementa paid_amount da parcela + recalcula status
+                const instStatus = newInstPaid >= instAmount - 0.01 ? "pago"
+                                 : newInstPaid > 0                  ? "parcial"
+                                 : "pendente";
+                if (newInstPaid <= 0) {
+                    await dbTx.execute(sql`
+                        UPDATE farm_loan_installments
+                        SET paid_amount = 0, status = 'pendente', paid_date = NULL
+                        WHERE id = ${row.inst_id}
+                    `);
+                } else {
+                    await dbTx.execute(sql`
+                        UPDATE farm_loan_installments
+                        SET paid_amount = ${newInstPaid}, status = ${instStatus}
+                        WHERE id = ${row.inst_id}
+                    `);
+                }
+
+                // 3) Decrementa paid_amount do loan + recalcula status
+                await dbTx.execute(sql`
+                    UPDATE farm_loans
+                    SET paid_amount = GREATEST(COALESCE(paid_amount, 0) - ${amount}, 0)
+                    WHERE id = ${row.loan_id}
+                `);
+                const allInst = await dbTx.execute(sql`
+                    SELECT status FROM farm_loan_installments WHERE loan_id = ${row.loan_id}
+                `);
+                const allRows = allInst.rows || allInst;
+                const allPaid = allRows.every((r: any) => r.status === "pago");
+                const somePaid = allRows.some((r: any) => r.status === "pago" || r.status === "parcial");
+                const loanStatus = allPaid ? "pago" : somePaid ? "parcial" : "aberto";
+                await dbTx.execute(sql`
+                    UPDATE farm_loans SET status = ${loanStatus} WHERE id = ${row.loan_id}
+                `);
+
+                // 4) Exclui a cash_transaction
+                await dbTx.execute(sql`
+                    DELETE FROM farm_cash_transactions WHERE id = ${txId}
+                `);
+            });
+
+            res.json({ ok: true });
+        } catch (err: any) {
+            console.error("[LOAN_PAYMENT_DELETE]", err);
             res.status(500).json({ error: err.message });
         }
     });

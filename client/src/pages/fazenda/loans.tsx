@@ -44,6 +44,7 @@ interface Loan {
     created_at: string;
     loan_number?: number | null;
     loan_year?: number | null;
+    account_name?: string | null;
     installments: any[];
 }
 
@@ -79,6 +80,7 @@ export default function LoansPage() {
     const [payingInstallment, setPayingInstallment] = useState<any>(null);
     const [payAccountId, setPayAccountId] = useState("");
     const [payAmount, setPayAmount] = useState("");
+    const [editingLoanId, setEditingLoanId] = useState<string | null>(null); // null = create; id = edit
     const [searchTerm, setSearchTerm] = useState("");
     const [filterCurrency, setFilterCurrency] = useState("todos");
     const [filterStatus, setFilterStatus] = useState("todos");
@@ -173,6 +175,48 @@ export default function LoansPage() {
         },
     });
 
+    const updateMutation = useMutation({
+        mutationFn: async (data: { id: string; payload: any }) => {
+            const r = await apiRequest("PUT", `/api/farm/loans/${data.id}`, data.payload);
+            return r.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/loans"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
+            toast({ title: "Prestamo atualizado com sucesso" });
+            setShowNewModal(false);
+            setEditingLoanId(null);
+            resetForm();
+        },
+        onError: (err: any) => {
+            toast({ title: "Erro ao atualizar prestamo", description: err.message, variant: "destructive" });
+        },
+    });
+
+    function openEdit(loan: Loan) {
+        if (loan.status !== "aberto") {
+            toast({
+                title: "Nao e possivel editar",
+                description: "Emprestimo com pagamentos. Exclua os pagamentos no historico antes de editar.",
+                variant: "destructive",
+            });
+            return;
+        }
+        setEditingLoanId(loan.id);
+        setFormCounterpartId(loan.counterpart_id || "");
+        setFormCounterpartName(loan.counterpart_name);
+        setFormDescription(loan.description || "");
+        setFormCurrency(loan.currency);
+        setFormAccountId(loan.account_id || "");
+        setFormTotalAmount(String(parseFloat(loan.total_amount)));
+        setFormInterestRate(loan.interest_rate ? String(parseFloat(loan.interest_rate)) : "");
+        setFormInstallments((loan.installments || []).map((i: any) => ({
+            amount: String(parseFloat(i.amount)),
+            dueDate: i.due_date ? new Date(i.due_date).toISOString().slice(0, 10) : "",
+        })));
+        setShowNewModal(true);
+    }
+
     const payMutation = useMutation({
         mutationFn: async (data: { installmentId: string; accountId: string; amount: number }) => {
             const r = await apiRequest("POST", `/api/farm/loans/installments/${data.installmentId}/pay`, {
@@ -253,7 +297,7 @@ export default function LoansPage() {
                 return;
             }
         }
-        createMutation.mutate({
+        const payload = {
             type: activeTab,
             counterpartId: formCounterpartId || null,
             counterpartName: formCounterpartName,
@@ -266,7 +310,12 @@ export default function LoansPage() {
                 amount: i.amount,
                 dueDate: i.dueDate,
             })),
-        });
+        };
+        if (editingLoanId) {
+            updateMutation.mutate({ id: editingLoanId, payload });
+        } else {
+            createMutation.mutate(payload);
+        }
     }
 
     function handleSelectSupplier(supplierId: string) {
@@ -280,6 +329,11 @@ export default function LoansPage() {
     function openDetail(loan: Loan) {
         setSelectedLoan(loan);
         setShowDetailModal(true);
+        // Fetch detail com accountName (JOIN no backend) e installments frescas
+        apiRequest("GET", `/api/farm/loans/${loan.id}`)
+            .then(r => r.json())
+            .then(setSelectedLoan)
+            .catch(() => {/* silencioso — modal ja tem dados da lista */});
     }
 
     function openPayInstallment(inst: any, loan: Loan) {
@@ -386,10 +440,10 @@ export default function LoansPage() {
 
                     {/* Content for loan tabs */}
                     <TabsContent value="payable" className="mt-4">
-                        <LoansList loans={filtered} isLoading={isLoading} onDetail={openDetail} onDelete={(id) => deleteMutation.mutate(id)} currencySymbol={currencySymbol} />
+                        <LoansList loans={filtered} isLoading={isLoading} onDetail={openDetail} onEdit={openEdit} onDelete={(id) => deleteMutation.mutate(id)} currencySymbol={currencySymbol} />
                     </TabsContent>
                     <TabsContent value="receivable" className="mt-4">
-                        <LoansList loans={filtered} isLoading={isLoading} onDetail={openDetail} onDelete={(id) => deleteMutation.mutate(id)} currencySymbol={currencySymbol} />
+                        <LoansList loans={filtered} isLoading={isLoading} onDetail={openDetail} onEdit={openEdit} onDelete={(id) => deleteMutation.mutate(id)} currencySymbol={currencySymbol} />
                     </TabsContent>
 
                     {/* Content for history tabs */}
@@ -403,11 +457,13 @@ export default function LoansPage() {
 
                 {/* ── NEW LOAN MODAL ───────────────────────────────────────────── */}
                 {showNewModal && (
-                    <Dialog open={showNewModal} onOpenChange={setShowNewModal}>
+                    <Dialog open={showNewModal} onOpenChange={(o) => { setShowNewModal(o); if (!o) { setEditingLoanId(null); resetForm(); } }}>
                         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>
-                                    {activeTab === "payable" ? "Novo Prestamo a Pagar" : "Novo Prestamo a Receber"}
+                                    {editingLoanId
+                                        ? (activeTab === "payable" ? "Editar Prestamo a Pagar" : "Editar Prestamo a Receber")
+                                        : (activeTab === "payable" ? "Novo Prestamo a Pagar" : "Novo Prestamo a Receber")}
                                 </DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4">
@@ -554,11 +610,11 @@ export default function LoansPage() {
                                 {/* Submit */}
                                 <Button
                                     onClick={handleSubmit}
-                                    disabled={createMutation.isPending || !sumValid}
+                                    disabled={createMutation.isPending || updateMutation.isPending || !sumValid}
                                     className="w-full"
                                 >
-                                    {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                    Registrar Prestamo
+                                    {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                    {editingLoanId ? "Salvar Alteracoes" : "Registrar Prestamo"}
                                 </Button>
                             </div>
                         </DialogContent>
@@ -607,6 +663,10 @@ export default function LoansPage() {
                                             <p className="font-medium">{selectedLoan.interest_rate}%</p>
                                         </div>
                                     )}
+                                    <div>
+                                        <p className="text-gray-500">{selectedLoan.type === "payable" ? "Conta Creditada" : "Conta Debitada"}</p>
+                                        <p className="font-medium">{selectedLoan.account_name || "—"}</p>
+                                    </div>
                                     {selectedLoan.description && (
                                         <div className="col-span-2">
                                             <p className="text-gray-500">Descricao</p>
@@ -736,11 +796,12 @@ export default function LoansPage() {
 
 // ─── Loans List Component ───────────────────────────────────────────────────
 function LoansList({
-    loans, isLoading, onDetail, onDelete, currencySymbol,
+    loans, isLoading, onDetail, onEdit, onDelete, currencySymbol,
 }: {
     loans: Loan[];
     isLoading: boolean;
     onDetail: (loan: Loan) => void;
+    onEdit: (loan: Loan) => void;
     onDelete: (id: string) => void;
     currencySymbol: (c: string) => string;
 }) {
@@ -817,6 +878,17 @@ function LoansList({
                                     <div className="flex gap-1">
                                         <Button variant="outline" size="icon" onClick={() => onDetail(loan)} title="Ver detalhes">
                                             <Eye className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => onEdit(loan)}
+                                            disabled={loan.status !== "aberto"}
+                                            title={loan.status !== "aberto"
+                                                ? "Emprestimo com pagamentos — exclua os pagamentos no historico para editar"
+                                                : "Editar emprestimo"}
+                                        >
+                                            <Pencil className="w-4 h-4" />
                                         </Button>
                                         <Button variant="ghost" size="icon" onClick={() => onDelete(loan.id)} className="text-red-500 hover:text-red-700" title="Excluir">
                                             <Trash2 className="w-4 h-4" />
@@ -930,6 +1002,33 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
             toast({ title: "Erro ao editar pagamento", description: err.message, variant: "destructive" });
         },
     });
+
+    const deletePaymentMutation = useMutation({
+        mutationFn: async (txId: string) => {
+            const r = await apiRequest("DELETE", `/api/farm/loan-payments/${txId}`);
+            return r.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/loan-payments"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/loans"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
+            toast({ title: "Pagamento excluido", description: "Valor revertido no caixa e no emprestimo" });
+        },
+        onError: (err: any) => {
+            toast({ title: "Erro ao excluir pagamento", description: err.message, variant: "destructive" });
+        },
+    });
+
+    function handleDeletePayment(row: PaymentRow) {
+        if (!row.installmentId) {
+            toast({ title: "Nao e possivel excluir", description: "Pagamento antigo sem vinculo", variant: "destructive" });
+            return;
+        }
+        const code = formatLoanCode(row.loanNumber, row.loanYear);
+        const label = code ? ` do emprestimo ${code}` : "";
+        if (!confirm(`Excluir este pagamento${label}?\n\nValor: ${formatCurrency(parseFloat(row.amount), row.currency)}\nCaixa: ${row.accountName || "—"}\n\nO valor sera revertido no caixa, na parcela e no emprestimo. Acao nao pode ser desfeita.`)) return;
+        deletePaymentMutation.mutate(row.id);
+    }
 
     function openEdit(row: PaymentRow) {
         setEditing(row);
@@ -1074,15 +1173,29 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
                                                 {formatCurrency(parseFloat(p.amount), p.currency)}
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    onClick={() => openEdit(p)}
-                                                    disabled={!canEdit}
-                                                    title={canEdit ? "Editar pagamento" : "Pagamento antigo sem vinculo (nao editavel)"}
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="icon"
+                                                        onClick={() => openEdit(p)}
+                                                        disabled={!canEdit}
+                                                        title={canEdit ? "Editar pagamento" : "Pagamento antigo sem vinculo (nao editavel)"}
+                                                    >
+                                                        <Pencil className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                        onClick={() => handleDeletePayment(p)}
+                                                        disabled={!canEdit || deletePaymentMutation.isPending}
+                                                        title={canEdit ? "Excluir pagamento (reverte valores)" : "Pagamento antigo sem vinculo"}
+                                                    >
+                                                        {deletePaymentMutation.isPending && deletePaymentMutation.variables === p.id
+                                                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                            : <Trash2 className="w-4 h-4" />}
+                                                    </Button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
