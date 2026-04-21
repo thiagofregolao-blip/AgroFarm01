@@ -1037,6 +1037,31 @@ app.use((req, res, next) => {
         created_at TIMESTAMP NOT NULL DEFAULT now()
       )
     `);
+    // Numero serial por emprestimo: PRST-YYYY-NNNN onde NNNN reseta por farmer+ano
+    await db.execute(sql`ALTER TABLE farm_loans ADD COLUMN IF NOT EXISTS loan_number INTEGER`);
+    await db.execute(sql`ALTER TABLE farm_loans ADD COLUMN IF NOT EXISTS loan_year INTEGER`);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_loans_number
+      ON farm_loans(farmer_id, loan_year, loan_number)
+      WHERE loan_number IS NOT NULL
+    `);
+    // Backfill: numera emprestimos existentes por ordem cronologica, separados por farmer+ano
+    await db.execute(sql`
+      UPDATE farm_loans SET
+        loan_year = sub.yr,
+        loan_number = sub.rn
+      FROM (
+        SELECT id,
+               EXTRACT(YEAR FROM created_at)::int AS yr,
+               ROW_NUMBER() OVER (
+                 PARTITION BY farmer_id, EXTRACT(YEAR FROM created_at)
+                 ORDER BY created_at
+               ) AS rn
+        FROM farm_loans
+        WHERE loan_number IS NULL
+      ) sub
+      WHERE farm_loans.id = sub.id
+    `);
     log("✅ Migration: farm_loans + farm_loan_installments tables ensured");
   } catch (migErr: any) {
     log(`⚠️  Migration farm_loans: ${migErr.message}`);

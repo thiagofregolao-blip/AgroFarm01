@@ -42,7 +42,15 @@ interface Loan {
     paid_amount: string;
     status: string;
     created_at: string;
+    loan_number?: number | null;
+    loan_year?: number | null;
     installments: any[];
+}
+
+// Formata codigo serial do emprestimo: PRST-2026-0001
+function formatLoanCode(loanNumber?: number | null, loanYear?: number | null): string {
+    if (!loanNumber || !loanYear) return "";
+    return `PRST-${loanYear}-${String(loanNumber).padStart(4, "0")}`;
 }
 
 // ─── Status badge ───────────────────────────────────────────────────────────
@@ -562,7 +570,12 @@ export default function LoansPage() {
                     <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
                         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2">
+                                <DialogTitle className="flex items-center gap-2 flex-wrap">
+                                    {selectedLoan.loan_number != null && selectedLoan.loan_year != null && (
+                                        <span className="text-xs font-mono font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                            {formatLoanCode(selectedLoan.loan_number, selectedLoan.loan_year)}
+                                        </span>
+                                    )}
                                     {selectedLoan.type === "payable" ? "Prestamo a Pagar" : "Prestamo a Receber"}
                                     <StatusBadge status={selectedLoan.status} />
                                 </DialogTitle>
@@ -763,6 +776,11 @@ function LoansList({
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
+                                        {loan.loan_number != null && loan.loan_year != null && (
+                                            <span className="text-xs font-mono font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                {formatLoanCode(loan.loan_number, loan.loan_year)}
+                                            </span>
+                                        )}
                                         <span className="font-semibold truncate">{loan.counterpart_name}</span>
                                         <StatusBadge status={loan.status} />
                                         {loan.interest_rate && (
@@ -829,6 +847,8 @@ interface PaymentRow {
     loanId: string | null;
     counterpartName: string | null;
     loanType: string | null;
+    loanNumber: number | null;
+    loanYear: number | null;
 }
 
 function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"; accounts: any[] }) {
@@ -840,6 +860,14 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
     const [editDate, setEditDate] = useState("");
     const [editDescription, setEditDescription] = useState("");
 
+    // Filtros (5)
+    const [fltSearch, setFltSearch] = useState("");
+    const [fltStartDate, setFltStartDate] = useState("");
+    const [fltEndDate, setFltEndDate] = useState("");
+    const [fltAccountId, setFltAccountId] = useState("todos");
+    const [fltCurrency, setFltCurrency] = useState("todos");
+    const [fltCounterpart, setFltCounterpart] = useState("todos");
+
     const { data: payments = [], isLoading } = useQuery<PaymentRow[]>({
         queryKey: ["/api/farm/loan-payments", type],
         queryFn: async () => {
@@ -847,6 +875,39 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
             return r.json();
         },
     });
+
+    // Listas para selects de filtro (extraidas dos dados)
+    const counterpartOptions = useMemo(() => {
+        const set = new Set<string>();
+        payments.forEach(p => { if (p.counterpartName) set.add(p.counterpartName); });
+        return Array.from(set).sort();
+    }, [payments]);
+
+    const filteredPayments = useMemo(() => {
+        return payments.filter(p => {
+            // 1) Busca livre
+            if (fltSearch.trim()) {
+                const s = fltSearch.toLowerCase().trim();
+                const code = formatLoanCode(p.loanNumber, p.loanYear).toLowerCase();
+                const counterpart = (p.counterpartName || "").toLowerCase();
+                const desc = (p.description || "").toLowerCase();
+                if (!code.includes(s) && !counterpart.includes(s) && !desc.includes(s)) return false;
+            }
+            // 2) Data de / até
+            if (p.transactionDate) {
+                const d = new Date(p.transactionDate).toISOString().slice(0, 10);
+                if (fltStartDate && d < fltStartDate) return false;
+                if (fltEndDate && d > fltEndDate) return false;
+            }
+            // 3) Caixa
+            if (fltAccountId !== "todos" && p.accountId !== fltAccountId) return false;
+            // 4) Moeda
+            if (fltCurrency !== "todos" && p.currency !== fltCurrency) return false;
+            // 5) Contraparte
+            if (fltCounterpart !== "todos" && p.counterpartName !== fltCounterpart) return false;
+            return true;
+        });
+    }, [payments, fltSearch, fltStartDate, fltEndDate, fltAccountId, fltCurrency, fltCounterpart]);
 
     const editMutation = useMutation({
         mutationFn: async (payload: { txId: string; amount: number; accountId: string; transactionDate: string; description: string }) => {
@@ -913,14 +974,75 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
         );
     }
 
+    const hasAnyFilter = fltSearch || fltStartDate || fltEndDate ||
+        fltAccountId !== "todos" || fltCurrency !== "todos" || fltCounterpart !== "todos";
+
     return (
         <>
+            {/* 5 Filtros */}
+            <div className="bg-white border border-gray-100 rounded-lg p-3 mb-3 space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                            placeholder="Buscar (nº emprestimo, contraparte, descricao)"
+                            value={fltSearch}
+                            onChange={e => setFltSearch(e.target.value)}
+                            className="pl-9"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Input type="date" value={fltStartDate} onChange={e => setFltStartDate(e.target.value)} placeholder="De" title="Data de" />
+                        <Input type="date" value={fltEndDate} onChange={e => setFltEndDate(e.target.value)} placeholder="Ate" title="Data ate" />
+                    </div>
+                    <Select value={fltAccountId} onValueChange={setFltAccountId}>
+                        <SelectTrigger><SelectValue placeholder="Caixa" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="todos">Todas as caixas</SelectItem>
+                            {accounts.map((a: any) => (
+                                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={fltCurrency} onValueChange={setFltCurrency}>
+                        <SelectTrigger><SelectValue placeholder="Moeda" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="todos">Todas as moedas</SelectItem>
+                            <SelectItem value="USD">$ Dolar</SelectItem>
+                            <SelectItem value="PYG">Gs Guarani</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={fltCounterpart} onValueChange={setFltCounterpart}>
+                        <SelectTrigger><SelectValue placeholder="Contraparte" /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="todos">Todas</SelectItem>
+                            {counterpartOptions.map(c => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {hasAnyFilter && (
+                        <Button variant="outline" size="sm" onClick={() => {
+                            setFltSearch(""); setFltStartDate(""); setFltEndDate("");
+                            setFltAccountId("todos"); setFltCurrency("todos"); setFltCounterpart("todos");
+                        }}>Limpar filtros</Button>
+                    )}
+                </div>
+            </div>
+
+            {filteredPayments.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                    <History className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>Nenhum resultado com os filtros aplicados</p>
+                </div>
+            ) : (
             <Card>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className={`border-b ${themeHeader}`}>
+                                    <th className="text-left px-4 py-3 font-semibold">Nº Emprestimo</th>
                                     <th className="text-left px-4 py-3 font-semibold">Data</th>
                                     <th className="text-left px-4 py-3 font-semibold">Caixa</th>
                                     <th className="text-left px-4 py-3 font-semibold">Descricao</th>
@@ -930,10 +1052,16 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
                                 </tr>
                             </thead>
                             <tbody>
-                                {payments.map(p => {
+                                {filteredPayments.map(p => {
                                     const canEdit = !!p.installmentId;
+                                    const code = formatLoanCode(p.loanNumber, p.loanYear);
                                     return (
                                         <tr key={p.id} className="border-b hover:bg-gray-50">
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                {code ? (
+                                                    <span className="text-xs font-mono font-semibold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">{code}</span>
+                                                ) : "—"}
+                                            </td>
                                             <td className="px-4 py-3 whitespace-nowrap">
                                                 {p.transactionDate ? new Date(p.transactionDate).toLocaleDateString("pt-BR") : "—"}
                                             </td>
@@ -964,6 +1092,7 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
                     </div>
                 </CardContent>
             </Card>
+            )}
 
             {/* Edit Modal */}
             {editing && (
@@ -974,6 +1103,9 @@ function LoanPaymentHistory({ type, accounts }: { type: "payable" | "receivable"
                         </DialogHeader>
                         <div className="space-y-3">
                             <div className="text-xs text-gray-500 bg-gray-50 rounded p-2">
+                                {formatLoanCode(editing.loanNumber, editing.loanYear) && (
+                                    <p><span className="font-semibold">Emprestimo:</span> <span className="font-mono">{formatLoanCode(editing.loanNumber, editing.loanYear)}</span></p>
+                                )}
                                 <p><span className="font-semibold">Contraparte:</span> {editing.counterpartName || "—"}</p>
                                 {editing.installmentNumber != null && (
                                     <p><span className="font-semibold">Parcela:</span> #{editing.installmentNumber}{editing.installmentAmount ? ` (${formatCurrency(parseFloat(editing.installmentAmount), editing.currency)})` : ""}</p>

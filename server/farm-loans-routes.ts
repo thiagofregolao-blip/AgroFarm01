@@ -111,9 +111,18 @@ export function registerFarmLoansRoutes(app: Express) {
             // Atomico: loan + installments + cash_tx + saldo sao criados juntos
             let loan: any;
             await db.transaction(async (dbTx: any) => {
+                // Proximo numero serial do ano corrente (PRST-YYYY-NNNN)
+                const currentYear = new Date().getFullYear();
+                const maxRes = await dbTx.execute(sql`
+                    SELECT COALESCE(MAX(loan_number), 0) AS max_num
+                    FROM farm_loans
+                    WHERE farmer_id = ${farmerId} AND loan_year = ${currentYear}
+                `);
+                const nextNumber = ((maxRes.rows || maxRes)[0]?.max_num || 0) + 1;
+
                 const loanResult = await dbTx.execute(sql`
-                    INSERT INTO farm_loans (farmer_id, type, counterpart_id, counterpart_name, description, currency, account_id, total_amount, interest_rate)
-                    VALUES (${farmerId}, ${type}, ${counterpartId || null}, ${counterpartName}, ${description || null}, ${currency || "USD"}, ${accountId || null}, ${total}, ${interestRate ? parseFloat(interestRate) : null})
+                    INSERT INTO farm_loans (farmer_id, type, counterpart_id, counterpart_name, description, currency, account_id, total_amount, interest_rate, loan_number, loan_year)
+                    VALUES (${farmerId}, ${type}, ${counterpartId || null}, ${counterpartName}, ${description || null}, ${currency || "USD"}, ${accountId || null}, ${total}, ${interestRate ? parseFloat(interestRate) : null}, ${nextNumber}, ${currentYear})
                     RETURNING *
                 `);
                 loan = (loanResult.rows || loanResult)[0];
@@ -378,7 +387,9 @@ export function registerFarmLoansRoutes(app: Express) {
                     inst.amount            AS "installmentAmount",
                     l.id                   AS "loanId",
                     l.counterpart_name     AS "counterpartName",
-                    l.type                 AS "loanType"
+                    l.type                 AS "loanType",
+                    l.loan_number          AS "loanNumber",
+                    l.loan_year            AS "loanYear"
                 FROM farm_cash_transactions tx
                 LEFT JOIN farm_cash_accounts     acc  ON acc.id  = tx.account_id
                 LEFT JOIN farm_loan_installments inst ON inst.id = tx.reference_id
