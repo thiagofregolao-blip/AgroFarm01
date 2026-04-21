@@ -5,7 +5,7 @@ import {
     LogOut, DollarSign, Monitor, TrendingUp, Sprout, User, Tractor, FileBarChart,
     BookOpen, ArrowDownUp, Satellite, Menu, X, CloudRain, Wallet,
     Receipt, HandCoins, PieChart, Target, Scale, Landmark, Building2,
-    Settings, HelpCircle, Download, ChevronDown, FilePlus, Users, RefreshCw, Tag, Banknote
+    Settings, HelpCircle, Download, ChevronDown, ChevronRight, FilePlus, Users, RefreshCw, Tag, Banknote
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -197,7 +197,7 @@ function DesktopMenuDropdown({
     );
 }
 
-// ─── Desktop Financeiro Mega Dropdown (grouped) ─────────────────────────────
+// ─── Desktop Financeiro Cascade Dropdown (categories with flyout submenus) ──
 function FinanceiroMegaDropdown({
     location, onNavigate, isEnabled,
 }: {
@@ -207,16 +207,28 @@ function FinanceiroMegaDropdown({
 }) {
     const { t } = useLanguage();
     const [open, setOpen] = useState(false);
+    const [openCategory, setOpenCategory] = useState<number | null>(null);
     const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-    const hasActive = financeNavGroups.some(g => g.items.some(i => isEnabled(i) && (location === i.href || location.startsWith(i.href))));
+    const hasActive = financeNavGroups.some(g =>
+        g.items.some(i => isEnabled(i) && (location === i.href || location.startsWith(i.href)))
+    );
 
     function handleEnter() {
         clearTimeout(timeoutRef.current);
         setOpen(true);
     }
     function handleLeave() {
-        timeoutRef.current = setTimeout(() => setOpen(false), 150);
+        timeoutRef.current = setTimeout(() => {
+            setOpen(false);
+            setOpenCategory(null);
+        }, 150);
+    }
+
+    function navigate(href: string) {
+        onNavigate(href);
+        setOpen(false);
+        setOpenCategory(null);
     }
 
     return (
@@ -225,7 +237,7 @@ function FinanceiroMegaDropdown({
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors duration-150 cursor-pointer whitespace-nowrap
                     ${hasActive ? "text-emerald-700 bg-emerald-50" : "text-gray-500 hover:text-emerald-700 hover:bg-gray-50"}
                 `}
-                onClick={() => setOpen(!open)}
+                onClick={() => { setOpen(!open); setOpenCategory(null); }}
             >
                 <Wallet className="w-3.5 h-3.5" />
                 <span>Financeiro</span>
@@ -233,33 +245,69 @@ function FinanceiroMegaDropdown({
             </button>
 
             {open && (
-                <div className="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 py-2 min-w-[240px] z-50">
+                <div className="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 py-2 min-w-[220px] z-50">
                     {financeNavGroups.map((group, gi) => {
                         const visibleItems = group.items.filter(isEnabled);
                         if (!visibleItems.length) return null;
+
+                        const isCategoryActive = visibleItems.some(
+                            i => location === i.href || (i.href !== "/fazenda" && location.startsWith(i.href))
+                        );
+
+                        // Categoria com 1 item: navega direto, sem submenu
+                        if (visibleItems.length === 1) {
+                            const item = visibleItems[0];
+                            const ItemIcon = item.icon;
+                            return (
+                                <button
+                                    key={gi}
+                                    onMouseEnter={() => setOpenCategory(null)}
+                                    onClick={() => navigate(item.href)}
+                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-100 cursor-pointer
+                                        ${isCategoryActive ? "text-emerald-700 bg-emerald-50 font-semibold" : "text-gray-700 hover:bg-gray-50 hover:text-emerald-700"}
+                                    `}
+                                >
+                                    <ItemIcon className={`w-4 h-4 shrink-0 ${isCategoryActive ? "text-emerald-600" : "text-gray-400"}`} />
+                                    <span>{group.label}</span>
+                                </button>
+                            );
+                        }
+
+                        // Categoria com multiplos itens: abre submenu ao passar o mouse
+                        const isHovered = openCategory === gi;
                         return (
-                            <div key={gi}>
-                                {group.label && (
-                                    <p className={`px-4 text-[11px] font-bold uppercase tracking-widest text-gray-400 ${gi > 0 ? "mt-2 pt-2 border-t border-gray-100" : ""} mb-1`}>
-                                        {group.label}
-                                    </p>
+                            <div key={gi} className="relative" onMouseEnter={() => setOpenCategory(gi)}>
+                                <button
+                                    onClick={() => setOpenCategory(isHovered ? null : gi)}
+                                    className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition-colors duration-100 cursor-pointer
+                                        ${isCategoryActive || isHovered ? "text-emerald-700 bg-emerald-50" : "text-gray-700 hover:bg-gray-50 hover:text-emerald-700"}
+                                        ${isCategoryActive ? "font-semibold" : ""}
+                                    `}
+                                >
+                                    <span>{group.label}</span>
+                                    <ChevronRight className={`w-4 h-4 shrink-0 transition-colors ${isHovered ? "text-emerald-600" : "text-gray-400"}`} />
+                                </button>
+
+                                {isHovered && (
+                                    <div className="absolute top-0 right-full mr-1 bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 py-2 min-w-[220px] z-50">
+                                        {visibleItems.map(item => {
+                                            const ItemIcon = item.icon;
+                                            const isActive = location === item.href || (item.href !== "/fazenda" && location.startsWith(item.href));
+                                            return (
+                                                <button
+                                                    key={item.href}
+                                                    onClick={() => navigate(item.href)}
+                                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-100 cursor-pointer whitespace-nowrap
+                                                        ${isActive ? "text-emerald-700 bg-emerald-50 font-semibold" : "text-gray-700 hover:bg-gray-50 hover:text-emerald-700"}
+                                                    `}
+                                                >
+                                                    <ItemIcon className={`w-4 h-4 shrink-0 ${isActive ? "text-emerald-600" : "text-gray-400"}`} />
+                                                    <span>{t(item.labelKey as any)}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 )}
-                                {visibleItems.map(item => {
-                                    const ItemIcon = item.icon;
-                                    const isActive = location === item.href || location.startsWith(item.href);
-                                    return (
-                                        <button
-                                            key={item.href}
-                                            onClick={() => { onNavigate(item.href); setOpen(false); }}
-                                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-100 cursor-pointer
-                                                ${isActive ? "text-emerald-700 bg-emerald-50 font-semibold" : "text-gray-700 hover:bg-gray-50 hover:text-emerald-700"}
-                                            `}
-                                        >
-                                            <ItemIcon className={`w-4 h-4 shrink-0 ${isActive ? "text-emerald-600" : "text-gray-400"}`} />
-                                            <span>{t(item.labelKey as any)}</span>
-                                        </button>
-                                    );
-                                })}
                             </div>
                         );
                     })}
