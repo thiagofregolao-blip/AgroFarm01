@@ -1038,15 +1038,15 @@ app.use((req, res, next) => {
       )
     `);
     // Numero serial por emprestimo: PRST-YYYY-NNNN onde NNNN reseta por farmer+ano
-    await db.execute(sql`ALTER TABLE farm_loans ADD COLUMN IF NOT EXISTS loan_number INTEGER`);
-    await db.execute(sql`ALTER TABLE farm_loans ADD COLUMN IF NOT EXISTS loan_year INTEGER`);
-    await db.execute(sql`
+    await loanDb.execute(loanSql`ALTER TABLE farm_loans ADD COLUMN IF NOT EXISTS loan_number INTEGER`);
+    await loanDb.execute(loanSql`ALTER TABLE farm_loans ADD COLUMN IF NOT EXISTS loan_year INTEGER`);
+    await loanDb.execute(loanSql`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_farm_loans_number
       ON farm_loans(farmer_id, loan_year, loan_number)
       WHERE loan_number IS NOT NULL
     `);
     // Backfill: numera emprestimos existentes por ordem cronologica, separados por farmer+ano
-    await db.execute(sql`
+    await loanDb.execute(loanSql`
       UPDATE farm_loans SET
         loan_year = sub.yr,
         loan_number = sub.rn
