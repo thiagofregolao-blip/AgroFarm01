@@ -202,14 +202,19 @@ export function registerFarmLoansRoutes(app: Express) {
                 // 2) Busca todas as cash_transactions relacionadas
                 //    - tx de criacao do loan: reference_id = loan.id
                 //    - tx de pagamento de parcelas: reference_id IN (instIds)
+                // Loop individual: evita bug de serializacao de array JS como record
+                // pelo driver postgres-js ("cannot cast type record to character varying[]")
                 const allRefIds = [loanId, ...instIds];
-                const txRes = await dbTx.execute(sql`
-                    SELECT id, account_id, type, amount FROM farm_cash_transactions
-                    WHERE farmer_id = ${farmerId}
-                      AND reference_type = 'prestamo'
-                      AND reference_id = ANY(${allRefIds}::varchar[])
-                `);
-                const txs = (txRes.rows || txRes) as any[];
+                const txs: any[] = [];
+                for (const refId of allRefIds) {
+                    const r = await dbTx.execute(sql`
+                        SELECT id, account_id, type, amount FROM farm_cash_transactions
+                        WHERE farmer_id = ${farmerId}
+                          AND reference_type = 'prestamo'
+                          AND reference_id = ${refId}
+                    `);
+                    txs.push(...((r.rows || r) as any[]));
+                }
 
                 // 3) Reverte o saldo de cada caixa (entrada vira -amount; saida vira +amount)
                 for (const t of txs) {
@@ -223,13 +228,13 @@ export function registerFarmLoansRoutes(app: Express) {
                     `);
                 }
 
-                // 4) Exclui as cash_transactions vinculadas
-                if (allRefIds.length > 0) {
+                // 4) Exclui as cash_transactions vinculadas (loop individual)
+                for (const refId of allRefIds) {
                     await dbTx.execute(sql`
                         DELETE FROM farm_cash_transactions
                         WHERE farmer_id = ${farmerId}
                           AND reference_type = 'prestamo'
-                          AND reference_id = ANY(${allRefIds}::varchar[])
+                          AND reference_id = ${refId}
                     `);
                 }
 
