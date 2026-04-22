@@ -196,6 +196,15 @@ export function registerFarmLoansRoutes(app: Express) {
             const loan = (check.rows || check)[0];
             if (!loan) return res.status(404).json({ error: "Loan not found" });
 
+            // Bloqueia exclusao se ja existem pagamentos registrados.
+            // Usuario deve apagar cada pagamento no historico (que reverte valores)
+            // antes de poder excluir o emprestimo.
+            if (loan.status !== "aberto") {
+                return res.status(400).json({
+                    error: "Emprestimo com pagamentos nao pode ser excluido. Exclua os pagamentos no historico antes.",
+                });
+            }
+
             await db.transaction(async (dbTx: any) => {
                 // 1) Coleta ids das parcelas deste loan
                 const instRes = await dbTx.execute(sql`

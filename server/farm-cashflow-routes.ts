@@ -166,9 +166,36 @@ export function registerFarmCashFlowRoutes(app: Express) {
                     }
                 } catch (_) { /* receipt columns may not exist yet */ }
             }
+
+            // Enrich com loanCode (PRST-YYYY-NNNN) para tx vinculadas a emprestimo.
+            // tx.reference_id pode apontar para loan.id (criacao) ou installment.id (parcela).
+            // O LEFT JOIN com COALESCE resolve os 2 casos:
+            //   - parcela: inst.loan_id populated -> pega o loan via inst
+            //   - criacao: inst nao existe -> COALESCE cai em tx.reference_id (loan.id direto)
+            const loanCodeMap: Record<string, string> = {};
+            const prestamoTxs = transactions.filter((t: any) => t.referenceType === "prestamo");
+            for (const t of prestamoTxs) {
+                try {
+                    const refId = (t as any).referenceId || (t as any).reference_id;
+                    if (!refId) continue;
+                    const rows = await db.execute(sqlFn`
+                        SELECT l.loan_number, l.loan_year
+                        FROM farm_loans l
+                        LEFT JOIN farm_loan_installments inst ON inst.id = ${refId}
+                        WHERE l.id = COALESCE(inst.loan_id, ${refId})
+                        LIMIT 1
+                    `);
+                    const row = ((rows as any).rows ?? rows)[0];
+                    if (row?.loan_number && row?.loan_year) {
+                        loanCodeMap[t.id] = `PRST-${row.loan_year}-${String(row.loan_number).padStart(4, "0")}`;
+                    }
+                } catch (_) { /* reference_id ou loan_number podem nao existir em dados antigos */ }
+            }
+
             const enriched = transactions.map((t: any) => ({
                 ...t,
                 receipt_id: receiptMap[t.id] || null,
+                loanCode: loanCodeMap[t.id] || null,
             }));
             res.json(enriched);
         } catch (error) {

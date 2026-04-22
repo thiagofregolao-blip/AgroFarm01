@@ -890,7 +890,16 @@ function LoansList({
                                         >
                                             <Pencil className="w-4 h-4" />
                                         </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => onDelete(loan.id)} className="text-red-500 hover:text-red-700" title="Excluir">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onDelete(loan.id)}
+                                            disabled={loan.status !== "aberto"}
+                                            className="text-red-500 hover:text-red-700 disabled:text-gray-300"
+                                            title={loan.status !== "aberto"
+                                                ? "Emprestimo com pagamentos — exclua os pagamentos no historico antes de excluir"
+                                                : "Excluir"}
+                                        >
                                             <Trash2 className="w-4 h-4" />
                                         </Button>
                                     </div>

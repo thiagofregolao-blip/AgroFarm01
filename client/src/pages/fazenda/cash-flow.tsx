@@ -59,7 +59,7 @@ const PIE_COLORS = ["#059669", "#0891b2", "#d97706", "#dc2626", "#7c3aed", "#db2
 
 // ─── CSV helper ───────────────────────────────────────────────────────────────
 function exportTransactionsCSV(transactions: any[], accounts: any[]) {
-    const headers = ["Data", "Tipo", "Categoria", "Descrição", "Conta", "Valor", "Moeda", "Recibo", "Origem"];
+    const headers = ["Data", "Tipo", "Categoria", "Descrição", "Conta", "Valor", "Moeda", "Comprovante", "Origem"];
     const rows = transactions.map((t: any) => {
         const acc = accounts.find((a: any) => a.id === t.accountId);
         const cat = ALL_CATEGORIES.find(c => c.value === t.category);
@@ -71,7 +71,7 @@ function exportTransactionsCSV(transactions: any[], accounts: any[]) {
             acc?.name || "",
             (t.type === "entrada" ? "+" : "-") + formatCurrency(parseFloat(t.amount), t.currency || "USD"),
             t.currency || "USD",
-            t.receipt_id || "",
+            t.loanCode || t.receipt_id || "",
             t.referenceType === "manual" ? "Manual" : t.referenceType === "whatsapp" ? "WhatsApp" : "Auto",
         ];
     });
@@ -766,7 +766,7 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                                     <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Data</th>
                                     <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Categoria</th>
                                     <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Descricao</th>
-                                    <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">N. Recibo</th>
+                                    <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Comprovantes</th>
                                     <th className="text-left px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Banco</th>
                                     <th className="text-right px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Valor</th>
                                     <th className="text-center px-5 py-3 text-[11px] uppercase tracking-wider text-gray-400 font-semibold">Status</th>
@@ -790,7 +790,11 @@ function TransactionTable({ transactions, accounts, onDelete, deleting }: { tran
                                             </td>
                                             <td className="px-5 py-3.5 text-gray-700 max-w-[200px] truncate">{t.description || "--"}</td>
                                             <td className="px-5 py-3.5 text-xs text-gray-500 font-mono">
-                                                {t.receipt_id || t.receiptNumber || t.receipt_number || "--"}
+                                                {t.loanCode ? (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-semibold">
+                                                        {t.loanCode}
+                                                    </span>
+                                                ) : (t.receipt_id || t.receiptNumber || t.receipt_number || "--")}
                                             </td>
                                             <td className="px-5 py-3.5">
                                                 {acc ? (
