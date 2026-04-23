@@ -536,11 +536,13 @@ export class FarmStorage {
                    m.reference_type AS "referenceType", m.reference_id AS "referenceId",
                    m.notes, m.created_at AS "createdAt",
                    p.name AS "productName", p.category AS "productCategory",
-                   s.property_id AS "depositId", d.name AS "depositName"
+                   s.property_id AS "depositId", d.name AS "depositName",
+                   inv.invoice_number AS "invoiceNumber", inv.supplier AS "invoiceSupplier"
             FROM farm_stock_movements m
             INNER JOIN farm_products_catalog p ON m.product_id = p.id
             LEFT JOIN farm_stock s ON s.product_id = m.product_id AND s.farmer_id = m.farmer_id
             LEFT JOIN farm_properties d ON s.property_id = d.id
+            LEFT JOIN farm_invoices inv ON m.reference_type = 'invoice' AND m.reference_id = inv.id
             WHERE m.farmer_id = ${farmerId}
             ORDER BY m.created_at DESC
             LIMIT ${limit}

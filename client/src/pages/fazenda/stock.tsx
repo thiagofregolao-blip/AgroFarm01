@@ -823,7 +823,8 @@ export default function FarmStock() {
                                                 <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Tipo</th>
                                                 <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Quantidade</th>
                                                 <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Custo Unit.</th>
-                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Referencia</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Nº Fatura</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Fornecedor</th>
                                                 <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Notas</th>
                                             </tr>
                                         </thead>
@@ -844,8 +845,12 @@ export default function FarmStock() {
                                                         </span>
                                                     </td>
                                                     <td className="text-right px-4 py-3 font-mono font-bold text-gray-900">{m.unitCost ? formatCurrency(m.unitCost) : "—"}</td>
-                                                    <td className="px-4 py-3 text-gray-400 text-xs">
-                                                        {m.referenceType === "correcao_caderno" ? (
+                                                    <td className="px-4 py-3 text-xs">
+                                                        {m.referenceType === "invoice" && m.invoiceNumber ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 font-mono">
+                                                                {m.invoiceNumber}
+                                                            </span>
+                                                        ) : m.referenceType === "correcao_caderno" ? (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
                                                                 Correção Caderno
                                                             </span>
@@ -857,7 +862,12 @@ export default function FarmStock() {
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
                                                                 NC Emissão
                                                             </span>
-                                                        ) : (m.referenceType || "—")}
+                                                        ) : <span className="text-gray-400">—</span>}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px] truncate" title={m.referenceType === "invoice" ? (m.invoiceSupplier || "") : "Entrada manual"}>
+                                                        {m.referenceType === "invoice"
+                                                            ? (m.invoiceSupplier || <span className="text-gray-400">—</span>)
+                                                            : "Entrada manual"}
                                                     </td>
                                                     <td className="px-4 py-3 text-gray-400 text-xs max-w-[200px] truncate">{m.notes || "—"}</td>
                                                 </tr>
