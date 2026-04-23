@@ -529,7 +529,9 @@ export class FarmStorage {
     // ==================== Stock Movements ====================
     async getStockMovements(farmerId: string, limit = 50): Promise<any[]> {
         await dbReady;
-        // Use raw SQL to include deposit info via farm_stock → farm_properties join
+        // Use raw SQL to include deposit info via farm_stock → farm_properties join.
+        // Lote/validade: quando reference_type='invoice', vem do item da fatura
+        // (fonte real); caso contrario, fallback para o lote atual do estoque.
         const rows = await db.execute(sql`
             SELECT m.id, m.farmer_id AS "farmerId", m.product_id AS "productId",
                    m.type, m.quantity, m.unit_cost AS "unitCost",
@@ -537,12 +539,16 @@ export class FarmStorage {
                    m.notes, m.created_at AS "createdAt",
                    p.name AS "productName", p.category AS "productCategory",
                    s.property_id AS "depositId", d.name AS "depositName",
-                   inv.invoice_number AS "invoiceNumber", inv.supplier AS "invoiceSupplier"
+                   inv.invoice_number AS "invoiceNumber", inv.supplier AS "invoiceSupplier",
+                   COALESCE(ii.batch, s.lote) AS "lote",
+                   COALESCE(ii.expiry_date, s.expiry_date) AS "expiryDate"
             FROM farm_stock_movements m
             INNER JOIN farm_products_catalog p ON m.product_id = p.id
             LEFT JOIN farm_stock s ON s.product_id = m.product_id AND s.farmer_id = m.farmer_id
             LEFT JOIN farm_properties d ON s.property_id = d.id
             LEFT JOIN farm_invoices inv ON m.reference_type = 'invoice' AND m.reference_id = inv.id
+            LEFT JOIN farm_invoice_items ii ON m.reference_type = 'invoice'
+                AND ii.invoice_id = m.reference_id AND ii.product_id = m.product_id
             WHERE m.farmer_id = ${farmerId}
             ORDER BY m.created_at DESC
             LIMIT ${limit}

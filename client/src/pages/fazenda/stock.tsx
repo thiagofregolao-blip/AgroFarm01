@@ -74,6 +74,7 @@ export default function FarmStock() {
     const queryClient = useQueryClient();
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("");
+    const [showZeroStock, setShowZeroStock] = useState(false);
     const [dieselReceipt, setDieselReceipt] = useState<any>(null);
     const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
     const { toast } = useToast();
@@ -268,15 +269,22 @@ export default function FarmStock() {
         const matchesSearch = s.productName.toLowerCase().includes(search.toLowerCase()) ||
             (s.productCategory || "").toLowerCase().includes(search.toLowerCase());
         const matchesCategory = !categoryFilter || normalizeCategory(s.productCategory) === categoryFilter;
-        return matchesSearch && matchesCategory;
+        // Esconder produtos com saldo agrupado = 0 quando toggle desligado.
+        // Positivos e negativos continuam aparecendo; apenas zero exato some.
+        const matchesZero = showZeroStock || (s._totalQty ?? parseFloat(s.quantity || 0)) !== 0;
+        return matchesSearch && matchesCategory && matchesZero;
     });
 
-    // KPI computations
+    // KPI computations — usa "filtered" (agrupado + com toggle de zero aplicado)
+    // para refletir exatamente o que o usuario ve na tabela.
     const kpiData = useMemo(() => {
-        const negativeCount = stock.filter((s: any) => parseFloat(s.quantity) < 0).length;
-        const lowStockCount = stock.filter((s: any) => parseFloat(s.quantity) < 5).length;
+        const negativeCount = filtered.filter((s: any) => parseFloat(s.quantity) < 0).length;
+        const lowStockCount = filtered.filter((s: any) => {
+            const q = parseFloat(s.quantity);
+            return q > 0 && q < 5;
+        }).length;
         const catCounts: Record<string, number> = {};
-        stock.forEach((s: any) => {
+        filtered.forEach((s: any) => {
             const cat = normalizeCategory(s.productCategory);
             catCounts[cat] = (catCounts[cat] || 0) + 1;
         });
@@ -286,19 +294,6 @@ export default function FarmStock() {
             : "—";
         const topCategoryCount = catCounts[topCategory] || 0;
         return { negativeCount, lowStockCount, catCounts, allCategories, topCategory, topCategoryCount };
-    }, [stock]);
-
-    // Check if Lote/Validade columns should be shown (>20% filled)
-    const showLoteColumn = useMemo(() => {
-        if (filtered.length === 0) return false;
-        const filledCount = filtered.filter((s: any) => s.lote).length;
-        return filledCount / filtered.length > 0.2;
-    }, [filtered]);
-
-    const showValidadeColumn = useMemo(() => {
-        if (filtered.length === 0) return false;
-        const filledCount = filtered.filter((s: any) => s.expiryDate).length;
-        return filledCount / filtered.length > 0.2;
     }, [filtered]);
 
     // Group stock by deposit/property for warehouse view
@@ -432,7 +427,16 @@ export default function FarmStock() {
                                         </button>
                                     )}
                                 </div>
-                                <div className="flex gap-2 items-center">
+                                <div className="flex gap-2 items-center flex-wrap">
+                                    <label className="flex items-center gap-2 bg-white border-0 shadow-sm rounded-lg h-10 px-3 text-xs font-semibold text-gray-600 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={showZeroStock}
+                                            onChange={e => { setShowZeroStock(e.target.checked); setCurrentPage(1); }}
+                                            className="h-4 w-4 cursor-pointer accent-emerald-600"
+                                        />
+                                        Mostrar sem estoque
+                                    </label>
                                     <div className="relative">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                         <Input
@@ -466,8 +470,6 @@ export default function FarmStock() {
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Produto</th>
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Categoria</th>
                                             <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Especificacao</th>
-                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Lote</th>
-                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Validade</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Custo Medio</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Quantidade</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Valor Total</th>
@@ -529,23 +531,6 @@ export default function FarmStock() {
                                                     {/* Especificacao */}
                                                     <td className="px-4 py-3 text-sm text-gray-500">
                                                         {s.productUnit || "—"}
-                                                    </td>
-                                                    {/* Lote */}
-                                                    <td className="px-4 py-3 text-sm text-gray-500">
-                                                        {s.lote || "—"}
-                                                    </td>
-                                                    {/* Validade */}
-                                                    <td className="px-4 py-3 text-sm">
-                                                        {(() => {
-                                                            if (!s.expiryDate) return <span className="text-gray-500">—</span>;
-                                                            const exp = new Date(s.expiryDate);
-                                                            const now = new Date();
-                                                            const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                                                            const formatted = exp.toLocaleDateString("pt-BR");
-                                                            if (diffDays < 0) return <span className="text-red-600 font-bold">{formatted}</span>;
-                                                            if (diffDays <= 30) return <span className="text-amber-600 font-bold">{formatted}</span>;
-                                                            return <span className="text-gray-500">{formatted}</span>;
-                                                        })()}
                                                     </td>
                                                     {/* Custo Medio */}
                                                     <td className="text-right px-4 py-3">
@@ -823,6 +808,8 @@ export default function FarmStock() {
                                                 <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Tipo</th>
                                                 <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Quantidade</th>
                                                 <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Custo Unit.</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Lote</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Validade</th>
                                                 <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Nº Fatura</th>
                                                 <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Fornecedor</th>
                                             </tr>
@@ -844,6 +831,21 @@ export default function FarmStock() {
                                                         </span>
                                                     </td>
                                                     <td className="text-right px-4 py-3 font-mono font-bold text-gray-900">{m.unitCost ? formatCurrency(m.unitCost) : "—"}</td>
+                                                    <td className="px-4 py-3 text-xs text-gray-600">
+                                                        {m.lote || <span className="text-gray-400">—</span>}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs">
+                                                        {(() => {
+                                                            if (!m.expiryDate) return <span className="text-gray-400">—</span>;
+                                                            const exp = new Date(m.expiryDate);
+                                                            const now = new Date();
+                                                            const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                                                            const formatted = exp.toLocaleDateString("pt-BR");
+                                                            if (diffDays < 0) return <span className="text-red-600 font-bold">{formatted}</span>;
+                                                            if (diffDays <= 30) return <span className="text-amber-600 font-bold">{formatted}</span>;
+                                                            return <span className="text-gray-600">{formatted}</span>;
+                                                        })()}
+                                                    </td>
                                                     <td className="px-4 py-3 text-xs">
                                                         {m.referenceType === "invoice" && m.invoiceNumber ? (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 font-mono">
