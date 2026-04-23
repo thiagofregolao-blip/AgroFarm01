@@ -285,11 +285,7 @@ export default function FarmStock() {
             ? allCategories.reduce((a, b) => catCounts[a] >= catCounts[b] ? a : b)
             : "—";
         const topCategoryCount = catCounts[topCategory] || 0;
-        // Lowest stock items for restock analysis
-        const lowestStockItems = [...stock]
-            .sort((a: any, b: any) => parseFloat(a.quantity) - parseFloat(b.quantity))
-            .slice(0, 3);
-        return { negativeCount, lowStockCount, catCounts, allCategories, topCategory, topCategoryCount, lowestStockItems };
+        return { negativeCount, lowStockCount, catCounts, allCategories, topCategory, topCategoryCount };
     }, [stock]);
 
     // Check if Lote/Validade columns should be shown (>20% filled)
@@ -323,13 +319,6 @@ export default function FarmStock() {
     const paginatedItems = filtered.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
     const showingFrom = filtered.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
     const showingTo = Math.min(safePage * ITEMS_PER_PAGE, filtered.length);
-
-    // Space utilization for warehouse optimization
-    const warehouseUtilization = useMemo(() => {
-        const withDeposit = stock.filter((s: any) => s.depositId).length;
-        const pct = stock.length > 0 ? Math.round((withDeposit / stock.length) * 100) : 0;
-        return { pct, withDeposit, total: stock.length };
-    }, [stock]);
 
     return (
         <FarmLayout>
@@ -377,7 +366,7 @@ export default function FarmStock() {
 
                 {/* Action buttons */}
                 {canEdit && (
-                <div className="flex gap-2 flex-wrap items-center">
+                <div className="flex gap-2 flex-wrap items-center justify-end">
                     <NewDepositDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/deposits"] })} />
                     <DieselEntryDialog onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] }); queryClient.invalidateQueries({ queryKey: ["/api/farm/stock/movements"] }); }} />
                     <ManualStockEntryDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ["/api/farm/stock"] })} />
@@ -388,7 +377,6 @@ export default function FarmStock() {
                     <TabsList>
                         <TabsTrigger value="stock">Estoque Atual</TabsTrigger>
                         <TabsTrigger value="deposits"><Building2 className="h-4 w-4 mr-1" />Depósitos</TabsTrigger>
-                        <TabsTrigger value="movements">Movimentações</TabsTrigger>
                         <TabsTrigger value="extrato"><FileText className="h-4 w-4 mr-1" />Extrato</TabsTrigger>
                         <TabsTrigger value="transferencias"><ArrowLeftRight className="h-4 w-4 mr-1" />Transferencias</TabsTrigger>
                         <TabsTrigger value="diesel"><Fuel className="h-4 w-4 mr-1" />Diesel</TabsTrigger>
@@ -521,7 +509,7 @@ export default function FarmStock() {
                                                                     )}
                                                                 </div>
                                                                 {s.activeIngredient ? (
-                                                                    <p className="text-[11px] text-gray-400 truncate">{s.activeIngredient}</p>
+                                                                    <p className="text-[11px] text-gray-400 break-words">{s.activeIngredient}</p>
                                                                 ) : s.depositCount > 1 ? (
                                                                     <p className="text-[11px] text-blue-500 font-medium">{s.depositCount} depositos: {s.depositNames.join(", ")}</p>
                                                                 ) : s.depositName ? (
@@ -643,7 +631,7 @@ export default function FarmStock() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {s.activeIngredient && <p className="text-[11px] text-gray-400">{s.activeIngredient}</p>}
+                                                    {s.activeIngredient && <p className="text-[11px] text-gray-400 break-words">{s.activeIngredient}</p>}
                                                     <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${badge.bg} ${badge.text}`}>{cat}</span>
                                                 </div>
                                                 {canEdit && !isMerged && (
@@ -740,69 +728,6 @@ export default function FarmStock() {
                                 </div>
                             )}
 
-                            {/* BOTTOM INSIGHTS */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                                {/* Restock Analysis */}
-                                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                                    <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                        <TrendingUp className="h-4 w-4 text-amber-500" />
-                                        Restock Analysis
-                                    </h3>
-                                    <p className="text-[11px] text-gray-400 mb-3">Top 3 itens com menor estoque</p>
-                                    <div className="space-y-2">
-                                        {kpiData.lowestStockItems.map((item: any) => {
-                                            const q = parseFloat(item.quantity);
-                                            return (
-                                                <div key={item.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <div className="w-7 h-7 rounded bg-amber-50 flex items-center justify-center flex-shrink-0">
-                                                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                                        </div>
-                                                        <span className="text-sm text-gray-700 font-medium truncate">{item.productName}</span>
-                                                    </div>
-                                                    <span className={`text-sm font-bold font-mono ml-2 flex-shrink-0 ${q < 0 ? "text-red-600" : q < 5 ? "text-amber-600" : "text-gray-900"}`}>
-                                                        {q.toFixed(2)}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    {kpiData.lowestStockItems.length > 0 && (
-                                        <button type="button" className="mt-3 text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition-colors flex items-center gap-1">
-                                            Review Order <ArrowUpRight className="h-3 w-3" />
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Warehouse Optimization */}
-                                <div className="bg-emerald-950 rounded-xl shadow-sm p-5 text-white">
-                                    <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
-                                        <Warehouse className="h-4 w-4 text-emerald-300" />
-                                        Warehouse Optimization
-                                    </h3>
-                                    <p className="text-[11px] text-emerald-300/70 mb-4">Utilizacao de espaco e alocacao de itens em depositos</p>
-                                    <div className="flex items-end gap-6 mb-4">
-                                        <div>
-                                            <p className="text-3xl font-extrabold">{warehouseUtilization.pct}%</p>
-                                            <p className="text-[11px] text-emerald-300/60">Space Utilization</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-2xl font-bold">{warehouseUtilization.total}</p>
-                                            <p className="text-[11px] text-emerald-300/60">Total Itens</p>
-                                        </div>
-                                    </div>
-                                    {/* Progress bar */}
-                                    <div className="w-full bg-emerald-900 rounded-full h-2 mb-4">
-                                        <div
-                                            className="bg-emerald-400 h-2 rounded-full transition-all duration-500"
-                                            style={{ width: `${warehouseUtilization.pct}%` }}
-                                        />
-                                    </div>
-                                    <button type="button" className="text-xs font-semibold text-emerald-300 hover:text-white transition-colors flex items-center gap-1">
-                                        Generate Load Map <ArrowUpRight className="h-3 w-3" />
-                                    </button>
-                                </div>
-                            </div>
                         </>)}
                     </TabsContent>
 
@@ -822,74 +747,6 @@ export default function FarmStock() {
                             }}
                             deletingDeposit={deleteDepositMutation.isPending}
                         />
-                    </TabsContent>
-
-                    <TabsContent value="movements" className="mt-4">
-                        {movements.length === 0 ? (
-                            <div className="bg-white rounded-xl shadow-sm py-16 text-center">
-                                <ArrowLeftRight className="h-14 w-14 text-gray-200 mx-auto mb-4" />
-                                <p className="text-gray-400 text-sm font-medium">Nenhuma movimentacao registrada</p>
-                            </div>
-                        ) : (
-                            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="bg-gray-50 border-b border-gray-100">
-                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Data</th>
-                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Produto</th>
-                                            <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Tipo</th>
-                                            <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Quantidade</th>
-                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Referencia</th>
-                                            <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Notas</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {movements.map((m: any) => (
-                                            <tr key={m.id} className="border-b border-gray-50 hover:bg-emerald-50/20 transition-colors">
-                                                <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{new Date(m.createdAt).toLocaleDateString("pt-BR")}</td>
-                                                <td className="px-4 py-3 font-bold text-sm text-gray-900">{m.productName}</td>
-                                                <td className="px-4 py-3 text-center">
-                                                    {m.type === "entry" ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                                            <ArrowUpRight className="h-3 w-3" /> Entrada
-                                                        </span>
-                                                    ) : m.type === "exit" ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
-                                                            <ArrowDownRight className="h-3 w-3" /> Saida
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                                                            <RefreshCw className="h-3 w-3" /> Ajuste
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="text-right px-4 py-3">
-                                                    <span className={`font-extrabold text-sm font-mono ${m.type === "entry" ? "text-emerald-600" : m.type === "exit" ? "text-red-600" : "text-amber-600"}`}>
-                                                        {m.type === "entry" ? "+" : ""}{parseFloat(m.quantity).toFixed(2)}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-xs text-gray-400">
-                                                    {m.referenceType === "correcao_caderno" ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
-                                                            Correção Caderno
-                                                        </span>
-                                                    ) : m.referenceType === "nota_credito_provedor" ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700">
-                                                            NC Provedor
-                                                        </span>
-                                                    ) : m.referenceType === "nota_credito_emissao" ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
-                                                            NC Emissão
-                                                        </span>
-                                                    ) : (m.referenceType || "—")}
-                                                </td>
-                                                <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{m.notes || "—"}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
                     </TabsContent>
 
                     {/* Extrato de Estoque tab */}
