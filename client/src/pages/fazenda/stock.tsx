@@ -825,7 +825,6 @@ export default function FarmStock() {
                                                 <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Custo Unit.</th>
                                                 <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Nº Fatura</th>
                                                 <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Fornecedor</th>
-                                                <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Notas</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -869,7 +868,6 @@ export default function FarmStock() {
                                                             ? (m.invoiceSupplier || <span className="text-gray-400">—</span>)
                                                             : "Entrada manual"}
                                                     </td>
-                                                    <td className="px-4 py-3 text-gray-400 text-xs max-w-[200px] truncate">{m.notes || "—"}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
