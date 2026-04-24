@@ -88,6 +88,28 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 apMap[row.invoice_id] = { apStatus: row.status, paidAmount: row.paid_amount, totalAmount: row.total_amount };
             }
 
+            // Depositos vinculados via movimentacoes de estoque (DISTINCT por fatura).
+            // Agrupa farm_stock_movements.reference_id (invoice.id) -> farm_stock.property_id
+            // -> farm_properties.name para montar lista de depositos onde os itens entraram.
+            const depRows = await db.execute(sql`
+                SELECT DISTINCT m.reference_id AS invoice_id, p.id AS deposit_id, p.name AS deposit_name
+                FROM farm_stock_movements m
+                LEFT JOIN farm_stock s ON s.product_id = m.product_id AND s.farmer_id = m.farmer_id
+                LEFT JOIN farm_properties p ON s.property_id = p.id
+                WHERE m.farmer_id = ${farmerId}
+                  AND m.reference_type IN ('invoice','remision')
+                  AND m.reference_id IS NOT NULL
+                  AND p.id IS NOT NULL
+            `);
+            const depositMap: Record<string, Array<{ id: string; name: string }>> = {};
+            for (const row of ((depRows as any).rows ?? depRows) as any[]) {
+                if (!depositMap[row.invoice_id]) depositMap[row.invoice_id] = [];
+                // Evita duplicatas (DISTINCT ja ajuda mas paranoia nao custa)
+                if (!depositMap[row.invoice_id].some(d => d.id === row.deposit_id)) {
+                    depositMap[row.invoice_id].push({ id: row.deposit_id, name: row.deposit_name });
+                }
+            }
+
             // Strip pdfBase64 from list response (can be megabytes), add hasFile flag + payment info
             const light = filtered.map((inv: any) => {
                 const { pdfBase64, rawPdfData, ...rest } = inv;
@@ -97,6 +119,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
                     hasFile: !!pdfBase64,
                     paymentStatus: ap?.apStatus || null,
                     hasPendingPayment: ap && (ap.apStatus === "pago" || ap.apStatus === "parcial"),
+                    linkedDeposits: depositMap[inv.id] || [],
                 };
             });
             res.json(light);
@@ -509,7 +532,7 @@ export function registerFarmInvoiceRoutes(app: Express) {
                 await db.execute(sql`UPDATE farm_invoices SET season_id = ${req.body.seasonId} WHERE id = ${req.params.id}`);
             }
 
-            await farmStorage.confirmInvoice(req.params.id, farmerId, req.body.warehouseId, req.body.itemConversions);
+            await farmStorage.confirmInvoice(req.params.id, farmerId, req.body.warehouseId, req.body.itemConversions, req.body.itemDeposits);
 
             // Auto-create accounts payable entry (only for faturas, NOT remissoes)
             const isRemisionDoc = (invoice as any).documentType === "remision";

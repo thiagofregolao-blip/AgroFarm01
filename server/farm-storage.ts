@@ -397,7 +397,7 @@ export class FarmStorage {
 
     // Confirm invoice: create stock entries + movements (unless skipStockEntry is set), and save price history
     // Wrapped in a transaction to prevent race-condition duplications (Bug fix 2025-03)
-    async confirmInvoice(invoiceId: string, farmerId: string, warehouseId?: string, itemConversions?: Record<string, number>): Promise<void> {
+    async confirmInvoice(invoiceId: string, farmerId: string, warehouseId?: string, itemConversions?: Record<string, number>, itemDeposits?: Record<string, string>): Promise<void> {
         await dbReady;
 
         // Fetch invoice details for price history
@@ -490,10 +490,13 @@ export class FarmStorage {
                         cost = cost / pkgSize;
                     }
 
-                    console.log(`[FARM_CONFIRM]   STOCK ENTRY: "${item.productName}" pid=${item.productId} qty=${qty} cost=${cost}`);
+                    // Multi-deposito: itemDeposits[item.id] sobrepoe warehouseId global.
+                    // Fallback: warehouseId do form → null (sem deposito).
+                    const itemDepositId = itemDeposits?.[item.id] || warehouseId || null;
+                    console.log(`[FARM_CONFIRM]   STOCK ENTRY: "${item.productName}" pid=${item.productId} qty=${qty} cost=${cost} deposit=${itemDepositId || "null"}`);
 
                     // Update stock (warehouseId = deposit destino)
-                    await this.upsertStock(farmerId, item.productId, qty, cost, warehouseId || null);
+                    await this.upsertStock(farmerId, item.productId, qty, cost, itemDepositId);
 
                     // Record movement
                     await db.insert(farmStockMovements).values({

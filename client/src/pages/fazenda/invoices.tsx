@@ -130,6 +130,10 @@ export default function FarmInvoices() {
     const [confirmSeasonId, setConfirmSeasonId] = useState<string>("");
     // confirmFrotaAmount removed — field no longer needed
     const [confirmEquipmentId, setConfirmEquipmentId] = useState<string>("");
+    // Multi-deposito: quando ON, cada item escolhe seu deposito individualmente.
+    // itemDeposits mapeia item.id -> depositId.
+    const [multiDeposit, setMultiDeposit] = useState(false);
+    const [itemDeposits, setItemDeposits] = useState<Record<string, string>>({});
 
     // Nova Despesa dialog state
     const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
@@ -247,13 +251,14 @@ export default function FarmInvoices() {
     };
 
     const confirmMutation = useMutation({
-        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, itemConversions, equipmentId }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; itemConversions?: Record<string, number>; equipmentId?: string }) =>
+        mutationFn: ({ id, skipStockEntry, warehouseId, seasonId, itemConversions, equipmentId, itemDeposits }: { id: string; skipStockEntry?: boolean; warehouseId?: string; seasonId?: string; itemConversions?: Record<string, number>; equipmentId?: string; itemDeposits?: Record<string, string> }) =>
             apiRequest("POST", `/api/farm/invoices/${id}/confirm`, {
                 ...(skipStockEntry ? { skipStockEntry: true } : {}),
                 ...(warehouseId ? { warehouseId } : {}),
                 ...(seasonId ? { seasonId } : {}),
                 ...(itemConversions && Object.keys(itemConversions).length > 0 ? { itemConversions } : {}),
                 ...(equipmentId ? { equipmentId } : {}),
+                ...(itemDeposits && Object.keys(itemDeposits).length > 0 ? { itemDeposits } : {}),
             }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
@@ -269,6 +274,8 @@ export default function FarmInvoices() {
             setConfirmWarehouseId("");
             setConfirmSeasonId("");
             setConfirmEquipmentId("");
+            setMultiDeposit(false);
+            setItemDeposits({});
         },
         onError: (err: any) => toast({ title: `Erro ao confirmar: ${err?.message || "Falha desconhecida"}`, variant: "destructive" }),
     });
@@ -1115,6 +1122,9 @@ export default function FarmInvoices() {
                                                         <th className="text-right p-2">Qtd</th>
                                                         <th className="text-right p-2">Preço Un.</th>
                                                         <th className="text-right p-2">Total</th>
+                                                        {multiDeposit && !confirmSkipStock && invoiceDetail.status === "pending" && (
+                                                            <th className="text-left p-2 min-w-[160px]">Depósito</th>
+                                                        )}
                                                         {invoiceDetail.status === "pending" && <th className="text-center p-2">Ações</th>}
                                                     </tr>
                                                 </thead>
@@ -1156,6 +1166,9 @@ export default function FarmInvoices() {
                                                                     <CurrencyInput className="h-7 text-xs w-24 text-right" value={editItemData.totalPrice}
                                                                         onValueChange={v => setEditItemData({ ...editItemData, totalPrice: v })} prefix="" />
                                                                 </td>
+                                                                {multiDeposit && !confirmSkipStock && invoiceDetail.status === "pending" && (
+                                                                    <td className="p-2 text-[11px] text-gray-400 italic">Salve para escolher</td>
+                                                                )}
                                                                 <td className="p-2 text-center">
                                                                     <div className="flex items-center justify-center gap-1">
                                                                         <button className="p-1 rounded hover:bg-emerald-200" title="Salvar"
@@ -1229,6 +1242,27 @@ export default function FarmInvoices() {
                                                                         </>
                                                                     );
                                                                 })()}
+                                                                {multiDeposit && !confirmSkipStock && invoiceDetail.status === "pending" && (
+                                                                    <td className="p-2">
+                                                                        {item.productId ? (
+                                                                            <Select
+                                                                                value={itemDeposits[item.id] || ""}
+                                                                                onValueChange={v => setItemDeposits(prev => ({ ...prev, [item.id]: v }))}
+                                                                            >
+                                                                                <SelectTrigger className="h-8 text-xs">
+                                                                                    <SelectValue placeholder="Selecione..." />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    {(deposits as any[]).map((d: any) => (
+                                                                                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                                                    ))}
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        ) : (
+                                                                            <span className="text-[11px] text-gray-400 italic">Vincule ao catalogo</span>
+                                                                        )}
+                                                                    </td>
+                                                                )}
                                                                 {invoiceDetail.status === "pending" && (
                                                                     <td className="text-center p-2">
                                                                         <button className="p-1 rounded hover:bg-amber-100" title="Editar item"
@@ -1354,9 +1388,13 @@ export default function FarmInvoices() {
                                                             <Warehouse className="h-4 w-4 text-emerald-500" />
                                                             Deposito
                                                         </Label>
-                                                        <Select value={confirmWarehouseId} onValueChange={setConfirmWarehouseId}>
+                                                        <Select
+                                                            value={confirmWarehouseId}
+                                                            onValueChange={setConfirmWarehouseId}
+                                                            disabled={multiDeposit}
+                                                        >
                                                             <SelectTrigger className="mt-1">
-                                                                <SelectValue placeholder="Selecione..." />
+                                                                <SelectValue placeholder={multiDeposit ? "Por item (abaixo)" : "Selecione..."} />
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 {(deposits as any[]).map((d: any) => (
@@ -1364,6 +1402,18 @@ export default function FarmInvoices() {
                                                                 ))}
                                                             </SelectContent>
                                                         </Select>
+                                                        <label className="flex items-center gap-2 mt-2 text-xs text-gray-600 cursor-pointer select-none">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={multiDeposit}
+                                                                onChange={e => {
+                                                                    setMultiDeposit(e.target.checked);
+                                                                    if (!e.target.checked) setItemDeposits({});
+                                                                }}
+                                                                className="h-3.5 w-3.5 accent-emerald-600 cursor-pointer"
+                                                            />
+                                                            Multi-depositos (um por produto)
+                                                        </label>
                                                     </div>
                                                 )}
 
@@ -1426,13 +1476,28 @@ export default function FarmInvoices() {
                                                             }
                                                         }
                                                         const hasEquipment = confirmEquipmentId && confirmEquipmentId !== "__none__";
+                                                        // Multi-deposito: valida que todo item vinculado ao catalogo tem deposito escolhido
+                                                        if (multiDeposit && !confirmSkipStock && !hasEquipment) {
+                                                            const linkedItems = (invoiceDetail.items || []).filter((i: any) => i.productId);
+                                                            const missing = linkedItems.filter((i: any) => !itemDeposits[i.id]);
+                                                            if (missing.length > 0) {
+                                                                toast({
+                                                                    title: "Selecione o deposito de cada produto",
+                                                                    description: `${missing.length} produto(s) sem deposito escolhido.`,
+                                                                    variant: "destructive"
+                                                                });
+                                                                return;
+                                                            }
+                                                        }
+                                                        const shouldSendItemDeposits = multiDeposit && !confirmSkipStock && !hasEquipment && Object.keys(itemDeposits).length > 0;
                                                         confirmMutation.mutate({
                                                             id: selectedInvoice!,
                                                             skipStockEntry: confirmSkipStock || hasEquipment || undefined,
-                                                            warehouseId: !confirmSkipStock && !hasEquipment && confirmWarehouseId ? confirmWarehouseId : undefined,
+                                                            warehouseId: !confirmSkipStock && !hasEquipment && !multiDeposit && confirmWarehouseId ? confirmWarehouseId : undefined,
                                                             seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
                                                             itemConversions: Object.keys(conversions).length > 0 ? conversions : undefined,
                                                             equipmentId: hasEquipment ? confirmEquipmentId : undefined,
+                                                            itemDeposits: shouldSendItemDeposits ? itemDeposits : undefined,
                                                         });
                                                     }}
                                                     disabled={confirmMutation.isPending}
@@ -1514,6 +1579,7 @@ export default function FarmInvoices() {
                                                 <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Vencimento</th>
                                                 <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
                                                 <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Origem</th>
+                                                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Estoque</th>
                                                 <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Valor</th>
                                                 <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Acoes</th>
                                             </tr>
@@ -1587,6 +1653,29 @@ export default function FarmInvoices() {
                                                                 <><Upload className="h-3.5 w-3.5 text-gray-400" /><span>Import</span></>
                                                             )}
                                                         </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap text-xs">
+                                                        {(() => {
+                                                            const deps: Array<{ id: string; name: string }> = inv.linkedDeposits || [];
+                                                            if (deps.length === 0) return <span className="text-gray-300">—</span>;
+                                                            if (deps.length === 1) {
+                                                                return (
+                                                                    <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold">
+                                                                        <Warehouse className="h-3 w-3" />
+                                                                        {deps[0].name}
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <span
+                                                                    className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold cursor-help"
+                                                                    title={deps.map(d => d.name).join("\n")}
+                                                                >
+                                                                    <Warehouse className="h-3 w-3" />
+                                                                    {deps.length} depositos
+                                                                </span>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="px-4 py-3 text-right font-black text-gray-900 whitespace-nowrap">
                                                         {formatCurrency(parseFloat(inv.totalAmount || "0"), inv.currency || "USD")}
@@ -1751,6 +1840,9 @@ export default function FarmInvoices() {
                                                 <th className="text-left p-2 font-semibold text-purple-800 min-w-[180px]">Vincular ao Catalogo</th>
                                                 <th className="text-left p-2 font-semibold text-purple-800">Un</th>
                                                 <th className="text-right p-2 font-semibold text-purple-800">Qtd</th>
+                                                {multiDeposit && invoiceDetail.status === "pending" && (
+                                                    <th className="text-left p-2 font-semibold text-purple-800 min-w-[160px]">Deposito</th>
+                                                )}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1774,6 +1866,27 @@ export default function FarmInvoices() {
                                                     </td>
                                                     <td className="p-2 text-gray-600">{item.unit}</td>
                                                     <td className="p-2 text-right">{parseFloat(item.quantity || 0).toFixed(2)}</td>
+                                                    {multiDeposit && invoiceDetail.status === "pending" && (
+                                                        <td className="p-2">
+                                                            {item.productId ? (
+                                                                <Select
+                                                                    value={itemDeposits[item.id] || ""}
+                                                                    onValueChange={v => setItemDeposits(prev => ({ ...prev, [item.id]: v }))}
+                                                                >
+                                                                    <SelectTrigger className="h-8 text-xs">
+                                                                        <SelectValue placeholder="Selecione..." />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {(deposits as any[]).map((d: any) => (
+                                                                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            ) : (
+                                                                <span className="text-[11px] text-gray-400 italic">Vincule ao catalogo</span>
+                                                            )}
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1787,9 +1900,13 @@ export default function FarmInvoices() {
                                                         <Warehouse className="h-4 w-4 text-emerald-500" />
                                                         Deposito
                                                     </Label>
-                                                    <Select value={confirmWarehouseId} onValueChange={setConfirmWarehouseId}>
+                                                    <Select
+                                                        value={confirmWarehouseId}
+                                                        onValueChange={setConfirmWarehouseId}
+                                                        disabled={multiDeposit}
+                                                    >
                                                         <SelectTrigger className="mt-1">
-                                                            <SelectValue placeholder="Selecione..." />
+                                                            <SelectValue placeholder={multiDeposit ? "Por item (abaixo)" : "Selecione..."} />
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {(deposits as any[]).map((d: any) => (
@@ -1797,6 +1914,18 @@ export default function FarmInvoices() {
                                                             ))}
                                                         </SelectContent>
                                                     </Select>
+                                                    <label className="flex items-center gap-2 mt-2 text-xs text-gray-600 cursor-pointer select-none">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={multiDeposit}
+                                                            onChange={e => {
+                                                                setMultiDeposit(e.target.checked);
+                                                                if (!e.target.checked) setItemDeposits({});
+                                                            }}
+                                                            className="h-3.5 w-3.5 accent-emerald-600 cursor-pointer"
+                                                        />
+                                                        Multi-depositos (um por produto)
+                                                    </label>
                                                 </div>
                                                 <div className="p-3 rounded-lg border border-gray-200 bg-white">
                                                     <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
@@ -1819,10 +1948,25 @@ export default function FarmInvoices() {
                                                 <Button
                                                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
                                                     onClick={() => {
+                                                        // Multi-deposito: valida items vinculados com deposito escolhido
+                                                        if (multiDeposit) {
+                                                            const linkedItems = (invoiceDetail.items || []).filter((i: any) => i.productId);
+                                                            const missing = linkedItems.filter((i: any) => !itemDeposits[i.id]);
+                                                            if (missing.length > 0) {
+                                                                toast({
+                                                                    title: "Selecione o deposito de cada produto",
+                                                                    description: `${missing.length} produto(s) sem deposito escolhido.`,
+                                                                    variant: "destructive"
+                                                                });
+                                                                return;
+                                                            }
+                                                        }
+                                                        const shouldSendItemDeposits = multiDeposit && Object.keys(itemDeposits).length > 0;
                                                         confirmMutation.mutate({
                                                             id: selectedInvoice!,
-                                                            warehouseId: confirmWarehouseId || undefined,
+                                                            warehouseId: !multiDeposit && confirmWarehouseId ? confirmWarehouseId : undefined,
                                                             seasonId: confirmSeasonId || invoiceDetail.seasonId || undefined,
+                                                            itemDeposits: shouldSendItemDeposits ? itemDeposits : undefined,
                                                         });
                                                     }}
                                                     disabled={confirmMutation.isPending || (invoiceDetail.items || []).every((i: any) => !i.productId)}
