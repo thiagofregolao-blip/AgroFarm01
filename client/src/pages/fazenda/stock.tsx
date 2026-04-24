@@ -473,7 +473,6 @@ export default function FarmStock() {
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Custo Medio</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Quantidade</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Valor Total</th>
-                                            <th className="text-center px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Status</th>
                                             <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Acoes</th>
                                         </tr>
                                     </thead>
@@ -538,32 +537,24 @@ export default function FarmStock() {
                                                             {cost > 0 ? `$ ${cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
                                                         </span>
                                                     </td>
-                                                    {/* Quantidade */}
+                                                    {/* Quantidade — badge colorido conforme saldo */}
                                                     <td className="text-right px-4 py-3">
-                                                        <span className={`font-bold text-sm font-mono ${isNegative ? "text-red-600" : isLow ? "text-amber-600" : "text-gray-900"}`}>
-                                                            {isNegative && <AlertTriangle className="h-3.5 w-3.5 text-red-500 inline mr-1" />}
+                                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-xs font-mono ${
+                                                            isNegative
+                                                                ? "bg-red-100 text-red-700"
+                                                                : isLow
+                                                                    ? "bg-amber-100 text-amber-700"
+                                                                    : qty > 0
+                                                                        ? "bg-emerald-100 text-emerald-700"
+                                                                        : "bg-gray-100 text-gray-500"
+                                                        }`}>
+                                                            {isNegative && <AlertTriangle className="h-3 w-3 inline" />}
                                                             {qty.toFixed(2)} {s.productUnit}
                                                         </span>
                                                     </td>
                                                     {/* Valor Total */}
                                                     <td className="text-right px-4 py-3">
                                                         <span className="font-extrabold text-sm text-gray-900">{formatCurrency(qty * cost)}</span>
-                                                    </td>
-                                                    {/* Status */}
-                                                    <td className="text-center px-4 py-3">
-                                                        {isNegative ? (
-                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
-                                                                NEGATIVO
-                                                            </span>
-                                                        ) : isLow ? (
-                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                                                                LOW STOCK
-                                                            </span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                                                IN STOCK
-                                                            </span>
-                                                        )}
                                                     </td>
                                                     {/* Acoes */}
                                                     <td className="text-right px-4 py-3">
@@ -638,24 +629,23 @@ export default function FarmStock() {
                                             <div className="grid grid-cols-2 gap-3 text-sm">
                                                 <div>
                                                     <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Quantidade</p>
-                                                    <p className={`font-bold ${isNegative ? "text-red-600" : isLow ? "text-amber-600" : "text-gray-900"}`}>
+                                                    <span className={`inline-flex items-center gap-1 mt-1 px-2.5 py-1 rounded-full font-bold text-xs font-mono ${
+                                                        isNegative
+                                                            ? "bg-red-100 text-red-700"
+                                                            : isLow
+                                                                ? "bg-amber-100 text-amber-700"
+                                                                : qty > 0
+                                                                    ? "bg-emerald-100 text-emerald-700"
+                                                                    : "bg-gray-100 text-gray-500"
+                                                    }`}>
+                                                        {isNegative && <AlertTriangle className="h-3 w-3 inline" />}
                                                         {qty.toFixed(2)} {s.productUnit}
-                                                    </p>
+                                                    </span>
                                                 </div>
                                                 <div>
                                                     <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Valor Total</p>
                                                     <p className="font-extrabold text-gray-900">{formatCurrency(qty * cost)}</p>
                                                 </div>
-                                            </div>
-                                            <div className="mt-3 flex justify-between items-center">
-                                                <span className="text-[10px] uppercase text-gray-400 font-semibold">Status</span>
-                                                {isNegative ? (
-                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">NEGATIVO</span>
-                                                ) : isLow ? (
-                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">LOW STOCK</span>
-                                                ) : (
-                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">IN STOCK</span>
-                                                )}
                                             </div>
                                         </div>
                                     );
