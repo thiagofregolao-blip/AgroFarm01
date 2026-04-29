@@ -1189,6 +1189,7 @@ export const farmStockMovements = pgTable("farm_stock_movements", {
   unitCost: decimal("unit_cost", { precision: 15, scale: 4 }),
   referenceType: text("reference_type"), // "invoice" ou "pdv"
   referenceId: varchar("reference_id"), // ID da fatura ou da aplicação
+  depositId: varchar("deposit_id"), // ID do deposito de origem (farm_properties.id)
   lote: text("lote"), // Número do lote
   expiryDate: timestamp("expiry_date"), // Data de vencimento do produto
   packageSize: decimal("package_size", { precision: 15, scale: 4 }), // Tamanho da embalagem

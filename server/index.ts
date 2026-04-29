@@ -433,6 +433,28 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS ruc text`);
     await db.execute(sql`ALTER TABLE farm_invoices ADD COLUMN IF NOT EXISTS expense_category text`);
 
+    // farm_stock_movements.deposit_id: persiste o deposito de origem do movimento
+    // (sem isso a coluna "Estoque" da listagem de faturas tinha que inferir via
+    // farm_stock atual, o que falha com transferencias, multi-deposito, e
+    // produtos zerados/consumidos).
+    await db.execute(sql`ALTER TABLE farm_stock_movements ADD COLUMN IF NOT EXISTS deposit_id varchar`);
+    // Backfill 1x: pra movimentos antigos sem deposit_id, pega o property_id
+    // do farm_stock atual com maior quantity (melhor heuristica retroativa).
+    await db.execute(sql`
+        UPDATE farm_stock_movements m
+        SET deposit_id = sub.property_id
+        FROM (
+            SELECT DISTINCT ON (s.farmer_id, s.product_id) s.farmer_id, s.product_id, s.property_id
+            FROM farm_stock s
+            WHERE s.property_id IS NOT NULL
+            ORDER BY s.farmer_id, s.product_id, s.quantity DESC
+        ) sub
+        WHERE m.deposit_id IS NULL
+          AND m.farmer_id = sub.farmer_id
+          AND m.product_id = sub.product_id
+          AND m.reference_type IN ('invoice', 'remision')
+    `);
+
     await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS person_type TEXT`);
     await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS entity_type TEXT`);
     await db.execute(sql`ALTER TABLE farm_suppliers ADD COLUMN IF NOT EXISTS guarantor_for TEXT`);

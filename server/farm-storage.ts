@@ -507,6 +507,7 @@ export class FarmStorage {
                         unitCost: String(cost),
                         referenceType: isRemision ? "remision" : "invoice",
                         referenceId: invoiceId,
+                        depositId: itemDepositId,
                         notes: isRemision ? `Remissao item: ${item.productName}` : `Fatura item: ${item.productName}`,
                     });
                 }

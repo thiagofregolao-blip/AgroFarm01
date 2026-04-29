@@ -89,17 +89,16 @@ export function registerFarmInvoiceRoutes(app: Express) {
             }
 
             // Depositos vinculados via movimentacoes de estoque (DISTINCT por fatura).
-            // Agrupa farm_stock_movements.reference_id (invoice.id) -> farm_stock.property_id
-            // -> farm_properties.name para montar lista de depositos onde os itens entraram.
+            // Agora le m.deposit_id direto — persistido pelo confirmInvoice.
+            // Reflete fielmente o deposito de origem (multi-deposito incluso) e
+            // nao se confunde com transferencias/consumos posteriores.
             const depRows = await db.execute(sql`
                 SELECT DISTINCT m.reference_id AS invoice_id, p.id AS deposit_id, p.name AS deposit_name
                 FROM farm_stock_movements m
-                LEFT JOIN farm_stock s ON s.product_id = m.product_id AND s.farmer_id = m.farmer_id
-                LEFT JOIN farm_properties p ON s.property_id = p.id
+                INNER JOIN farm_properties p ON p.id = m.deposit_id
                 WHERE m.farmer_id = ${farmerId}
                   AND m.reference_type IN ('invoice','remision')
                   AND m.reference_id IS NOT NULL
-                  AND p.id IS NOT NULL
             `);
             const depositMap: Record<string, Array<{ id: string; name: string }>> = {};
             for (const row of ((depRows as any).rows ?? depRows) as any[]) {
