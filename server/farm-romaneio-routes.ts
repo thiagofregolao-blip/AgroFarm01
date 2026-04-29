@@ -8,6 +8,27 @@ import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { ZApiClient } from "./whatsapp/zapi-client";
+import { timingSafeEqual } from "crypto";
+
+// Aceita o secret via header HTTP `x-webhook-secret` OU via query param
+// `?x-webhook-secret=xxx` (compat com fluxos n8n antigos — ver CLAUDE.md
+// "Conexoes Externas").
+function requireWebhookSecret(req: any, res: any, next: any) {
+    const secret = process.env.N8N_WEBHOOK_SECRET;
+    if (!secret) {
+        console.warn("[N8N_WEBHOOK] N8N_WEBHOOK_SECRET not configured — webhooks disabled");
+        return res.status(503).json({ error: "Webhooks not configured" });
+    }
+    const header = req.headers["x-webhook-secret"];
+    const queryParam = (req.query as any)?.["x-webhook-secret"];
+    const provided = (Array.isArray(header) ? header[0] : header) || queryParam;
+    const expectedBuffer = Buffer.from(secret);
+    const providedBuffer = Buffer.from(String(provided || ""));
+    if (expectedBuffer.length !== providedBuffer.length || !timingSafeEqual(expectedBuffer, providedBuffer)) {
+        return res.status(401).json({ error: "Invalid webhook secret" });
+    }
+    next();
+}
 
 export function registerFarmRomaneioRoutes(app: Express) {
 
@@ -339,7 +360,7 @@ export function registerFarmRomaneioRoutes(app: Express) {
     });
 
     // ===== N8N/WhatsApp Webhook: Romaneio Photo Import =====
-    app.post("/api/farm/webhook/n8n/romaneio", async (req, res) => {
+    app.post("/api/farm/webhook/n8n/romaneio", requireWebhookSecret, async (req, res) => {
         try {
             const { whatsapp_number, imageUrl, caption } = req.body;
             if (!whatsapp_number || !imageUrl) {

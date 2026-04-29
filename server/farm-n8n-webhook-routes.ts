@@ -3,26 +3,39 @@ import { requireFarmer, upload, parseLocalDate } from "./farm-middleware";
 import { farmStorage } from "./farm-storage";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import { timingSafeEqual } from "crypto";
 import { ZApiClient } from "./whatsapp/zapi-client";
 import { findSimilarSuppliers, fillMissingSupplierFields } from "./lib/supplier-dedup";
 
-// Middleware to validate n8n webhook shared secret
+// Middleware to validate n8n webhook shared secret.
+// Aceita o secret via header HTTP `x-webhook-secret` OU via query param
+// `?x-webhook-secret=xxx` (compat com fluxos n8n antigos — ver CLAUDE.md
+// "Conexoes Externas").
 function requireWebhookSecret(req: any, res: any, next: any) {
     const secret = process.env.N8N_WEBHOOK_SECRET;
     if (!secret) {
         console.warn("[N8N_WEBHOOK] N8N_WEBHOOK_SECRET not configured — webhooks disabled");
         return res.status(503).json({ error: "Webhooks not configured" });
     }
-    const provided = req.headers['x-webhook-secret'] || req.query.secret || req.query['x-webhook-secret'];
-    if (provided !== secret) {
+    const header = req.headers["x-webhook-secret"];
+    const queryParam = (req.query as any)?.["x-webhook-secret"];
+    const provided = (Array.isArray(header) ? header[0] : header) || queryParam;
+    const expectedBuffer = Buffer.from(secret);
+    const providedBuffer = Buffer.from(String(provided || ""));
+    if (expectedBuffer.length !== providedBuffer.length || !timingSafeEqual(expectedBuffer, providedBuffer)) {
         return res.status(401).json({ error: "Invalid webhook secret" });
     }
     next();
 }
 
+function requireWebhookSecretOrAuth(req: any, res: any, next: any) {
+    if (req.isAuthenticated?.()) return next();
+    return requireWebhookSecret(req, res, next);
+}
+
 export function registerFarmN8nWebhookRoutes(app: Express) {
     // ==================== n8n / WhatsApp Webhooks ====================
-    // All webhook routes require a shared secret via x-webhook-secret header or ?secret= query param
+    // Webhook routes require a shared secret via x-webhook-secret header.
 
     app.post("/api/farm/webhook/n8n/check-pending-equipment", requireWebhookSecret, async (req, res) => {
         try {
@@ -1050,7 +1063,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
         }
     });
 
-    app.get("/api/farm/webhook/n8n/stock", async (req, res) => {
+    app.get("/api/farm/webhook/n8n/stock", requireWebhookSecret, async (req, res) => {
         try {
             const { whatsapp_number } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
@@ -1095,7 +1108,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
         }
     });
 
-    app.get("/api/farm/webhook/n8n/applications", async (req, res) => {
+    app.get("/api/farm/webhook/n8n/applications", requireWebhookSecret, async (req, res) => {
         try {
             const { whatsapp_number, limit = 5 } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
@@ -1140,7 +1153,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
         }
     });
 
-    app.get("/api/farm/webhook/n8n/prices", async (req, res) => {
+    app.get("/api/farm/webhook/n8n/prices", requireWebhookSecret, async (req, res) => {
         try {
             const { whatsapp_number, search } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
@@ -1375,7 +1388,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
     });
 
     // ===== Weather Forecast for n8n =====
-    app.get("/api/farm/webhook/n8n/weather", async (req, res) => {
+    app.get("/api/farm/webhook/n8n/weather", requireWebhookSecret, async (req, res) => {
         try {
             const { whatsapp_number } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
@@ -1424,7 +1437,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
     });
 
     // ===== Commodity Prices for n8n =====
-    app.get("/api/farm/webhook/n8n/commodity", async (_req, res) => {
+    app.get("/api/farm/webhook/n8n/commodity", requireWebhookSecret, async (_req, res) => {
         try {
             const { getCommodityData, formatCommodityMessage } = await import("./services/commodity-service");
             const data = await getCommodityData();
@@ -1439,7 +1452,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
         }
     });
 
-    app.get("/api/farm/webhook/n8n/invoices", async (req, res) => {
+    app.get("/api/farm/webhook/n8n/invoices", requireWebhookSecret, async (req, res) => {
         try {
             const { whatsapp_number, limit = 20, date, supplier } = req.query;
             if (!whatsapp_number) return res.status(400).json({ error: "whatsapp_number is required" });
@@ -1517,7 +1530,7 @@ export function registerFarmN8nWebhookRoutes(app: Express) {
         }
     });
 
-    app.get("/api/farm/webhook/n8n/manuals", async (req, res) => {
+    app.get("/api/farm/webhook/n8n/manuals", requireWebhookSecretOrAuth, async (req, res) => {
         try {
             const { search } = req.query;
             const { farmManuals } = await import("../shared/schema");
