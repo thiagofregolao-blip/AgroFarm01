@@ -96,16 +96,21 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
         setDisplay(raw);
         onValueChange(raw || "0");
       } else {
-        // Allow digits, one dot or comma as decimal separator
-        // First normalise: remove thousand separators
-        raw = raw.replace(/\./g, "").replace(",", ".");
-        raw = raw.replace(/[^\d.]/g, "");
-        // Only one decimal point
-        const parts = raw.split(".");
-        if (parts.length > 2) raw = parts[0] + "." + parts.slice(1).join("");
-        // Limit decimal places
-        if (parts[1] !== undefined) {
-          raw = parts[0] + "." + parts[1].slice(0, decimals);
+        // Keep only digits, dots and commas
+        raw = raw.replace(/[^\d.,]/g, "");
+        // The LAST . or , in the string is the decimal separator;
+        // any other . or , are thousand separators and get dropped.
+        // Handles digitation ("5,50" → "5.50"), intl paste ("1234.56"),
+        // and pt-BR paste ("1.234,56" → "1234.56").
+        const lastComma = raw.lastIndexOf(",");
+        const lastDot = raw.lastIndexOf(".");
+        const decimalPos = Math.max(lastComma, lastDot);
+        if (decimalPos !== -1) {
+          const intPart = raw.slice(0, decimalPos).replace(/[.,]/g, "");
+          const decPart = raw.slice(decimalPos + 1).replace(/[.,]/g, "").slice(0, decimals);
+          raw = intPart + "." + decPart;
+        } else {
+          raw = raw.replace(/[.,]/g, "");
         }
         setDisplay(raw);
         onValueChange(raw || "0");
