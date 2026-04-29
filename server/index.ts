@@ -947,6 +947,9 @@ app.use((req, res, next) => {
     // display_order: ordem de selecao do cliente no PDV (preserva sequencia no caderno/PDF)
     await db.execute(sql`ALTER TABLE farm_applications ADD COLUMN IF NOT EXISTS display_order INT DEFAULT 0`);
 
+    // document_number: usuario informa numero do recibo ao cadastrar despesa manual
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS document_number TEXT`);
+
     // Find duplicate applications: same farmer_id + product_id + plot_id + quantity within 120 seconds
     // Keep the oldest (smallest created_at), delete the rest + their movements + restore stock
     const dupResult = await db.execute(sql`

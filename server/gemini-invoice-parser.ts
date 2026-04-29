@@ -40,21 +40,20 @@ REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
 - Dados de classificação: umidade, impureza, avariados, corpo estranho
 - Número de ticket/romaneio, placa de caminhão, motorista
 
-**expense** (Despesa de Frota/Manutenção) — use quando os itens são:
-- Peças de máquinas/veículos (porcas, parafusos, rolamentos, correias, filtros, ponta de eixo, etc.)
-- Óleo de motor, lubrificantes, graxas
-- Diesel, combustível, gasolina
-- Serviços mecânicos, mão de obra, frete, transporte
-- Pneus, baterias, peças automotivas
-- Qualquer coisa relacionada a manutenção de tratores, colheitadeiras, caminhões, veículos
+**invoice** (Fatura/Factura — qualquer documento fiscal com cabecalho "FACTURA") — use SEMPRE quando:
+- O documento diz "FACTURA", "FACTURA ELECTRONICA", "FATURA" ou "NOTA FISCAL" no cabecalho/timbrado (canto superior direito normalmente)
+- Tem numero de timbrado/SENAVE/RUC do emissor
+- Tem numero da fatura (ex: 001-001-0000123)
+- Tem totalizadores (TOTAL A PAGAR, SUB-TOTAL, IVA)
+- **Nao importa o conteudo dos itens**: pode ser defensivos agricolas (Glifosato, Atrazina), sementes, fertilizantes, **OU pecas de maquina, oleo, diesel, lubrificantes, manutencao, pneus, baterias, peças automotivas, servicos mecanicos**. Toda factura emitida por um fornecedor (Repuestos SJ, oficina mecanica, posto de combustivel, agroquimica, etc) deve ser classificada como "invoice".
 
-**invoice** (Fatura de Insumos Agrícolas) — use APENAS quando:
-- O documento diz "FACTURA ELECTRONICA" ou "FACTURA" no cabecalho (NAO "Nota de Remision")
-- Os itens são defensivos agrícolas (herbicidas, fungicidas, inseticidas, acaricidas): Glifosato, Atrazina, Flumitop, etc.
-- Sementes (soja, milho, trigo, etc.)
-- Fertilizantes e adubos (NPK, ureia, MAP, KCl, etc.)
-- Adjuvantes, espalhantes, reguladores de crescimento
-- Produtos fitossanitários em geral
+**expense** (Despesa SEM nota fiscal — apenas recibos simples) — use APENAS quando:
+- O documento NAO tem cabecalho "FACTURA" ou timbrado fiscal
+- E um simples recibo manuscrito, ticket de caixa sem numero fiscal, comprovante de transferencia, foto de pagamento informal
+- Mao de obra avulsa sem nota
+- Frete/transporte avulso sem nota
+- Gorjetas, gastos pequenos sem documento fiscal
+- Em DUVIDA entre invoice e expense, escolha "invoice" — todo documento com numero fiscal e fatura.
 
 **remision** (Nota de Remision / Guia de Remessa) — use quando:
 - O TITULO/CABECALHO/TIMBRADO do documento diz "NOTA DE REMISION", "REMISION", "NOTA DE REMISSAO" ou "GUIA DE REMESSA". Olhe especificamente o topo, o timbrado, ou o canto superior direito — e ahi que o tipo do documento e declarado.
@@ -67,9 +66,10 @@ REGRA DE CLASSIFICAÇÃO (MUITO IMPORTANTE - siga à risca):
 **unknown** — quando não for possível determinar com certeza.
 
 REGRA DE CLASSIFICACAO CORRETA:
-1. Olhe o CABECALHO/TIMBRADO do documento (topo da pagina, caixa do timbrado, canto superior direito). Se diz "FACTURA" ou "FACTURA ELECTRONICA" → type="invoice". Se diz "NOTA DE REMISION" ou "REMISION" no titulo → type="remision".
+1. Olhe o CABECALHO/TIMBRADO do documento (topo da pagina, caixa do timbrado, canto superior direito). Se diz "FACTURA" ou "FACTURA ELECTRONICA" → type="invoice" SEMPRE, independente do conteudo (peças, defensivos, diesel, manutencao — tudo invoice). Se diz "NOTA DE REMISION" ou "REMISION" no titulo → type="remision".
 2. IMPORTANTE — FALSOS POSITIVOS DE REMISSAO: faturas paraguaias frequentemente tem uma LINHA DE REFERENCIA no corpo tipo "REMISIONES: 001-004:0000596" ou "Facturas asociadas: ..." — isso e apenas uma REFERENCIA cruzada a um documento relacionado, NAO muda o tipo. Se o cabecalho diz "FACTURA", o type e "invoice" mesmo que a palavra "REMISIONES" apareca no corpo.
-3. Se o documento tem TOTAL A PAGAR, PRECO UNITARIO e VALOR DE VENTA preenchidos com valores > 0 → quase sempre e "invoice" (remissoes normalmente nao tem precos).
+3. IMPORTANTE — NAO CLASSIFIQUE COMO EXPENSE SE TEM TIMBRADO/NUMERO DE FATURA: se o documento tem numero de fatura (formato XXX-XXX-XXXXXXX), timbrado fiscal, ou cabecalho "FACTURA", e SEMPRE invoice — mesmo que os itens sejam pecas mecanicas, oleo, diesel, manutencao, frete. Expense e APENAS para recibos sem documento fiscal nenhum.
+4. Se o documento tem TOTAL A PAGAR, PRECO UNITARIO e VALOR DE VENTA preenchidos com valores > 0 → quase sempre e "invoice" (remissoes normalmente nao tem precos).
 
 Se for 'invoice', extraia TAMBÉM o fornecedor, o número da nota (se houver) e TODOS os produtos com quantidades, unidades e valores.
 
@@ -234,6 +234,15 @@ export async function parseWithGemini(fileBase64: string, mimeType: string): Pro
     parsed.supplierPhone = parsed.supplierPhone || null;
     parsed.supplierEmail = parsed.supplierEmail || null;
     parsed.supplierAddress = parsed.supplierAddress || null;
+
+    // Downgrade EXPENSE -> INVOICE: se Gemini classificou como expense mas o documento
+    // tem numero de fatura E total > 0, e quase certamente uma factura (so que com
+    // conteudo de pecas/diesel/manutencao). Reverter para invoice — falsos positivos
+    // pegavam Repuestos SJ e similares.
+    if (parsed.type === "expense" && parsed.invoiceNumber && parsed.totalAmount > 0) {
+        console.log(`[GEMINI_PARSER] Downgrade: expense -> invoice (tem invoiceNumber=${parsed.invoiceNumber} e totalAmount=${parsed.totalAmount})`);
+        parsed.type = "invoice";
+    }
 
     return parsed;
 }

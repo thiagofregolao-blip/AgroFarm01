@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, DollarSign, Loader2, Repeat, Download, Pencil, Trash2, FileText } from "lucide-react";
+import { Plus, DollarSign, Loader2, Repeat, Download, Pencil, Trash2, FileText, Check, X, Link2, Truck } from "lucide-react";
 import { formatCurrency } from "@/lib/format-currency";
 import { useAccessLevel } from "@/hooks/use-access-level";
 
@@ -60,6 +60,10 @@ export default function FarmExpenses() {
     const [editingExpense, setEditingExpense] = useState<any>(null);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<any>(null);
+    const [detailExpense, setDetailExpense] = useState<any>(null);
+    const [approveExpense, setApproveExpense] = useState<any>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [promoteOpen, setPromoteOpen] = useState(false);
     const { canEdit } = useAccessLevel("expenses");
 
     const { data: expenses = [], isLoading } = useQuery({
@@ -98,6 +102,12 @@ export default function FarmExpenses() {
         enabled: !!user,
     });
 
+    const { data: equipment = [] } = useQuery<any[]>({
+        queryKey: ["/api/farm/equipment"],
+        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/equipment"); return r.json(); },
+        enabled: !!user,
+    });
+
     const filtered = filterCategory === "todos" ? expenses : expenses.filter((e: any) => e.category === filterCategory);
     const totalExpenses = expenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0);
     const totalFiltered = filtered.reduce((s: number, e: any) => s + parseFloat(e.amount), 0);
@@ -122,7 +132,7 @@ export default function FarmExpenses() {
     });
 
     const updateMutation = useMutation({
-        mutationFn: async ({ id, data }: { id: number; data: any }) => apiRequest("PUT", `/api/farm/expenses/${id}`, data),
+        mutationFn: async ({ id, data }: { id: string; data: any }) => apiRequest("PATCH", `/api/farm/expenses/${id}`, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
             toast({ title: "Despesa atualizada com sucesso" });
@@ -130,6 +140,48 @@ export default function FarmExpenses() {
             setEditingExpense(null);
         },
     });
+
+    const approveMutation = useMutation({
+        mutationFn: async ({ id, data }: { id: string; data: any }) => apiRequest("POST", `/api/farm/expenses/${id}/confirm`, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-accounts"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
+            toast({ title: "Despesa aprovada" });
+            setApproveExpense(null);
+        },
+        onError: (err: any) => toast({ title: `Erro: ${err?.message || "falha ao aprovar"}`, variant: "destructive" }),
+    });
+
+    const promoteMutation = useMutation({
+        mutationFn: async ({ expenseIds, invoiceId }: { expenseIds: string[]; invoiceId: string }) =>
+            apiRequest("POST", "/api/farm/expenses/promote-to-invoice", { expenseIds, invoiceId }),
+        onSuccess: (_, vars) => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
+            toast({ title: `${vars.expenseIds.length} despesa(s) vinculada(s) a fatura` });
+            setPromoteOpen(false);
+            setSelectedIds(new Set());
+        },
+        onError: (err: any) => toast({ title: `Erro: ${err?.message || "falha ao promover"}`, variant: "destructive" }),
+    });
+
+    function toggleSelected(id: string) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }
+    function toggleSelectAll() {
+        setSelectedIds(prev => {
+            if (prev.size === filtered.length) return new Set();
+            return new Set(filtered.map((e: any) => e.id));
+        });
+    }
+    const selectedExpenses = filtered.filter((e: any) => selectedIds.has(e.id));
+    const selectedSuppliers = new Set(selectedExpenses.map((e: any) => (e.supplier || "").toLowerCase().trim()));
+    const canPromote = selectedExpenses.length > 0 && selectedSuppliers.size === 1;
 
     return (
         <FarmLayout>
@@ -183,21 +235,81 @@ export default function FarmExpenses() {
                         <p className="text-gray-500">Nenhuma despesa registrada</p>
                     </CardContent></Card>
                 ) : (
+                    <>
+                    {/* Barra de acao de selecao multipla */}
+                    {canEdit && (
+                        <div className="flex items-center gap-3 bg-emerald-50/50 border border-emerald-100 rounded-lg px-3 py-2">
+                            <span className="text-xs text-emerald-700 font-semibold">
+                                {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : "Selecione despesas para promover a fatura"}
+                            </span>
+                            {selectedIds.size > 0 && selectedSuppliers.size > 1 && (
+                                <span className="text-[11px] text-amber-600">⚠ fornecedores diferentes — selecione apenas do mesmo fornecedor</span>
+                            )}
+                            <div className="ml-auto flex gap-2">
+                                {selectedIds.size > 0 && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs"
+                                        onClick={() => setSelectedIds(new Set())}
+                                    >
+                                        Limpar selecao
+                                    </Button>
+                                )}
+                                <Button
+                                    size="sm"
+                                    className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40"
+                                    disabled={!canPromote}
+                                    onClick={() => setPromoteOpen(true)}
+                                >
+                                    <Link2 className="mr-1 h-3.5 w-3.5" />
+                                    Promover a Fatura
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                     <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden">
                         <table className="w-full text-sm">
                             <thead className="bg-emerald-50">
                                 <tr>
+                                    {canEdit && (
+                                        <th className="p-3 w-10">
+                                            <input
+                                                type="checkbox"
+                                                checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                                                onChange={toggleSelectAll}
+                                                className="h-4 w-4 cursor-pointer accent-emerald-600"
+                                                aria-label="Selecionar todas"
+                                            />
+                                        </th>
+                                    )}
                                     <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Descrição</th>
                                     <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
+                                    <th className="text-left p-3 font-semibold text-emerald-800">Doc Nº</th>
+                                    <th className="text-center p-3 font-semibold text-emerald-800">Status</th>
                                     <th className="text-right p-3 font-semibold text-emerald-800">Valor</th>
-                                    {canEdit && <th className="text-center p-3 font-semibold text-emerald-800 w-24">Acoes</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {filtered.map((e: any) => (
-                                    <tr key={e.id} className="border-t border-gray-100 hover:bg-gray-50">
+                                    <tr
+                                        key={e.id}
+                                        className={`border-t border-gray-100 hover:bg-emerald-50/30 cursor-pointer transition-colors ${selectedIds.has(e.id) ? "bg-emerald-50/40" : ""}`}
+                                        onClick={() => setDetailExpense(e)}
+                                    >
+                                        {canEdit && (
+                                            <td className="p-3" onClick={ev => ev.stopPropagation()}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedIds.has(e.id)}
+                                                    onChange={() => toggleSelected(e.id)}
+                                                    className="h-4 w-4 cursor-pointer accent-emerald-600"
+                                                    aria-label={`Selecionar despesa ${e.description || e.category}`}
+                                                />
+                                            </td>
+                                        )}
                                         <td className="p-3">{new Date(e.expenseDate).toLocaleDateString("pt-BR")}</td>
                                         <td className="p-3">
                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
@@ -206,36 +318,25 @@ export default function FarmExpenses() {
                                         </td>
                                         <td className="p-3 text-gray-600 max-w-[200px] truncate">{e.description || "—"}</td>
                                         <td className="p-3 text-gray-500">{e.supplier || "—"}</td>
-                                        <td className="text-right p-3 font-mono font-semibold">{formatCurrency(e.amount)}</td>
-                                        {canEdit && (
+                                        <td className="p-3 text-gray-500 font-mono text-xs">{e.documentNumber || "—"}</td>
                                         <td className="p-3 text-center">
-                                            <div className="flex items-center justify-center gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50"
-                                                    aria-label="Editar despesa"
-                                                    onClick={() => { setEditingExpense(e); setEditDialogOpen(true); }}
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                                    aria-label="Excluir despesa"
-                                                    onClick={() => setDeleteTarget(e)}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
+                                            {e.invoiceId ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700" title="Vinculada a uma fatura">
+                                                    <Link2 className="h-2.5 w-2.5" /> Vinculada
+                                                </span>
+                                            ) : e.status === "confirmed" ? (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">Confirmada</span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">Pendente</span>
+                                            )}
                                         </td>
-                                        )}
+                                        <td className="text-right p-3 font-mono font-semibold">{formatCurrency(e.amount)}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
+                    </>
                 )}
                 {/* Delete confirmation dialog */}
                 <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
@@ -281,8 +382,291 @@ export default function FarmExpenses() {
                         )}
                     </DialogContent>
                 </Dialog>
+
+                {/* Modal de detalhes — abre ao clicar na linha */}
+                <Dialog open={!!detailExpense} onOpenChange={open => { if (!open) setDetailExpense(null); }}>
+                    <DialogContent className="max-w-lg">
+                        <DialogHeader><DialogTitle>Detalhes da Despesa</DialogTitle></DialogHeader>
+                        {detailExpense && (
+                            <div className="space-y-3 text-sm">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Data</Label>
+                                        <p className="font-semibold">{new Date(detailExpense.expenseDate).toLocaleDateString("pt-BR")}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Categoria</Label>
+                                        <p>{EXPENSE_CATEGORIES.find(c => c.value === detailExpense.category)?.label || detailExpense.category}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Fornecedor</Label>
+                                        <p>{detailExpense.supplier || "—"}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Doc Nº</Label>
+                                        <p className="font-mono">{detailExpense.documentNumber || "—"}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Valor</Label>
+                                        <p className="font-bold text-emerald-700">{formatCurrency(detailExpense.amount)}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Pagamento</Label>
+                                        <p>{detailExpense.paymentType === "a_prazo" ? `A prazo (${detailExpense.installments}x)` : "A vista"}</p>
+                                    </div>
+                                    {detailExpense.dueDate && (
+                                        <div>
+                                            <Label className="text-xs text-gray-500">Vencimento</Label>
+                                            <p>{new Date(detailExpense.dueDate).toLocaleDateString("pt-BR")}</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Status</Label>
+                                        <p>
+                                            {detailExpense.invoiceId
+                                                ? <span className="text-blue-700 font-semibold">Vinculada à fatura</span>
+                                                : detailExpense.status === "confirmed"
+                                                    ? <span className="text-emerald-700 font-semibold">Confirmada</span>
+                                                    : <span className="text-amber-700 font-semibold">Pendente</span>}
+                                        </p>
+                                    </div>
+                                </div>
+                                {detailExpense.description && (
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Descrição</Label>
+                                        <p className="text-gray-700">{detailExpense.description}</p>
+                                    </div>
+                                )}
+                                {detailExpense.equipmentId && (
+                                    <div>
+                                        <Label className="text-xs text-gray-500">Veiculo vinculado</Label>
+                                        <p className="text-gray-700">
+                                            {(equipment as any[]).find(eq => eq.id === detailExpense.equipmentId)?.name || detailExpense.equipmentId}
+                                        </p>
+                                    </div>
+                                )}
+                                {canEdit && (
+                                    <div className="flex gap-2 pt-3 border-t">
+                                        {detailExpense.status !== "confirmed" && (
+                                            <Button
+                                                size="sm"
+                                                className="bg-emerald-600 hover:bg-emerald-700"
+                                                onClick={() => { setApproveExpense(detailExpense); setDetailExpense(null); }}
+                                            >
+                                                Aprovar
+                                            </Button>
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => { setEditingExpense(detailExpense); setEditDialogOpen(true); setDetailExpense(null); }}
+                                        >
+                                            <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-red-600 border-red-300 hover:bg-red-50"
+                                            onClick={() => { setDeleteTarget(detailExpense); setDetailExpense(null); }}
+                                        >
+                                            <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
+                                        </Button>
+                                        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setDetailExpense(null)}>
+                                            Fechar
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
+
+                {/* Modal de aprovacao — escolhe conta + veiculo opcional */}
+                <Dialog open={!!approveExpense} onOpenChange={open => { if (!open) setApproveExpense(null); }}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader><DialogTitle>Aprovar Despesa</DialogTitle></DialogHeader>
+                        {approveExpense && (
+                            <ApproveForm
+                                expense={approveExpense}
+                                equipment={equipment as any[]}
+                                cashAccounts={cashAccounts as any[]}
+                                saving={approveMutation.isPending}
+                                onSave={(data: any) => approveMutation.mutate({ id: approveExpense.id, data })}
+                                onCancel={() => setApproveExpense(null)}
+                            />
+                        )}
+                    </DialogContent>
+                </Dialog>
+
+                {/* Modal Promover a Fatura — lista faturas do mesmo fornecedor */}
+                <Dialog open={promoteOpen} onOpenChange={setPromoteOpen}>
+                    <DialogContent className="max-w-lg">
+                        <DialogHeader><DialogTitle>Promover a Fatura</DialogTitle></DialogHeader>
+                        <PromoteToInvoice
+                            expenses={selectedExpenses}
+                            invoices={invoices as any[]}
+                            saving={promoteMutation.isPending}
+                            onSave={(invoiceId: string) => promoteMutation.mutate({ expenseIds: selectedExpenses.map((e: any) => e.id), invoiceId })}
+                            onCancel={() => setPromoteOpen(false)}
+                        />
+                    </DialogContent>
+                </Dialog>
             </div>
         </FarmLayout>
+    );
+}
+
+// ─── ApproveForm ────────────────────────────────────────────────────────────
+function ApproveForm({ expense, equipment, cashAccounts, saving, onSave, onCancel }: any) {
+    const [paymentType, setPaymentType] = useState<string>(expense.paymentType || "a_vista");
+    const [paymentStatus, setPaymentStatus] = useState<string>(expense.paymentStatus || "pendente");
+    const [accountId, setAccountId] = useState<string>("");
+    const [equipmentId, setEquipmentId] = useState<string>(expense.equipmentId || "__none__");
+    const [dueDate, setDueDate] = useState<string>(expense.dueDate ? new Date(expense.dueDate).toISOString().substring(0, 10) : "");
+    const [installments, setInstallments] = useState<string>(String(expense.installments || 1));
+
+    function handleSubmit() {
+        onSave({
+            paymentType,
+            paymentStatus,
+            accountId: accountId || undefined,
+            equipmentId: equipmentId === "__none__" ? null : equipmentId,
+            dueDate: dueDate || undefined,
+            installments: paymentType === "a_prazo" ? parseInt(installments) : 1,
+        });
+    }
+
+    return (
+        <div className="space-y-4 text-sm">
+            <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500">Despesa</p>
+                <p className="font-semibold">{expense.supplier || expense.category} — {formatCurrency(expense.amount)}</p>
+            </div>
+
+            <div>
+                <Label>Vincular a veiculo <span className="text-gray-400 font-normal">(opcional)</span></Label>
+                <Select value={equipmentId} onValueChange={setEquipmentId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__none__">Nenhum</SelectItem>
+                        {equipment.filter((e: any) => e.status === "Ativo" || !e.status).map((e: any) => (
+                            <SelectItem key={e.id} value={e.id}>{e.name} {e.type ? `(${e.type})` : ""}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <div>
+                <Label>Tipo de pagamento</Label>
+                <Select value={paymentType} onValueChange={setPaymentType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="a_vista">A vista</SelectItem>
+                        <SelectItem value="a_prazo">A prazo</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {paymentType === "a_prazo" && (
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <Label>Parcelas</Label>
+                        <Input type="number" min="1" value={installments} onChange={e => setInstallments(e.target.value)} />
+                    </div>
+                    <div>
+                        <Label>1º vencimento</Label>
+                        <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                    </div>
+                </div>
+            )}
+
+            <div>
+                <Label>Status do pagamento</Label>
+                <Select value={paymentStatus} onValueChange={setPaymentStatus}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="pendente">Pendente</SelectItem>
+                        <SelectItem value="pago">Pago</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {paymentStatus === "pago" && cashAccounts.length > 0 && (
+                <div>
+                    <Label>Conta a debitar</Label>
+                    <Select value={accountId} onValueChange={setAccountId}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>
+                            {cashAccounts.map((a: any) => (
+                                <SelectItem key={a.id} value={a.id}>{a.name} — {formatCurrency(a.currentBalance)}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
+                <Button variant="outline" onClick={onCancel} disabled={saving}>Cancelar</Button>
+                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSubmit} disabled={saving}>
+                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                    Aprovar
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+// ─── PromoteToInvoice ──────────────────────────────────────────────────────
+function PromoteToInvoice({ expenses, invoices, saving, onSave, onCancel }: any) {
+    const [invoiceId, setInvoiceId] = useState<string>("");
+
+    // Filtra faturas do mesmo fornecedor das despesas selecionadas
+    const supplier = expenses[0]?.supplier?.toLowerCase().trim() || "";
+    const candidateInvoices = (invoices as any[]).filter((inv: any) =>
+        (inv.supplier || "").toLowerCase().trim().includes(supplier) ||
+        supplier.includes((inv.supplier || "").toLowerCase().trim())
+    );
+
+    return (
+        <div className="space-y-4 text-sm">
+            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+                <p className="text-xs text-emerald-700 font-semibold mb-1">{expenses.length} despesa(s) — {expenses[0]?.supplier || "—"}</p>
+                <p className="text-xs text-gray-600">Total: {formatCurrency(expenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0))}</p>
+            </div>
+
+            <div>
+                <Label>Selecione a fatura</Label>
+                {candidateInvoices.length === 0 ? (
+                    <p className="text-sm text-amber-600 mt-2">
+                        Nenhuma fatura encontrada para o fornecedor <strong>{expenses[0]?.supplier}</strong>.
+                        Importe ou cadastre uma fatura primeiro.
+                    </p>
+                ) : (
+                    <Select value={invoiceId} onValueChange={setInvoiceId}>
+                        <SelectTrigger><SelectValue placeholder="Selecione a fatura..." /></SelectTrigger>
+                        <SelectContent>
+                            {candidateInvoices.map((inv: any) => (
+                                <SelectItem key={inv.id} value={inv.id}>
+                                    NF-{inv.invoiceNumber || inv.id.slice(0, 8)} — {formatCurrency(inv.totalAmount, inv.currency)} — {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "?"}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
+                <Button variant="outline" onClick={onCancel} disabled={saving}>Cancelar</Button>
+                <Button
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => invoiceId && onSave(invoiceId)}
+                    disabled={!invoiceId || saving}
+                >
+                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
+                    Vincular
+                </Button>
+            </div>
+        </div>
     );
 }
 
@@ -298,6 +682,7 @@ function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, o
     const [dueDate, setDueDate] = useState(initialData?.dueDate ? new Date(initialData.dueDate).toISOString().substring(0, 10) : "");
     const [installments, setInstallments] = useState(initialData?.installments ? String(initialData.installments) : "1");
     const [accountId, setAccountId] = useState(initialData?.accountId ? String(initialData.accountId) : "");
+    const [documentNumber, setDocumentNumber] = useState(initialData?.documentNumber || "");
 
     // Item #17 — expense with or without invoice
     const [expenseType, setExpenseType] = useState<"sem_fatura" | "com_fatura">(initialData?.invoiceId ? "com_fatura" : "sem_fatura");
@@ -354,6 +739,7 @@ function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, o
             installments: paymentType === "a_prazo" ? parseInt(installments) : 1,
             accountId: paymentType === "a_vista" && accountId ? accountId : null,
             invoiceId: expenseType === "com_fatura" && invoiceId ? invoiceId : null,
+            documentNumber: documentNumber || null,
             // Recurring fields -- backend will interpret repeatTimes > 1
             frequency: isRecurring ? frequency : null,
             repeatTimes: isRecurring ? parseInt(repeatTimes) : 1,
@@ -409,6 +795,17 @@ function ExpenseForm({ properties, seasons, suppliers, invoices, cashAccounts, o
                 {triedSubmit && !supplier && (
                     <p className="text-xs text-red-500 mt-1">Selecione um fornecedor cadastrado</p>
                 )}
+            </div>
+
+            {/* Numero do documento (opcional) — recibo, NF-e, comprovante */}
+            <div>
+                <Label>Numero do documento <span className="text-gray-400 font-normal">(opcional)</span></Label>
+                <Input
+                    type="text"
+                    value={documentNumber}
+                    onChange={e => setDocumentNumber(e.target.value)}
+                    placeholder="Ex: 001-001-0000123"
+                />
             </div>
 
             {/* Item #17 — Invoice selection when "Com Fatura" */}

@@ -1250,6 +1250,7 @@ export const farmExpenses = pgTable("farm_expenses", {
   installmentsPaid: integer("installments_paid").default(0),
   paidAmount: decimal("paid_amount", { precision: 15, scale: 2 }).default("0"),
   expenseDate: timestamp("expense_date").notNull().default(sql`now()`),
+  documentNumber: text("document_number"), // numero do documento/recibo (opcional)
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

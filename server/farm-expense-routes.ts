@@ -236,7 +236,7 @@ export function registerFarmExpenseRoutes(app: Express) {
             const {
                 plotId, propertyId, seasonId, category, description, amount,
                 expenseDate, paymentType, dueDate, installments, supplier,
-                frequency, repeatTimes, invoiceId, accountId,
+                frequency, repeatTimes, invoiceId, accountId, documentNumber,
             } = req.body;
             if (!category || !amount) return res.status(400).json({ error: "Category and amount required" });
 
@@ -275,6 +275,13 @@ export function registerFarmExpenseRoutes(app: Express) {
                     installments: installments ? parseInt(installments) : 1,
                     supplier: supplier || undefined,
                 });
+                // documentNumber é campo novo; salva via raw SQL pra nao precisar
+                // mexer na assinatura do storage.
+                if (expense.id && documentNumber) {
+                    const { db } = await import("./db");
+                    const { sql: sqlFn } = await import("drizzle-orm");
+                    await db.execute(sqlFn`UPDATE farm_expenses SET document_number = ${documentNumber} WHERE id = ${expense.id}`);
+                }
                 createdExpenses.push(expense);
 
                 // AUTO: Toda despesa gera Conta a Pagar
@@ -365,7 +372,7 @@ export function registerFarmExpenseRoutes(app: Express) {
 
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
-            const { accountId, paymentMethod, paymentStatus, paymentType, dueDate, installments } = req.body || {};
+            const { accountId, paymentMethod, paymentStatus, paymentType, dueDate, installments, equipmentId } = req.body || {};
 
             const [expense] = await db.select().from(farmExpenses).where(
                 and(eq(farmExpenses.id, req.params.id), eq(farmExpenses.farmerId, farmerId))
@@ -386,6 +393,10 @@ export function registerFarmExpenseRoutes(app: Express) {
             if (isPago) {
                 updateData.paidAmount = String(amount);
                 updateData.installmentsPaid = updateData.installments || 1;
+            }
+            // Vincular veiculo na aprovacao (campo opcional do modal de aprovar)
+            if (equipmentId !== undefined) {
+                updateData.equipmentId = equipmentId || null;
             }
 
             await db.update(farmExpenses).set(updateData).where(eq(farmExpenses.id, expense.id));
@@ -454,6 +465,91 @@ export function registerFarmExpenseRoutes(app: Express) {
         } catch (error) {
             console.error("[FARM_EXPENSE_PAY]", error);
             res.status(500).json({ error: "Failed to pay expense" });
+        }
+    });
+
+    // PATCH: editar campos de uma despesa (nao mexe em pagamento — usar /confirm ou /pay)
+    app.patch("/api/farm/expenses/:id", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenses } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and } = await import("drizzle-orm");
+
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const [expense] = await db.select().from(farmExpenses).where(
+                and(eq(farmExpenses.id, req.params.id), eq(farmExpenses.farmerId, farmerId))
+            ).limit(1);
+            if (!expense) return res.status(404).json({ error: "Expense not found" });
+
+            const allowed = ["category", "supplier", "description", "amount", "dueDate", "expenseDate", "equipmentId", "propertyId", "documentNumber"];
+            const updateData: any = {};
+            for (const key of allowed) {
+                if (key in req.body) {
+                    if ((key === "dueDate" || key === "expenseDate") && req.body[key]) {
+                        updateData[key] = parseLocalDate(req.body[key]);
+                    } else {
+                        updateData[key] = req.body[key];
+                    }
+                }
+            }
+            if (Object.keys(updateData).length === 0) {
+                return res.status(400).json({ error: "Nada para atualizar" });
+            }
+
+            await db.update(farmExpenses).set(updateData).where(eq(farmExpenses.id, expense.id));
+            res.json({ success: true });
+        } catch (error: any) {
+            console.error("[FARM_EXPENSE_PATCH]", error);
+            res.status(500).json({ error: `Failed to update expense: ${error?.message || "unknown"}` });
+        }
+    });
+
+    // POST: vincular varias despesas a uma fatura existente (botao "Promover a Fatura").
+    // Body: { expenseIds: string[], invoiceId: string }. Setam farm_expenses.invoice_id.
+    app.post("/api/farm/expenses/promote-to-invoice", requireFarmer, async (req, res) => {
+        try {
+            const { farmExpenses, farmInvoices } = await import("../shared/schema");
+            const { db } = await import("./db");
+            const { eq, and, inArray } = await import("drizzle-orm");
+
+            const farmerId = await getEffectiveFarmerId(req);
+            if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+
+            const { expenseIds, invoiceId } = req.body || {};
+            if (!Array.isArray(expenseIds) || expenseIds.length === 0) {
+                return res.status(400).json({ error: "expenseIds (array) obrigatorio" });
+            }
+            if (!invoiceId) return res.status(400).json({ error: "invoiceId obrigatorio" });
+
+            // Garante que a fatura pertence ao farmer
+            const [invoice] = await db.select().from(farmInvoices).where(
+                and(eq(farmInvoices.id, invoiceId), eq(farmInvoices.farmerId, farmerId))
+            ).limit(1);
+            if (!invoice) return res.status(404).json({ error: "Fatura nao encontrada" });
+
+            // Garante que todas as despesas pertencem ao farmer e tem o mesmo fornecedor
+            const expenses = await db.select().from(farmExpenses).where(
+                and(eq(farmExpenses.farmerId, farmerId), inArray(farmExpenses.id, expenseIds))
+            );
+            if (expenses.length !== expenseIds.length) {
+                return res.status(404).json({ error: "Uma ou mais despesas nao encontradas" });
+            }
+            const suppliers = new Set(expenses.map((e: any) => (e.supplier || "").trim().toLowerCase()).filter(Boolean));
+            if (suppliers.size > 1) {
+                return res.status(400).json({ error: "Despesas devem ser do mesmo fornecedor" });
+            }
+
+            await db.update(farmExpenses)
+                .set({ invoiceId })
+                .where(and(eq(farmExpenses.farmerId, farmerId), inArray(farmExpenses.id, expenseIds)));
+
+            console.log(`[FARM_EXPENSE_PROMOTE] vinculadas ${expenseIds.length} despesa(s) a fatura ${invoiceId}`);
+            res.json({ success: true, count: expenseIds.length });
+        } catch (error: any) {
+            console.error("[FARM_EXPENSE_PROMOTE]", error);
+            res.status(500).json({ error: `Failed to promote: ${error?.message || "unknown"}` });
         }
     });
 
