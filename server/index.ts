@@ -732,7 +732,10 @@ app.use((req, res, next) => {
 
   // Inline migration: farm_season_plots table
   try {
-    await db.execute(sql`CREATE TABLE IF NOT EXISTS farm_season_plots (
+    const { db: seasonPlotDb, dbReady: seasonPlotReady } = await import("./db");
+    const { sql: seasonPlotSql } = await import("drizzle-orm");
+    await seasonPlotReady;
+    await seasonPlotDb.execute(seasonPlotSql`CREATE TABLE IF NOT EXISTS farm_season_plots (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
       season_id varchar NOT NULL REFERENCES farm_seasons(id) ON DELETE CASCADE,
       plot_id varchar NOT NULL REFERENCES farm_plots(id) ON DELETE CASCADE,
@@ -950,6 +953,10 @@ app.use((req, res, next) => {
     // document_number: usuario informa numero do recibo ao cadastrar despesa manual
     await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS document_number TEXT`);
 
+    // currency: moeda da despesa (faltava — INSERTs em farm-invoice-routes ja
+    // tentavam gravar essa coluna, gerando "column currency does not exist")
+    await db.execute(sql`ALTER TABLE farm_expenses ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'USD'`);
+
     // Find duplicate applications: same farmer_id + product_id + plot_id + quantity within 120 seconds
     // Keep the oldest (smallest created_at), delete the rest + their movements + restore stock
     const dupResult = await db.execute(sql`
@@ -1166,7 +1173,10 @@ app.use((req, res, next) => {
 
   // ── Download page: validate password and return latest release links ──
   app.post("/api/download/auth", (req: any, res: any) => {
-    const DOWNLOAD_PASSWORD = process.env.DOWNLOAD_PASSWORD || "agrofarm2025";
+    const DOWNLOAD_PASSWORD = process.env.DOWNLOAD_PASSWORD;
+    if (!DOWNLOAD_PASSWORD) {
+      return res.status(503).json({ error: "Download indisponivel" });
+    }
     const { password } = req.body || {};
     if (!password || password !== DOWNLOAD_PASSWORD) {
       return res.status(401).json({ error: "Senha incorreta" });
