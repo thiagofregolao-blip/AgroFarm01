@@ -7,6 +7,7 @@
 
 import type { Express, Request, Response } from "express";
 import multer from "multer";
+import { createHmac, timingSafeEqual } from "crypto";
 import { db } from "./db";
 import { farmInvoices, farmInvoiceItems, users } from "../shared/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -18,6 +19,51 @@ import {
 
 // Multer for parsing multipart/form-data (Mailgun webhooks)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+function getMailgunField(req: Request, name: string): string {
+    const value = req.body?.[name] ?? req.body?.[name.toLowerCase()] ?? req.body?.[name.toUpperCase()];
+    return typeof value === "string" ? value : "";
+}
+
+function validateMailgunSignature(req: Request): boolean {
+    const signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY || process.env.MAILGUN_SIGNING_KEY;
+    if (!signingKey) {
+        console.warn("[MAILGUN_HMAC] REJECT: MAILGUN_WEBHOOK_SIGNING_KEY nao configurada");
+        return false;
+    }
+
+    const timestamp = getMailgunField(req, "timestamp");
+    const token = getMailgunField(req, "token");
+    const signature = getMailgunField(req, "signature");
+    if (!timestamp || !token || !signature) {
+        console.warn(`[MAILGUN_HMAC] REJECT: campos ausentes — timestamp=${!!timestamp}, token=${!!token}, signature=${!!signature}. Body keys: ${Object.keys(req.body || {}).join(", ").substring(0, 200)}`);
+        return false;
+    }
+
+    const timestampMs = Number(timestamp) * 1000;
+    if (!Number.isFinite(timestampMs)) {
+        console.warn(`[MAILGUN_HMAC] REJECT: timestamp invalido "${timestamp}"`);
+        return false;
+    }
+    const driftMs = Math.abs(Date.now() - timestampMs);
+    if (driftMs > 15 * 60 * 1000) {
+        console.warn(`[MAILGUN_HMAC] REJECT: anti-replay — drift=${Math.round(driftMs / 1000)}s (limite 900s). serverNow=${new Date().toISOString()} mailgunTs=${new Date(timestampMs).toISOString()}`);
+        return false;
+    }
+
+    const expected = createHmac("sha256", signingKey).update(timestamp + token).digest("hex");
+    const expectedBuffer = Buffer.from(expected, "hex");
+    const signatureBuffer = Buffer.from(signature, "hex");
+    if (expectedBuffer.length !== signatureBuffer.length) {
+        console.warn(`[MAILGUN_HMAC] REJECT: tamanhos diferentes — expected=${expectedBuffer.length} got=${signatureBuffer.length}. Sigkey starts with "${signingKey.substring(0, 8)}..." len=${signingKey.length}`);
+        return false;
+    }
+    const ok = timingSafeEqual(expectedBuffer, signatureBuffer);
+    if (!ok) {
+        console.warn(`[MAILGUN_HMAC] REJECT: HMAC nao bate. Sigkey len=${signingKey.length} starts="${signingKey.substring(0, 4)}..." ts=${timestamp} tokenLen=${token.length}`);
+    }
+    return ok;
+}
 
 export function registerInvoiceEmailRoutes(app: Express) {
 
@@ -35,6 +81,10 @@ export function registerInvoiceEmailRoutes(app: Express) {
      */
     app.post("/api/webhooks/mailgun/invoice", upload.any(), async (req: Request, res: Response) => {
         try {
+            if (!validateMailgunSignature(req)) {
+                return res.status(401).json({ error: "Invalid Mailgun signature" });
+            }
+
             console.log("[Invoice Webhook] Received Mailgun webhook");
 
             const recipient = req.body.recipient || req.body.To || "";
