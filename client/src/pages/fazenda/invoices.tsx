@@ -150,8 +150,15 @@ export default function FarmInvoices() {
     const [expInstallments, setExpInstallments] = useState("1");
     const [expPropertyId, setExpPropertyId] = useState("");
     const [expSeasonId, setExpSeasonId] = useState("");
+    const [expDocumentNumber, setExpDocumentNumber] = useState("");
     const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
     const [supplierSearchTerm, setSupplierSearchTerm] = useState("");
+
+    // Despesas sem Fatura: selecao multipla + modal Promover a Fatura + campo veiculo no aprovar
+    const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
+    const [promoteOpen, setPromoteOpen] = useState(false);
+    const [promoteInvoiceId, setPromoteInvoiceId] = useState("");
+    const [approveEquipmentId, setApproveEquipmentId] = useState<string>("__none__");
 
     const { user } = useAuth();
 
@@ -312,13 +319,15 @@ export default function FarmInvoices() {
     });
 
     const confirmExpenseMutation = useMutation({
-        mutationFn: ({ id, accountId }: { id: string; accountId?: string }) =>
+        mutationFn: ({ id, accountId, equipmentId, paymentType, paymentStatus, dueDate, installments }: { id: string; accountId?: string; equipmentId?: string; paymentType?: string; paymentStatus?: string; dueDate?: string; installments?: string }) =>
             apiRequest("POST", `/api/farm/expenses/${id}/confirm`, {
-                accountId, paymentMethod: "efetivo",
-                paymentStatus: approvePayStatus,
-                paymentType: approvePayType,
-                dueDate: approveDueDate || undefined,
-                installments: approveInstallments || "1",
+                accountId,
+                paymentMethod: "efetivo",
+                paymentStatus: paymentStatus || approvePayStatus,
+                paymentType: paymentType || approvePayType,
+                dueDate: dueDate || approveDueDate || undefined,
+                installments: installments || approveInstallments || "1",
+                equipmentId,
             }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
@@ -490,6 +499,31 @@ export default function FarmInvoices() {
             installments: expPaymentType === "a_prazo" ? parseInt(expInstallments) : 1,
             propertyId: expPropertyId || null,
             seasonId: expSeasonId || null,
+            documentNumber: expDocumentNumber || null,
+        });
+    }
+
+    // Promover despesas a fatura (vincula via invoice_id; despesas continuam aparecendo
+    // na lista com badge "Vinculada", per opcao C confirmada pelo usuario).
+    const promoteToInvoiceMutation = useMutation({
+        mutationFn: async ({ expenseIds, invoiceId }: { expenseIds: string[]; invoiceId: string }) =>
+            apiRequest("POST", "/api/farm/expenses/promote-to-invoice", { expenseIds, invoiceId }),
+        onSuccess: (_, vars) => {
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
+            toast({ title: `${vars.expenseIds.length} despesa(s) vinculada(s) a fatura` });
+            setPromoteOpen(false);
+            setPromoteInvoiceId("");
+            setSelectedExpenseIds(new Set());
+        },
+        onError: (err: any) => toast({ title: `Erro ao vincular: ${err?.message || "falha"}`, variant: "destructive" }),
+    });
+
+    function toggleExpenseSelected(id: string) {
+        setSelectedExpenseIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
         });
     }
 
@@ -813,6 +847,12 @@ export default function FarmInvoices() {
                                     <Label className="text-xs text-gray-500">Descricao</Label>
                                     <Input value={expDescription} onChange={e => setExpDescription(e.target.value)} placeholder="Descricao..." />
                                 </div>
+                            </div>
+
+                            {/* Numero do documento (opcional) */}
+                            <div>
+                                <Label className="text-xs text-gray-500">Numero do documento <span className="text-gray-400 font-normal">(opcional)</span></Label>
+                                <Input value={expDocumentNumber} onChange={e => setExpDocumentNumber(e.target.value)} placeholder="Ex: 001-001-0000123" />
                             </div>
 
                             {/* Linha 3: Valor + Data + Pagamento + Propriedade + Safra */}
@@ -2271,10 +2311,41 @@ export default function FarmInvoices() {
                     <TabsContent value="expenses-nofatura">
                         <Card>
                             <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
                                     <CardTitle className="text-emerald-800 flex items-center gap-2">
                                         <DollarSign className="h-5 w-5" /> Despesas sem Fatura
                                     </CardTitle>
+                                    {(() => {
+                                        const selectedExps = expensesWithoutInvoice.filter((e: any) => selectedExpenseIds.has(e.id));
+                                        const sups = new Set(selectedExps.map((e: any) => (e.supplier || "").toLowerCase().trim()));
+                                        const canPromote = selectedExps.length > 0 && sups.size === 1;
+                                        return (
+                                            <div className="flex items-center gap-3">
+                                                {selectedExpenseIds.size > 0 && (
+                                                    <span className="text-xs text-emerald-700 font-semibold">
+                                                        {selectedExpenseIds.size} selecionada(s)
+                                                    </span>
+                                                )}
+                                                {selectedExpenseIds.size > 0 && sups.size > 1 && (
+                                                    <span className="text-[11px] text-amber-600">⚠ fornecedores diferentes</span>
+                                                )}
+                                                {selectedExpenseIds.size > 0 && (
+                                                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setSelectedExpenseIds(new Set())}>
+                                                        Limpar
+                                                    </Button>
+                                                )}
+                                                <Button
+                                                    size="sm"
+                                                    className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40"
+                                                    disabled={!canPromote}
+                                                    onClick={() => setPromoteOpen(true)}
+                                                >
+                                                    <FileText className="mr-1 h-3.5 w-3.5" />
+                                                    Promover a Fatura
+                                                </Button>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </CardHeader>
                             <CardContent className="p-0">
@@ -2285,8 +2356,23 @@ export default function FarmInvoices() {
                                         <table className="w-full text-sm">
                                             <thead className="bg-emerald-50">
                                                 <tr>
+                                                    <th className="p-3 w-10">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={expensesWithoutInvoice.length > 0 && selectedExpenseIds.size === expensesWithoutInvoice.length}
+                                                            onChange={() => {
+                                                                setSelectedExpenseIds(prev => {
+                                                                    if (prev.size === expensesWithoutInvoice.length) return new Set();
+                                                                    return new Set(expensesWithoutInvoice.map((e: any) => e.id));
+                                                                });
+                                                            }}
+                                                            className="h-4 w-4 cursor-pointer accent-emerald-600"
+                                                            aria-label="Selecionar todas"
+                                                        />
+                                                    </th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Data</th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Fornecedor</th>
+                                                    <th className="text-left p-3 font-semibold text-emerald-800">Doc Nº</th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Categoria</th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Pagamento</th>
                                                     <th className="text-left p-3 font-semibold text-emerald-800">Vencimento</th>
@@ -2297,9 +2383,23 @@ export default function FarmInvoices() {
                                             </thead>
                                             <tbody>
                                                 {expensesWithoutInvoice.map((exp: any) => (
-                                                    <tr key={exp.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                                                    <tr
+                                                        key={exp.id}
+                                                        className={`border-t border-gray-100 hover:bg-emerald-50/30 cursor-pointer transition-colors ${selectedExpenseIds.has(exp.id) ? "bg-emerald-50/40" : ""}`}
+                                                        onClick={() => setSelectedExpense(exp.id)}
+                                                    >
+                                                        <td className="p-3" onClick={ev => ev.stopPropagation()}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedExpenseIds.has(exp.id)}
+                                                                onChange={() => toggleExpenseSelected(exp.id)}
+                                                                className="h-4 w-4 cursor-pointer accent-emerald-600"
+                                                                aria-label={`Selecionar ${exp.supplier || exp.category}`}
+                                                            />
+                                                        </td>
                                                         <td className="p-3 text-gray-700">{new Date(exp.expenseDate || exp.createdAt).toLocaleDateString("pt-BR")}</td>
                                                         <td className="p-3 font-medium">{exp.supplier || "--"}</td>
+                                                        <td className="p-3 text-xs font-mono text-gray-600">{exp.documentNumber || "--"}</td>
                                                         <td className="p-3"><Badge variant="outline" className="text-xs">{exp.category}</Badge></td>
                                                         <td className="p-3">
                                                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${exp.paymentType === "a_prazo" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
@@ -2309,9 +2409,13 @@ export default function FarmInvoices() {
                                                         <td className="p-3 text-gray-600">{exp.paymentType === "a_prazo" && exp.dueDate ? new Date(exp.dueDate).toLocaleDateString("pt-BR") : "--"}</td>
                                                         <td className="p-3 text-gray-600">{exp.paymentType === "a_prazo" ? `${exp.installmentsPaid || 0}/${exp.installments || 1}` : "--"}</td>
                                                         <td className="p-3">
-                                                            <Badge variant={exp.status === "confirmed" ? "default" : "secondary"} className="text-xs">
-                                                                {exp.status === "confirmed" ? "Confirmada" : "Pendente"}
-                                                            </Badge>
+                                                            {exp.invoiceId ? (
+                                                                <Badge className="bg-blue-100 text-blue-700 text-[10px]">Vinculada</Badge>
+                                                            ) : (
+                                                                <Badge variant={exp.status === "confirmed" ? "default" : "secondary"} className="text-xs">
+                                                                    {exp.status === "confirmed" ? "Confirmada" : "Pendente"}
+                                                                </Badge>
+                                                            )}
                                                         </td>
                                                         <td className="text-right p-3 font-mono font-bold text-emerald-700">{formatCurrency(parseFloat(exp.amount || "0"), exp.currency || "USD")}</td>
                                                     </tr>
@@ -2343,7 +2447,7 @@ export default function FarmInvoices() {
                 </div>
             </div>
 
-            <Dialog open={!!approveExpenseId} onOpenChange={(open) => { if (!open) { setApproveExpenseId(null); setApproveAccountId(""); setApprovePayStatus("pago"); setApprovePayType("a_vista"); setApproveDueDate(""); setApproveInstallments("1"); } }}>
+            <Dialog open={!!approveExpenseId} onOpenChange={(open) => { if (!open) { setApproveExpenseId(null); setApproveAccountId(""); setApprovePayStatus("pago"); setApprovePayType("a_vista"); setApproveDueDate(""); setApproveInstallments("1"); setApproveEquipmentId("__none__"); } }}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -2387,6 +2491,19 @@ export default function FarmInvoices() {
                                 )}
                             </div>
                         )}
+                        <div>
+                            <Label>Vincular a Veiculo <span className="text-gray-400 font-normal">(opcional)</span></Label>
+                            <Select value={approveEquipmentId} onValueChange={setApproveEquipmentId}>
+                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__none__">Nenhum</SelectItem>
+                                    {(equipment as any[]).filter((e: any) => e.status === "Ativo" || !e.status).map((e: any) => (
+                                        <SelectItem key={e.id} value={e.id}>{e.name} {e.type ? `(${e.type})` : ""}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-[11px] text-gray-400 mt-1">Despesa fica vinculada ao veiculo (ex: combustivel, manutencao).</p>
+                        </div>
                         {approvePayStatus === "pago" && (
                             <div>
                                 <Label>Conta de Pagamento</Label>
@@ -2409,6 +2526,11 @@ export default function FarmInvoices() {
                                 onClick={() => approveExpenseId && confirmExpenseMutation.mutate({
                                     id: approveExpenseId,
                                     accountId: approvePayStatus === "pago" ? approveAccountId : undefined,
+                                    equipmentId: approveEquipmentId !== "__none__" ? approveEquipmentId : undefined,
+                                    paymentType: approvePayType,
+                                    paymentStatus: approvePayStatus,
+                                    dueDate: approveDueDate || undefined,
+                                    installments: approvePayType === "financiado" ? approveInstallments : undefined,
                                 })}
                             >
                                 {confirmExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
@@ -2416,6 +2538,74 @@ export default function FarmInvoices() {
                             </Button>
                         </div>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal Promover a Fatura — vincula despesas selecionadas a uma fatura existente do mesmo fornecedor */}
+            <Dialog open={promoteOpen} onOpenChange={open => { if (!open) { setPromoteOpen(false); setPromoteInvoiceId(""); } }}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-emerald-800">
+                            <FileText className="h-5 w-5" /> Promover a Fatura
+                        </DialogTitle>
+                    </DialogHeader>
+                    {(() => {
+                        const selExps = expensesWithoutInvoice.filter((e: any) => selectedExpenseIds.has(e.id));
+                        const supplier = (selExps[0]?.supplier || "").toLowerCase().trim();
+                        const candidateInvoices = (invoices as any[]).filter((inv: any) => {
+                            const invSup = (inv.supplier || "").toLowerCase().trim();
+                            return supplier && (invSup.includes(supplier) || supplier.includes(invSup));
+                        });
+                        const totalSel = selExps.reduce((s: number, e: any) => s + parseFloat(e.amount || "0"), 0);
+                        return (
+                            <div className="space-y-4 text-sm py-2">
+                                <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+                                    <p className="text-xs text-emerald-700 font-semibold mb-1">
+                                        {selExps.length} despesa(s) — {selExps[0]?.supplier || "—"}
+                                    </p>
+                                    <p className="text-xs text-gray-600">Total: {formatCurrency(totalSel)}</p>
+                                </div>
+
+                                <div>
+                                    <Label>Selecione a fatura</Label>
+                                    {candidateInvoices.length === 0 ? (
+                                        <p className="text-sm text-amber-600 mt-2">
+                                            Nenhuma fatura encontrada para o fornecedor <strong>{selExps[0]?.supplier}</strong>.
+                                            Importe ou cadastre uma fatura primeiro.
+                                        </p>
+                                    ) : (
+                                        <Select value={promoteInvoiceId} onValueChange={setPromoteInvoiceId}>
+                                            <SelectTrigger><SelectValue placeholder="Selecione a fatura..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {candidateInvoices.map((inv: any) => (
+                                                    <SelectItem key={inv.id} value={inv.id}>
+                                                        NF-{inv.invoiceNumber || inv.id.slice(0, 8)} — {formatCurrency(parseFloat(inv.totalAmount || "0"), inv.currency || "USD")} — {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString("pt-BR") : "?"}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-3 border-t">
+                                    <Button variant="outline" onClick={() => setPromoteOpen(false)} disabled={promoteToInvoiceMutation.isPending}>
+                                        Cancelar
+                                    </Button>
+                                    <Button
+                                        className="bg-emerald-600 hover:bg-emerald-700"
+                                        onClick={() => promoteInvoiceId && promoteToInvoiceMutation.mutate({
+                                            expenseIds: selExps.map((e: any) => e.id),
+                                            invoiceId: promoteInvoiceId,
+                                        })}
+                                        disabled={!promoteInvoiceId || promoteToInvoiceMutation.isPending}
+                                    >
+                                        {promoteToInvoiceMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                                        Vincular
+                                    </Button>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </DialogContent>
             </Dialog>
 
