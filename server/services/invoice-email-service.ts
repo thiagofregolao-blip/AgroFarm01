@@ -218,8 +218,9 @@ export async function createDraftInvoice(
     }).from(farmInvoices).where(eq(farmInvoices.farmerId, farmerId));
 
     if (emailId && existingInvs.find(inv => inv.sourceEmailId === emailId)) {
+        const dup = existingInvs.find(inv => inv.sourceEmailId === emailId)!;
         console.log(`[Invoice Email] Duplicada por emailId: ${emailId}`);
-        return existingInvs.find(inv => inv.sourceEmailId === emailId) as any;
+        return { ...dup, wasDuplicate: true } as any;
     }
 
     // Dedup rule: invoice number MUST match (plus supplier for extra safety).
@@ -236,7 +237,7 @@ export async function createDraftInvoice(
 
     if (emailDuplicate) {
         console.log(`[Invoice Email] Fatura duplicada detectada: num=${emailDuplicate.invoiceNumber} supplier=${emailDuplicate.supplier} existingId=${emailDuplicate.id}`);
-        return emailDuplicate as any;
+        return { ...emailDuplicate, wasDuplicate: true } as any;
     }
 
     // Match products with catalog

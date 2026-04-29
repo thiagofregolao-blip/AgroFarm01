@@ -145,6 +145,14 @@ export function registerInvoiceEmailRoutes(app: Express) {
                     if (result) {
                         results.push(result);
 
+                        // Pular notificacao se a fatura era duplicada (cliente reenviou
+                        // mesmo PDF). Sem isso, o cliente recebe varias mensagens "fatura
+                        // recebida" da mesma nota — confuso e errado.
+                        if ((result as any).wasDuplicate) {
+                            console.log(`[Invoice Webhook] Fatura duplicada — pulando notificacao WhatsApp (cliente ja recebeu na primeira vez)`);
+                            continue;
+                        }
+
                         console.log(`[Invoice Webhook] Attempting WhatsApp notification...`);
                         console.log(`[Invoice Webhook] Farmer WhatsApp: ${farmer.whatsapp_number || 'NOT SET'}`);
                         console.log(`[Invoice Webhook] ZAPI_INSTANCE_ID: ${process.env.ZAPI_INSTANCE_ID ? 'SET' : 'NOT SET'}`);
