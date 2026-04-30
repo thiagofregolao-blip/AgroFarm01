@@ -625,9 +625,6 @@ export function registerFarmExpenseRoutes(app: Express) {
                 and(eq(farmExpenses.id, req.params.id), eq(farmExpenses.farmerId, farmerId))
             ).limit(1);
             if (!expense) return res.status(404).json({ error: "Expense not found" });
-            if (expense.invoiceId) {
-                return res.status(400).json({ error: "Despesa vinculada a fatura nao pode ser excluida por aqui" });
-            }
 
             const expensePayables = await db.select().from(farmAccountsPayable).where(
                 and(eq(farmAccountsPayable.expenseId, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
@@ -641,6 +638,21 @@ export function registerFarmExpenseRoutes(app: Express) {
                 return res.status(400).json({
                     error: "Despesa ja possui conta paga/parcial. Reverta o pagamento antes de excluir.",
                 });
+            }
+            if (expense.invoiceId) {
+                const invoicePayables = await db.select().from(farmAccountsPayable).where(
+                    and(eq(farmAccountsPayable.invoiceId, expense.invoiceId), eq(farmAccountsPayable.farmerId, farmerId))
+                );
+                const paidInvoicePayable = invoicePayables.find((ap: any) =>
+                    ap.status === "pago" ||
+                    ap.status === "parcial" ||
+                    (parseFloat(ap.paidAmount as string) || 0) > 0
+                );
+                if (paidInvoicePayable) {
+                    return res.status(400).json({
+                        error: "A fatura vinculada ja foi paga/parcial. Reverta o pagamento antes de excluir a despesa.",
+                    });
+                }
             }
 
             await db.delete(farmWhatsappPendingContext).where(

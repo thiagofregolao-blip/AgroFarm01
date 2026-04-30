@@ -339,6 +339,7 @@ export default function FarmInvoices() {
         mutationFn: (id: string) => apiRequest("DELETE", `/api/farm/expenses/${id}`),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
             toast({ title: "Recibo removido." });
         },
         onError: () => toast({ title: "Erro ao remover recibo", variant: "destructive" }),
@@ -2444,19 +2445,20 @@ export default function FarmInvoices() {
                                                                     <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setSelectedExpense(exp.id)}>
                                                                         <Pencil className="mr-1 h-3 w-3" /> Editar
                                                                     </Button>
-                                                                    {!isLinked && (
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant="outline"
-                                                                            className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                                                                            disabled={deleteExpenseMutation.isPending}
-                                                                            onClick={() => {
-                                                                                if (confirm("Excluir esta despesa sem fatura?")) deleteExpenseMutation.mutate(exp.id);
-                                                                            }}
-                                                                        >
-                                                                            <Trash2 className="mr-1 h-3 w-3" /> Excluir
-                                                                        </Button>
-                                                                    )}
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                                                                        disabled={deleteExpenseMutation.isPending}
+                                                                        onClick={() => {
+                                                                            const message = isLinked
+                                                                                ? "Excluir esta despesa vinculada? A fatura continuara existindo e a exclusao so sera permitida se ela ainda nao foi paga."
+                                                                                : "Excluir esta despesa sem fatura?";
+                                                                            if (confirm(message)) deleteExpenseMutation.mutate(exp.id);
+                                                                        }}
+                                                                    >
+                                                                        <Trash2 className="mr-1 h-3 w-3" /> Excluir
+                                                                    </Button>
                                                                 </div>
                                                             </td>
                                                         </tr>

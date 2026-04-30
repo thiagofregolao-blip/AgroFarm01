@@ -159,6 +159,25 @@ export function registerFarmFinancialRoutes(app: Express) {
             const { db } = await import("./db");
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
+            const { sql: sqlFn } = await import("drizzle-orm");
+
+            await db.execute(sqlFn`
+                DELETE FROM farm_accounts_payable ap
+                USING farm_expenses e
+                WHERE ap.expense_id = e.id
+                  AND ap.farmer_id = ${farmerId}
+                  AND e.farmer_id = ${farmerId}
+                  AND e.invoice_id IS NOT NULL
+                  AND ap.status NOT IN ('pago', 'parcial')
+                  AND COALESCE(CAST(ap.paid_amount AS NUMERIC), 0) = 0
+                  AND EXISTS (
+                      SELECT 1
+                      FROM farm_accounts_payable invoice_ap
+                      WHERE invoice_ap.farmer_id = ap.farmer_id
+                        AND invoice_ap.invoice_id = e.invoice_id
+                        AND invoice_ap.id <> ap.id
+                  )
+            `);
 
             const conditions: any[] = [eq(farmAccountsPayable.farmerId, farmerId)];
             if (req.query.status) conditions.push(eq(farmAccountsPayable.status, req.query.status as string));
@@ -167,7 +186,6 @@ export function registerFarmFinancialRoutes(app: Express) {
                 .where(and(...conditions))
                 .orderBy(desc(farmAccountsPayable.dueDate));
             // Enrich with observation (column added via ALTER TABLE, not in Drizzle schema)
-            const { sql: sqlFn } = await import("drizzle-orm");
             const apIds = accounts.map((a: any) => a.id);
             let obsMap: Record<string, string> = {};
             if (apIds.length > 0) {
