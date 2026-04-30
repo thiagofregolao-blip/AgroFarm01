@@ -617,10 +617,38 @@ export function registerFarmExpenseRoutes(app: Express) {
         try {
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
-            const { farmExpenses } = await import("../shared/schema");
+            const { farmExpenses, farmWhatsappPendingContext, farmAccountsPayable } = await import("../shared/schema");
             const { db } = await import("./db");
             const { eq, and } = await import("drizzle-orm");
 
+            const [expense] = await db.select().from(farmExpenses).where(
+                and(eq(farmExpenses.id, req.params.id), eq(farmExpenses.farmerId, farmerId))
+            ).limit(1);
+            if (!expense) return res.status(404).json({ error: "Expense not found" });
+            if (expense.invoiceId) {
+                return res.status(400).json({ error: "Despesa vinculada a fatura nao pode ser excluida por aqui" });
+            }
+
+            const expensePayables = await db.select().from(farmAccountsPayable).where(
+                and(eq(farmAccountsPayable.expenseId, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+            );
+            const paidPayable = expensePayables.find((ap: any) =>
+                ap.status === "pago" ||
+                ap.status === "parcial" ||
+                (parseFloat(ap.paidAmount as string) || 0) > 0
+            );
+            if (paidPayable) {
+                return res.status(400).json({
+                    error: "Despesa ja possui conta paga/parcial. Reverta o pagamento antes de excluir.",
+                });
+            }
+
+            await db.delete(farmWhatsappPendingContext).where(
+                and(eq(farmWhatsappPendingContext.expenseId, req.params.id), eq(farmWhatsappPendingContext.farmerId, farmerId))
+            );
+            await db.delete(farmAccountsPayable).where(
+                and(eq(farmAccountsPayable.expenseId, req.params.id), eq(farmAccountsPayable.farmerId, farmerId))
+            );
             await db.delete(farmExpenses).where(
                 and(
                     eq(farmExpenses.id, req.params.id),
