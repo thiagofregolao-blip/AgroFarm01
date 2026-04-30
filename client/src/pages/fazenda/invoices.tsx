@@ -535,7 +535,7 @@ export default function FarmInvoices() {
 
     // Expenses/receipts managed from "Despesas s/ Fatura". Linked ones stay visible
     // for traceability, but only unlinked expenses can be selected/promoted.
-    const expensesWithoutInvoice = (expenses as any[]).filter((e: any) => !isWhatsappFleetReceipt(e));
+    const expensesWithoutInvoice = expenses as any[];
     const selectableExpensesWithoutInvoice = expensesWithoutInvoice.filter((e: any) => !e.invoiceId);
     const findLinkedInvoice = (invoiceId?: string | null) =>
         invoiceId ? (invoices as any[]).find((inv: any) => String(inv.id) === String(invoiceId)) : null;
