@@ -274,6 +274,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                     dueDate: parseLocalDate(dueDate) || undefined,
                     installments: installments ? parseInt(installments) : 1,
                     supplier: supplier || undefined,
+                    status: sanitize(invoiceId) ? "confirmed" : "pending",
                 });
                 // documentNumber é campo novo; salva via raw SQL pra nao precisar
                 // mexer na assinatura do storage.
@@ -284,8 +285,8 @@ export function registerFarmExpenseRoutes(app: Express) {
                 }
                 createdExpenses.push(expense);
 
-                // AUTO: Toda despesa gera Conta a Pagar
-                try {
+                // Despesas sem fatura passam por aprovacao antes de gerar Contas a Pagar.
+                if (sanitize(invoiceId)) try {
                     const { farmAccountsPayable, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
                     const { db } = await import("./db");
                     const { eq, and, sql: sqlFn } = await import("drizzle-orm");
@@ -366,7 +367,7 @@ export function registerFarmExpenseRoutes(app: Express) {
 
     app.post("/api/farm/expenses/:id/confirm", requireFarmer, async (req, res) => {
         try {
-            const { farmExpenses, farmCashTransactions, farmCashAccounts } = await import("../shared/schema");
+            const { farmExpenses, farmCashTransactions, farmCashAccounts, farmAccountsPayable } = await import("../shared/schema");
             const { db } = await import("./db");
             const { eq, and, sql: sqlFn } = await import("drizzle-orm");
 
@@ -401,10 +402,41 @@ export function registerFarmExpenseRoutes(app: Express) {
 
             await db.update(farmExpenses).set(updateData).where(eq(farmExpenses.id, expense.id));
 
+            const [existingPayable] = await db.select().from(farmAccountsPayable).where(
+                and(eq(farmAccountsPayable.expenseId, expense.id), eq(farmAccountsPayable.farmerId, farmerId))
+            ).limit(1);
+
+            if (!existingPayable) {
+                const totalInstallments = paymentType === "financiado" ? Math.max(parseInt(installments || "1"), 1) : 1;
+                const firstDueDate = parseLocalDate(dueDate) || expense.dueDate || expense.expenseDate || new Date();
+                const installmentAmount = amount / totalInstallments;
+
+                for (let i = 0; i < totalInstallments; i++) {
+                    const payableDueDate = new Date(firstDueDate);
+                    if (i > 0) payableDueDate.setMonth(payableDueDate.getMonth() + i);
+                    await db.insert(farmAccountsPayable).values({
+                        farmerId,
+                        expenseId: expense.id,
+                        supplier: expense.supplier || expense.category,
+                        description: totalInstallments > 1
+                            ? `${expense.description || expense.category} - Parcela ${i + 1}/${totalInstallments}`
+                            : (expense.description || expense.category),
+                        totalAmount: String(installmentAmount.toFixed(2)),
+                        paidAmount: isPago ? String(installmentAmount.toFixed(2)) : "0",
+                        currency: expense.currency || "USD",
+                        installmentNumber: i + 1,
+                        totalInstallments,
+                        dueDate: payableDueDate,
+                        paidDate: isPago ? new Date() : null,
+                        status: isPago ? "pago" : "aberto",
+                    });
+                }
+            }
+
             if (accountId && isPago) {
                 await db.insert(farmCashTransactions).values({
                     farmerId, accountId, type: "saida",
-                    amount: String(amount), currency: "USD", category: expense.category,
+                    amount: String(amount), currency: expense.currency || "USD", category: expense.category,
                     description: expense.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa aprovada",
                     paymentMethod: paymentMethod || "efetivo",
                     expenseId: expense.id, referenceType: "aprovacao_despesa",
@@ -510,7 +542,7 @@ export function registerFarmExpenseRoutes(app: Express) {
     // Body: { expenseIds: string[], invoiceId: string }. Setam farm_expenses.invoice_id.
     app.post("/api/farm/expenses/promote-to-invoice", requireFarmer, async (req, res) => {
         try {
-            const { farmExpenses, farmInvoices } = await import("../shared/schema");
+            const { farmExpenses, farmInvoices, farmAccountsPayable } = await import("../shared/schema");
             const { db } = await import("./db");
             const { eq, and, inArray } = await import("drizzle-orm");
 
@@ -540,10 +572,30 @@ export function registerFarmExpenseRoutes(app: Express) {
             if (suppliers.size > 1) {
                 return res.status(400).json({ error: "Despesas devem ser do mesmo fornecedor" });
             }
+            const alreadyLinked = expenses.find((e: any) => e.invoiceId);
+            if (alreadyLinked) {
+                return res.status(400).json({ error: "Uma ou mais despesas ja estao vinculadas a uma fatura" });
+            }
+            const notApproved = expenses.find((e: any) => e.status !== "confirmed");
+            if (notApproved) {
+                return res.status(400).json({ error: "Aprove todas as despesas antes de vincular a uma fatura" });
+            }
+
+            const expensesTotal = expenses.reduce((sum: number, e: any) => sum + (parseFloat(e.amount as string) || 0), 0);
+            const invoiceTotal = parseFloat(invoice.totalAmount as string) || 0;
+            if (Math.abs(expensesTotal - invoiceTotal) > 0.01) {
+                return res.status(400).json({
+                    error: `A soma das despesas (${expensesTotal.toFixed(2)}) deve ser igual ao total da fatura (${invoiceTotal.toFixed(2)})`,
+                });
+            }
 
             await db.update(farmExpenses)
                 .set({ invoiceId })
                 .where(and(eq(farmExpenses.farmerId, farmerId), inArray(farmExpenses.id, expenseIds)));
+
+            await db.update(farmAccountsPayable)
+                .set({ invoiceId })
+                .where(and(eq(farmAccountsPayable.farmerId, farmerId), inArray(farmAccountsPayable.expenseId, expenseIds)));
 
             console.log(`[FARM_EXPENSE_PROMOTE] vinculadas ${expenseIds.length} despesa(s) a fatura ${invoiceId}`);
             res.json({ success: true, count: expenseIds.length });
