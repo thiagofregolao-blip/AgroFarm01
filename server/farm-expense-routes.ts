@@ -367,13 +367,15 @@ export function registerFarmExpenseRoutes(app: Express) {
 
     app.post("/api/farm/expenses/:id/confirm", requireFarmer, async (req, res) => {
         try {
-            const { farmExpenses, farmCashTransactions, farmCashAccounts, farmAccountsPayable } = await import("../shared/schema");
+            const { farmExpenses, farmAccountsPayable } = await import("../shared/schema");
             const { db } = await import("./db");
-            const { eq, and, sql: sqlFn } = await import("drizzle-orm");
+            const { eq, and } = await import("drizzle-orm");
 
             const farmerId = await getEffectiveFarmerId(req);
             if (!farmerId) return res.status(403).json({ error: "Farmer not found" });
-            const { accountId, paymentMethod, paymentStatus, paymentType, dueDate, installments, equipmentId } = req.body || {};
+            const { dueDate, seasonId, equipmentId } = req.body || {};
+            if (!dueDate) return res.status(400).json({ error: "Data de vencimento obrigatoria" });
+            if (!seasonId) return res.status(400).json({ error: "Safra obrigatoria" });
 
             const [expense] = await db.select().from(farmExpenses).where(
                 and(eq(farmExpenses.id, req.params.id), eq(farmExpenses.farmerId, farmerId))
@@ -382,19 +384,16 @@ export function registerFarmExpenseRoutes(app: Express) {
             if (!expense) return res.status(404).json({ error: "Expense not found" });
 
             const amount = parseFloat(expense.amount as string) || 0;
-            const isPago = paymentStatus === "pago" || (!paymentStatus && accountId);
+            const payableDueDate = parseLocalDate(dueDate);
+            if (!payableDueDate) return res.status(400).json({ error: "Data de vencimento invalida" });
 
             const updateData: any = {
                 status: "confirmed",
-                paymentStatus: paymentStatus || (accountId ? "pago" : "pendente"),
-                paymentType: paymentType || "a_vista",
+                paymentStatus: "pendente",
+                paymentType: "a_prazo",
+                dueDate: payableDueDate,
+                seasonId,
             };
-            if (dueDate) updateData.dueDate = parseLocalDate(dueDate);
-            if (installments) updateData.installments = parseInt(installments);
-            if (isPago) {
-                updateData.paidAmount = String(amount);
-                updateData.installmentsPaid = updateData.installments || 1;
-            }
             // Vincular veiculo na aprovacao (campo opcional do modal de aprovar)
             if (equipmentId !== undefined) {
                 updateData.equipmentId = equipmentId || null;
@@ -407,43 +406,19 @@ export function registerFarmExpenseRoutes(app: Express) {
             ).limit(1);
 
             if (!existingPayable) {
-                const totalInstallments = paymentType === "financiado" ? Math.max(parseInt(installments || "1"), 1) : 1;
-                const firstDueDate = parseLocalDate(dueDate) || expense.dueDate || expense.expenseDate || new Date();
-                const installmentAmount = amount / totalInstallments;
-
-                for (let i = 0; i < totalInstallments; i++) {
-                    const payableDueDate = new Date(firstDueDate);
-                    if (i > 0) payableDueDate.setMonth(payableDueDate.getMonth() + i);
-                    await db.insert(farmAccountsPayable).values({
-                        farmerId,
-                        expenseId: expense.id,
-                        supplier: expense.supplier || expense.category,
-                        description: totalInstallments > 1
-                            ? `${expense.description || expense.category} - Parcela ${i + 1}/${totalInstallments}`
-                            : (expense.description || expense.category),
-                        totalAmount: String(installmentAmount.toFixed(2)),
-                        paidAmount: isPago ? String(installmentAmount.toFixed(2)) : "0",
-                        currency: expense.currency || "USD",
-                        installmentNumber: i + 1,
-                        totalInstallments,
-                        dueDate: payableDueDate,
-                        paidDate: isPago ? new Date() : null,
-                        status: isPago ? "pago" : "aberto",
-                    });
-                }
-            }
-
-            if (accountId && isPago) {
-                await db.insert(farmCashTransactions).values({
-                    farmerId, accountId, type: "saida",
-                    amount: String(amount), currency: expense.currency || "USD", category: expense.category,
-                    description: expense.description?.replace(/\[Via WhatsApp\]\s*(\[[^\]]*\]\s*)?/, "").trim() || "Despesa aprovada",
-                    paymentMethod: paymentMethod || "efetivo",
-                    expenseId: expense.id, referenceType: "aprovacao_despesa",
+                await db.insert(farmAccountsPayable).values({
+                    farmerId,
+                    expenseId: expense.id,
+                    supplier: expense.supplier || expense.category,
+                    description: expense.description || expense.category,
+                    totalAmount: String(amount.toFixed(2)),
+                    paidAmount: "0",
+                    currency: expense.currency || "USD",
+                    installmentNumber: 1,
+                    totalInstallments: 1,
+                    dueDate: payableDueDate,
+                    status: "aberto",
                 });
-                await db.update(farmCashAccounts)
-                    .set({ currentBalance: sqlFn`current_balance - ${amount}` })
-                    .where(and(eq(farmCashAccounts.id, accountId), eq(farmCashAccounts.farmerId, farmerId)));
             }
 
             res.json({ success: true });

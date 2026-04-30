@@ -101,11 +101,8 @@ export default function FarmInvoices() {
     const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
     const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
     const [approveExpenseId, setApproveExpenseId] = useState<string | null>(null);
-    const [approveAccountId, setApproveAccountId] = useState<string>("");
-    const [approvePayStatus, setApprovePayStatus] = useState<string>("pago");
-    const [approvePayType, setApprovePayType] = useState<string>("a_vista");
     const [approveDueDate, setApproveDueDate] = useState<string>("");
-    const [approveInstallments, setApproveInstallments] = useState<string>("1");
+    const [approveSeasonId, setApproveSeasonId] = useState<string>("");
     const [selectedSeasonId, setSelectedSeasonId] = useState<string>("");
     const [skipStockEntry, setSkipStockEntry] = useState(false);
     const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -242,10 +239,11 @@ export default function FarmInvoices() {
 
 
 
-    const whatsappExpenses = (expenses as any[]).filter((e) =>
+    const isWhatsappFleetReceipt = (e: any) =>
         e.equipmentId &&
-        (e.description?.startsWith("[Via WhatsApp]") ?? false)
-    );
+        (e.description?.startsWith("[Via WhatsApp]") ?? false);
+
+    const whatsappExpenses = (expenses as any[]).filter(isWhatsappFleetReceipt);
     const pendingFleetReceipts = whatsappExpenses.filter((e) => e.status === "pending");
     const confirmedFleetReceipts = whatsappExpenses.filter((e) => e.status === "confirmed");
 
@@ -319,23 +317,20 @@ export default function FarmInvoices() {
     });
 
     const confirmExpenseMutation = useMutation({
-        mutationFn: ({ id, accountId, equipmentId, paymentType, paymentStatus, dueDate, installments }: { id: string; accountId?: string; equipmentId?: string; paymentType?: string; paymentStatus?: string; dueDate?: string; installments?: string }) =>
+        mutationFn: ({ id, equipmentId, dueDate, seasonId }: { id: string; equipmentId?: string; dueDate: string; seasonId: string }) =>
             apiRequest("POST", `/api/farm/expenses/${id}/confirm`, {
-                accountId,
-                paymentMethod: "efetivo",
-                paymentStatus: paymentStatus || approvePayStatus,
-                paymentType: paymentType || approvePayType,
-                dueDate: dueDate || approveDueDate || undefined,
-                installments: installments || approveInstallments || "1",
+                dueDate,
+                seasonId,
                 equipmentId,
             }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-summary"] });
-            toast({ title: approvePayStatus === "pago" ? "✅ Despesa aprovada e lançada no caixa!" : "✅ Despesa aprovada no Contas a Pagar!" });
+            toast({ title: "✅ Despesa aprovada no Contas a Pagar!" });
             setApproveExpenseId(null);
-            setApproveAccountId("");
+            setApproveSeasonId("");
+            setApproveDueDate("");
+            setApproveEquipmentId("__none__");
         },
         onError: () => toast({ title: "Erro ao aprovar recibo", variant: "destructive" }),
     });
@@ -540,7 +535,7 @@ export default function FarmInvoices() {
 
     // Expenses/receipts managed from "Despesas s/ Fatura". Linked ones stay visible
     // for traceability, but only unlinked expenses can be selected/promoted.
-    const expensesWithoutInvoice = (expenses as any[]).filter((e: any) => !e.equipmentId);
+    const expensesWithoutInvoice = (expenses as any[]).filter((e: any) => !isWhatsappFleetReceipt(e));
     const selectableExpensesWithoutInvoice = expensesWithoutInvoice.filter((e: any) => !e.invoiceId);
     const findLinkedInvoice = (invoiceId?: string | null) =>
         invoiceId ? (invoices as any[]).find((inv: any) => String(inv.id) === String(invoiceId)) : null;
@@ -2493,7 +2488,7 @@ export default function FarmInvoices() {
                 </div>
             </div>
 
-            <Dialog open={!!approveExpenseId} onOpenChange={(open) => { if (!open) { setApproveExpenseId(null); setApproveAccountId(""); setApprovePayStatus("pago"); setApprovePayType("a_vista"); setApproveDueDate(""); setApproveInstallments("1"); setApproveEquipmentId("__none__"); } }}>
+            <Dialog open={!!approveExpenseId} onOpenChange={(open) => { if (!open) { setApproveExpenseId(null); setApproveSeasonId(""); setApproveDueDate(""); setApproveEquipmentId("__none__"); } }}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -2503,40 +2498,22 @@ export default function FarmInvoices() {
                     </DialogHeader>
                     <div className="space-y-4 py-2">
                         <div>
-                            <Label>Status do Pagamento</Label>
-                            <Select value={approvePayStatus} onValueChange={setApprovePayStatus}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                            <Label>Safra</Label>
+                            <Select value={approveSeasonId} onValueChange={setApproveSeasonId}>
+                                <SelectTrigger><SelectValue placeholder="Selecione a safra..." /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="pago">Já foi pago</SelectItem>
-                                    <SelectItem value="pendente">Ainda não pagou</SelectItem>
+                                    {(seasons as any[]).map((s: any) => (
+                                        <SelectItem key={s.id} value={s.id}>
+                                            {s.name}{s.isActive ? "" : " (encerrada)"}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div>
-                            <Label>Tipo de Pagamento</Label>
-                            <Select value={approvePayType} onValueChange={setApprovePayType}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="a_vista">À Vista</SelectItem>
-                                    <SelectItem value="a_prazo">A Prazo (Fiado)</SelectItem>
-                                    <SelectItem value="financiado">Financiado / Parcelado</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <Label>Data de Vencimento</Label>
+                            <Input type="date" value={approveDueDate} onChange={e => setApproveDueDate(e.target.value)} />
                         </div>
-                        {(approvePayType === "a_prazo" || approvePayType === "financiado") && (
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <Label>Vencimento</Label>
-                                    <Input type="date" value={approveDueDate} onChange={e => setApproveDueDate(e.target.value)} />
-                                </div>
-                                {approvePayType === "financiado" && (
-                                    <div>
-                                        <Label>Parcelas</Label>
-                                        <Input type="number" min="1" value={approveInstallments} onChange={e => setApproveInstallments(e.target.value)} />
-                                    </div>
-                                )}
-                            </div>
-                        )}
                         <div>
                             <Label>Vincular a Veiculo <span className="text-gray-400 font-normal">(opcional)</span></Label>
                             <Select value={approveEquipmentId} onValueChange={setApproveEquipmentId}>
@@ -2550,37 +2527,22 @@ export default function FarmInvoices() {
                             </Select>
                             <p className="text-[11px] text-gray-400 mt-1">Despesa fica vinculada ao veiculo (ex: combustivel, manutencao).</p>
                         </div>
-                        {approvePayStatus === "pago" && (
-                            <div>
-                                <Label>Conta de Pagamento</Label>
-                                <Select value={approveAccountId} onValueChange={setApproveAccountId}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {(cashAccounts as any[]).map((a: any) => (
-                                            <SelectItem key={a.id} value={a.id}>
-                                                {a.name} ({a.currency})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
+                        <p className="text-xs text-gray-500">
+                            Depois de aprovada, a despesa entra em Contas a Pagar como aberta. A forma de pagamento sera definida no pagamento da conta.
+                        </p>
                         <div className="flex gap-2">
                             <Button
                                 className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                                disabled={confirmExpenseMutation.isPending || (approvePayStatus === "pago" && !approveAccountId)}
+                                disabled={confirmExpenseMutation.isPending || !approveSeasonId || !approveDueDate}
                                 onClick={() => approveExpenseId && confirmExpenseMutation.mutate({
                                     id: approveExpenseId,
-                                    accountId: approvePayStatus === "pago" ? approveAccountId : undefined,
                                     equipmentId: approveEquipmentId !== "__none__" ? approveEquipmentId : undefined,
-                                    paymentType: approvePayType,
-                                    paymentStatus: approvePayStatus,
-                                    dueDate: approveDueDate || undefined,
-                                    installments: approvePayType === "financiado" ? approveInstallments : undefined,
+                                    dueDate: approveDueDate,
+                                    seasonId: approveSeasonId,
                                 })}
                             >
                                 {confirmExpenseMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                                {approvePayStatus === "pago" ? "Aprovar e Lançar" : "Aprovar (Pendente)"}
+                                Aprovar e Enviar ao Contas a Pagar
                             </Button>
                         </div>
                     </div>
