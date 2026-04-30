@@ -37,6 +37,7 @@ const AVAILABLE_MODULES = [
     { key: "romaneios", label: "Romaneios" },
     { key: "accounts_payable", label: "Contas a Pagar" },
     { key: "accounts_receivable", label: "Contas a Receber" },
+    { key: "loans", label: "Préstamos" },
     { key: "dre", label: "DRE / Resultado" },
     { key: "budget", label: "Orcamento por Safra" },
     { key: "reconciliation", label: "Conciliacao Bancaria" },
