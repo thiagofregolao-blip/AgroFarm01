@@ -23,16 +23,20 @@ function formatForDisplay(numStr: string, decimals: number): string {
 
 /** Parse display string back to numeric string (removes thousand separators, normalises decimal) */
 function parseDisplayToRaw(display: string, decimals: number): string {
-  // Remove thousand separators (dots in pt-BR)
-  let s = display.replace(/\./g, "");
-  // Normalise comma → dot for decimal
-  s = s.replace(",", ".");
-  // Keep only digits and one dot
-  s = s.replace(/[^\d.]/g, "");
-  const parts = s.split(".");
-  if (parts.length > 2) s = parts[0] + "." + parts.slice(1).join("");
-  if (decimals === 0) s = s.replace(/\./g, "");
-  return s || "0";
+  let s = display.replace(/[^\d.,]/g, "");
+  if (decimals === 0) return s.replace(/\D/g, "") || "0";
+
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  const decimalPos = Math.max(lastComma, lastDot);
+
+  if (decimalPos !== -1) {
+    const intPart = s.slice(0, decimalPos).replace(/[.,]/g, "") || "0";
+    const decPart = s.slice(decimalPos + 1).replace(/[.,]/g, "").slice(0, decimals);
+    return decPart ? `${intPart}.${decPart}` : `${intPart}.`;
+  }
+
+  return s.replace(/[.,]/g, "") || "0";
 }
 
 // Kept for backward-compat exports (not used internally anymore)
@@ -96,22 +100,7 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
         setDisplay(raw);
         onValueChange(raw || "0");
       } else {
-        // Keep only digits, dots and commas
-        raw = raw.replace(/[^\d.,]/g, "");
-        // The LAST . or , in the string is the decimal separator;
-        // any other . or , are thousand separators and get dropped.
-        // Handles digitation ("5,50" → "5.50"), intl paste ("1234.56"),
-        // and pt-BR paste ("1.234,56" → "1234.56").
-        const lastComma = raw.lastIndexOf(",");
-        const lastDot = raw.lastIndexOf(".");
-        const decimalPos = Math.max(lastComma, lastDot);
-        if (decimalPos !== -1) {
-          const intPart = raw.slice(0, decimalPos).replace(/[.,]/g, "");
-          const decPart = raw.slice(decimalPos + 1).replace(/[.,]/g, "").slice(0, decimals);
-          raw = intPart + "." + decPart;
-        } else {
-          raw = raw.replace(/[.,]/g, "");
-        }
+        raw = parseDisplayToRaw(raw, decimals);
         setDisplay(raw);
         onValueChange(raw || "0");
       }
