@@ -556,6 +556,20 @@ export function registerFarmExpenseRoutes(app: Express) {
                 return res.status(400).json({ error: "Aprove todas as despesas antes de vincular a uma fatura" });
             }
 
+            const expensePayables = await db.select().from(farmAccountsPayable).where(
+                and(eq(farmAccountsPayable.farmerId, farmerId), inArray(farmAccountsPayable.expenseId, expenseIds))
+            );
+            const paidExpensePayable = expensePayables.find((ap: any) =>
+                ap.status === "pago" ||
+                ap.status === "parcial" ||
+                (parseFloat(ap.paidAmount as string) || 0) > 0
+            );
+            if (paidExpensePayable) {
+                return res.status(400).json({
+                    error: "Existe conta a pagar da despesa ja paga/parcial. Reverta esse pagamento antes de vincular a fatura.",
+                });
+            }
+
             const expensesTotal = expenses.reduce((sum: number, e: any) => sum + (parseFloat(e.amount as string) || 0), 0);
             const invoiceTotal = parseFloat(invoice.totalAmount as string) || 0;
             if (Math.abs(expensesTotal - invoiceTotal) > 0.01) {
@@ -564,12 +578,31 @@ export function registerFarmExpenseRoutes(app: Express) {
                 });
             }
 
+            const invoicePayables = await db.select().from(farmAccountsPayable).where(
+                and(eq(farmAccountsPayable.farmerId, farmerId), eq(farmAccountsPayable.invoiceId, invoiceId))
+            );
+            if (invoicePayables.length === 0 && invoice.totalAmount) {
+                const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
+                const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : new Date(issueDate);
+                if (!invoice.dueDate) dueDate.setDate(dueDate.getDate() + 30);
+
+                await db.insert(farmAccountsPayable).values({
+                    farmerId,
+                    invoiceId,
+                    supplier: invoice.supplier || "Fornecedor",
+                    description: `Fatura #${invoice.invoiceNumber || invoiceId.slice(0, 8)}`,
+                    totalAmount: String(invoice.totalAmount),
+                    currency: invoice.currency || "USD",
+                    dueDate,
+                    status: "aberto",
+                });
+            }
+
             await db.update(farmExpenses)
                 .set({ invoiceId })
                 .where(and(eq(farmExpenses.farmerId, farmerId), inArray(farmExpenses.id, expenseIds)));
 
-            await db.update(farmAccountsPayable)
-                .set({ invoiceId })
+            await db.delete(farmAccountsPayable)
                 .where(and(eq(farmAccountsPayable.farmerId, farmerId), inArray(farmAccountsPayable.expenseId, expenseIds)));
 
             console.log(`[FARM_EXPENSE_PROMOTE] vinculadas ${expenseIds.length} despesa(s) a fatura ${invoiceId}`);

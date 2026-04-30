@@ -507,6 +507,7 @@ export default function FarmInvoices() {
         onSuccess: (_, vars) => {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/expenses"] });
             queryClient.invalidateQueries({ queryKey: ["/api/farm/invoices"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/farm/accounts-payable"] });
             toast({ title: `${vars.expenseIds.length} despesa(s) vinculada(s) a fatura` });
             setPromoteOpen(false);
             setPromoteInvoiceId("");
