@@ -237,6 +237,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                 plotId, propertyId, seasonId, category, description, amount,
                 expenseDate, paymentType, dueDate, installments, supplier,
                 frequency, repeatTimes, invoiceId, accountId, documentNumber,
+                currency,
             } = req.body;
             if (!category || !amount) return res.status(400).json({ error: "Category and amount required" });
 
@@ -269,6 +270,7 @@ export function registerFarmExpenseRoutes(app: Express) {
                     category,
                     description: repeats > 1 ? `${description || category} (${r + 1}/${repeats})` : (description || undefined),
                     amount: String(amount),
+                    currency: currency || "USD",
                     expenseDate: occurrenceDate,
                     paymentType: paymentType || "a_vista",
                     dueDate: parseLocalDate(dueDate) || undefined,

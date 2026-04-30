@@ -137,14 +137,9 @@ export default function FarmInvoices() {
     const [expCategory, setExpCategory] = useState("");
     const [expDescription, setExpDescription] = useState("");
     const [expAmount, setExpAmount] = useState("");
+    const [expCurrency, setExpCurrency] = useState("USD");
     const [expSupplier, setExpSupplier] = useState("");
     const [expDate, setExpDate] = useState(new Date().toISOString().substring(0, 10));
-    const [expPaymentType, setExpPaymentType] = useState("a_vista");
-    const [expAccountId, setExpAccountId] = useState("");
-    const [expHasFatura, setExpHasFatura] = useState(false);
-    const [expInvoiceId, setExpInvoiceId] = useState("");
-    const [expDueDate, setExpDueDate] = useState("");
-    const [expInstallments, setExpInstallments] = useState("1");
     const [expPropertyId, setExpPropertyId] = useState("");
     const [expSeasonId, setExpSeasonId] = useState("");
     const [expDocumentNumber, setExpDocumentNumber] = useState("");
@@ -310,12 +305,6 @@ export default function FarmInvoices() {
         onError: (err: any) => toast({ title: `Erro na conciliacao: ${err?.message || "Falha"}`, variant: "destructive" }),
     });
 
-    const { data: cashAccounts = [] } = useQuery({
-        queryKey: ["/api/farm/cash-accounts"],
-        queryFn: async () => { const r = await apiRequest("GET", "/api/farm/cash-accounts"); return r.json(); },
-        enabled: !!user,
-    });
-
     const confirmExpenseMutation = useMutation({
         mutationFn: ({ id, equipmentId, dueDate, seasonId }: { id: string; equipmentId?: string; dueDate: string; seasonId: string }) =>
             apiRequest("POST", `/api/farm/expenses/${id}/confirm`, {
@@ -470,10 +459,9 @@ export default function FarmInvoices() {
             queryClient.invalidateQueries({ queryKey: ["/api/farm/cash-transactions"] });
             toast({ title: "Despesa lancada com sucesso!" });
             setExpenseDialogOpen(false);
-            setExpCategory(""); setExpDescription(""); setExpAmount(""); setExpSupplier("");
-            setExpDate(new Date().toISOString().substring(0, 10)); setExpPaymentType("a_vista");
-            setExpAccountId(""); setExpHasFatura(false); setExpInvoiceId("");
-            setExpDueDate(""); setExpInstallments("1"); setExpPropertyId(""); setExpSeasonId("");
+            setExpCategory(""); setExpDescription(""); setExpAmount(""); setExpCurrency("USD"); setExpSupplier("");
+            setExpDate(new Date().toISOString().substring(0, 10));
+            setExpPropertyId(""); setExpSeasonId("");
         },
         onError: () => toast({ title: "Erro ao lancar despesa", variant: "destructive" }),
     });
@@ -487,13 +475,13 @@ export default function FarmInvoices() {
             category: expCategory,
             description: expDescription,
             amount: expAmount,
+            currency: expCurrency,
             supplier: expSupplier,
             expenseDate: expDate,
-            paymentType: expPaymentType,
-            accountId: expPaymentType === "a_vista" && expAccountId ? expAccountId : null,
-            invoiceId: expHasFatura && expInvoiceId ? expInvoiceId : null,
-            dueDate: expPaymentType === "a_prazo" ? expDueDate : null,
-            installments: expPaymentType === "a_prazo" ? parseInt(expInstallments) : 1,
+            paymentType: "a_prazo",
+            invoiceId: null,
+            dueDate: null,
+            installments: 1,
             propertyId: expPropertyId || null,
             seasonId: expSeasonId || null,
             documentNumber: expDocumentNumber || null,
@@ -523,16 +511,6 @@ export default function FarmInvoices() {
             if (next.has(id)) next.delete(id); else next.add(id);
             return next;
         });
-    }
-
-    // When invoice selected in expense form, auto-fill amount
-    function handleExpInvoiceSelect(invId: string) {
-        setExpInvoiceId(invId);
-        const inv = (invoices as any[]).find((i: any) => String(i.id) === invId);
-        if (inv) {
-            setExpAmount(String(inv.totalAmount || ""));
-            if (inv.supplier) setExpSupplier(inv.supplier);
-        }
     }
 
     // Expenses/receipts managed from "Despesas s/ Fatura". Linked ones stay visible
@@ -796,34 +774,7 @@ export default function FarmInvoices() {
                             <DialogTitle>Nova Despesa</DialogTitle>
                         </DialogHeader>
                         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                            {/* Linha 1: Checkbox fatura + selecao fatura */}
-                            <div className="flex items-center gap-4">
-                                <div
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all flex-shrink-0 ${expHasFatura ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                                    onClick={() => { setExpHasFatura(!expHasFatura); if (expHasFatura) setExpInvoiceId(""); }}
-                                >
-                                    <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors ${expHasFatura ? "bg-blue-500 text-white" : "border-2 border-gray-300"}`}>
-                                        {expHasFatura && <Check className="h-3 w-3" />}
-                                    </div>
-                                    <span className={`text-sm font-medium ${expHasFatura ? "text-blue-800" : "text-gray-700"}`}>Despesa com fatura</span>
-                                </div>
-                                {expHasFatura && (
-                                    <div className="flex-1">
-                                        <Select value={expInvoiceId} onValueChange={handleExpInvoiceSelect}>
-                                            <SelectTrigger><SelectValue placeholder="Escolha uma fatura..." /></SelectTrigger>
-                                            <SelectContent>
-                                                {(invoices as any[]).filter((i: any) => i.status === "pending" || i.status === "pendente").map((inv: any) => (
-                                                    <SelectItem key={inv.id} value={String(inv.id)}>
-                                                        #{inv.invoiceNumber || "S/N"} - {inv.supplier || "?"} - {formatCurrency(parseFloat(inv.totalAmount || "0"), inv.currency || "USD")}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Linha 2: Categoria + Fornecedor + Descricao */}
+                            {/* Linha 1: Categoria + Fornecedor + Descricao */}
                             <div className="grid grid-cols-3 gap-3">
                                 <div>
                                     <Label className="text-xs text-gray-500">Categoria *</Label>
@@ -857,25 +808,25 @@ export default function FarmInvoices() {
                                 <Input value={expDocumentNumber} onChange={e => setExpDocumentNumber(e.target.value)} placeholder="Ex: 001-001-0000123" />
                             </div>
 
-                            {/* Linha 3: Valor + Data + Pagamento + Propriedade + Safra */}
+                            {/* Linha 3: Valor + Moeda + Data + Propriedade + Safra */}
                             <div className="grid grid-cols-5 gap-3">
                                 <div>
                                     <Label className="text-xs text-gray-500">Valor *</Label>
                                     <CurrencyInput value={expAmount} onValueChange={setExpAmount} />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-gray-500">Data</Label>
-                                    <Input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} />
-                                </div>
-                                <div>
-                                    <Label className="text-xs text-gray-500">Pagamento</Label>
-                                    <Select value={expPaymentType} onValueChange={setExpPaymentType}>
+                                    <Label className="text-xs text-gray-500">Moeda *</Label>
+                                    <Select value={expCurrency} onValueChange={setExpCurrency}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="a_vista">A Vista</SelectItem>
-                                            <SelectItem value="a_prazo">A Prazo</SelectItem>
+                                            <SelectItem value="USD">Dolar (USD)</SelectItem>
+                                            <SelectItem value="PYG">Guarani (PYG)</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-gray-500">Data</Label>
+                                    <Input type="date" value={expDate} onChange={e => setExpDate(e.target.value)} />
                                 </div>
                                 <div>
                                     <Label className="text-xs text-gray-500">Propriedade</Label>
@@ -902,41 +853,6 @@ export default function FarmInvoices() {
                                     </Select>
                                 </div>
                             </div>
-
-                            {/* Linha condicional: A Vista conta ou A Prazo parcelas */}
-                            {expPaymentType === "a_vista" && (cashAccounts as any[]).length > 0 && (
-                                <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                                    <Wallet className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-                                    <div className="flex-1 grid grid-cols-2 gap-3 items-center">
-                                        <Select value={expAccountId} onValueChange={setExpAccountId}>
-                                            <SelectTrigger><SelectValue placeholder="Selecione a conta para debito..." /></SelectTrigger>
-                                            <SelectContent>
-                                                {(cashAccounts as any[]).map((acc: any) => (
-                                                    <SelectItem key={acc.id} value={String(acc.id)}>
-                                                        {acc.name} {acc.bankName ? `(${acc.bankName})` : ""} - {acc.currency || "USD"}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <p className="text-xs text-emerald-600">Debito automatico no fluxo de caixa</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {expPaymentType === "a_prazo" && (
-                                <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                                    <div className="grid grid-cols-2 gap-3 flex-1">
-                                        <div>
-                                            <Label className="text-xs text-amber-700">N Parcelas</Label>
-                                            <Input type="number" min="1" max="60" value={expInstallments} onChange={e => setExpInstallments(e.target.value)} />
-                                        </div>
-                                        <div>
-                                            <Label className="text-xs text-amber-700">1o Vencimento</Label>
-                                            <Input type="date" value={expDueDate} onChange={e => setExpDueDate(e.target.value)} />
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         {/* Footer fixo */}
